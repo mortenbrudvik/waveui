@@ -27,7 +27,7 @@ describe('Select', () => {
       { name: 'disabled', props: { disabled: true } },
       { name: 'error message', props: { error: 'Pick a letter' } },
     ],
-    conflictingClass: { className: 'h-10', overrides: 'h-8' },
+    conflictingClass: { className: 'h-10', overrides: 'wave:h-8' },
   });
 
   testFocusEvents(Select, { 'aria-label': 'Letter', children: options }, 'select');
@@ -72,10 +72,10 @@ describe('Select', () => {
       render(<Select aria-label="Letter">{options}</Select>);
       const select = screen.getByRole('combobox', { name: 'Letter' });
       expect(select).toHaveClass(
-        'border-input',
-        'border-b-stroke-accessible',
-        'focus:outline-hidden',
-        'focus:border-b-primary',
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+        'wave:focus:outline-hidden',
+        'wave:focus:border-b-primary',
       );
       expect(select.className).toContain('var(--wave-muted-foreground)');
       expect(select.className).not.toMatch(/%23|#[0-9a-f]{3,8}|outline-none/i);
@@ -85,10 +85,10 @@ describe('Select', () => {
       renderWithProviders(<Select aria-label="Letter">{options}</Select>, { dir: 'rtl' });
       const select = screen.getByRole('combobox', { name: 'Letter' });
       expect(select).toHaveClass(
-        'ps-3',
-        'pe-8',
-        'bg-[position:right_16px_center,right_11px_center]',
-        'wave-rtl:bg-[position:left_11px_center,left_16px_center]',
+        'wave:ps-3',
+        'wave:pe-8',
+        'wave:bg-[position:right_16px_center,right_11px_center]',
+        'wave:wave-rtl:bg-[position:left_11px_center,left_16px_center]',
       );
       expect(select.className).not.toMatch(/\b(pl|pr)-/);
     });
@@ -103,8 +103,8 @@ describe('Select', () => {
         { dir: 'rtl' },
       );
       const select = screen.getByRole('combobox', { name: 'Letter' });
-      expect(select.className).not.toMatch(/(^|\s)rtl:/);
-      expect(select).toHaveClass('wave-rtl:bg-[position:left_11px_center,left_16px_center]');
+      expect(select.className).not.toMatch(/(^|\s)wave:rtl:/);
+      expect(select).toHaveClass('wave:wave-rtl:bg-[position:left_11px_center,left_16px_center]');
     });
   });
 
@@ -121,7 +121,7 @@ describe('Select', () => {
       expect(select).toHaveAttribute('aria-invalid', 'true');
       expect(select).toHaveAccessibleDescription('Pick a letter');
       expect(select).toHaveAttribute('aria-errormessage', alert.id);
-      expect(select).toHaveClass('border-destructive');
+      expect(select).toHaveClass('wave:border-destructive');
       expect(container.firstElementChild).toBe(select);
     });
 
@@ -131,7 +131,7 @@ describe('Select', () => {
           {options}
         </Select>,
       );
-      expect(screen.getByRole('alert')).toHaveClass('italic', 'text-caption-1');
+      expect(screen.getByRole('alert')).toHaveClass('italic', 'wave:text-caption-1');
     });
 
     it('error={true} keeps the flag-only look', () => {
@@ -161,7 +161,7 @@ describe('Select', () => {
       for (const name of ['Letter', 'Digit']) {
         const select = screen.getByRole('combobox', { name });
         expect(select).toHaveAttribute('aria-invalid', 'false');
-        expect(select).not.toHaveClass('border-destructive');
+        expect(select).not.toHaveClass('wave:border-destructive');
         expect(select).not.toHaveAttribute('aria-describedby');
         expect(select).not.toHaveAttribute('aria-errormessage');
       }
@@ -183,7 +183,7 @@ describe('Select', () => {
       for (const name of ['Letter', 'Digit']) {
         const select = screen.getByRole('combobox', { name });
         expect(select).toHaveClass(...inputInvalid.split(' '));
-        expect(select).not.toHaveClass('border-input');
+        expect(select).not.toHaveClass('wave:border-input');
       }
     });
 
@@ -215,29 +215,47 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   it('renders the 0.7 classes (paddings and chevron) by default', () => {
     renderSelect();
     expect(select()).toHaveClass(
-      'h-8',
-      'ps-3',
-      'pe-8',
-      'text-body-1',
-      'bg-[size:5px_5px,5px_5px]',
-      'bg-[position:right_16px_center,right_11px_center]',
+      'wave:h-8',
+      'wave:ps-3',
+      'wave:pe-8',
+      'wave:text-body-1',
+      'wave:bg-[size:5px_5px,5px_5px]',
+      'wave:bg-[position:right_16px_center,right_11px_center]',
     );
     expect(select()).toHaveAttribute('data-size', 'medium');
     expect(select()).toHaveAttribute('data-appearance', 'outline');
   });
 
   it.each([
-    ['small', ['h-6', 'ps-2', 'pe-6', 'text-caption-1', 'bg-[size:4px_4px,4px_4px]']],
-    ['large', ['h-10', 'ps-4', 'pe-10', 'text-body-2', 'bg-[size:6px_6px,6px_6px]']],
+    [
+      'small',
+      [
+        'wave:h-6',
+        'wave:ps-2',
+        'wave:pe-6',
+        'wave:text-caption-1',
+        'wave:bg-[size:4px_4px,4px_4px]',
+      ],
+    ],
+    [
+      'large',
+      [
+        'wave:h-10',
+        'wave:ps-4',
+        'wave:pe-10',
+        'wave:text-body-2',
+        'wave:bg-[size:6px_6px,6px_6px]',
+      ],
+    ],
   ] as const)('size="%s" scales the paddings and the chevron', (size, classes) => {
     renderSelect({ size });
     expect(select()).toHaveClass(...classes);
   });
 
   it.each([
-    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+    ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+    ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
   ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
     renderSelect({ appearance });
     expect(select()).toHaveClass(...classes);
@@ -246,7 +264,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
 
   it('a filled appearance keeps the chevron image next to its fill', () => {
     renderSelect({ appearance: 'filled-darker' });
-    expect(select()).toHaveClass('bg-input-filled-darker');
+    expect(select()).toHaveClass('wave:bg-input-filled-darker');
     expect(select().className).toContain('bg-[image:');
   });
 
@@ -288,7 +306,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     'an invalid %s field keeps the destructive border and the focus color on its bottom',
     (appearance) => {
       renderSelect({ appearance, error: true });
-      expect(select()).toHaveClass('border-destructive', 'focus:border-b-primary');
+      expect(select()).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
     },
   );
 
@@ -302,39 +320,31 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
         { errorId: FIELD_TEST_IDS.errorId },
       );
       expect(select(FIELD_TEST_TEXT.label)).toHaveClass(
-        'border-destructive',
-        'focus:border-b-primary',
+        'wave:border-destructive',
+        'wave:focus:border-b-primary',
       );
     },
   );
 
-  it('a numeric size is the native visible-rows attribute, deprecated', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderSelect({ size: 4 });
-    // A `size` greater than 1 gives the `<select>` the accessible role `listbox` (jsdom follows
-    // the HTML-AAM mapping here), so it is no longer reachable as a `combobox`: query by label.
-    const el = screen.getByLabelText('Country');
-    expect(el).toHaveAttribute('size', '4');
-    expect(el).toHaveAttribute('data-size', 'medium');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
-    );
-  });
-
-  it('a digit-only size string (0.7 HTML style from untyped code) is the numeric legacy form', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderSelect({ size: '5' as unknown as number });
-    // Same role change as above: the native `size` is 5 here.
-    const el = screen.getByLabelText('Country');
-    expect(el).toHaveAttribute('size', '5');
-    expect(el).toHaveAttribute('data-size', 'medium');
-    expect(el).toHaveClass('h-8', 'text-body-1');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
-    );
-  });
+  it.each([
+    ['a number', 4],
+    ['a digit-only string (0.7 HTML style)', '5'],
+  ])(
+    'has no numeric size (removed in 1.0): %s renders neither the native attribute nor a design size',
+    (_label, value) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // @ts-expect-error -- a numeric `size` is removed in 1.0: use `htmlSize`
+      renderSelect({ size: value as number });
+      // Without the native `size` the `<select>` keeps the accessible role `combobox`.
+      const el = select();
+      expect(el).not.toHaveAttribute('size');
+      expect(el).toHaveAttribute('data-size', 'medium');
+      expect(el).toHaveClass('wave:h-8', 'wave:text-body-1');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    },
+  );
 
   it('another untyped size string renders the medium outline defaults, without the attribute', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -346,33 +356,32 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     expect(el).not.toHaveAttribute('size');
     expect(el).toHaveAttribute('data-size', 'medium');
     expect(el).toHaveAttribute('data-appearance', 'outline');
-    expect(el).toHaveClass('h-8', 'text-body-1', 'border-input');
+    expect(el).toHaveClass('wave:h-8', 'wave:text-body-1', 'wave:border-input');
     expect(warn).not.toHaveBeenCalled();
   });
 
   it('htmlSize alone does not warn', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderSelect({ htmlSize: 3 });
-    // Same role change as above: the native `size` is 3 here too.
+    // A `size` greater than 1 gives the `<select>` the accessible role `listbox` (jsdom follows
+    // the HTML-AAM mapping here), so it is no longer reachable as a `combobox`: query by label.
     const el = screen.getByLabelText('Country');
     expect(el).toHaveAttribute('size', '3');
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('with both, htmlSize wins and the numeric form still warns', () => {
+  it('htmlSize next to a numeric size from untyped code: htmlSize alone reaches the attribute', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // @ts-expect-error -- a numeric `size` is removed in 1.0: use `htmlSize`
     renderSelect({ htmlSize: 3, size: 4 });
-    // Same role change as above: the native `size` is 3 here too.
+    // A native `size` greater than 1 makes the `<select>` a `listbox`: query by label.
     const el = screen.getByLabelText('Country');
     expect(el).toHaveAttribute('size', '3');
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      '[WaveUI] Select: `size={number}` is deprecated and will be removed in 1.0. Use `htmlSize` instead.',
-    );
+    expect(warn).not.toHaveBeenCalled();
   });
 
-  it('types: CoreSize or a number', () => {
-    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+  it('types: CoreSize only', () => {
+    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     render(
       // @ts-expect-error not a size
       <Select aria-label="Country" size="huge">

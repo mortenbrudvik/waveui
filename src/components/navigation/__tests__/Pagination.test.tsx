@@ -170,7 +170,7 @@ describe('Pagination', () => {
 
   it('applies small size classes', () => {
     render(<Pagination totalPages={3} size="small" showPreviousNext={false} />);
-    expect(page(1)).toHaveClass('h-7', 'w-7');
+    expect(page(1)).toHaveClass('wave:h-7', 'wave:w-7');
   });
 
   describe('boundary buttons (C-DISABLED, feedback-navigation#29)', () => {
@@ -291,11 +291,11 @@ describe('Pagination', () => {
       render(<Pagination totalPages={5} defaultCurrentPage={1} />);
       const previous = screen.getByRole('button', { name: 'Previous page' });
       expect(previous).toHaveClass(
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
-        'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-        'aria-disabled:opacity-50',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+        'wave:aria-disabled:opacity-50',
       );
-      expect(previous.className).not.toMatch(/(^|\s)hover:/);
+      expect(previous.className).not.toMatch(/(^|\s)wave:hover:/);
     });
 
     it('shows the focus ring of a boundary button that disabled itself at full strength', async () => {
@@ -308,8 +308,8 @@ describe('Pagination', () => {
       expect(previous).toHaveFocus();
       // Dimmed, except while its ring shows: `opacity` would dim the ring below 3:1.
       expect(previous).toHaveClass(
-        'aria-disabled:opacity-50',
-        'aria-disabled:focus-visible:opacity-100',
+        'wave:aria-disabled:opacity-50',
+        'wave:aria-disabled:focus-visible:opacity-100',
       );
     });
   });
@@ -656,26 +656,30 @@ describe('Pagination', () => {
       render(<Pagination totalPages={5} showFirstLast />);
       for (const button of screen.getAllByRole('button')) {
         expect(button).toHaveClass(
-          'focus-visible:outline-2',
-          'focus-visible:outline-offset-2',
-          'focus-visible:outline-ring',
+          'wave:focus-visible:outline-2',
+          'wave:focus-visible:outline-offset-2',
+          'wave:focus-visible:outline-ring',
         );
       }
     });
 
     it('draws the current page with theme tokens (input-basic#8)', () => {
       render(<Pagination totalPages={5} defaultCurrentPage={2} />);
-      expect(page(2)).toHaveClass('bg-primary', 'text-primary-foreground', 'border-primary');
+      expect(page(2)).toHaveClass(
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+        'wave:border-primary',
+      );
       expect(page(2).className).not.toMatch(/text-white|#[0-9a-f]{3,6}/i);
       expect(page(3)).toHaveClass(
-        'text-foreground',
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:text-foreground',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
       );
     });
 
     it('turns off the color transition for reduced motion', () => {
       render(<Pagination totalPages={3} />);
-      expect(page(1)).toHaveClass('motion-reduce:transition-none');
+      expect(page(1)).toHaveClass('wave:motion-reduce:transition-none');
     });
 
     it('mirrors the directional chevrons in RTL (feedback-navigation#34)', () => {
@@ -685,7 +689,7 @@ describe('Pagination', () => {
       for (const name of ['First page', 'Previous page', 'Next page', 'Last page']) {
         const icon = screen.getByRole('button', { name }).querySelector('svg');
         expect(icon).toHaveAttribute('aria-hidden', 'true');
-        expect(icon).toHaveClass('wave-rtl:-scale-x-100');
+        expect(icon).toHaveClass('wave:wave-rtl:-scale-x-100');
       }
     });
 
@@ -701,8 +705,8 @@ describe('Pagination', () => {
       for (const name of ['First page', 'Previous page', 'Next page', 'Last page']) {
         const icon = screen.getByRole('button', { name }).querySelector('svg');
         expect(icon?.closest('[dir]')).toHaveAttribute('dir', 'ltr');
-        expect(icon).toHaveClass('wave-rtl:-scale-x-100');
-        expect(icon?.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
+        expect(icon).toHaveClass('wave:wave-rtl:-scale-x-100');
+        expect(icon?.getAttribute('class')).not.toMatch(/(^|\s)wave:rtl:/);
       }
     });
   });
@@ -871,17 +875,18 @@ describe('Pagination — slotProps', () => {
 
   // Captured from 414fe7d's dist (client and server agree).
   const buttonClasses = (size: string) =>
-    'inline-flex items-center justify-center rounded border cursor-pointer transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 ' +
+    'wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:border wave:cursor-pointer wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 ' +
     size;
   const IDLE =
-    'border-border bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed';
+    'wave:border-border wave:bg-transparent wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed';
   const CURRENT =
-    'border-primary bg-primary text-primary-foreground forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none';
-  const LIST = '<ol class="wave-pagination__list m-0 flex list-none items-center gap-1 p-0">';
+    'wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none';
+  const LIST =
+    '<ol class="wave-pagination__list wave:m-0 wave:flex wave:list-none wave:items-center wave:gap-1 wave:p-0">';
   const ITEM = '<li class="wave-pagination__list-item">';
   const GAP_ITEM = '<li aria-hidden="true" class="wave-pagination__list-item">';
-  const MEDIUM = buttonClasses('h-8 w-8 text-body-1');
-  const SMALL = buttonClasses('h-7 w-7 text-caption-1');
+  const MEDIUM = buttonClasses('wave:h-8 wave:w-8 wave:text-body-1');
+  const SMALL = buttonClasses('wave:h-7 wave:w-7 wave:text-caption-1');
   const BASE_FIRST_PAGE = [
     LIST,
     ITEM,
@@ -899,7 +904,7 @@ describe('Pagination — slotProps', () => {
     `<button aria-label="Page 20" class="wave-pagination__page-button ${MEDIUM} ${IDLE}" type="button">`,
     `<button aria-label="Next page" class="wave-pagination__next-button ${MEDIUM} ${IDLE}" type="button">`,
     `<button aria-label="Last page" class="wave-pagination__last-button ${MEDIUM} ${IDLE}" type="button">`,
-    '<span class="wave-pagination__ellipsis inline-flex items-center justify-center text-muted-foreground h-8 w-8 text-body-1">',
+    '<span class="wave-pagination__ellipsis wave:inline-flex wave:items-center wave:justify-center wave:text-muted-foreground wave:h-8 wave:w-8 wave:text-body-1">',
   ].join('\n');
   const BASE_DISABLED_LAST_PAGE = [
     LIST,
@@ -918,7 +923,7 @@ describe('Pagination — slotProps', () => {
     `<button aria-current="page" aria-label="Page 20" class="wave-pagination__page-button ${SMALL} ${CURRENT}" disabled="" type="button">`,
     `<button aria-label="Next page" class="wave-pagination__next-button ${SMALL} ${IDLE}" disabled="" type="button">`,
     `<button aria-label="Last page" class="wave-pagination__last-button ${SMALL} ${IDLE}" disabled="" type="button">`,
-    '<span class="wave-pagination__ellipsis inline-flex items-center justify-center text-muted-foreground h-7 w-7 text-caption-1">',
+    '<span class="wave-pagination__ellipsis wave:inline-flex wave:items-center wave:justify-center wave:text-muted-foreground wave:h-7 wave:w-7 wave:text-caption-1">',
   ].join('\n');
 
   it('renders the parts of 414fe7d (attributes sorted), on the client and the server', () => {
@@ -1018,11 +1023,11 @@ describe('Pagination — slotProps', () => {
       />,
     );
     expect(one(paginationClassNames.list)).toHaveClass('gap-2');
-    expect(one(paginationClassNames.list)).not.toHaveClass('gap-1');
+    expect(one(paginationClassNames.list)).not.toHaveClass('wave:gap-1');
     expect(page(10)).toHaveClass('rounded-full');
-    expect(page(10)).not.toHaveClass('rounded');
-    expect(screen.getByRole('button', { name: 'Next page' })).not.toHaveClass('border');
-    expect(one(paginationClassNames.ellipsis)).not.toHaveClass('text-muted-foreground');
+    expect(page(10)).not.toHaveClass('wave:rounded');
+    expect(screen.getByRole('button', { name: 'Next page' })).not.toHaveClass('wave:border');
+    expect(one(paginationClassNames.ellipsis)).not.toHaveClass('wave:text-muted-foreground');
   });
 
   it('attaches your refs to the parts', () => {
@@ -1308,7 +1313,7 @@ describe('Pagination — slotProps', () => {
     );
     const next = screen.getByRole('button', { name: 'Next page' });
     expect(next).toHaveClass('my-next');
-    expect(next.querySelector('svg')).toHaveClass('wave-rtl:-scale-x-100');
+    expect(next.querySelector('svg')).toHaveClass('wave:wave-rtl:-scale-x-100');
     expect(screen.getByRole('button', { name: 'First page' })).toHaveAttribute('dir', 'ltr');
   });
 

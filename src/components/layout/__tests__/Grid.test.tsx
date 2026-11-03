@@ -11,7 +11,7 @@ describe('Grid', () => {
     displayName: 'Grid',
     polymorphic: true,
     defaultProps: { columns: 2, gap: 'md', children: <p>Grid item</p> },
-    conflictingClass: { className: 'grid-cols-4', overrides: 'grid-cols-2' },
+    conflictingClass: { className: 'grid-cols-4', overrides: 'wave:grid-cols-2' },
   });
 
   it('renders without crashing', () => {
@@ -27,8 +27,8 @@ describe('Grid', () => {
   it('renders as a grid by default (exact token)', () => {
     render(<Grid data-testid="grid">Content</Grid>);
     const el = screen.getByTestId('grid');
-    expect(el).toHaveClass('grid');
-    expect(el).not.toHaveClass('inline-grid');
+    expect(el).toHaveClass('wave:grid');
+    expect(el).not.toHaveClass('wave:inline-grid');
   });
 
   it('applies 1 column', () => {
@@ -37,7 +37,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('grid-cols-1');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:grid-cols-1');
   });
 
   it('applies 2 columns', () => {
@@ -46,7 +46,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('grid-cols-2');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:grid-cols-2');
   });
 
   it('applies 3 columns', () => {
@@ -55,7 +55,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('grid-cols-3');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:grid-cols-3');
   });
 
   it('applies 4 columns', () => {
@@ -64,7 +64,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('grid-cols-4');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:grid-cols-4');
   });
 
   it('applies 6 columns', () => {
@@ -73,7 +73,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('grid-cols-6');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:grid-cols-6');
   });
 
   it('applies 12 columns', () => {
@@ -82,7 +82,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('grid-cols-12');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:grid-cols-12');
   });
 
   it('applies rows via inline style', () => {
@@ -101,7 +101,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('gap-4');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:gap-4');
   });
 
   it('applies columnGap prop', () => {
@@ -110,7 +110,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('gap-x-2');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:gap-x-2');
   });
 
   it('applies rowGap prop', () => {
@@ -119,7 +119,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('gap-y-6');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:gap-y-6');
   });
 
   it('applies align prop', () => {
@@ -128,7 +128,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('items-center');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:items-center');
   });
 
   it('applies justify prop', () => {
@@ -137,7 +137,7 @@ describe('Grid', () => {
         Content
       </Grid>,
     );
-    expect(screen.getByTestId('grid')).toHaveClass('justify-items-center');
+    expect(screen.getByTestId('grid')).toHaveClass('wave:justify-items-center');
   });
 
   it('renders as custom element via as prop', () => {

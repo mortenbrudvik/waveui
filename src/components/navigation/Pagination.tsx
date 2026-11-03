@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { paginationClassNames } from '../../lib/classNames';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { warnOnce } from '../../lib/dev';
@@ -257,17 +257,17 @@ export function getPaginationRange(
   return range;
 }
 
-const itemBaseClasses = cn(
-  'inline-flex items-center justify-center rounded border cursor-pointer transition-colors motion-reduce:transition-none',
+const itemBaseClasses = wcn(
+  'wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:border wave:cursor-pointer wave:transition-colors wave:motion-reduce:transition-none',
   focusRing,
   disabledStyles,
 );
 
 const idleItemClasses =
-  'border-border bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed';
+  'wave:border-border wave:bg-transparent wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed';
 
-const currentItemClasses = cn(
-  'border-primary bg-primary text-primary-foreground',
+const currentItemClasses = wcn(
+  'wave:border-primary wave:bg-primary wave:text-primary-foreground',
   forcedColors.selectedLeaf,
 );
 
@@ -275,7 +275,7 @@ const currentItemClasses = cn(
  * Directional glyphs point the other way in right-to-left layouts (C-LOGICAL), by the glyph's own
  * direction: Tailwind's bare variant would also match inside an LTR subtree of an RTL page.
  */
-const chevronClasses = 'wave-rtl:-scale-x-100';
+const chevronClasses = 'wave:wave-rtl:-scale-x-100';
 
 /**
  * Page navigation for paged content: page buttons with ellipses, optional Previous/Next and
@@ -349,7 +349,10 @@ const Pagination = ({
   if (pageCount < 1) return null;
 
   const range = getPaginationRange(pageCount, page, siblingCount, boundaryCount);
-  const sizeClasses = size === 'small' ? 'h-7 w-7 text-caption-1' : 'h-8 w-8 text-body-1';
+  const sizeClasses =
+    size === 'small'
+      ? 'wave:h-7 wave:w-7 wave:text-caption-1'
+      : 'wave:h-8 wave:w-8 wave:text-body-1';
   const atStart = page <= 1;
   const atEnd = page >= pageCount;
 
@@ -403,7 +406,7 @@ const Pagination = ({
   ) => {
     const label = getItemAriaLabel(type, target, false);
     const onClick = preventIfDisabled(unavailable, () => goTo(target));
-    const buttonClassName = cn(partClassName, itemBaseClasses, sizeClasses, idleItemClasses);
+    const buttonClassName = wcn(partClassName, itemBaseClasses, sizeClasses, idleItemClasses);
     return (
       <li className={paginationClassNames.listItem} {...listItemProps(LIST_PART_LOCKS)}>
         <button
@@ -421,13 +424,16 @@ const Pagination = ({
     );
   };
 
-  const listClassName = cn(paginationClassNames.list, 'm-0 flex list-none items-center gap-1 p-0');
+  const listClassName = wcn(
+    paginationClassNames.list,
+    'wave:m-0 wave:flex wave:list-none wave:items-center wave:gap-1 wave:p-0',
+  );
   return (
     <nav
       ref={ref}
       aria-label="Pagination"
       {...rest}
-      className={cn(paginationClassNames.root, className)}
+      className={wcn(paginationClassNames.root, className)}
     >
       <ol
         className={listClassName}
@@ -455,9 +461,9 @@ const Pagination = ({
 
         {range.map((item, index) => {
           if (item === 'ellipsis') {
-            const ellipsisClassName = cn(
+            const ellipsisClassName = wcn(
               paginationClassNames.ellipsis,
-              'inline-flex items-center justify-center text-muted-foreground',
+              'wave:inline-flex wave:items-center wave:justify-center wave:text-muted-foreground',
               sizeClasses,
             );
             return (
@@ -483,7 +489,7 @@ const Pagination = ({
           const label = getItemAriaLabel('page', item, item === page);
           const current = item === page ? 'page' : undefined;
           const onClick = () => goTo(item);
-          const buttonClassName = cn(
+          const buttonClassName = wcn(
             paginationClassNames.pageButton,
             itemBaseClasses,
             sizeClasses,

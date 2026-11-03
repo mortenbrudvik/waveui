@@ -16,17 +16,14 @@ import {
 } from '../../../test-utils';
 
 /*
- * P10-DRW-I (spec §4.3, §3, D7, D9, D12, D13, D19): an inline Drawer's `<aside>` sits in a collapse
+ * P10-DRW-I (spec §4.3, §3, D7, D9, D12, D13): an inline Drawer's `<aside>` sits in a collapse
  * wrapper, the presence element, whose default motion collapses the space the panel takes in the
  * layout (columns at a side, rows at the bottom) over the duration of its size. The `<aside>` keeps
  * the consumer's props and the presence attributes; a `full` drawer has no motion; a `className`
- * with presence variants keeps 0.14's motion on the `<aside>`. jsdom loads no CSS, so the phases
- * wait only where `mockAnimations` gives an element a running animation.
+ * with presence variants is a plain class list on the `<aside>` (0.15's D19 rule is removed in
+ * 1.0). jsdom loads no CSS, so the phases wait only where `mockAnimations` gives an element a
+ * running animation.
  */
-
-/** The development warning of a `className` with presence variants (P13-03). */
-const LEGACY_WARNING =
-  '[WaveUI] Drawer: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
 
 /** Spies on `console.warn`; the returned function asserts the warnings logged so far. */
 function spyOnWarnings() {
@@ -49,8 +46,8 @@ const axisOf = (position: DrawerPosition) => (position === 'bottom' ? 'height' :
 const WRAPPER_RECIPE = `${inlineDrawerMotion.width} ${drawerDurations.small}`;
 /** The wrapper's class that lifts the panel's size cap on each axis while it is not entered. */
 const PANEL_CAP_LIFT = {
-  width: 'not-data-[presence=entered]:*:max-w-none',
-  height: 'not-data-[presence=entered]:*:max-h-none',
+  width: 'wave:not-data-[presence=entered]:*:max-w-none',
+  height: 'wave:not-data-[presence=entered]:*:max-h-none',
 } as const;
 
 /** No word of `recipe` on `el`, apart from the words in `except` (the consumer's own classes). */
@@ -228,51 +225,43 @@ describe('inline Drawer motion slot on the wrapper (D5, D6)', () => {
   });
 });
 
-describe('inline Drawer with a className that holds presence variants (D19)', () => {
-  const legacy = ['p-8', 'data-[presence=exiting]:opacity-0'];
+// 0.14's motion in `className` turned the wrapper's motion off through 0.x and made the exit wait
+// for the <aside>; in 1.0 it is a plain class list on the <aside>.
+describe('inline Drawer with a className that holds presence variants (the rule is removed in 1.0)', () => {
+  const presenceClasses = ['p-8', 'data-[presence=exiting]:opacity-0'];
   const isAside = (el: Element) => el.tagName === 'ASIDE';
 
-  it('leaves the motion off the wrapper and keeps the classes on the <aside>, whose motion the exit waits for', async () => {
-    const motion = mockAnimations({ animated: isAside });
+  it('keeps the default collapse on the wrapper and the classes on the <aside>, with no warning', () => {
     const expectWarnings = spyOnWarnings();
-    const user = userEvent.setup();
-    render(<Page defaultOpen className={legacy.join(' ')} />);
-    expectWarnings([LEGACY_WARNING]);
-    expectNoWordOf(collapse(), WRAPPER_RECIPE);
-    expect(collapse()).toHaveClass(...motionClasses(inlineDrawerStructure.end));
-    expect(aside()).toHaveClass(...legacy);
-
-    const panel = aside()!;
-    const wrapper = collapse()!;
-    await user.click(button('Close'));
-    // 0.14's behaviour: the presence core waits for the <aside>'s own motion.
-    for (const element of [wrapper, panel]) {
-      expect(element).toHaveAttribute('data-presence', 'exiting');
-      expect(element).toHaveAttribute('inert');
-    }
-    expect(aside()).toBe(panel);
-    expect(button('Show details')).toHaveFocus();
-    await finish(motion);
-    expect(aside()).toBeNull();
-    expect(collapse()).toBeNull();
+    render(<Page defaultOpen className={presenceClasses.join(' ')} />);
+    expectWarnings([]);
+    expect(collapse()).toHaveClass(
+      ...motionClasses(inlineDrawerStructure.end),
+      ...motionClasses(WRAPPER_RECIPE),
+    );
+    expect(aside()).toHaveClass(...presenceClasses);
+    expect(Array.from(aside()!.classList).slice(-2)).toEqual(presenceClasses);
   });
 
-  it('without that className the exit waits for the wrapper, not for the <aside>', async () => {
+  it('the exit waits for the wrapper, never for the <aside>', async () => {
     mockAnimations({ animated: isAside });
     const user = userEvent.setup();
-    render(<Page defaultOpen className="p-8" />);
+    render(<Page defaultOpen className={presenceClasses.join(' ')} />);
     await user.click(button('Close'));
+    // The <aside> has a running animation, but the presence element is the wrapper, which has
+    // none here: the drawer unmounts at once.
     expect(aside()).toBeNull();
     expect(collapse()).toBeNull();
+    expect(button('Show details')).toHaveFocus();
   });
 
-  it('applies an explicit motion next to that className, on the wrapper, without the warning', () => {
+  it('an explicit motion still replaces the wrapper’s default; the className stays on the <aside>', () => {
     const expectWarnings = spyOnWarnings();
-    render(<Page defaultOpen className={legacy.join(' ')} motion="my-motion" />);
+    render(<Page defaultOpen className={presenceClasses.join(' ')} motion="my-motion" />);
     expectWarnings([]);
     expect(collapse()).toHaveClass('my-motion');
     expectNoWordOf(collapse(), WRAPPER_RECIPE);
-    expect(aside()).toHaveClass(...legacy);
+    expect(aside()).toHaveClass(...presenceClasses);
     expect(aside()).not.toHaveClass('my-motion');
   });
 });

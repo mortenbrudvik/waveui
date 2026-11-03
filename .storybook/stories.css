@@ -1,0 +1,15 @@
+/*
+ * Storybook's stylesheet for the stories' own classes (imported by preview.tsx after preview.css,
+ * compiled by @tailwindcss/vite), as an app's Tailwind build compiles its classes next to Wave:
+ * plain Tailwind without a prefix, Wave's namespaced theme keys of tokens.css (`bg-wave-primary`,
+ * `text-wave-body-1`, `shadow-wave-4`) and the `wave-rtl:` variant, with the stories as its only
+ * source. `reference` keeps the token rules out (preview.css ships them), and `theme(inline)`
+ * Tailwind's theme variables. Unlayered, like the library sheet, so a story's class that sits on a
+ * component's element wins a tie by coming later.
+ */
+@import 'tailwindcss/theme.css' theme(inline);
+@import '../src/styles/tokens.css' reference;
+@import '../src/styles/variants.css';
+@import 'tailwindcss/utilities.css' source(none);
+
+@source '../stories';

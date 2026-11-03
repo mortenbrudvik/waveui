@@ -183,15 +183,15 @@ describe('Dialog modalType="non-modal" (P6-06 D87)', () => {
       const positioner = dialog.parentElement;
       expect(positioner).toHaveClass(
         dialogContentClassNames.positioner,
-        'pointer-events-none',
-        'fixed',
-        'inset-0',
-        'flex',
-        'items-center',
-        'justify-center',
+        'wave:pointer-events-none',
+        'wave:fixed',
+        'wave:inset-0',
+        'wave:flex',
+        'wave:items-center',
+        'wave:justify-center',
       );
-      expect(positioner).not.toHaveClass('bg-backdrop');
-      expect(dialog).toHaveClass('pointer-events-auto');
+      expect(positioner).not.toHaveClass('wave:bg-backdrop');
+      expect(dialog).toHaveClass('wave:pointer-events-auto');
       expect(container).not.toHaveAttribute('inert');
       expect(document.querySelectorAll('[inert]')).toHaveLength(0);
       expect(document.documentElement.style.overflow).toBe('');

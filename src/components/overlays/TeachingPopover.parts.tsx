@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   teachingPopoverBodyClassNames,
   teachingPopoverCarouselClassNames,
@@ -194,7 +194,7 @@ function renderAction(
     const { className: own, onClick, appearance: ownAppearance } = action.props;
     const isWaveButton = isElementOfType(action, Button);
     return React.cloneElement(action, {
-      className: cn(className, own),
+      className: wcn(className, own),
       onClick: composeEventHandlers(onClick, activate),
       ...(isWaveButton ? { appearance: ownAppearance ?? appearance } : undefined),
     });
@@ -470,9 +470,9 @@ export const TeachingSurface = ({
               },
             }
           : { style })}
-        className={cn(
+        className={wcn(
           rootClassName,
-          'relative w-80 rounded-md border border-border bg-background p-5 text-foreground shadow-8',
+          'wave:relative wave:w-80 wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-5 wave:text-foreground wave:shadow-8',
           focusRing,
           motionClassName,
           className,
@@ -608,7 +608,7 @@ export const TeachingPopoverSurface = ({ id, ref, ...rest }: TeachingPopoverSurf
   return (
     <TeachingSurface
       context={context}
-      rootClassName={cn(teachingPopoverClassNames.root, teachingPopoverSurfaceClassNames.root)}
+      rootClassName={wcn(teachingPopoverClassNames.root, teachingPopoverSurfaceClassNames.root)}
       id={id}
       {...rest}
       ref={ref}
@@ -672,10 +672,10 @@ export const TeachingPopoverHeader = ({
     // whether or not the header has a caption.
     <div
       ref={ref}
-      className={cn(
+      className={wcn(
         teachingPopoverHeaderClassNames.root,
         (hasIcon || hasCaption) &&
-          '-mt-2 mb-2 flex min-h-6 items-center gap-1.5 pe-8 text-caption-1 font-semibold text-primary',
+          'wave:-mt-2 wave:mb-2 wave:flex wave:min-h-6 wave:items-center wave:gap-1.5 wave:pe-8 wave:text-caption-1 wave:font-semibold wave:text-primary',
         className,
       )}
       {...rest}
@@ -684,7 +684,10 @@ export const TeachingPopoverHeader = ({
         renderSlot(
           icon,
           'span',
-          cn(teachingPopoverHeaderClassNames.icon, 'inline-flex shrink-0 items-center'),
+          wcn(
+            teachingPopoverHeaderClassNames.icon,
+            'wave:inline-flex wave:shrink-0 wave:items-center',
+          ),
           { 'aria-hidden': true },
         )}
       {hasCaption && materialiseSlotContent(children)}
@@ -694,7 +697,10 @@ export const TeachingPopoverHeader = ({
         slotName="dismissButton"
         closeLabel={closeLabel}
         onClose={dismiss}
-        className={cn(teachingPopoverClassNames.closeButton, 'absolute end-3 top-3')}
+        className={wcn(
+          teachingPopoverClassNames.closeButton,
+          'wave:absolute wave:end-3 wave:top-3',
+        )}
         part={slotProps?.closeButton}
       />
     </div>
@@ -762,17 +768,17 @@ export const TeachingPopoverTitle: PolymorphicComponent<'h3', TeachingPopoverTit
   return (
     <Component
       id={id}
-      className={cn(
+      className={wcn(
         teachingPopoverTitleClassNames.root,
         teachingPopoverClassNames.title,
-        'mb-2 pe-8 text-subtitle-1 font-semibold text-foreground',
+        'wave:mb-2 wave:pe-8 wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
         className,
       )}
       {...rest}
       ref={mergedRef}
     >
       {slotRendersContent(children) ? materialiseSlotContent(children) : step.title}
-      <span className="sr-only">{`, ${stepPosition}`}</span>
+      <span className="wave:sr-only">{`, ${stepPosition}`}</span>
     </Component>
   );
 };
@@ -816,10 +822,10 @@ export const TeachingPopoverBody = ({
   return (
     <div
       ref={ref}
-      className={cn(
+      className={wcn(
         teachingPopoverBodyClassNames.root,
         teachingPopoverClassNames.body,
-        'mb-4 text-body-1 text-muted-foreground',
+        'wave:mb-4 wave:text-body-1 wave:text-muted-foreground',
         className,
       )}
       {...rest}
@@ -828,7 +834,10 @@ export const TeachingPopoverBody = ({
         renderSlot(
           media,
           'span',
-          cn(teachingPopoverBodyClassNames.media, 'mb-3 block overflow-hidden rounded-md'),
+          wcn(
+            teachingPopoverBodyClassNames.media,
+            'wave:mb-3 wave:block wave:overflow-hidden wave:rounded-md',
+          ),
         )}
       {slotRendersContent(children) ? materialiseSlotContent(children) : step.body}
     </div>
@@ -871,11 +880,13 @@ export const TeachingPopoverFooter = ({
     <div
       ref={ref}
       data-layout={footerLayout}
-      className={cn(
+      className={wcn(
         teachingPopoverFooterClassNames.root,
         teachingPopoverClassNames.footer,
-        'flex gap-2',
-        vertical ? 'flex-col items-stretch gap-4' : 'items-center justify-between',
+        'wave:flex wave:gap-2',
+        vertical
+          ? 'wave:flex-col wave:items-stretch wave:gap-4'
+          : 'wave:items-center wave:justify-between',
         className,
       )}
       {...rest}
@@ -903,11 +914,16 @@ function TeachingFooterContent({ context }: { context: TeachingPopoverContextVal
       <TeachingStepDots
         count={context.count}
         index={context.index}
-        className={vertical && 'justify-center'}
+        className={vertical && 'wave:justify-center'}
         part={context.slotProps?.dot}
       />
 
-      <div className={cn('flex gap-2', vertical ? 'flex-col items-stretch' : 'items-center')}>
+      <div
+        className={wcn(
+          'wave:flex wave:gap-2',
+          vertical ? 'wave:flex-col wave:items-stretch' : 'wave:items-center',
+        )}
+      >
         {secondary}
         {primary}
       </div>
@@ -934,15 +950,15 @@ function TeachingStepDots({
   part?: SlotPart<'span'>;
 }) {
   return (
-    <div aria-hidden="true" className={cn('flex items-center gap-1.5', className)}>
+    <div aria-hidden="true" className={wcn('wave:flex wave:items-center wave:gap-1.5', className)}>
       {Array.from({ length: count }, (_, i) => {
         const current = i === index ? 'step' : undefined;
-        const dotClassName = cn(
+        const dotClassName = wcn(
           teachingPopoverClassNames.dot,
-          'h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+          'wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none',
           current
-            ? cn('w-4 bg-primary', forcedColors.fill)
-            : 'w-1.5 bg-stroke-accessible forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none',
+            ? wcn('wave:w-4 wave:bg-primary', forcedColors.fill)
+            : 'wave:w-1.5 wave:bg-stroke-accessible wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none',
         );
         return (
           <span
@@ -1091,7 +1107,7 @@ export const TeachingPopoverCarousel = ({
   if (!step) return null;
 
   return (
-    <div ref={ref} className={cn(teachingPopoverCarouselClassNames.root, className)} {...rest}>
+    <div ref={ref} className={wcn(teachingPopoverCarouselClassNames.root, className)} {...rest}>
       {slotRendersContent(children) ? (
         materialiseSlotContent(children)
       ) : (
@@ -1164,9 +1180,9 @@ export const TeachingPopoverCarouselNav = ({
   );
   if (!step) return null;
 
-  const buttonClassName = cn(
+  const buttonClassName = wcn(
     teachingPopoverCarouselNavClassNames.button,
-    'group inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0',
+    'wave:group wave:inline-flex wave:h-6 wave:min-w-6 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded-md wave:border-0 wave:bg-transparent wave:p-0',
     focusRing,
   );
   return (
@@ -1174,18 +1190,22 @@ export const TeachingPopoverCarouselNav = ({
       ref={ref}
       role="group"
       aria-label={navLabel}
-      className={cn(teachingPopoverCarouselNavClassNames.root, 'flex items-center', className)}
+      className={wcn(
+        teachingPopoverCarouselNavClassNames.root,
+        'wave:flex wave:items-center',
+        className,
+      )}
       {...rest}
     >
       {Array.from({ length: count }, (_, i) => {
         const current = i === index ? 'step' : undefined;
         const label = navButtonLabel(i, count);
-        const indicatorClassName = cn(
+        const indicatorClassName = wcn(
           teachingPopoverCarouselNavClassNames.indicator,
-          'block h-1.5 rounded-full transition-[width,background-color] motion-reduce:transition-none',
+          'wave:block wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none',
           current
-            ? cn('w-4 bg-primary', forcedColors.fill)
-            : 'w-1.5 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
+            ? wcn('wave:w-4 wave:bg-primary', forcedColors.fill)
+            : 'wave:w-1.5 wave:bg-stroke-accessible wave:group-hover:bg-foreground wave:forced-colors:bg-[ButtonText] wave:forced-colors:forced-color-adjust-none',
         );
         // A click whose default the indicator part prevented (inside the button) shows no other
         // step; without that part every click shows it, whoever prevented its default.
@@ -1268,9 +1288,9 @@ export const TeachingPopoverCarouselPageCount = ({
   return (
     <div
       ref={ref}
-      className={cn(
+      className={wcn(
         teachingPopoverCarouselPageCountClassNames.root,
-        'shrink-0 text-caption-1 text-muted-foreground',
+        'wave:shrink-0 wave:text-caption-1 wave:text-muted-foreground',
         className,
       )}
       {...rest}
@@ -1354,9 +1374,9 @@ export const TeachingPopoverCarouselFooter = ({
   // than the whole footer wraps inside it.
   const indicator = slotRendersContent(children) ? (
     <div
-      className={cn(
-        'flex flex-wrap items-center gap-2',
-        centered && 'w-max max-w-full justify-center',
+      className={wcn(
+        'wave:flex wave:flex-wrap wave:items-center wave:gap-2',
+        centered && 'wave:w-max wave:max-w-full wave:justify-center',
       )}
     >
       {materialiseSlotContent(children)}
@@ -1372,16 +1392,16 @@ export const TeachingPopoverCarouselFooter = ({
       <div
         ref={footerRef}
         data-carousel-layout={layout}
-        className={cn(
+        className={wcn(
           teachingPopoverCarouselFooterClassNames.root,
           teachingPopoverClassNames.footer,
-          'flex flex-wrap items-center justify-between gap-2',
+          'wave:flex wave:flex-wrap wave:items-center wave:justify-between wave:gap-2',
           className,
         )}
         {...rest}
       >
         {indicator}
-        <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
+        <div className="wave:ms-auto wave:flex wave:flex-wrap wave:items-center wave:justify-end wave:gap-2">
           {secondary}
           {primary}
         </div>
@@ -1399,11 +1419,11 @@ export const TeachingPopoverCarouselFooter = ({
       ref={footerRef}
       data-carousel-layout={layout}
       data-stacked={stacked ? '' : undefined}
-      className={cn(
+      className={wcn(
         teachingPopoverCarouselFooterClassNames.root,
         teachingPopoverClassNames.footer,
-        'items-center gap-2',
-        stacked ? 'flex flex-wrap' : 'grid grid-cols-[1fr_auto_1fr]',
+        'wave:items-center wave:gap-2',
+        stacked ? 'wave:flex wave:flex-wrap' : 'wave:grid wave:grid-cols-[1fr_auto_1fr]',
         className,
       )}
       {...rest}
@@ -1411,22 +1431,28 @@ export const TeachingPopoverCarouselFooter = ({
       {slotRendersContent(secondary) && (
         <div
           data-wave-carousel-footer-slot="secondary"
-          className={cn('flex w-max max-w-full', !stacked && 'col-start-1 justify-self-start')}
+          className={wcn(
+            'wave:flex wave:w-max wave:max-w-full',
+            !stacked && 'wave:col-start-1 wave:justify-self-start',
+          )}
         >
           {secondary}
         </div>
       )}
       <div
         data-wave-carousel-footer-slot="indicator"
-        className={cn('flex justify-center', stacked ? 'order-first basis-full' : 'col-start-2')}
+        className={wcn(
+          'wave:flex wave:justify-center',
+          stacked ? 'wave:order-first wave:basis-full' : 'wave:col-start-2',
+        )}
       >
         {indicator}
       </div>
       <div
         data-wave-carousel-footer-slot="primary"
-        className={cn(
-          'flex w-max max-w-full',
-          stacked ? 'ms-auto' : 'col-start-3 justify-self-end',
+        className={wcn(
+          'wave:flex wave:w-max wave:max-w-full',
+          stacked ? 'wave:ms-auto' : 'wave:col-start-3 wave:justify-self-end',
         )}
       >
         {primary}

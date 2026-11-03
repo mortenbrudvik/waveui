@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import {
@@ -8,7 +8,6 @@ import {
   drawerMotion,
   inlineDrawerMotion,
   inlineDrawerStructure,
-  usesLegacyMotion,
 } from '../../lib/motion';
 import type { Slot, SlotObject } from '../../lib/slot';
 import { forcedColors } from '../../lib/styles';
@@ -16,7 +15,7 @@ import type { BackdropAppearance, ModalType, MotionSlot } from '../../lib/types'
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
@@ -62,11 +61,11 @@ function getDrawerSizeAxis(position: DrawerPosition): DrawerSizeAxis {
 /**
  * The size classes, keyed by axis: 320px, 592px and 940px on the spacing scale (rem, so they
  * follow the user's font size), and `full` the whole axis. A width (height) class in the
- * consumer's `className` replaces the size, as the consumer's class comes last in `cn()`.
+ * consumer's `className` replaces the size, as the consumer's class comes last in `wcn()`.
  */
 const drawerSizeClasses: Readonly<Record<DrawerSizeAxis, Readonly<Record<DrawerSize, string>>>> = {
-  width: { small: 'w-80', medium: 'w-148', large: 'w-235', full: 'w-full' },
-  height: { small: 'h-80', medium: 'h-148', large: 'h-235', full: 'h-full' },
+  width: { small: 'wave:w-80', medium: 'wave:w-148', large: 'wave:w-235', full: 'wave:w-full' },
+  height: { small: 'wave:h-80', medium: 'wave:h-148', large: 'wave:h-235', full: 'wave:h-full' },
 };
 
 /**
@@ -75,11 +74,11 @@ const drawerSizeClasses: Readonly<Record<DrawerSizeAxis, Readonly<Record<DrawerS
  * (which drop shadows).
  */
 const drawerEdgeClasses: Readonly<Record<DrawerPosition, string>> = {
-  start: 'border-e',
-  end: 'border-s',
-  left: 'border-r', // wave-allow-physical: the consumer asked for the physical left edge
-  right: 'border-l', // wave-allow-physical: the consumer asked for the physical right edge
-  bottom: 'border-t',
+  start: 'wave:border-e',
+  end: 'wave:border-s',
+  left: 'wave:border-r', // wave-allow-physical: the consumer asked for the physical left edge
+  right: 'wave:border-l', // wave-allow-physical: the consumer asked for the physical right edge
+  bottom: 'wave:border-t',
 };
 
 /**
@@ -87,11 +86,11 @@ const drawerEdgeClasses: Readonly<Record<DrawerPosition, string>> = {
  * width; neither grows past the window (a size larger than the screen acts as `full`).
  */
 const overlayPlacementClasses: Readonly<Record<DrawerPosition, string>> = {
-  start: 'start-0 top-0 h-full max-w-full',
-  end: 'end-0 top-0 h-full max-w-full',
-  left: 'left-0 top-0 h-full max-w-full', // wave-allow-physical: the consumer asked for the physical left edge
-  right: 'right-0 top-0 h-full max-w-full', // wave-allow-physical: the consumer asked for the physical right edge
-  bottom: 'inset-x-0 bottom-0 w-full max-h-full',
+  start: 'wave:start-0 wave:top-0 wave:h-full wave:max-w-full',
+  end: 'wave:end-0 wave:top-0 wave:h-full wave:max-w-full',
+  left: 'wave:left-0 wave:top-0 wave:h-full wave:max-w-full', // wave-allow-physical: the consumer asked for the physical left edge
+  right: 'wave:right-0 wave:top-0 wave:h-full wave:max-w-full', // wave-allow-physical: the consumer asked for the physical right edge
+  bottom: 'wave:inset-x-0 wave:bottom-0 wave:w-full wave:max-h-full',
 };
 
 /**
@@ -102,8 +101,8 @@ const overlayPlacementClasses: Readonly<Record<DrawerPosition, string>> = {
  * padded.
  */
 function getOverlayInsetClasses(position: DrawerPosition, size: DrawerSize): string {
-  if (position === 'bottom' && size !== 'full') return 'pb-[env(safe-area-inset-bottom)]';
-  return 'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]';
+  if (position === 'bottom' && size !== 'full') return 'wave:pb-[env(safe-area-inset-bottom)]';
+  return 'wave:pt-[env(safe-area-inset-top)] wave:pb-[env(safe-area-inset-bottom)]';
 }
 
 /**
@@ -127,8 +126,8 @@ function getOverlayPanelClasses(position: DrawerPosition, size: DrawerSize): str
  * colors.
  */
 const inlinePanelClasses = [
-  'relative flex min-h-0 shrink-0 flex-col max-w-full bg-background text-foreground',
-  'border-transparent data-[separator]:border-border',
+  'wave:relative wave:flex wave:min-h-0 wave:shrink-0 wave:flex-col wave:max-w-full wave:bg-background wave:text-foreground',
+  'wave:border-transparent wave:data-[separator]:border-border',
   forcedColors.border,
 ].join(' ');
 
@@ -143,7 +142,7 @@ function getInlinePanelClasses(position: DrawerPosition, size: DrawerSize): stri
   const axis = getDrawerSizeAxis(position);
   return [
     drawerEdgeClasses[position],
-    axis === 'height' ? 'w-full max-h-full' : '',
+    axis === 'height' ? 'wave:w-full wave:max-h-full' : '',
     drawerSizeClasses[axis][size],
   ]
     .filter(Boolean)
@@ -192,19 +191,19 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
   /** Where focus goes when the panel closes, if it can take focus (the root's `finalFocusRef`). */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
   /**
-   * The panel's stable class(es), first in its `cn()`: `drawerClassNames.root`, followed by a
-   * variant's root (`cn(drawerClassNames.root, navDrawerClassNames.root)`).
+   * The panel's stable class(es), first in its `wcn()`: `drawerClassNames.root`, followed by a
+   * variant's root (`wcn(drawerClassNames.root, navDrawerClassNames.root)`).
    */
   rootClassName: string;
   /**
-   * The backdrop's stable class(es), first in its `cn()`: `drawerClassNames.backdrop`, followed by
-   * a variant's (`cn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)`).
+   * The backdrop's stable class(es), first in its `wcn()`: `drawerClassNames.backdrop`, followed by
+   * a variant's (`wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)`).
    */
   backdropClassName: string;
   /**
-   * The stable class(es) of the collapse element around an inline panel, first in its `cn()`:
+   * The stable class(es) of the collapse element around an inline panel, first in its `wcn()`:
    * `drawerClassNames.collapse`, followed by a variant's
-   * (`cn(drawerClassNames.collapse, navDrawerClassNames.collapse)`). Unused by an overlay.
+   * (`wcn(drawerClassNames.collapse, navDrawerClassNames.collapse)`). Unused by an overlay.
    */
   collapseClassName: string;
   /**
@@ -218,9 +217,9 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
    * default of an inline panel is the collapse of the element around it (the space it takes opens
    * and closes on its axis, with a fade), on that element, and it is the element a value goes on.
    * Both take the duration of the panel's size. An inline panel at `full` has no motion: its
-   * element carries the collapse structure only, also with a value. A `className` with presence
-   * variants keeps 0.14's own motion while it is `undefined`: no default, and the presence core
-   * waits for the panel element (inline too, rather than for the element around it).
+   * element carries the collapse structure only, also with a value. The panel's `className` is a
+   * plain class list (on an overlay panel it comes after the motion classes): it never turns the
+   * motion off or changes the element the presence core waits for.
    */
   motion?: MotionSlot | null;
   /**
@@ -242,7 +241,7 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
  * page's background with the overlay shadow, its inner edge in the border colour.
  */
 const OVERLAY_PANEL_CLASSES =
-  'fixed flex flex-col border-border bg-background text-foreground shadow-64';
+  'wave:fixed wave:flex wave:flex-col wave:border-border wave:bg-background wave:text-foreground wave:shadow-64';
 
 /**
  * The drawer panel shell: the panel element of an overlay (in a portal, with its backdrop and the
@@ -253,8 +252,8 @@ const OVERLAY_PANEL_CLASSES =
  * enters also when it mounts open, and its panel and backdrop carry their motion classes
  * (`motion`, `backdropMotion`); the presence core waits for the panel's. An inline panel renders
  * as the only child of a collapse element (`collapseClassName`, D13), which carries the presence
- * attributes too and the inline motion classes, and which the presence core waits for (the panel
- * itself under 0.14's `className` rule); it never enters on mount.
+ * attributes too and the inline motion classes, and which the presence core waits for; it never
+ * enters on mount.
  *
  * It renders its `children` raw and provides no context: no header, title registry, Close button
  * or padding. The component that renders it holds the open state (`useModalOpenState`, then
@@ -304,18 +303,14 @@ export const DrawerPanel = ({
   } = usePresence(open, { appear: overlay, unmountOnExit: unmountOnClose });
   // The motion classes over the size's duration: an overlay panel slides from its edge and its
   // backdrop fades with it; an inline panel's collapse element opens and closes its space on the
-  // panel's axis (D13). A `className` with presence variants keeps 0.14's own motion (D19): no
-  // default, and inline the presence core waits for the panel rather than its collapse element.
+  // panel's axis (D13).
   const panelMotion = useMotionClasses(
     motion,
     inline
       ? `${inlineDrawerMotion[getDrawerSizeAxis(position)]} ${drawerDurations[size]}`
       : `${drawerMotion[position]} ${drawerDurations[size]}`,
-    className,
   );
   const backdropMotionClassName = useMotionClasses(backdropMotion, drawerBackdropMotion[size]);
-  const legacyMotion = usesLegacyMotion(motion, className);
-  useLegacyMotionWarning(componentName, motion, className);
 
   // The panel element of each type, held in state through its own callback ref. A change of `type`
   // remounts the panel (D105): the overlay's hooks see only the portaled element and the inline
@@ -344,11 +339,7 @@ export const DrawerPanel = ({
     };
   }, []);
   const overlayRef = useMergedRefs<HTMLElement>(ref, attachOverlayPanel, presenceRef);
-  const inlineRef = useMergedRefs<HTMLElement>(
-    ref,
-    attachInlinePanel,
-    legacyMotion ? presenceRef : null,
-  );
+  const inlineRef = useMergedRefs<HTMLElement>(ref, attachInlinePanel);
 
   // An inline panel takes no focus on open and returns it on close only from inside (D101). Called
   // before useModalLayer: on a switch from inline to overlay it restores before the overlay's trap
@@ -429,9 +420,9 @@ export const DrawerPanel = ({
     // closed.
     return (
       <div
-        ref={legacyMotion ? undefined : presenceRef}
+        ref={presenceRef}
         {...presenceProps}
-        className={cn(
+        className={wcn(
           collapseClassName,
           inlineDrawerStructure[position],
           size === 'full' ? '' : panelMotion,
@@ -447,7 +438,7 @@ export const DrawerPanel = ({
           {...rest}
           {...presenceProps}
           onKeyDown={onKeyDown}
-          className={cn(
+          className={wcn(
             rootClassName,
             inlinePanelClasses,
             getInlinePanelClasses(position, size),
@@ -488,7 +479,7 @@ export const DrawerPanel = ({
         {...rest}
         {...presenceProps}
         onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
-        className={cn(
+        className={wcn(
           rootClassName,
           OVERLAY_PANEL_CLASSES,
           getOverlayPanelClasses(position, size),

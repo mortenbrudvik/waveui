@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { fieldClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
@@ -444,31 +444,31 @@ const MESSAGE_ICONS: Readonly<Record<ValidationState, IconComponent | null>> = {
 
 /** Text color of each message state (the `*-tint-foreground` tokens keep 4.5:1 on page and card). */
 const MESSAGE_COLORS: Readonly<Record<ValidationState, string>> = {
-  error: 'text-error',
-  warning: 'text-warning-tint-foreground',
-  success: 'text-success-tint-foreground',
-  none: 'text-muted-foreground',
+  error: 'wave:text-error',
+  warning: 'wave:text-warning-tint-foreground',
+  success: 'wave:text-success-tint-foreground',
+  none: 'wave:text-muted-foreground',
 };
 
 /** The label's type ramp per Field size (0.7 default: medium). */
 const LABEL_TEXT: Readonly<Record<CoreSize, string>> = {
-  small: 'text-caption-1',
-  medium: 'text-body-1',
-  large: 'text-body-2',
+  small: 'wave:text-caption-1',
+  medium: 'wave:text-body-1',
+  large: 'wave:text-body-2',
 };
 
 /** Horizontal layout: the label's first line centred on a 24, 32 or 40px control. */
 const LABEL_TOP: Readonly<Record<CoreSize, string>> = {
-  small: 'pt-1',
-  medium: 'pt-1.5',
-  large: 'pt-2.25',
+  small: 'wave:pt-1',
+  medium: 'wave:pt-1.5',
+  large: 'wave:pt-2.25',
 };
 
 /** Horizontal layout: a Checkbox, Switch or RadioGroup row lined up with the label. */
 const SHORT_ROW_FIRST_CHILD: Readonly<Record<CoreSize, string>> = {
-  small: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-0.5',
-  medium: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-1.5',
-  large: '[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-2.5',
+  small: 'wave:[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-0.5',
+  medium: 'wave:[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-1.5',
+  large: 'wave:[&>:first-child:has([role=checkbox],[role=switch],label>[role=radio])]:py-2.5',
 };
 
 /** What Field merges into a `Label` or `InfoLabel` element passed as its `label` (D32). */
@@ -499,7 +499,7 @@ function mergeIntoLabelElement(
   const own = element.props;
   const merged: FieldLabelElementProps = {
     htmlFor: state.controlId,
-    className: cn(state.className, own.className),
+    className: wcn(state.className, own.className),
   };
   if (!own.id) merged.id = state.labelId;
   // The element's own `required` (`false` included) wins; else a required Field makes it show its
@@ -511,7 +511,7 @@ function mergeIntoLabelElement(
 }
 
 /** The icon box before a message: 12px glyphs line up with the first line of caption text. */
-const MESSAGE_ICON_CLASSES = 'mt-0.5 inline-flex shrink-0';
+const MESSAGE_ICON_CLASSES = 'wave:mt-0.5 wave:inline-flex wave:shrink-0';
 
 /**
  * The icon before a message: the state's glyph while `icon` is `undefined`, else the consumer's
@@ -520,7 +520,7 @@ const MESSAGE_ICON_CLASSES = 'mt-0.5 inline-flex shrink-0';
 function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefined) {
   if (icon !== undefined) {
     return slotRendersContent(icon)
-      ? renderSlot(icon, 'span', cn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES), {
+      ? renderSlot(icon, 'span', wcn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES), {
           'aria-hidden': true,
         })
       : null;
@@ -529,7 +529,7 @@ function renderMessageIcon(state: ValidationState, icon: Slot<'span'> | undefine
   return Icon ? (
     <span
       aria-hidden="true"
-      className={cn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES)}
+      className={wcn(fieldClassNames.validationMessageIcon, MESSAGE_ICON_CLASSES)}
     >
       <Icon size={12} />
     </span>
@@ -780,24 +780,25 @@ export const Field = ({
 
   const horizontal = orientation === 'horizontal';
   // Beside the control: a third of the width, its first line lined up with LABEL_TOP.
-  const labelColumn = horizontal && cn('mb-0 shrink-0 basis-1/3', LABEL_TOP[labelSize]);
+  const labelColumn =
+    horizontal && wcn('wave:mb-0 wave:shrink-0 wave:basis-1/3', LABEL_TOP[labelSize]);
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: cn(
+    className: wcn(
       fieldClassNames.label,
-      'mb-1 font-semibold text-foreground',
+      'wave:mb-1 wave:font-semibold wave:text-foreground',
       LABEL_TEXT[labelSize],
       labelColumn,
     ),
     locked: { id: labelId, htmlFor: controlId },
   });
   const requiredProps = mergeSlotProps(slotProps?.required, {
-    className: cn(fieldClassNames.required, 'ms-0.5 text-error'),
+    className: wcn(fieldClassNames.required, 'wave:ms-0.5 wave:text-error'),
     locked: { 'aria-hidden': 'true', tabIndex: undefined },
   });
   const messageProps = mergeSlotProps(slotProps?.validationMessage, {
-    className: cn(
+    className: wcn(
       fieldClassNames.validationMessage,
-      'mt-1 flex items-start gap-1 text-caption-1',
+      'wave:mt-1 wave:flex wave:items-start wave:gap-1 wave:text-caption-1',
       MESSAGE_COLORS[state],
     ),
     locked: {
@@ -807,7 +808,10 @@ export const Field = ({
     },
   });
   const hintProps = mergeSlotProps(slotProps?.hint, {
-    className: cn(fieldClassNames.hint, 'mt-1 text-caption-1 text-muted-foreground'),
+    className: wcn(
+      fieldClassNames.hint,
+      'wave:mt-1 wave:text-caption-1 wave:text-muted-foreground',
+    ),
     locked: { id: hintId },
   });
   const control = (
@@ -836,10 +840,10 @@ export const Field = ({
       data-orientation={orientation}
       data-size={labelSize}
       data-validation-state={state}
-      className={cn(
+      className={wcn(
         fieldClassNames.root,
-        'flex',
-        horizontal ? 'flex-row items-start gap-x-3' : 'flex-col',
+        'wave:flex',
+        horizontal ? 'wave:flex-row wave:items-start wave:gap-x-3' : 'wave:flex-col',
         className,
       )}
       {...rest}
@@ -850,7 +854,7 @@ export const Field = ({
           labelId,
           required,
           size: labelSize,
-          className: cn(fieldClassNames.label, 'mb-1', labelColumn),
+          className: wcn(fieldClassNames.label, 'wave:mb-1', labelColumn),
         })
       ) : hasLabel ? (
         <label {...labelProps}>
@@ -859,7 +863,12 @@ export const Field = ({
         </label>
       ) : null}
       {horizontal ? (
-        <div className={cn('flex min-w-0 flex-1 flex-col', SHORT_ROW_FIRST_CHILD[labelSize])}>
+        <div
+          className={wcn(
+            'wave:flex wave:min-w-0 wave:flex-1 wave:flex-col',
+            SHORT_ROW_FIRST_CHILD[labelSize],
+          )}
+        >
           {control}
         </div>
       ) : (

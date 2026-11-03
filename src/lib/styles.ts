@@ -6,43 +6,44 @@ import type { CoreSize, InputAppearance } from './types';
 
 /** Focus-visible ring for focusable controls (C-FOCUS). */
 export const focusRing =
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  'wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring';
 
 /** Focus-visible ring drawn inside the element: cells, rows, list and menu items. */
 export const focusRingInset =
-  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
+  'wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring';
 
 /** Ring on a container while any descendant has focus. */
 export const focusWithinRing =
-  'focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring';
+  'wave:focus-within:outline-2 wave:focus-within:outline-offset-2 wave:focus-within:outline-ring';
 
 /**
- * Base look of text-entry controls (Input, Textarea, Select, picker inputs).
- * @deprecated Compose inputHeightClasses, inputTextClasses, inputPaddingClasses and
- * inputAppearanceClasses.
+ * Base look of a text-entry control (Input, Textarea, Select, picker inputs) at the medium size
+ * with the outline appearance, as one class list. Internal and unused by the components, which
+ * compose inputHeightClasses, inputTextClasses, inputPaddingClasses and inputAppearanceClasses
+ * instead, so that `size` and `appearance` apply; new code does the same.
  */
 export const inputBase =
-  'h-8 w-full rounded border border-input bg-background px-3 text-body-1 text-foreground placeholder:text-muted-foreground';
+  'wave:h-8 wave:w-full wave:rounded wave:border wave:border-input wave:bg-background wave:px-3 wave:text-body-1 wave:text-foreground wave:placeholder:text-muted-foreground';
 
 /** Height of a text control or picker per size: 24, 32 or 40px. */
 export const inputHeightClasses: Readonly<Record<CoreSize, string>> = {
-  small: 'h-6',
-  medium: 'h-8',
-  large: 'h-10',
+  small: 'wave:h-6',
+  medium: 'wave:h-8',
+  large: 'wave:h-10',
 };
 
 /** Type ramp of a text control or picker per size. */
 export const inputTextClasses: Readonly<Record<CoreSize, string>> = {
-  small: 'text-caption-1',
-  medium: 'text-body-1',
-  large: 'text-body-2',
+  small: 'wave:text-caption-1',
+  medium: 'wave:text-body-1',
+  large: 'wave:text-body-2',
 };
 
 /** Horizontal padding of a text control drawn on its own element, per size: 8, 12 or 16px. */
 export const inputPaddingClasses: Readonly<Record<CoreSize, string>> = {
-  small: 'px-2',
-  medium: 'px-3',
-  large: 'px-4',
+  small: 'wave:px-2',
+  medium: 'wave:px-3',
+  large: 'wave:px-4',
 };
 
 /**
@@ -53,13 +54,14 @@ export const inputPaddingClasses: Readonly<Record<CoreSize, string>> = {
  * border in the system's button text color, so every appearance keeps a visible boundary.
  */
 export const inputAppearanceClasses: Readonly<Record<InputAppearance, string>> = {
-  outline: 'rounded border border-input border-b-stroke-accessible bg-background',
+  outline:
+    'wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background',
   underline:
-    'rounded-none border-0 border-b border-b-stroke-accessible bg-transparent forced-colors:border-[ButtonText]',
+    'wave:rounded-none wave:border-0 wave:border-b wave:border-b-stroke-accessible wave:bg-transparent wave:forced-colors:border-[ButtonText]',
   'filled-darker':
-    'rounded border border-input-filled-stroke bg-input-filled-darker forced-colors:border-[ButtonText]',
+    'wave:rounded wave:border wave:border-input-filled-stroke wave:bg-input-filled-darker wave:forced-colors:border-[ButtonText]',
   'filled-lighter':
-    'rounded border border-input-filled-stroke bg-input-filled-lighter forced-colors:border-[ButtonText]',
+    'wave:rounded wave:border wave:border-input-filled-stroke wave:bg-input-filled-lighter wave:forced-colors:border-[ButtonText]',
 };
 
 /**
@@ -68,7 +70,7 @@ export const inputAppearanceClasses: Readonly<Record<InputAppearance, string>> =
  * sets its own position (the recipe sets none, because cn() would then replace the position of a
  * picker button).
  */
-export const hitAreaLayer = 'before:absolute before:-inset-0.5';
+export const hitAreaLayer = 'wave:before:absolute wave:before:-inset-0.5';
 
 /**
  * Focus indicator of text-entry controls: a 2px primary bottom border. `focus:outline-hidden`
@@ -76,13 +78,14 @@ export const hitAreaLayer = 'before:absolute before:-inset-0.5';
  * forced-colors mode, where the border colour change is not perceivable. (Scoped to `:focus` so
  * unfocused inputs do not show that outline in forced colors.)
  */
-export const inputFocus = 'focus:outline-hidden focus:border-b-2 focus:border-b-primary';
+export const inputFocus =
+  'wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary';
 
 /**
  * Wrapper form of {@link inputFocus} for inputs rendered inside a styled wrapper (slots,
  * SearchBox, TagPicker). Put `focus:outline-hidden` on the inner control.
  */
-export const inputFocusWithin = 'focus-within:border-b-2 focus-within:border-b-primary';
+export const inputFocusWithin = 'wave:focus-within:border-b-2 wave:focus-within:border-b-primary';
 
 /**
  * Invalid look of a text-entry control (Input, Select, Textarea, SearchBox, SpinButton, Combobox,
@@ -91,14 +94,14 @@ export const inputFocusWithin = 'focus-within:border-b-2 focus-within:border-b-p
  * appearance and {@link inputFocus} in `cn()`: while the control is focused, the focus recipe
  * colors the 2px bottom border and the other borders stay destructive.
  */
-export const inputInvalid = 'border-destructive';
+export const inputInvalid = 'wave:border-destructive';
 
 /**
  * Wrapper form of {@link inputInvalid} for a control drawn by a styled wrapper around the
  * focusable input (Input with slots, SearchBox, SpinButton, TagPicker), placed after
  * {@link inputFocusWithin}.
  */
-export const inputInvalidWithin = 'border-destructive';
+export const inputInvalidWithin = 'wave:border-destructive';
 
 /**
  * Disabled look for native `disabled` and `aria-disabled` (C-DISABLED) controls. An
@@ -107,13 +110,13 @@ export const inputInvalidWithin = 'border-destructive';
  * 3:1, as a `disabledFocusable` button does.
  */
 export const disabledStyles =
-  'disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
+  'wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100';
 
 /** Colour-transition recipe that is switched off for reduced motion (C-MOTION). */
-export const motionSafeTransition = 'transition motion-reduce:transition-none';
+export const motionSafeTransition = 'wave:transition wave:motion-reduce:transition-none';
 
 const selectedLeaf =
-  'forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none';
+  'wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none';
 
 /**
  * Forced-colors (Windows High Contrast) recipes, built from system colours.
@@ -131,11 +134,11 @@ export const forcedColors = {
    * non-colour indicator; the browser keeps system colours for the content.
    */
   selectedContainer:
-    'forced-colors:outline-2 forced-colors:outline-[Highlight] forced-colors:-outline-offset-2',
+    'wave:forced-colors:outline-2 wave:forced-colors:outline-[Highlight] wave:forced-colors:-outline-offset-2',
   /** Border of a control (Switch track, Checkbox box, Radio circle). */
-  control: 'forced-colors:border-[ButtonText]',
+  control: 'wave:forced-colors:border-[ButtonText]',
   /** Border of a non-interactive surface (tracks, separators). */
-  border: 'forced-colors:border-[CanvasText]',
+  border: 'wave:forced-colors:border-[CanvasText]',
   /**
    * Fill of a **leaf indicator drawn with its own background** that must stay visible in forced
    * colors, where author backgrounds become Canvas: a step dot or connector, a pager dot, a
@@ -146,7 +149,7 @@ export const forcedColors = {
    * pseudo-element or a border: use `rangeInput` for a native range input (Slider) and `ringArc`
    * for a border-drawn ring (Spinner).
    */
-  fill: 'forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none',
+  fill: 'wave:forced-colors:bg-[Highlight] wave:forced-colors:forced-color-adjust-none',
   /**
    * A native `<input type="range">` drawn through its track and thumb pseudo-elements (Slider):
    * put it on the input, after the normal-mode classes. It opts the input out of forced colors
@@ -157,7 +160,7 @@ export const forcedColors = {
    * Firefox (`::-moz-range-*`) parts.
    */
   rangeInput:
-    'forced-colors:forced-color-adjust-none forced-colors:[&::-webkit-slider-runnable-track]:bg-[CanvasText] forced-colors:[&::-moz-range-track]:bg-[CanvasText] forced-colors:[&::-webkit-slider-thumb]:bg-[Highlight] forced-colors:[&::-webkit-slider-thumb]:border-[Canvas] forced-colors:[&::-moz-range-thumb]:bg-[Highlight] forced-colors:[&::-moz-range-thumb]:border-[Canvas] forced-colors:disabled:[&::-webkit-slider-runnable-track]:bg-[GrayText] forced-colors:disabled:[&::-moz-range-track]:bg-[GrayText] forced-colors:disabled:[&::-webkit-slider-thumb]:bg-[GrayText] forced-colors:disabled:[&::-moz-range-thumb]:bg-[GrayText] forced-colors:focus-visible:outline-[Highlight]',
+    'wave:forced-colors:forced-color-adjust-none wave:forced-colors:[&::-webkit-slider-runnable-track]:bg-[CanvasText] wave:forced-colors:[&::-moz-range-track]:bg-[CanvasText] wave:forced-colors:[&::-webkit-slider-thumb]:bg-[Highlight] wave:forced-colors:[&::-webkit-slider-thumb]:border-[Canvas] wave:forced-colors:[&::-moz-range-thumb]:bg-[Highlight] wave:forced-colors:[&::-moz-range-thumb]:border-[Canvas] wave:forced-colors:disabled:[&::-webkit-slider-runnable-track]:bg-[GrayText] wave:forced-colors:disabled:[&::-moz-range-track]:bg-[GrayText] wave:forced-colors:disabled:[&::-webkit-slider-thumb]:bg-[GrayText] wave:forced-colors:disabled:[&::-moz-range-thumb]:bg-[GrayText] wave:forced-colors:focus-visible:outline-[Highlight]',
   /**
    * Arc of a **ring drawn with borders** whose top side is the arc (Spinner): put it on the ring,
    * after its border classes. Forced colors would give all four sides the same system color, so
@@ -165,12 +168,13 @@ export const forcedColors = {
    * track in `Canvas` and draws the arc in `Highlight`. Leaf elements only, as with `fill`.
    */
   ringArc:
-    'forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:border-t-[Highlight]',
+    'wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:border-t-[Highlight]',
   /** Disabled text and borders. */
-  disabled: 'forced-colors:text-[GrayText] forced-colors:border-[GrayText]',
+  disabled: 'wave:forced-colors:text-[GrayText] wave:forced-colors:border-[GrayText]',
   /**
-   * @deprecated Ambiguous: use `selectedLeaf` for leaf indicators or `selectedContainer` for
-   * containers. Kept as an alias of `selectedLeaf`.
+   * The same classes as `selectedLeaf`, under the earlier, ambiguous name: unused by the
+   * components; new code picks `selectedLeaf` for a leaf indicator or `selectedContainer` for a
+   * container.
    */
   selected: selectedLeaf,
 } as const;

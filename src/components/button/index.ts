@@ -18,7 +18,7 @@ export { MenuButton } from './MenuButton';
 export type { MenuButtonProps } from './MenuButton';
 
 export { Link } from './Link';
-export type { LinkProps, LinkOwnProps, LinkAppearance, LinkVariant } from './Link';
+export type { LinkProps, LinkOwnProps, LinkAppearance } from './Link';
 
 export {
   Toolbar,

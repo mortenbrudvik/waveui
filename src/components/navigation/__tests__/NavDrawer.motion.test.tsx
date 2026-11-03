@@ -24,17 +24,13 @@ import {
 } from '../../../test-utils';
 
 /*
- * P10-DRW-O (spec §4.2, §3, D7, D9, D19): an overlay NavDrawer moves as an overlay Drawer does, on
+ * P10-DRW-O (spec §4.2, §3, D7, D9): an overlay NavDrawer moves as an overlay Drawer does, on
  * the same panel shell: the panel slides from its edge with its size's duration (`motion`), the
  * backdrop fades (`backdropMotion`), and the panel exits `inert` with its layer and focus released
  * at once. An inline NavDrawer collapses as an inline Drawer does (P10-DRW-I, §4.3): its panel sits
  * in a collapse wrapper that carries Drawer's and NavDrawer's collapse classes. jsdom loads no
  * CSS, so the phases wait only where `mockAnimations` gives an element a running animation.
  */
-
-/** The development warning of a `className` with presence variants (P13-03). */
-const LEGACY_WARNING =
-  '[WaveUI] NavDrawer: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
 
 /** Spies on `console.warn`; the returned function asserts the warnings logged so far. */
 function spyOnWarnings() {
@@ -193,24 +189,33 @@ describe('NavDrawer motion slots (D5, D6)', () => {
     }
   });
 
-  describe('a className with presence variants keeps 0.14’s own motion (D19)', () => {
-    const legacy = ['w-65', 'data-[presence=exiting]:opacity-0'];
+  // 0.14's motion in `className` turned the default off through 0.x; in 1.0 it is a plain class
+  // list, composed after the motion classes.
+  describe('a className with presence variants is a plain class list (the rule is removed in 1.0)', () => {
+    const presenceClasses = ['w-65', 'data-[presence=exiting]:opacity-0'];
 
-    it('leaves the default motion out and keeps both consumer classes', () => {
+    it('keeps the default motion, composes the className after it and warns about nothing', () => {
       const expectWarnings = spyOnWarnings();
-      render(openDrawer({ className: legacy.join(' ') }));
-      expectWarnings([LEGACY_WARNING]);
-      expect(panel()).toHaveClass(...legacy);
-      expectNoWordOf(panel(), PANEL_RECIPE, legacy);
+      render(openDrawer({ className: presenceClasses.join(' ') }));
+      expectWarnings([]);
+      // The className's exit opacity replaces the recipe's own word of the same variant (1.0:
+      // the recipe's carries the prefix, so the two are no longer one string); the rest stays.
+      const replaced = 'wave:data-[presence=exiting]:opacity-0';
+      expect(panel()).toHaveClass(
+        ...motionClasses(PANEL_RECIPE).filter((word) => word !== replaced),
+        ...presenceClasses,
+      );
+      expect(panel()).not.toHaveClass(replaced);
+      expect(Array.from(panel()!.classList).slice(-2)).toEqual(presenceClasses);
       expect(backdrop()).toHaveClass(...motionClasses(drawerBackdropMotion.small));
     });
 
-    it('applies an explicit motion next to that className, without the warning', () => {
+    it('an explicit motion still replaces the default; the className stays', () => {
       const expectWarnings = spyOnWarnings();
-      render(openDrawer({ className: legacy.join(' '), motion: 'my-motion' }));
+      render(openDrawer({ className: presenceClasses.join(' '), motion: 'my-motion' }));
       expectWarnings([]);
-      expect(panel()).toHaveClass('my-motion', ...legacy);
-      expectNoWordOf(panel(), PANEL_RECIPE, legacy);
+      expect(panel()).toHaveClass('my-motion', ...presenceClasses);
+      expectNoWordOf(panel(), PANEL_RECIPE, presenceClasses);
     });
   });
 
@@ -391,24 +396,24 @@ describe('inline NavDrawer collapse (§4.3, D13)', () => {
     expect(collapse()).toHaveAttribute('data-presence', 'entered');
   });
 
-  it('a className with presence variants keeps 0.14’s motion on the panel (D19)', async () => {
-    const legacy = ['w-65', 'data-[presence=exiting]:opacity-0'];
-    const motion = mockAnimations({
-      animated: (el) => el.classList.contains(navDrawerClassNames.root),
-    });
+  it('a className with presence variants is a plain class list on the panel: the wrapper keeps its collapse and the exit waits for it (the rule is removed in 1.0)', async () => {
+    const presenceClasses = ['w-65', 'data-[presence=exiting]:opacity-0'];
+    const motion = mockAnimations({ animated: isCollapse });
     const expectWarnings = spyOnWarnings();
     const user = userEvent.setup();
-    render(<Page drawerProps={{ type: 'inline', className: legacy.join(' ') }} />);
+    render(<Page drawerProps={{ type: 'inline', className: presenceClasses.join(' ') }} />);
     await user.click(button('Open navigation'));
-    expectWarnings([LEGACY_WARNING]);
-    expectNoWordOf(collapse(), WRAPPER_RECIPE);
-    expect(panel()).toHaveClass(...legacy);
+    expectWarnings([]);
+    expect(collapse()).toHaveClass(...motionClasses(WRAPPER_RECIPE));
+    expect(panel()).toHaveClass(...presenceClasses);
     await finish(motion);
+    const wrapper = collapse()!;
     const element = panel()!;
     await user.click(button('Open navigation'));
-    expect(panel()).toBe(element);
-    expect(element).toHaveAttribute('data-presence', 'exiting');
-    expect(element).toHaveAttribute('inert');
+    for (const node of [wrapper, element]) {
+      expect(node).toHaveAttribute('data-presence', 'exiting');
+      expect(node).toHaveAttribute('inert');
+    }
     await finish(motion);
     expect(panel()).toBeNull();
     expect(collapse()).toBeNull();

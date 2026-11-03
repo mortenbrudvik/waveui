@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuButtonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
@@ -59,11 +59,11 @@ export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
  * counts the indicator as content, so it would give such a button the labelled 96px minimum width.
  */
 const unlabelledSizeClasses: Record<Size, string> = {
-  'extra-small': 'min-w-0 px-1.5',
-  small: 'min-w-0 px-1.5',
-  medium: 'min-w-0 px-2',
-  large: 'min-w-0 px-2',
-  'extra-large': 'min-w-0 px-3',
+  'extra-small': 'wave:min-w-0 wave:px-1.5',
+  small: 'wave:min-w-0 wave:px-1.5',
+  medium: 'wave:min-w-0 wave:px-2',
+  large: 'wave:min-w-0 wave:px-2',
+  'extra-large': 'wave:min-w-0 wave:px-3',
 };
 
 /**
@@ -113,12 +113,12 @@ export const MenuButton = ({
   // chevron, as for a picker's `expandIcon`.
   const indicator =
     menuIcon == null || (menuIconButton !== null && !slotRendersContent(glyph)) ? (
-      <ChevronDownIcon className={cn(menuButtonClassNames.menuIcon, 'shrink-0')} />
+      <ChevronDownIcon className={wcn(menuButtonClassNames.menuIcon, 'wave:shrink-0')} />
     ) : slotRendersContent(glyph) ? (
       renderSlot(
         glyph,
         'span',
-        cn(menuButtonClassNames.menuIcon, 'inline-flex shrink-0 items-center'),
+        wcn(menuButtonClassNames.menuIcon, 'wave:inline-flex wave:shrink-0 wave:items-center'),
         {
           'aria-hidden': true,
         },
@@ -155,9 +155,9 @@ export const MenuButton = ({
       appearance={appearance}
       size={size}
       icon={withPartClass(icon, menuButtonClassNames.icon)}
-      className={cn(
+      className={wcn(
         menuButtonClassNames.root,
-        'gap-1.5',
+        'wave:gap-1.5',
         unlabelled && unlabelledSizeClasses[size],
         className,
       )}

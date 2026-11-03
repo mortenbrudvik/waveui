@@ -6,9 +6,6 @@ import type { SkeletonGroupProps, SkeletonProps } from '../Skeleton';
 import type { Shape } from '../../../lib/types';
 import { testCompoundExposure, testSystemProps } from '../../../test-utils';
 
-const VARIANT_DEPRECATION =
-  '[WaveUI] Skeleton: `variant` is deprecated and will be removed in 1.0. Use `shape` instead.';
-
 describe('Skeleton', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -18,7 +15,7 @@ describe('Skeleton', () => {
     expectedTag: 'div',
     displayName: 'Skeleton',
     defaultProps: { width: 120, height: 12 },
-    conflictingClass: { className: 'rounded-full', overrides: 'rounded' },
+    conflictingClass: { className: 'rounded-full', overrides: 'wave:rounded' },
   });
 
   testCompoundExposure(Skeleton, ['Group']);
@@ -51,7 +48,11 @@ describe('Skeleton', () => {
   it('uses the skeleton token, the pulse animation and no animation for reduced motion', () => {
     render(<Skeleton data-testid="skel" />);
     const el = screen.getByTestId('skel');
-    expect(el).toHaveClass('bg-skeleton', 'animate-wave-pulse', 'motion-reduce:animate-none');
+    expect(el).toHaveClass(
+      'wave:bg-skeleton',
+      'wave:animate-wave-pulse',
+      'wave:motion-reduce:animate-none',
+    );
     expect(el.className).not.toMatch(/\[#|animate-\[/);
   });
 
@@ -59,8 +60,8 @@ describe('Skeleton', () => {
     render(<Skeleton data-testid="skel" />);
     // Forced colors replace the author fill with Canvas, which would make the placeholder vanish.
     expect(screen.getByTestId('skel')).toHaveClass(
-      'forced-colors:bg-[GrayText]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:forced-colors:bg-[GrayText]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
   });
 
@@ -68,69 +69,48 @@ describe('Skeleton', () => {
     it('defaults to the rounded shape (exact token, feedback-navigation#21)', () => {
       render(<Skeleton data-testid="skel" />);
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded');
-      expect(el).not.toHaveClass('rounded-full');
-      expect(el).not.toHaveClass('rounded-none');
+      expect(el).toHaveClass('wave:rounded');
+      expect(el).not.toHaveClass('wave:rounded-full');
+      expect(el).not.toHaveClass('wave:rounded-none');
     });
 
     it('applies the circular shape', () => {
       render(<Skeleton shape="circular" data-testid="skel" />);
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded-full');
-      expect(el).not.toHaveClass('rounded');
+      expect(el).toHaveClass('wave:rounded-full');
+      expect(el).not.toHaveClass('wave:rounded');
     });
 
     it('applies the square shape', () => {
       render(<Skeleton shape="square" data-testid="skel" />);
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded-none');
-      expect(el).not.toHaveClass('rounded');
+      expect(el).toHaveClass('wave:rounded-none');
+      expect(el).not.toHaveClass('wave:rounded');
     });
   });
 
-  describe('deprecated `variant` alias (layout#16)', () => {
-    it('applies circular variant class and warns once', () => {
+  describe('the 0.4 `variant` is removed in 1.0 (layout#16)', () => {
+    // Untyped code that still passes it: an unknown attribute of the placeholder element, which
+    // React renders as it is, and the placeholder keeps the default rounded shape.
+    it('has no variant alias of shape: variant="circular" stays rounded', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       render(
-        <>
-          <Skeleton variant="circular" data-testid="skel" />
-          <Skeleton variant="circular" />
-        </>,
+        <Skeleton
+          // @ts-expect-error -- `variant` is removed in 1.0: use `shape`
+          variant="circular"
+          data-testid="skel"
+        />,
       );
       const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded-full');
-      expect(el).not.toHaveClass('rounded');
-      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
+      expect(el).toHaveClass('wave:rounded');
+      expect(el).not.toHaveClass('wave:rounded-full');
+      expect(el).toHaveAttribute('variant', 'circular');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
 
-    it('applies text variant class (the 0.4 look: rounded)', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<Skeleton variant="text" data-testid="skel" />);
-      const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded');
-      expect(el).not.toHaveClass('rounded-full');
-      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
-    });
-
-    it('applies rectangular variant class (the 0.4 look: rounded)', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<Skeleton variant="rectangular" data-testid="skel" />);
-      const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded');
-      expect(el).not.toHaveClass('rounded-full');
-      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
-    });
-
-    it('lets shape win when both are given, and still warns about variant', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<Skeleton shape="square" variant="circular" data-testid="skel" />);
-      const el = screen.getByTestId('skel');
-      expect(el).toHaveClass('rounded-none');
-      expect(el).not.toHaveClass('rounded-full');
-      expect(warn.mock.calls).toEqual([[VARIANT_DEPRECATION]]);
-    });
-
-    it('does not warn for shape alone', () => {
+    it('does not warn for shape', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<Skeleton shape="circular" />);
       expect(warn).not.toHaveBeenCalled();
@@ -141,6 +121,7 @@ describe('Skeleton', () => {
     it('SkeletonProps carries ref (C-REF) and the shared Shape type', () => {
       expectTypeOf<SkeletonProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
       expectTypeOf<SkeletonProps['shape']>().toEqualTypeOf<Shape | undefined>();
+      expectTypeOf<SkeletonProps>().not.toHaveProperty('variant');
       expectTypeOf<SkeletonGroupProps['ref']>().toEqualTypeOf<
         React.Ref<HTMLDivElement> | undefined
       >();
@@ -177,7 +158,7 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
     expect(group).toHaveAttribute('aria-busy', 'true');
     expect(group).not.toHaveAttribute('role');
     const label = screen.getByText('Loading');
-    expect(label).toHaveClass('sr-only');
+    expect(label).toHaveClass('wave:sr-only');
     expect(group).toContainElement(label);
     expect(screen.getByTestId('item')).toHaveAttribute('aria-hidden', 'true');
   });
@@ -188,7 +169,7 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
         <Skeleton />
       </Skeleton.Group>,
     );
-    expect(screen.getByText('Loading comments')).toHaveClass('sr-only');
+    expect(screen.getByText('Loading comments')).toHaveClass('wave:sr-only');
     expect(screen.queryByText('Loading')).toBeNull();
   });
 
@@ -217,7 +198,7 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
           <Skeleton />
         </Skeleton.Group>,
       );
-      expect(screen.getByText('Loading comments')).toHaveClass('sr-only');
+      expect(screen.getByText('Loading comments')).toHaveClass('wave:sr-only');
       rerender(
         <Skeleton.Group label="Loading comments" aria-busy={false} data-testid="group">
           <p>Two comments</p>
@@ -236,13 +217,13 @@ describe('Skeleton.Group (feedback-navigation#6)', () => {
       render(<Wrapper />);
       const group = screen.getByTestId('group');
       expect(group).toHaveAttribute('aria-busy', 'true');
-      expect(screen.getByText('Loading')).toHaveClass('sr-only');
+      expect(screen.getByText('Loading')).toHaveClass('wave:sr-only');
     });
 
     it('keeps the label for an explicit aria-busy={true}', () => {
       render(<Skeleton.Group aria-busy data-testid="group" />);
       expect(screen.getByTestId('group')).toHaveAttribute('aria-busy', 'true');
-      expect(screen.getByText('Loading')).toHaveClass('sr-only');
+      expect(screen.getByText('Loading')).toHaveClass('wave:sr-only');
     });
   });
 });

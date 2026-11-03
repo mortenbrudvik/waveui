@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { messageBarGroupClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { getFirstTabbable } from '../../lib/focus';
 import {
@@ -96,7 +96,7 @@ const MessageBarGroupItem = ({ entry, motionClassName, onExited }: MessageBarGro
     <div
       ref={mergedRef}
       {...presenceProps}
-      className={cn(messageBarGroupClassNames.item, messageBarGroupItemStructure, motionClassName)}
+      className={wcn(messageBarGroupClassNames.item, messageBarGroupItemStructure, motionClassName)}
     >
       {element}
     </div>
@@ -171,7 +171,11 @@ export const MessageBarGroup = ({
       ref={ref}
       data-animate={animate}
       {...rest}
-      className={cn(messageBarGroupClassNames.root, 'flex flex-col gap-2', className)}
+      className={wcn(
+        messageBarGroupClassNames.root,
+        'wave:flex wave:flex-col wave:gap-2',
+        className,
+      )}
     >
       {entries.map((entry) => (
         <MessageBarGroupItem

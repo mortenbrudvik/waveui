@@ -34,8 +34,6 @@ afterEach(() => {
 const SORT_ERROR = '[WaveUI] useDataGridSort must be used within DataGrid';
 const SELECTION_ERROR = '[WaveUI] useDataGridSelection must be used within DataGrid';
 const ROW_ID_ERROR = '[WaveUI] useDataGridRowId must be used within DataGrid.Row';
-const POSITIONAL_SORT_WARNING =
-  '[WaveUI] DataGrid: `onSortChange(columnId, direction)` is deprecated and will be removed in 1.0. Use `onSortChange(sort, details?)` instead. Pass `items`, `sort` or `defaultSort` to receive the sort object.';
 
 interface Person {
   id: string;
@@ -193,15 +191,15 @@ describe('useDataGridSort (P13-02, R16)', () => {
 
   it('setSort without an event reports an untrusted sort event with no target', () => {
     const probes = recorder<UseDataGridSortResult>();
-    const onSortChange = vi.fn<(sort: DataGridSort, details?: DataGridSortChangeDetails) => void>();
+    const onSortChange = vi.fn<(sort: DataGridSort, details: DataGridSortChangeDetails) => void>();
     render(<SortGrid probes={probes} defaultSort={null} onSortChange={onSortChange} />);
     act(() => probes.last('caption').setSort({ columnId: 'name', direction: 'ascending' }));
     expect(onSortChange).toHaveBeenCalledTimes(1);
     const details = onSortChange.mock.calls[0][1];
-    expect(details?.event).toBeInstanceOf(Event);
-    expect(details?.event.type).toBe('sort');
-    expect(details?.event.isTrusted).toBe(false);
-    expect(details?.event.target).toBeNull();
+    expect(details.event).toBeInstanceOf(Event);
+    expect(details.event.type).toBe('sort');
+    expect(details.event.isTrusted).toBe(false);
+    expect(details.event.target).toBeNull();
   });
 
   it('setSort of the sort the grid already has changes nothing and calls nothing', () => {
@@ -299,11 +297,12 @@ describe('useDataGridSort (P13-02, R16)', () => {
     expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
   });
 
-  it('calls the deprecated positional onSortChange with the column and direction, and adds no warning', () => {
+  it('has no positional onSortChange (removed in 1.0): untyped code gets the sort object, with no warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const probes = recorder<UseDataGridSortResult>();
     const onSortChange = vi.fn();
     render(
+      // @ts-expect-error -- no `onSortChange` without `items`, `sort` or `defaultSort`
       <DataGrid aria-label="People" onSortChange={onSortChange}>
         <DataGrid.Header>
           <tr>
@@ -322,13 +321,13 @@ describe('useDataGridSort (P13-02, R16)', () => {
         </DataGrid.Body>
       </DataGrid>,
     );
-    // The grid's own announcement of the positional form, from its render.
-    expect(warn.mock.calls).toEqual([[POSITIONAL_SORT_WARNING]]);
     act(() => probes.last('cell').setSort({ columnId: 'name', direction: 'descending' }));
-    expect(onSortChange.mock.calls).toEqual([['name', 'descending']]);
+    expect(onSortChange.mock.calls).toEqual([
+      [{ columnId: 'name', direction: 'descending' }, { event: expect.any(Event) }],
+    ]);
     expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
     expect(probes.last('cell').sort).toStrictEqual({ columnId: 'name', direction: 'descending' });
-    expect(warn.mock.calls).toEqual([[POSITIONAL_SORT_WARNING]]);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('reads the grid in a header cell of your own and in a body cell', () => {

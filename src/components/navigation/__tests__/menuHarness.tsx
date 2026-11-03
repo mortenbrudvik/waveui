@@ -33,7 +33,7 @@ import { render, within } from '@testing-library/react';
 import type { RenderOptions, RenderResult } from '@testing-library/react';
 import { vi } from 'vitest';
 import type { Mock } from 'vitest';
-import { cn } from '../../../lib/cn';
+import { wcn } from '../../../lib/cn';
 import type { CheckedValues, CheckedValuesChangeHandler } from '../../../lib/types';
 import { useCheckedValues } from '../../../hooks/useCheckedValues';
 import { useRovingTabIndex } from '../../../hooks/useRovingTabIndex';
@@ -145,7 +145,7 @@ export function MenuListHarness({
             onKeyDown={handleKeyDown}
             onKeyDownCapture={withTypeaheadText(handleKeyDownCapture)}
             onFocus={handleFocus}
-            className={cn(menuSurfaceClasses)}
+            className={wcn(menuSurfaceClasses)}
           >
             {children}
           </div>

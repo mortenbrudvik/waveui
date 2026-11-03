@@ -110,7 +110,7 @@ describe('Drawer type="inline"', () => {
         title: 'Details',
         children: <p>Content</p>,
       },
-      conflictingClass: { className: 'w-96', overrides: 'w-80' },
+      conflictingClass: { className: 'w-96', overrides: 'wave:w-80' },
       a11yVariants: [{ name: 'separator', props: { separator: true } }],
     });
   });
@@ -439,32 +439,38 @@ describe('Drawer type="inline"', () => {
       const panel = complementary();
       expect(panel).not.toHaveAttribute('data-separator');
       expect(panel).toHaveClass(
-        'border-s',
-        'border-transparent',
-        'data-[separator]:border-border',
-        'forced-colors:border-[CanvasText]',
+        'wave:border-s',
+        'wave:border-transparent',
+        'wave:data-[separator]:border-border',
+        'wave:forced-colors:border-[CanvasText]',
       );
       rerender(<Page drawerProps={{ defaultOpen: true, separator: true }} />);
       expect(panel).toHaveAttribute('data-separator', '');
       expect(panel).toHaveClass(
-        'border-s',
-        'border-transparent',
-        'data-[separator]:border-border',
-        'forced-colors:border-[CanvasText]',
+        'wave:border-s',
+        'wave:border-transparent',
+        'wave:data-[separator]:border-border',
+        'wave:forced-colors:border-[CanvasText]',
       );
     });
 
     it.each([
-      ['start', 'border-e'],
-      ['end', 'border-s'],
-      ['left', 'border-r'],
-      ['right', 'border-l'],
-      ['bottom', 'border-t'],
+      ['start', 'wave:border-e'],
+      ['end', 'wave:border-s'],
+      ['left', 'wave:border-r'],
+      ['right', 'wave:border-l'],
+      ['bottom', 'wave:border-t'],
     ] as const)('draws the inner edge of a %s panel with %s', (position, edge) => {
       render(<Page drawerProps={{ defaultOpen: true, position }} />);
       const panel = complementary();
       expect(panel).toHaveClass(edge);
-      for (const other of ['border-e', 'border-s', 'border-r', 'border-l', 'border-t']) {
+      for (const other of [
+        'wave:border-e',
+        'wave:border-s',
+        'wave:border-r',
+        'wave:border-l',
+        'wave:border-t',
+      ]) {
         if (other !== edge) expect(panel).not.toHaveClass(other);
       }
       expect(panel).toHaveAttribute('data-position', position);
@@ -484,50 +490,56 @@ describe('Drawer type="inline"', () => {
     });
 
     it.each([
-      ['small', 'w-80'],
-      ['medium', 'w-148'],
-      ['large', 'w-235'],
-      ['full', 'w-full'],
+      ['small', 'wave:w-80'],
+      ['medium', 'wave:w-148'],
+      ['large', 'wave:w-235'],
+      ['full', 'wave:w-full'],
     ] as const)('sizes a side panel %s with %s', (size, width) => {
       render(<Page drawerProps={{ defaultOpen: true, size }} />);
       const panel = complementary();
       expect(panel).toHaveAttribute('data-size', size);
       expect(panel).toHaveClass(
         width,
-        'relative',
-        'flex',
-        'min-h-0',
-        'shrink-0',
-        'flex-col',
-        'max-w-full',
-        'bg-background',
-        'text-foreground',
+        'wave:relative',
+        'wave:flex',
+        'wave:min-h-0',
+        'wave:shrink-0',
+        'wave:flex-col',
+        'wave:max-w-full',
+        'wave:bg-background',
+        'wave:text-foreground',
       );
       // In the page layout: no placement, insets, shadow or full height of an overlay panel.
       for (const overlayClass of [
-        'fixed',
-        'top-0',
-        'end-0',
-        'h-full',
-        'shadow-64',
-        'pt-[env(safe-area-inset-top)]',
-        'pb-[env(safe-area-inset-bottom)]',
+        'wave:fixed',
+        'wave:top-0',
+        'wave:end-0',
+        'wave:h-full',
+        'wave:shadow-64',
+        'wave:pt-[env(safe-area-inset-top)]',
+        'wave:pb-[env(safe-area-inset-bottom)]',
       ]) {
         expect(panel).not.toHaveClass(overlayClass);
       }
     });
 
     it.each([
-      ['small', 'h-80'],
-      ['medium', 'h-148'],
-      ['large', 'h-235'],
-      ['full', 'h-full'],
+      ['small', 'wave:h-80'],
+      ['medium', 'wave:h-148'],
+      ['large', 'wave:h-235'],
+      ['full', 'wave:h-full'],
     ] as const)('sizes a bottom panel %s with %s', (size, height) => {
       render(<Page drawerProps={{ defaultOpen: true, position: 'bottom', size }} />);
       const panel = complementary();
       expect(panel).toHaveAttribute('data-size', size);
-      expect(panel).toHaveClass(height, 'w-full', 'max-h-full', 'border-t');
-      for (const overlayClass of ['fixed', 'inset-x-0', 'bottom-0', 'w-80', 'shadow-64']) {
+      expect(panel).toHaveClass(height, 'wave:w-full', 'wave:max-h-full', 'wave:border-t');
+      for (const overlayClass of [
+        'wave:fixed',
+        'wave:inset-x-0',
+        'wave:bottom-0',
+        'wave:w-80',
+        'wave:shadow-64',
+      ]) {
         expect(panel).not.toHaveClass(overlayClass);
       }
     });
@@ -535,7 +547,7 @@ describe('Drawer type="inline"', () => {
     it('lets a width in className replace the size', () => {
       render(<Page drawerProps={{ defaultOpen: true, className: 'w-[480px]' }} />);
       expect(complementary()).toHaveClass('w-[480px]');
-      expect(complementary()).not.toHaveClass('w-80');
+      expect(complementary()).not.toHaveClass('wave:w-80');
     });
 
     it('uses the logical edge of a start panel in a right-to-left layout and toggles there', async () => {
@@ -543,8 +555,8 @@ describe('Drawer type="inline"', () => {
       renderWithProviders(<Page drawerProps={{ position: 'start' }} />, { dir: 'rtl' });
       await user.click(button('Show details'));
       const panel = complementary();
-      expect(panel).toHaveClass('border-e');
-      for (const physical of ['border-l', 'border-r', 'left-0', 'right-0']) {
+      expect(panel).toHaveClass('wave:border-e');
+      for (const physical of ['wave:border-l', 'wave:border-r', 'wave:left-0', 'wave:right-0']) {
         expect(panel).not.toHaveClass(physical);
       }
       await user.click(button('Show details'));

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { preventIfDisabled } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { breadcrumbClassNames, breadcrumbItemClassNames } from '../../lib/classNames';
 import { partitionBreadcrumbItems } from '../../lib/breadcrumb';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -257,15 +257,15 @@ type BreadcrumbEntryProps = BreadcrumbItemOwnProps &
  * Links, buttons and `asChild` elements. The hover underline is gated (C-TOKENS), and the
  * disabled look covers a `disabled` button and an `aria-disabled` link.
  */
-const linkClasses = cn(
-  'inline-flex cursor-pointer items-center text-primary no-underline not-disabled:not-aria-disabled:hover:underline',
+const linkClasses = wcn(
+  'wave:inline-flex wave:cursor-pointer wave:items-center wave:text-primary wave:no-underline wave:not-disabled:not-aria-disabled:hover:underline',
   focusRing,
   disabledStyles,
 );
-const currentClasses = 'inline-flex items-center font-semibold text-foreground';
+const currentClasses = 'wave:inline-flex wave:items-center wave:font-semibold wave:text-foreground';
 /** A current `asChild` element is the consumer's link: it takes focus and can be disabled. */
-const currentChildClasses = cn(currentClasses, focusRing, disabledStyles);
-const textClasses = 'inline-flex items-center text-foreground';
+const currentChildClasses = wcn(currentClasses, focusRing, disabledStyles);
+const textClasses = 'wave:inline-flex wave:items-center wave:text-foreground';
 
 /**
  * The attributes only a `<button>` or an `<a>` has (`disabled`, `type`, `form*`, `name`, `value`;
@@ -319,9 +319,9 @@ function spanAttributes(rest: Record<string, unknown>): React.HTMLAttributes<HTM
 
 /** Text step and divider size (px) of each size; literal classes for Tailwind's scan. */
 const breadcrumbSizes = {
-  small: { text: 'text-caption-1', divider: 12 },
-  medium: { text: 'text-body-1', divider: 12 },
-  large: { text: 'text-body-2', divider: 16 },
+  small: { text: 'wave:text-caption-1', divider: 12 },
+  medium: { text: 'wave:text-body-1', divider: 12 },
+  large: { text: 'wave:text-body-2', divider: 16 },
 } as const satisfies Record<CoreSize, { text: string; divider: number }>;
 
 /** The controls of the trail that the arrow keys visit (`focusMode="arrow"`). */
@@ -633,7 +633,7 @@ function BreadcrumbOverflowMenu({
     }
   }, [unlistable]);
 
-  const className = cn(breadcrumbClassNames.overflowButton, linkClasses, 'rounded px-1');
+  const className = wcn(breadcrumbClassNames.overflowButton, linkClasses, 'wave:rounded wave:px-1');
   return (
     <Menu>
       <Menu.Trigger>
@@ -714,22 +714,28 @@ const BreadcrumbRoot = ({
       <ChevronRightIcon
         size={breadcrumbSizes[size].divider}
         data-wave-breadcrumb-separator=""
-        className={cn(
+        className={wcn(
           breadcrumbClassNames.divider,
-          'shrink-0 text-muted-foreground wave-rtl:-scale-x-100',
+          'wave:shrink-0 wave:text-muted-foreground wave:wave-rtl:-scale-x-100',
         )}
       />
     ) : slotRendersContent(divider) ? (
       renderSlot(
         divider,
         'span',
-        cn(breadcrumbClassNames.divider, 'inline-flex shrink-0 items-center text-muted-foreground'),
+        wcn(
+          breadcrumbClassNames.divider,
+          'wave:inline-flex wave:shrink-0 wave:items-center wave:text-muted-foreground',
+        ),
         { 'aria-hidden': true, 'data-wave-breadcrumb-separator': '' },
       )
     ) : null;
 
   const renderListItem = (node: React.ReactNode, index: number, key?: string) => {
-    const itemClassName = cn(breadcrumbClassNames.listItem, 'flex items-center gap-1');
+    const itemClassName = wcn(
+      breadcrumbClassNames.listItem,
+      'wave:flex wave:items-center wave:gap-1',
+    );
     return (
       <li
         key={key}
@@ -751,7 +757,7 @@ const BreadcrumbRoot = ({
   let list: React.ReactNode;
   if (auto) {
     const overflowButton = (_count: number, hiddenIds: string[]) => (
-      <span className="flex items-center gap-1">
+      <span className="wave:flex wave:items-center wave:gap-1">
         {renderDivider()}
         <BreadcrumbOverflowMenu
           entries={entries.filter((entry) => hiddenIds.includes(entry.key))}
@@ -760,7 +766,7 @@ const BreadcrumbRoot = ({
         />
       </span>
     );
-    const listClassName = cn(breadcrumbClassNames.list, 'gap-1', breadcrumbSizes[size].text);
+    const listClassName = wcn(breadcrumbClassNames.list, 'wave:gap-1', breadcrumbSizes[size].text);
     list = (
       <Overflow
         role="list"
@@ -803,9 +809,9 @@ const BreadcrumbRoot = ({
       </Overflow>
     );
   } else {
-    const listClassName = cn(
+    const listClassName = wcn(
       breadcrumbClassNames.list,
-      'm-0 flex list-none items-center gap-1 p-0',
+      'wave:m-0 wave:flex wave:list-none wave:items-center wave:gap-1 wave:p-0',
       breadcrumbSizes[size].text,
     );
     list = (
@@ -834,7 +840,7 @@ const BreadcrumbRoot = ({
           ? composeEventHandlers(onFocus, containerProps.onFocus, { checkDefaultPrevented: false })
           : onFocus
       }
-      className={cn(breadcrumbClassNames.root, className)}
+      className={wcn(breadcrumbClassNames.root, className)}
     >
       {list}
     </nav>
@@ -917,9 +923,14 @@ function BreadcrumbItem(
   // `me-1` margin. The check does not consume a generator: renderSlot still renders its items.
   const renderedIcon =
     icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', cn(breadcrumbItemClassNames.icon, 'me-1 inline-flex shrink-0'), {
-          'aria-hidden': true,
-        })
+      ? renderSlot(
+          icon,
+          'span',
+          wcn(breadcrumbItemClassNames.icon, 'wave:me-1 wave:inline-flex wave:shrink-0'),
+          {
+            'aria-hidden': true,
+          },
+        )
       : null;
   const child = asChildElement<{ children?: React.ReactNode }>(asChild, children);
   const kind = child
@@ -972,7 +983,7 @@ function BreadcrumbItem(
         ref={ref}
         onClick={preventIfDisabled(linkDisabled, onClick)}
         aria-current={current ? 'page' : undefined}
-        className={cn(
+        className={wcn(
           breadcrumbItemClassNames.root,
           current ? currentChildClasses : linkClasses,
           className,
@@ -990,7 +1001,7 @@ function BreadcrumbItem(
         ref={ref as React.Ref<HTMLSpanElement>}
         aria-current="page"
         onClick={onClick}
-        className={cn(breadcrumbItemClassNames.root, currentClasses, className)}
+        className={wcn(breadcrumbItemClassNames.root, currentClasses, className)}
       >
         {renderedIcon}
         {children}
@@ -1009,7 +1020,7 @@ function BreadcrumbItem(
         aria-disabled={linkDisabled ? true : ariaDisabled}
         tabIndex={linkDisabled ? -1 : anchorRest.tabIndex}
         onClick={preventIfDisabled(linkDisabled, onClick)}
-        className={cn(breadcrumbItemClassNames.root, linkClasses, className)}
+        className={wcn(breadcrumbItemClassNames.root, linkClasses, className)}
       >
         {renderedIcon}
         {children}
@@ -1026,7 +1037,7 @@ function BreadcrumbItem(
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
         ref={ref as React.Ref<HTMLButtonElement>}
         onClick={onClick}
-        className={cn(breadcrumbItemClassNames.root, linkClasses, className)}
+        className={wcn(breadcrumbItemClassNames.root, linkClasses, className)}
       >
         {renderedIcon}
         {children}
@@ -1038,7 +1049,7 @@ function BreadcrumbItem(
     <span
       {...spanAttributes(rest)}
       ref={ref as React.Ref<HTMLSpanElement>}
-      className={cn(breadcrumbItemClassNames.root, textClasses, className)}
+      className={wcn(breadcrumbItemClassNames.root, textClasses, className)}
     >
       {renderedIcon}
       {children}

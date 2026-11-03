@@ -1,7 +1,0 @@
-/*
- * Deprecated (0.5): intentionally empty; will be removed in 1.0.
- *
- * The `wave-*` keyframes moved into the `@theme` block of tokens.css, so Tailwind emits them
- * together with the `animate-wave-*` utilities. The former global `*` reduced-motion override
- * was removed: reduced motion is handled per component with `motion-reduce:` variants.
- */

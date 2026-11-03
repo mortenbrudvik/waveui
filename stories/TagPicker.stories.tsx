@@ -181,7 +181,7 @@ function AsyncSearchTagPicker({ onQueryChange, onValueChange, ...args }: TagPick
           onQueryChange?.(next);
         }}
       />
-      <span className="text-caption-1 text-muted-foreground">
+      <span className="text-wave-caption-1 text-wave-muted-foreground">
         {query === answered ? `${results.length} results` : 'Searching…'}
       </span>
     </div>
@@ -228,7 +228,7 @@ export const SizesAndAppearances: Story = {
           key={appearance}
           className={
             appearance === 'filled-lighter'
-              ? 'grid grid-cols-3 items-start gap-3 rounded bg-secondary p-3'
+              ? 'grid grid-cols-3 items-start gap-3 rounded bg-wave-secondary p-3'
               : 'grid grid-cols-3 items-start gap-3 p-3'
           }
         >

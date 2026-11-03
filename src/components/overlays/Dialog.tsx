@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   dialogContentClassNames,
   dialogFooterClassNames,
@@ -23,7 +23,7 @@ import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useModalLayer } from '../../hooks/useModalLayer';
-import { useLegacyMotionWarning, useMotionClasses } from '../../hooks/useMotion';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { Portal } from '../portal/Portal';
 import {
@@ -90,13 +90,12 @@ export interface DialogProps {
    * `close` (a `.Close` part), `close-button` (the built-in Close button), `escape` or
    * `outside-press` (the backdrop) — so a controlled dialog can refuse only some ways of closing
    * (for example keep a form with unsaved changes open on `outside-press`); `details.event` is the
-   * DOM event behind the request. WaveUI always passes `details`; it is typed optional until 1.0
-   * so that code which calls this prop itself keeps compiling.
+   * DOM event behind the request. WaveUI always passes `details`.
    *
    * Fires only when the value changes; a controlled dialog stays as it is until the parent updates
    * `open`.
    */
-  onOpenChange?: (open: boolean, details?: DialogOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: DialogOpenChangeDetails) => void;
   /**
    * `modal`: the page behind is `inert` and does not scroll; a backdrop press, Escape, the Close
    * button and `Dialog.Close` close it. `alert`: a confirmation that needs an answer —
@@ -168,10 +167,9 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
    * curve; under reduced motion it appears and disappears at once. `null` turns the motion off
    * (the surface still renders its `data-presence` phases, which then end at once); a class string
    * or `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
-   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. A `className` that
-   * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
-   * motion, your classes animate the surface; development builds log a warning once, and the rule
-   * is removed in 1.0, so pass `motion` instead. Fluent's `Dialog` `surfaceMotion`.
+   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. `className` is a
+   * plain class list composed after the motion: `data-[presence=…]` classes there apply next to
+   * the default motion, so pass a motion of your own here. Fluent's `Dialog` `surfaceMotion`.
    * @default the scale and fade above
    */
   motion?: MotionSlot | null;
@@ -460,15 +458,15 @@ DialogClose.displayName = 'DialogClose';
  * side, with no direction override that a consumer's padding class would leave behind.
  */
 const sizeClasses: Record<DialogSize, string> = {
-  small: 'max-w-[400px]',
-  medium: 'max-w-[600px]',
-  large: 'max-w-[940px]',
-  full: 'm-0 h-dvh max-h-none max-w-none rounded-none border-0 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))]', // wave-allow-physical: the safe-area insets are physical sides
+  small: 'wave:max-w-[400px]',
+  medium: 'wave:max-w-[600px]',
+  large: 'wave:max-w-[940px]',
+  full: 'wave:m-0 wave:h-dvh wave:max-h-none wave:max-w-none wave:rounded-none wave:border-0 wave:pt-[max(1.5rem,env(safe-area-inset-top))] wave:pb-[max(1.5rem,env(safe-area-inset-bottom))] wave:pl-[max(1.5rem,env(safe-area-inset-left))] wave:pr-[max(1.5rem,env(safe-area-inset-right))]', // wave-allow-physical: the safe-area insets are physical sides
 };
 
 /** The title-actions area of a `full` dialog moves by the safe-area insets, as the padding does. */
 const fullTitleActionsClasses =
-  'top-[max(1rem,env(safe-area-inset-top))] end-[max(1rem,env(safe-area-inset-right))] wave-rtl:end-[max(1rem,env(safe-area-inset-left))]';
+  'wave:top-[max(1rem,env(safe-area-inset-top))] wave:end-[max(1rem,env(safe-area-inset-right))] wave:wave-rtl:end-[max(1rem,env(safe-area-inset-left))]';
 
 /** The gap (px) between the titles' text and the title-actions area. */
 const TITLE_ACTIONS_GAP = 8;
@@ -569,10 +567,8 @@ export const DialogContent = ({
     presenceProps,
   } = usePresence(open, { appear: true, unmountOnExit: unmountOnClose });
   const exiting = presenceProps['data-presence'] === 'exiting';
-  // The motion classes of the surface (a `className` with presence variants keeps 0.14's own
-  // motion, D19) and of the backdrop.
-  const surfaceMotion = useMotionClasses(motion, dialogMotion, className);
-  useLegacyMotionWarning('Dialog.Content', motion, className);
+  // The motion classes of the surface and of the backdrop.
+  const surfaceMotion = useMotionClasses(motion, dialogMotion);
   const backdropMotionClassName = useMotionClasses(backdropMotion, dialogBackdropMotion);
   const keptMounted = !unmountOnClose;
   const generatedId = useId('wave-dialog');
@@ -696,9 +692,9 @@ export const DialogContent = ({
         {...presenceProps}
         // Centres the surface and lets presses through to the backdrop (modal) or the page
         // (non-modal) around it.
-        className={cn(
+        className={wcn(
           dialogContentClassNames.positioner,
-          'pointer-events-none fixed inset-0 flex items-center justify-center',
+          'wave:pointer-events-none wave:fixed wave:inset-0 wave:flex wave:items-center wave:justify-center',
         )}
       >
         <div
@@ -713,7 +709,7 @@ export const DialogContent = ({
           data-presence={presenceProps['data-presence']}
           style={surfaceStyle}
           onKeyDown={composeEventHandlers(onKeyDown, onTabOrderKeyDown)}
-          className={cn(
+          className={wcn(
             dialogContentClassNames.root,
             // The border marks the surface where the shadow cannot: in high contrast the page,
             // the backdrop and the surface are black, and forced colors drop shadows. The 1rem gap
@@ -721,7 +717,7 @@ export const DialogContent = ({
             // a margin in `className` replaces it and a full-screen dialog can reach the edges.
             // Its minimum width is zero, so content wider than the room inside the gap scrolls in
             // the body instead of pushing the surface over the gap.
-            'pointer-events-auto relative m-4 flex min-w-0 max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-border bg-background p-6 text-foreground shadow-64',
+            'wave:pointer-events-auto wave:relative wave:m-4 wave:flex wave:min-w-0 wave:max-h-[calc(100dvh-2rem)] wave:w-full wave:flex-col wave:rounded-lg wave:border wave:border-border wave:bg-background wave:p-6 wave:text-foreground wave:shadow-64',
             sizeClasses[size],
             surfaceMotion,
             className,
@@ -731,9 +727,9 @@ export const DialogContent = ({
             {hasTitle && (
               <h2
                 id={propTitleId}
-                className={cn(
+                className={wcn(
                   dialogTitleClassNames.root,
-                  'pe-[var(--wave-dialog-title-end-padding,2rem)] text-subtitle-1 font-semibold',
+                  'wave:pe-[var(--wave-dialog-title-end-padding,2rem)] wave:text-subtitle-1 wave:font-semibold',
                 )}
               >
                 {title}
@@ -741,9 +737,9 @@ export const DialogContent = ({
             )}
             <div
               {...mergeSlotProps(slotProps?.titleActions, {
-                className: cn(
+                className: wcn(
                   dialogContentClassNames.titleActions,
-                  'absolute end-4 top-4 flex items-start gap-1',
+                  'wave:absolute wave:end-4 wave:top-4 wave:flex wave:items-start wave:gap-1',
                   size === 'full' && fullTitleActionsClasses,
                 ),
                 locked: HIDDEN_PART_LOCKS,
@@ -754,25 +750,28 @@ export const DialogContent = ({
                 ? renderSlot(
                     titleAction,
                     'span',
-                    cn(dialogContentClassNames.titleAction, 'inline-flex items-center gap-1'),
+                    wcn(
+                      dialogContentClassNames.titleAction,
+                      'wave:inline-flex wave:items-center wave:gap-1',
+                    ),
                   )
                 : null}
               {/* Each Dialog.Title action portals here, in mount order. */}
-              <span ref={setTitleActionsOutlet} className="contents" />
+              <span ref={setTitleActionsOutlet} className="wave:contents" />
               <ModalCloseButton
                 componentName="Dialog.Content"
                 closeButton={closeButton}
                 closeLabel={closeLabel}
                 onClose={(event) => requestOpen(false, { reason: 'close-button', event })}
-                className={cn(dialogContentClassNames.closeButton, 'text-muted-foreground')}
+                className={wcn(dialogContentClassNames.closeButton, 'wave:text-muted-foreground')}
               />
             </div>
             <div
               {...mergeSlotProps(slotProps?.body, {
                 // The scroll padding keeps a focused field above the sticky footer (WCAG 2.4.11).
-                className: cn(
+                className: wcn(
                   dialogContentClassNames.body,
-                  '-mx-1 mt-1 min-h-0 flex-1 overflow-y-auto scroll-pb-(--wave-dialog-footer-height) p-1 text-body-1',
+                  'wave:-mx-1 wave:mt-1 wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:scroll-pb-(--wave-dialog-footer-height) wave:p-1 wave:text-body-1',
                 ),
                 style:
                   footerHeight === null
@@ -816,9 +815,9 @@ export const DialogTitle = ({
       {...rest}
       id={titleId}
       ref={titleRef}
-      className={cn(
+      className={wcn(
         dialogTitleClassNames.root,
-        'pe-[var(--wave-dialog-title-end-padding,2rem)] text-subtitle-1 font-semibold text-foreground',
+        'wave:pe-[var(--wave-dialog-title-end-padding,2rem)] wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
         className,
       )}
     >
@@ -829,7 +828,7 @@ export const DialogTitle = ({
   const actionElement = renderSlot(
     action,
     'span',
-    cn(dialogTitleClassNames.action, 'inline-flex items-center gap-1'),
+    wcn(dialogTitleClassNames.action, 'wave:inline-flex wave:items-center wave:gap-1'),
   );
   return (
     <>
@@ -846,13 +845,13 @@ DialogTitle.displayName = 'DialogTitle';
  * focus-ring inset, and `pt-3` separates the actions from the content scrolling under them.
  */
 const stickyFooterClasses =
-  'sticky -bottom-1 z-10 -mx-1 -mb-1 mt-6 flex justify-end gap-2 bg-background px-1 pb-2 pt-3';
+  'wave:sticky wave:-bottom-1 wave:z-10 wave:-mx-1 wave:-mb-1 wave:mt-6 wave:flex wave:justify-end wave:gap-2 wave:bg-background wave:px-1 wave:pb-2 wave:pt-3';
 
 /**
  * `Dialog.Footer` where no body reserves its height as scroll padding (a Drawer's body): a plain
  * action row, which never covers a focused field.
  */
-const footerRowClasses = 'mt-6 flex justify-end gap-2';
+const footerRowClasses = 'wave:mt-6 wave:flex wave:justify-end wave:gap-2';
 
 /**
  * Action row at the end of the dialog body. It stays where you render it in the DOM and sticks to
@@ -902,7 +901,7 @@ export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooter
       ref={mergedRef}
       {...rest}
       // Sticky only where the surface reserves the footer's height (Dialog.Content).
-      className={cn(
+      className={wcn(
         dialogFooterClassNames.root,
         setFooterHeight ? stickyFooterClasses : footerRowClasses,
         className,

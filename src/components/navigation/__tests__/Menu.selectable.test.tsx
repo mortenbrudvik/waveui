@@ -40,7 +40,8 @@ afterEach(() => {
 const checkbox = (name: string) => screen.getByRole('menuitemcheckbox', { name });
 const radio = (name: string) => screen.getByRole('menuitemradio', { name });
 
-const CHECKMARK_SPACE = 'hidden w-4 shrink-0 group-has-[[data-menu-checkmark]]/menu:inline-flex';
+const CHECKMARK_SPACE =
+  'wave:hidden wave:w-4 wave:shrink-0 wave:group-has-[[data-menu-checkmark]]/menu:inline-flex';
 
 function Harness({ children }: { children: React.ReactNode }) {
   return <MenuListHarness>{children}</MenuListHarness>;
@@ -852,9 +853,9 @@ describe('the check column', () => {
 
 describe('the switch indicator', () => {
   const TRACK =
-    'relative inline-flex h-[16px] w-[32px] shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none';
+    'wave:relative wave:inline-flex wave:h-[16px] wave:w-[32px] wave:shrink-0 wave:items-center wave:rounded-full wave:border wave:transition-colors wave:duration-200 wave:motion-reduce:transition-none';
   const THUMB =
-    'block h-[10px] w-[10px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none';
+    'wave:block wave:h-[10px] wave:w-[10px] wave:rounded-full wave:transition-transform wave:duration-200 wave:motion-reduce:transition-none wave:forced-colors:forced-color-adjust-none';
 
   function renderSwitches(options: { rtl?: boolean } = {}) {
     renderInMenuList(
@@ -888,55 +889,55 @@ describe('the switch indicator', () => {
     const parts = renderSwitches();
     const on = parts('On');
     expect(on.track).toHaveAttribute('aria-hidden', 'true');
-    expect(on.track).toHaveClass(...TRACK.split(' '), 'border-primary', 'bg-primary');
+    expect(on.track).toHaveClass(...TRACK.split(' '), 'wave:border-primary', 'wave:bg-primary');
     expect(on.thumb).toHaveClass(
       ...THUMB.split(' '),
-      'translate-x-[18px]',
-      'wave-rtl:-translate-x-[18px]',
-      'bg-primary-foreground',
+      'wave:translate-x-[18px]',
+      'wave:wave-rtl:-translate-x-[18px]',
+      'wave:bg-primary-foreground',
     );
     const off = parts('Off');
     expect(off.track).toHaveClass(
       ...TRACK.split(' '),
-      'border-stroke-accessible',
-      'bg-transparent',
+      'wave:border-stroke-accessible',
+      'wave:bg-transparent',
     );
-    expect(off.track).not.toHaveClass('bg-primary');
+    expect(off.track).not.toHaveClass('wave:bg-primary');
     expect(off.thumb).toHaveClass(
       ...THUMB.split(' '),
-      'translate-x-[2px]',
-      'wave-rtl:-translate-x-[2px]',
-      'bg-stroke-accessible',
+      'wave:translate-x-[2px]',
+      'wave:wave-rtl:-translate-x-[2px]',
+      'wave:bg-stroke-accessible',
     );
   });
 
   it('uses the forced-colors recipe of Switch', () => {
     const parts = renderSwitches();
     expect(parts('On').track).toHaveClass(
-      'forced-colors:border-[Highlight]',
-      'forced-colors:bg-[Highlight]',
+      'wave:forced-colors:border-[Highlight]',
+      'wave:forced-colors:bg-[Highlight]',
     );
-    expect(parts('On').thumb).toHaveClass('forced-colors:bg-[HighlightText]');
-    expect(parts('Off').track).toHaveClass('forced-colors:border-[ButtonText]');
-    expect(parts('Off').thumb).toHaveClass('forced-colors:bg-[ButtonText]');
+    expect(parts('On').thumb).toHaveClass('wave:forced-colors:bg-[HighlightText]');
+    expect(parts('Off').track).toHaveClass('wave:forced-colors:border-[ButtonText]');
+    expect(parts('Off').thumb).toHaveClass('wave:forced-colors:bg-[ButtonText]');
     expect(parts('On disabled').track).toHaveClass(
-      'forced-colors:border-[GrayText]',
-      'forced-colors:bg-[Canvas]',
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
     );
-    expect(parts('On disabled').thumb).toHaveClass('forced-colors:bg-[GrayText]');
+    expect(parts('On disabled').thumb).toHaveClass('wave:forced-colors:bg-[GrayText]');
     expect(parts('Off disabled').track).toHaveClass(
-      'forced-colors:text-[GrayText]',
-      'forced-colors:border-[GrayText]',
+      'wave:forced-colors:text-[GrayText]',
+      'wave:forced-colors:border-[GrayText]',
     );
-    expect(parts('Off disabled').thumb).toHaveClass('forced-colors:bg-[GrayText]');
+    expect(parts('Off disabled').thumb).toHaveClass('wave:forced-colors:bg-[GrayText]');
   });
 
   it('follows the checked state', async () => {
     const user = userEvent.setup();
     const parts = renderSwitches();
     await user.click(checkbox('Off'));
-    expect(parts('Off').track).toHaveClass('bg-primary');
-    expect(parts('Off').thumb).toHaveClass('translate-x-[18px]');
+    expect(parts('Off').track).toHaveClass('wave:bg-primary');
+    expect(parts('Off').thumb).toHaveClass('wave:translate-x-[18px]');
   });
 
   it('keeps the logical row and the wave-rtl: thumb classes in RTL', () => {
@@ -948,8 +949,8 @@ describe('the switch indicator', () => {
       'text:On',
       'switch',
     ]);
-    expect(parts('On').thumb).toHaveClass('wave-rtl:-translate-x-[18px]');
-    expect(parts('Off').thumb).toHaveClass('wave-rtl:-translate-x-[2px]');
+    expect(parts('On').thumb).toHaveClass('wave:wave-rtl:-translate-x-[18px]');
+    expect(parts('Off').thumb).toHaveClass('wave:wave-rtl:-translate-x-[2px]');
   });
 });
 
@@ -1088,7 +1089,7 @@ describe('MenuItemCheckbox system props', () => {
     displayName: 'MenuItemCheckbox',
     defaultProps: { name: 'view', value: 'grid', children: 'Grid' },
     a11yVariants: [{ name: 'checked', props: { value: 'ruler', children: 'Ruler' } }],
-    conflictingClass: { className: 'px-4', overrides: 'px-3' },
+    conflictingClass: { className: 'px-4', overrides: 'wave:px-3' },
     wrapper: function CheckedHarness({ children }) {
       return (
         <MenuListHarness defaultCheckedValues={{ view: ['ruler'] }}>{children}</MenuListHarness>
@@ -1102,7 +1103,7 @@ describe('MenuItemRadio system props', () => {
     expectedTag: 'div',
     displayName: 'MenuItemRadio',
     defaultProps: { name: 'sort', value: 'date', children: 'Date' },
-    conflictingClass: { className: 'px-4', overrides: 'px-3' },
+    conflictingClass: { className: 'px-4', overrides: 'wave:px-3' },
     wrapper: Harness,
   });
 });
@@ -1112,7 +1113,7 @@ describe('MenuItemSwitch system props', () => {
     expectedTag: 'div',
     displayName: 'MenuItemSwitch',
     defaultProps: { name: 'view', value: 'grid', children: 'Grid' },
-    conflictingClass: { className: 'px-4', overrides: 'px-3' },
+    conflictingClass: { className: 'px-4', overrides: 'wave:px-3' },
     wrapper: Harness,
   });
 });
@@ -1155,17 +1156,17 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
   // Captured from 4a08890 (client and server agree): the merged props may put the class before the
   // locked attributes.
   const ON_TRACK =
-    '<span aria-hidden="true" class="wave-menu-item-switch__track relative inline-flex h-[16px] w-[32px] shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none border-primary bg-primary forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" data-menu-switch="">';
+    '<span aria-hidden="true" class="wave-menu-item-switch__track wave:relative wave:inline-flex wave:h-[16px] wave:w-[32px] wave:shrink-0 wave:items-center wave:rounded-full wave:border wave:transition-colors wave:duration-200 wave:motion-reduce:transition-none wave:border-primary wave:bg-primary wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]" data-menu-switch="">';
   const ON_THUMB =
-    '<span class="wave-menu-item-switch__thumb block h-[10px] w-[10px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none translate-x-[18px] wave-rtl:-translate-x-[18px] bg-primary-foreground forced-colors:bg-[HighlightText]">';
+    '<span class="wave-menu-item-switch__thumb wave:block wave:h-[10px] wave:w-[10px] wave:rounded-full wave:transition-transform wave:duration-200 wave:motion-reduce:transition-none wave:forced-colors:forced-color-adjust-none wave:translate-x-[18px] wave:wave-rtl:-translate-x-[18px] wave:bg-primary-foreground wave:forced-colors:bg-[HighlightText]">';
   const OFF_DISABLED_TRACK =
-    '<span aria-hidden="true" class="wave-menu-item-switch__track relative inline-flex h-[16px] w-[32px] shrink-0 items-center rounded-full border transition-colors duration-200 motion-reduce:transition-none border-stroke-accessible bg-transparent forced-colors:text-[GrayText] forced-colors:border-[GrayText]" data-menu-switch="">';
+    '<span aria-hidden="true" class="wave-menu-item-switch__track wave:relative wave:inline-flex wave:h-[16px] wave:w-[32px] wave:shrink-0 wave:items-center wave:rounded-full wave:border wave:transition-colors wave:duration-200 wave:motion-reduce:transition-none wave:border-stroke-accessible wave:bg-transparent wave:forced-colors:text-[GrayText] wave:forced-colors:border-[GrayText]" data-menu-switch="">';
   const OFF_DISABLED_THUMB =
-    '<span class="wave-menu-item-switch__thumb block h-[10px] w-[10px] rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none translate-x-[2px] wave-rtl:-translate-x-[2px] bg-stroke-accessible forced-colors:bg-[GrayText]">';
+    '<span class="wave-menu-item-switch__thumb wave:block wave:h-[10px] wave:w-[10px] wave:rounded-full wave:transition-transform wave:duration-200 wave:motion-reduce:transition-none wave:forced-colors:forced-color-adjust-none wave:translate-x-[2px] wave:wave-rtl:-translate-x-[2px] wave:bg-stroke-accessible wave:forced-colors:bg-[GrayText]">';
   const contentPin = (kind: string) =>
-    `<span class="wave-menu-item__content wave-menu-item-${kind}__content flex-1">`;
+    `<span class="wave-menu-item__content wave-menu-item-${kind}__content wave:flex-1">`;
   const shortcutPin = (kind: string) =>
-    `<span class="wave-menu-item__shortcut wave-menu-item-${kind}__shortcut ms-4 text-caption-1 text-muted-foreground" dir="auto">`;
+    `<span class="wave-menu-item__shortcut wave-menu-item-${kind}__shortcut wave:ms-4 wave:text-caption-1 wave:text-muted-foreground" dir="auto">`;
   const BASE_PINS = [
     contentPin('checkbox'),
     shortcutPin('checkbox'),
@@ -1292,7 +1293,7 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
           menuItemClassNames.content,
           classes.content,
           'my-content',
-          'flex-1',
+          'wave:flex-1',
           'content',
           '0.5',
           contentRef,
@@ -1302,7 +1303,7 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
           menuItemClassNames.shortcut,
           classes.shortcut,
           'my-shortcut',
-          'ms-4',
+          'wave:ms-4',
           'shortcut',
           '0.25',
           shortcutRef,
@@ -1493,7 +1494,7 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
         track(row),
         menuItemSwitchClassNames.track,
         'my-track',
-        'bg-primary',
+        'wave:bg-primary',
         'track',
         '0.5',
         trackRef,
@@ -1502,7 +1503,7 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
         thumb(row),
         menuItemSwitchClassNames.thumb,
         'my-thumb',
-        'h-[10px]',
+        'wave:h-[10px]',
         'thumb',
         '0.25',
         thumbRef,
@@ -1532,13 +1533,13 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
       { defaultCheckedValues: { view: [] } },
     );
     const row = checkbox('Grid');
-    expect(track(row)).toHaveClass('my-track', 'bg-transparent');
-    expect(thumb(row)).toHaveClass('my-thumb', 'translate-x-[2px]');
+    expect(track(row)).toHaveClass('my-track', 'wave:bg-transparent');
+    expect(thumb(row)).toHaveClass('my-thumb', 'wave:translate-x-[2px]');
     await user.click(row);
     expect(row).toHaveAttribute('aria-checked', 'true');
-    expect(track(row)).toHaveClass('my-track', 'bg-primary');
-    expect(track(row)).not.toHaveClass('bg-transparent');
-    expect(thumb(row)).toHaveClass('my-thumb', 'translate-x-[18px]');
+    expect(track(row)).toHaveClass('my-track', 'wave:bg-primary');
+    expect(track(row)).not.toHaveClass('wave:bg-transparent');
+    expect(thumb(row)).toHaveClass('my-thumb', 'wave:translate-x-[18px]');
   });
 
   it('switch: locks the track’s hidden state and marker, and gives the drawing no role', () => {
@@ -1743,7 +1744,7 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
     );
     const row = named('menuitemcheckbox', 'Grid');
     expect(row.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-    expect(thumb(row)).toHaveClass('my-thumb', 'wave-rtl:-translate-x-[18px]');
+    expect(thumb(row)).toHaveClass('my-thumb', 'wave:wave-rtl:-translate-x-[18px]');
     expect(get(row, menuItemSwitchClassNames.shortcut)).toHaveAttribute('dir', 'auto');
   });
 

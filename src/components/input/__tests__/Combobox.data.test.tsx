@@ -507,11 +507,11 @@ describe('Combobox windowed options (virtualWindow)', () => {
     const user = userEvent.setup();
     const { unmount } = render(<WindowedCombobox />);
     await user.click(combobox());
-    expect(list()).toHaveClass('[overflow-anchor:none]');
+    expect(list()).toHaveClass('wave:[overflow-anchor:none]');
     unmount();
     render(<Combobox aria-label="Item" items={MANY_ITEMS.slice(0, 20)} />);
     await user.click(combobox());
-    expect(list()).not.toHaveClass('[overflow-anchor:none]');
+    expect(list()).not.toHaveClass('wave:[overflow-anchor:none]');
   });
 
   it('moves the window to the option an arrow key reaches in the same update, and scrolls it into view', async () => {

@@ -150,7 +150,7 @@ describe('hasRenderedTextLabel', () => {
     // Valid CSS (jsdom logs a parse error for invalid CSS), full of letters.
     ['a <style>', '<button><style>.close { color: red }</style></button>', false],
     ['a <template>', '<button><template>Close</template></button>', false],
-    ['visually hidden text', '<button><span class="sr-only">Close</span></button>', true],
+    ['visually hidden text', '<button><span class="wave:sr-only">Close</span></button>', true],
     ['an icon and text', '<button><svg aria-hidden="true"></svg>Reset</button>', true],
   ])('%s → %s', (_name, html, expected) => {
     const button = mount(html).querySelector('button')!;

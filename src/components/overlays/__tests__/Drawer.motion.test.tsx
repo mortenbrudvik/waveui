@@ -16,16 +16,13 @@ import {
 } from '../../../test-utils';
 
 /*
- * P10-DRW-O (spec §4.2, §3, D7, D9, D16, D19): the overlay Drawer's default motion on the panel
+ * P10-DRW-O (spec §4.2, §3, D7, D9, D16): the overlay Drawer's default motion on the panel
  * (`motion`: a slide from its edge and a fade, timed by its size) and on the backdrop
  * (`backdropMotion`), the presence pair of the panel, `appear`, and the backdrop appearance a
- * stacked drawer holds while it exits. jsdom loads no CSS, so the phases wait only where
+ * stacked drawer holds while it exits. A `className` with presence variants is a plain class list
+ * (0.15's D19 rule is removed in 1.0). jsdom loads no CSS, so the phases wait only where
  * `mockAnimations` gives the panel a running animation. The inline drawer's collapse is P10-DRW-I.
  */
-
-/** The development warning of a `className` with presence variants (P13-03). */
-const LEGACY_WARNING =
-  '[WaveUI] Drawer: a className containing "[presence=" turns the default motion off; this compatibility rule is removed in 1.0 - pass the motion prop instead.';
 
 /** Spies on `console.warn`; the returned function asserts the warnings logged so far. */
 function spyOnWarnings() {
@@ -166,25 +163,44 @@ describe('Drawer motion slots (D5, D6)', () => {
     expect(panel()).not.toHaveClass(drawerDurations.small);
   });
 
-  describe('a className with presence variants keeps 0.14’s own motion (D19)', () => {
-    const legacy = ['p-8', 'data-[presence=exiting]:opacity-0'];
+  // 0.14's motion in `className` turned the default off through 0.x; in 1.0 it is a plain class
+  // list, composed after the motion classes.
+  describe('a className with presence variants is a plain class list (the rule is removed in 1.0)', () => {
+    const presenceClasses = ['p-8', 'data-[presence=exiting]:opacity-0'];
 
-    it('leaves the default motion out and keeps both consumer classes', () => {
+    it('keeps the default motion, composes the className after it and warns about nothing', async () => {
+      const motion = mockAnimations({ animated: isDialog });
       const expectWarnings = spyOnWarnings();
-      render(<FiltersDrawer defaultOpen className={legacy.join(' ')} />);
-      expectWarnings([LEGACY_WARNING]);
-      expect(panel()).toHaveClass(...legacy);
-      expectNoWordOf(panel(), PANEL_RECIPE, legacy);
-      // The backdrop is not the className's element: it keeps its default.
+      const user = userEvent.setup();
+      render(<FiltersDrawer className={presenceClasses.join(' ')} />);
+      await user.click(button('Open filters'));
+      await finish(motion);
+      expectWarnings([]);
+      // The className's exit opacity replaces the recipe's own word of the same variant (1.0:
+      // the recipe's carries the prefix, so the two are no longer one string); the rest stays.
+      const replaced = 'wave:data-[presence=exiting]:opacity-0';
+      expect(panel()).toHaveClass(
+        ...motionClasses(PANEL_RECIPE).filter((word) => word !== replaced),
+        ...presenceClasses,
+      );
+      expect(panel()).not.toHaveClass(replaced);
+      expect(Array.from(panel()!.classList).slice(-2)).toEqual(presenceClasses);
       expect(backdrop()).toHaveClass(...motionClasses(drawerBackdropMotion.small));
+      // The exit still runs on the panel's motion.
+      await user.keyboard('{Escape}');
+      expect(panel()).toHaveAttribute('data-presence', 'exiting');
+      await finish(motion);
+      expect(panel()).toBeNull();
     });
 
-    it('applies an explicit motion next to that className, without the warning', () => {
+    it('an explicit motion still replaces the default; the className stays', () => {
       const expectWarnings = spyOnWarnings();
-      render(<FiltersDrawer defaultOpen className={legacy.join(' ')} motion="my-motion" />);
+      render(
+        <FiltersDrawer defaultOpen className={presenceClasses.join(' ')} motion="my-motion" />,
+      );
       expectWarnings([]);
-      expect(panel()).toHaveClass('my-motion', ...legacy);
-      expectNoWordOf(panel(), PANEL_RECIPE, legacy);
+      expect(panel()).toHaveClass('my-motion', ...presenceClasses);
+      expectNoWordOf(panel(), PANEL_RECIPE, presenceClasses);
     });
   });
 

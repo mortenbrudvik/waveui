@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { spinnerClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { Size } from '../../lib/types';
@@ -94,19 +94,19 @@ function isName(value: unknown): value is string {
 }
 
 const sizeClasses: Record<Size, string> = {
-  'extra-small': 'w-3 h-3',
-  small: 'w-4 h-4',
-  medium: 'w-6 h-6',
-  large: 'w-9 h-9',
-  'extra-large': 'w-12 h-12',
+  'extra-small': 'wave:w-3 wave:h-3',
+  small: 'wave:w-4 wave:h-4',
+  medium: 'wave:w-6 wave:h-6',
+  large: 'wave:w-9 wave:h-9',
+  'extra-large': 'wave:w-12 wave:h-12',
 };
 
 /** Ring (track, then arc) and visible-label colors of each appearance. */
 const appearanceClasses: Record<SpinnerAppearance, { ring: string; label: string }> = {
-  primary: { ring: 'border-track border-t-primary', label: 'text-muted-foreground' },
+  primary: { ring: 'wave:border-track wave:border-t-primary', label: 'wave:text-muted-foreground' },
   // The current text color matches any surface the spinner sits on (on-brand text in a primary
   // Button, the inverted foreground), so no token is needed.
-  inverted: { ring: 'border-current/30 border-t-current', label: 'text-current' },
+  inverted: { ring: 'wave:border-current/30 wave:border-t-current', label: 'wave:text-current' },
 };
 
 /**
@@ -180,18 +180,18 @@ export const Spinner = ({
   // The parts merge only when given.
   const ringPart = slotProps?.spinner;
   const ringClassName = shown
-    ? cn(
+    ? wcn(
         spinnerClassNames.spinner,
-        'rounded-full border-2 animate-wave-spin motion-reduce:animate-wave-spin-slow',
+        'wave:rounded-full wave:border-2 wave:animate-wave-spin wave:motion-reduce:animate-wave-spin-slow',
         colors.ring,
         forcedColors.ringArc,
         sizeClasses[size],
       )
     : undefined;
   const labelPart = slotProps?.label;
-  const labelClassName = cn(
+  const labelClassName = wcn(
     spinnerClassNames.label,
-    labelVisible ? cn('text-body-1', colors.label) : 'sr-only',
+    labelVisible ? wcn('wave:text-body-1', colors.label) : 'wave:sr-only',
   );
 
   return (
@@ -202,7 +202,11 @@ export const Spinner = ({
       role={role}
       aria-label={nameFromLabel ? label : rest['aria-label']}
       ref={ref}
-      className={cn(spinnerClassNames.root, 'inline-flex items-center gap-2', className)}
+      className={wcn(
+        spinnerClassNames.root,
+        'wave:inline-flex wave:items-center wave:gap-2',
+        className,
+      )}
     >
       {shown ? (
         <span

@@ -38,8 +38,8 @@ export type {
  * last step) and Close.
  *
  * - Visibility is controllable: `open`/`defaultOpen` (default `true`, or `false` with a direct
- *   `TeachingPopover.Trigger`)/`onOpenChange`; Close, Done, Escape (anywhere in the document) and
- *   the Trigger dismiss it and call `onDismiss`.
+ *   `TeachingPopover.Trigger`)/`onOpenChange`; Close, Escape (anywhere in the document) and the
+ *   Trigger dismiss it and call `onDismiss`; Done closes it and calls `onFinish`.
  * - The step is controllable with `activeStep`/`defaultActiveStep`/`onStepChange` and clamped to
  *   the available steps. An uncontrolled step starts again at `defaultActiveStep` each time the
  *   popover opens, so a tour finished with Done or closed midway starts over (`onStepChange`
@@ -48,8 +48,8 @@ export type {
  *   (`aria-disabled`) on the first step.
  * - `primaryAction` and `secondaryAction` (on the popover, or on a step, which wins) replace Next/Done
  *   and Back: a label, a Button-like element or a slot object. The consumer's `onClick` runs first,
- *   then the step's normal action unless it called `preventDefault()`. Done calls `onFinish`
- *   (and, in 0.x, `onDismiss`); `footerLayout` stacks the buttons.
+ *   then the step's normal action unless it called `preventDefault()`. Done calls `onFinish`;
+ *   `footerLayout` stacks the buttons.
  * - The built-in text is English: `labels` localizes Back, Next, Done and the step position, and
  *   `closeLabel` the Close button.
  * - Focus moves to the popover when it opens and returns to the element that had it when it

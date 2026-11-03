@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { navClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp, warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -34,15 +34,6 @@ export interface NavProps extends Omit<React.HTMLAttributes<HTMLElement>, 'defau
   defaultValue?: string;
   /** Called with the new value when the selection changes (not when the current item is re-selected). */
   onValueChange?: (value: string) => void;
-  /** @deprecated Use `value`. */
-  selectedValue?: string;
-  /** @deprecated Use `defaultValue`. */
-  defaultSelectedValue?: string;
-  /**
-   * @deprecated Use `onValueChange`. Unlike `onValueChange`, it fires on every activation,
-   * re-selecting the current item included (0.4 behaviour).
-   */
-  onNavItemSelect?: (value: string) => void;
   /** Controlled list of open category values. */
   openCategories?: readonly string[];
   /**
@@ -81,7 +72,7 @@ export interface NavProps extends Omit<React.HTMLAttributes<HTMLElement>, 'defau
   };
 }
 
-/** What useNavRootState reads: the root's props with Nav's deprecated aliases already resolved. */
+/** What useNavRootState reads: the root's props, with the defaults already applied. */
 export interface UseNavRootStateOptions {
   /** The public component: the key and text prefix of the duplicate-value warnings. */
   componentName: string;
@@ -92,8 +83,8 @@ export interface UseNavRootStateOptions {
   /** Called with the new value when it changes (`useControllable`). */
   onValueChange: ((value: string) => void) | undefined;
   /**
-   * Called on every activation, re-selection included, after the value update (Nav's deprecated
-   * `onNavItemSelect`, NavDrawer's `onItemSelect`).
+   * Called on every activation, re-selection included, after the value update (NavDrawer's
+   * `onItemSelect`; Nav has no such callback).
    */
   onActivate?: (value: string) => void;
   /** Controlled list of open category values (`undefined`: uncontrolled). */
@@ -213,12 +204,9 @@ export function useNavRootState({
 }
 
 export const NavRoot = ({
-  value: valueProp,
-  defaultValue: defaultValueProp,
+  value,
+  defaultValue,
   onValueChange,
-  selectedValue,
-  defaultSelectedValue,
-  onNavItemSelect,
   openCategories,
   defaultOpenCategories,
   onOpenCategoriesChange,
@@ -229,29 +217,11 @@ export const NavRoot = ({
   slotProps,
   ...rest
 }: NavProps) => {
-  const controlledValue = resolveDeprecatedProp(
-    'Nav',
-    valueProp,
-    selectedValue,
-    'selectedValue',
-    'value',
-  );
-  const defaultValue =
-    resolveDeprecatedProp(
-      'Nav',
-      defaultValueProp,
-      defaultSelectedValue,
-      'defaultSelectedValue',
-      'defaultValue',
-    ) ?? '';
-  if (onNavItemSelect !== undefined) warnDeprecated('Nav', 'onNavItemSelect', 'onValueChange');
-
   const contextValue = useNavRootState({
     componentName: 'Nav',
-    value: controlledValue,
-    defaultValue,
+    value,
+    defaultValue: defaultValue ?? '',
     onValueChange,
-    onActivate: onNavItemSelect,
     openCategories,
     defaultOpenCategories,
     onOpenCategoriesChange,
@@ -270,15 +240,15 @@ export const NavRoot = ({
         aria-label="Navigation"
         {...rest}
         ref={ref}
-        className={cn(
+        className={wcn(
           navClassNames.root,
-          'w-60 border-e border-border bg-background py-2',
+          'wave:w-60 wave:border-e wave:border-border wave:bg-background wave:py-2',
           className,
         )}
       >
         <ul
           {...mergeSlotProps(slotProps?.list, {
-            className: cn(navClassNames.list, 'm-0 list-none p-0'),
+            className: wcn(navClassNames.list, 'wave:m-0 wave:list-none wave:p-0'),
             locked: NAV_SHOWN_PART_LOCKS,
           })}
           ref={listMergedRef}

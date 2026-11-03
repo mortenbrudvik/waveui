@@ -34,9 +34,6 @@ function radio(name: string): HTMLElement {
 const CHILDREN_WARNING =
   '[WaveUI] RadioItem: children are not rendered. Pass the label in `label`.';
 
-const ONCHANGE_DEPRECATION =
-  '[WaveUI] RadioGroup: `onChange` is deprecated and will be removed in 1.0. Use `onValueChange` instead.';
-
 describe('RadioGroup', () => {
   testSystemProps(RadioGroup, {
     expectedTag: 'div',
@@ -154,32 +151,7 @@ describe('RadioGroup', () => {
     expect(onValueChange).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const user = userEvent.setup();
-      const onChange = vi.fn();
-      const onValueChange = vi.fn();
-      const { rerender } = render(
-        <RadioGroup onChange={onChange} onValueChange={onValueChange} aria-label="Options">
-          {twoItems}
-        </RadioGroup>,
-      );
-      rerender(
-        <RadioGroup onChange={onChange} onValueChange={onValueChange} aria-label="Options">
-          {twoItems}
-        </RadioGroup>,
-      );
-      await user.click(radio('Beta'));
-      expect(onChange).toHaveBeenCalledWith('b');
-      expect(onValueChange).toHaveBeenCalledWith('b');
-      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it('the deprecated onChange alias is change-only like onValueChange: re-selecting calls neither', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const user = userEvent.setup();
@@ -187,7 +159,7 @@ describe('RadioGroup', () => {
       const onValueChange = vi.fn();
       render(
         <RadioGroup
-          defaultValue="a"
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
           onChange={onChange}
           onValueChange={onValueChange}
           aria-label="Options"
@@ -195,56 +167,52 @@ describe('RadioGroup', () => {
           {twoItems}
         </RadioGroup>,
       );
-      await user.click(radio('Alpha'));
-      expect(onChange).not.toHaveBeenCalled();
-      expect(onValueChange).not.toHaveBeenCalled();
       await user.click(radio('Beta'));
-      expect(onChange.mock.calls).toEqual([['b']]);
       expect(onValueChange.mock.calls).toEqual([['b']]);
-      // A keyboard selection that changes the value fires both.
-      await user.keyboard('{ArrowUp}');
-      expect(onChange.mock.calls).toEqual([['b'], ['a']]);
-      expect(onValueChange.mock.calls).toEqual([['b'], ['a']]);
-      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
   });
 
-  it('the deprecated onChange alias matches onValueChange in a controlled group (rejected values retry)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const user = userEvent.setup();
-      const onChange = vi.fn();
-      const onValueChange = vi.fn();
-      // The parent never accepts a change, so the value stays "a".
-      render(
-        <RadioGroup
-          value="a"
-          onChange={onChange}
-          onValueChange={onValueChange}
-          aria-label="Options"
-        >
-          {twoItems}
-        </RadioGroup>,
-      );
-      // Re-selecting the controlled value is a no-op for both callbacks.
-      await user.click(radio('Alpha'));
-      expect(onChange).not.toHaveBeenCalled();
-      expect(onValueChange).not.toHaveBeenCalled();
-      // ArrowDown moves focus to Beta and requests "b"; ArrowUp returns to the selected Alpha
-      // (no change); ArrowDown requests the rejected "b" again, which fires again.
-      await user.keyboard('{ArrowDown}');
-      expect(radio('Beta')).toHaveFocus();
-      await user.keyboard('{ArrowUp}');
-      expect(radio('Alpha')).toHaveFocus();
-      await user.keyboard('{ArrowDown}');
-      expect(onChange.mock.calls).toEqual([['b'], ['b']]);
-      expect(onValueChange.mock.calls).toEqual([['b'], ['b']]);
-      expect(warn.mock.calls).toEqual([[ONCHANGE_DEPRECATION]]);
-    } finally {
-      warn.mockRestore();
-    }
+  it('onValueChange is change-only: re-selecting does not call it, a keyboard selection does', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <RadioGroup defaultValue="a" onValueChange={onValueChange} aria-label="Options">
+        {twoItems}
+      </RadioGroup>,
+    );
+    await user.click(radio('Alpha'));
+    expect(onValueChange).not.toHaveBeenCalled();
+    await user.click(radio('Beta'));
+    expect(onValueChange.mock.calls).toEqual([['b']]);
+    // A keyboard selection that changes the value fires it.
+    await user.keyboard('{ArrowUp}');
+    expect(onValueChange.mock.calls).toEqual([['b'], ['a']]);
+  });
+
+  it('onValueChange in a controlled group: rejected values retry', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    // The parent never accepts a change, so the value stays "a".
+    render(
+      <RadioGroup value="a" onValueChange={onValueChange} aria-label="Options">
+        {twoItems}
+      </RadioGroup>,
+    );
+    // Re-selecting the controlled value is a no-op.
+    await user.click(radio('Alpha'));
+    expect(onValueChange).not.toHaveBeenCalled();
+    // ArrowDown moves focus to Beta and requests "b"; ArrowUp returns to the selected Alpha
+    // (no change); ArrowDown requests the rejected "b" again, which fires again.
+    await user.keyboard('{ArrowDown}');
+    expect(radio('Beta')).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(radio('Alpha')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(onValueChange.mock.calls).toEqual([['b'], ['b']]);
   });
 
   it('respects controlled value prop', async () => {
@@ -269,7 +237,7 @@ describe('RadioGroup', () => {
       </RadioGroup>,
     );
     const group = screen.getByRole('radiogroup', { name: 'Options' });
-    expect(group).toHaveClass('flex-col');
+    expect(group).toHaveClass('wave:flex-col');
     expect(group).toHaveAttribute('aria-orientation', 'vertical');
   });
 
@@ -280,7 +248,7 @@ describe('RadioGroup', () => {
       </RadioGroup>,
     );
     const group = screen.getByRole('radiogroup', { name: 'Options' });
-    expect(group).toHaveClass('flex-row');
+    expect(group).toHaveClass('wave:flex-row');
     expect(group).toHaveAttribute('aria-orientation', 'horizontal');
   });
 
@@ -575,18 +543,21 @@ describe('RadioItem', () => {
       </RadioGroup>,
     );
     expect(radio('Alpha')).toHaveClass(
-      'border-stroke-accessible',
-      'forced-colors:border-[ButtonText]',
+      'wave:border-stroke-accessible',
+      'wave:forced-colors:border-[ButtonText]',
     );
-    expect(radio('Alpha')).not.toHaveClass('border-input');
-    expect(radio('Beta')).toHaveClass('border-primary', 'forced-colors:border-[Highlight]');
+    expect(radio('Alpha')).not.toHaveClass('wave:border-input');
+    expect(radio('Beta')).toHaveClass(
+      'wave:border-primary',
+      'wave:forced-colors:border-[Highlight]',
+    );
     const dot = radio('Beta').querySelector('span');
     expect(dot).toHaveClass(
-      'bg-primary',
-      'forced-colors:bg-[Highlight]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:bg-primary',
+      'wave:forced-colors:bg-[Highlight]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
-    expect(radio('Alpha')).toHaveClass('motion-reduce:transition-none');
+    expect(radio('Alpha')).toHaveClass('wave:motion-reduce:transition-none');
   });
 
   it('sets its own zero padding and transparent circle, so app button styles cannot shift or fill it (C-NATIVE)', () => {
@@ -596,7 +567,7 @@ describe('RadioItem', () => {
       </RadioGroup>,
     );
     for (const name of ['Alpha', 'Beta']) {
-      expect(radio(name)).toHaveClass('p-0', 'bg-transparent');
+      expect(radio(name)).toHaveClass('wave:p-0', 'wave:bg-transparent');
     }
   });
 
@@ -606,8 +577,8 @@ describe('RadioItem', () => {
         <RadioItem value="a" label="Alpha" labelClassName="italic" />
       </RadioGroup>,
     );
-    expect(screen.getByText('Alpha')).toHaveClass('text-body-1', 'italic');
-    expect(screen.getByText('Alpha')).not.toHaveClass('text-sm');
+    expect(screen.getByText('Alpha')).toHaveClass('wave:text-body-1', 'italic');
+    expect(screen.getByText('Alpha')).not.toHaveClass('wave:text-sm');
   });
 
   it('forced colors: the radio circle keeps system colors; only the dot opts out (leaf)', () => {
@@ -616,7 +587,7 @@ describe('RadioItem', () => {
         {twoItems}
       </RadioGroup>,
     );
-    expect(radio('Beta')).not.toHaveClass('forced-colors:forced-color-adjust-none');
+    expect(radio('Beta')).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
   });
 
   it('forced colors: a disabled selected radio draws a GrayText dot and circle, no Highlight', () => {
@@ -625,17 +596,17 @@ describe('RadioItem', () => {
         {twoItems}
       </RadioGroup>,
     );
-    expect(radio('Beta')).toHaveClass('forced-colors:border-[GrayText]');
-    expect(radio('Beta')).not.toHaveClass('forced-colors:border-[Highlight]');
+    expect(radio('Beta')).toHaveClass('wave:forced-colors:border-[GrayText]');
+    expect(radio('Beta')).not.toHaveClass('wave:forced-colors:border-[Highlight]');
     const dot = radio('Beta').querySelector('span');
     expect(dot).toHaveClass(
-      'forced-colors:bg-[GrayText]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:forced-colors:bg-[GrayText]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
-    expect(dot).not.toHaveClass('forced-colors:bg-[Highlight]');
+    expect(dot).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
     // An unselected disabled radio draws a GrayText circle (not ButtonText).
-    expect(radio('Alpha')).toHaveClass('forced-colors:border-[GrayText]');
-    expect(radio('Alpha')).not.toHaveClass('forced-colors:border-[ButtonText]');
+    expect(radio('Alpha')).toHaveClass('wave:forced-colors:border-[GrayText]');
+    expect(radio('Alpha')).not.toHaveClass('wave:forced-colors:border-[ButtonText]');
   });
 });
 
@@ -760,12 +731,12 @@ describe('RadioItem — rich label', () => {
     );
     const pro = radio('Pro For growing teams');
     const root = pro.closest('label');
-    expect(root).toHaveClass('items-start');
-    expect(root).not.toHaveClass('items-center');
+    expect(root).toHaveClass('wave:items-start');
+    expect(root).not.toHaveClass('wave:items-center');
     // The 18px circle sits 1px down, centred on the 20px first line of `text-body-1`.
-    expect(pro).toHaveClass('mt-px');
+    expect(pro).toHaveClass('wave:mt-px');
     // Without a label text there is no line to line up with.
-    expect(radio('Free')).not.toHaveClass('mt-px');
+    expect(radio('Free')).not.toHaveClass('wave:mt-px');
   });
 
   it('clicking the label text selects; clicking a link inside it does not', async () => {
@@ -869,8 +840,8 @@ describe('RadioItem — rich label', () => {
       // disabled radio itself never takes focus). tailwind-merge keeps both classes (different
       // variants); the variant wins while it matches.
       expect(radio('Pro (see pricing)').closest('label')).toHaveClass(
-        'opacity-50',
-        'has-focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:has-focus-visible:opacity-100',
       );
       expect(radio('Small').closest('label')?.className).not.toMatch(/opacity/);
     },
@@ -1423,7 +1394,7 @@ describe('RadioGroup — types', () => {
 
 describe('RadioGroup.Item — slotProps', () => {
   type ItemSlotProps = NonNullable<RadioGroupItemProps['slotProps']>;
-  const EVERY_PART: ItemSlotProps = { indicator: {}, label: {} };
+  const EVERY_PART: ItemSlotProps = { root: {}, indicator: {}, label: {} };
 
   it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
     // Captured from 17abc07: the merged props may put the class before the locked attributes.
@@ -1443,13 +1414,13 @@ describe('RadioGroup.Item — slotProps', () => {
       ),
     ).toBe(
       [
-        '<div aria-label="Choice" aria-orientation="vertical" class="wave-radio-group relative flex flex-col gap-2" data-roving-container="" role="radiogroup">',
-        '<label class="wave-radio-group-item inline-flex items-start gap-2 select-none cursor-pointer">',
-        '<button aria-checked="true" aria-labelledby="radio-item-label-_R_3H1_" class="wave-radio-group-item__indicator flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-transparent p-0 transition-colors motion-reduce:transition-none mt-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-2 border-primary forced-colors:border-[Highlight]" data-roving-value="a" id="radio-item-_R_3_" role="radio" style="color:red" tabindex="0" title="t" type="button">',
-        '<span aria-hidden="true" class="block h-2 w-2 rounded-full bg-primary forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none">',
+        '<div aria-label="Choice" aria-orientation="vertical" class="wave-radio-group wave:relative wave:flex wave:flex-col wave:gap-2" data-roving-container="" role="radiogroup">',
+        '<label class="wave-radio-group-item wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer">',
+        '<button aria-checked="true" aria-labelledby="radio-item-label-_R_3H1_" class="wave-radio-group-item__indicator wave:flex wave:h-[18px] wave:w-[18px] wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:bg-transparent wave:p-0 wave:transition-colors wave:motion-reduce:transition-none wave:mt-px wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:border-2 wave:border-primary wave:forced-colors:border-[Highlight]" data-roving-value="a" id="radio-item-_R_3_" role="radio" style="color:red" tabindex="0" title="t" type="button">',
+        '<span aria-hidden="true" class="wave:block wave:h-2 wave:w-2 wave:rounded-full wave:bg-primary wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none">',
         '</span>',
         '</button>',
-        '<span class="wave-radio-group-item__label text-body-1 text-foreground lc" id="radio-item-label-_R_3H1_">One',
+        '<span class="wave-radio-group-item__label wave:text-body-1 wave:text-foreground lc" id="radio-item-label-_R_3H1_">One',
         '</span>',
         '</label>',
         '</div>',
@@ -1464,6 +1435,8 @@ describe('RadioGroup.Item — slotProps', () => {
       { 'aria-label': 'One' },
       { label: 'One', 'aria-describedby': 'd', 'data-x': '1', style: { color: 'red' }, title: 't' },
       { label: 'One', id: 'own', role: 'radio', tabIndex: 3 },
+      // The item's own props: on the root only its className, the rest on the radio.
+      { label: 'One', className: 'c', hidden: true, inert: true, 'aria-hidden': true },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -1494,7 +1467,11 @@ describe('RadioGroup.Item — slotProps', () => {
     );
     const indicator = screen.getByRole('radio', { name: 'One' });
     const label = screen.getByText('One');
-    expect(indicator).toHaveClass(radioGroupItemClassNames.indicator, 'rounded-full', 'my-circle');
+    expect(indicator).toHaveClass(
+      radioGroupItemClassNames.indicator,
+      'wave:rounded-full',
+      'my-circle',
+    );
     expect(indicator.classList[0]).toBe(radioGroupItemClassNames.indicator);
     expect(indicator.classList[indicator.classList.length - 1]).toBe('my-circle');
     expect(indicator).toHaveStyle({ width: '20px' });
@@ -1753,8 +1730,11 @@ describe('RadioGroup.Item — slotProps', () => {
   });
 
   it('types each part for its element, and takes no children', () => {
-    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<'indicator' | 'label'>();
+    expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<'root' | 'indicator' | 'label'>();
     expectTypeOf<RadioItemProps['slotProps']>().toEqualTypeOf<RadioGroupItemProps['slotProps']>();
+    expectTypeOf<NonNullable<ItemSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLabelElement> | undefined
+    >();
     expectTypeOf<NonNullable<ItemSlotProps['indicator']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLButtonElement> | undefined
     >();
@@ -1763,5 +1743,244 @@ describe('RadioGroup.Item — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the item draws the dot
     void (<RadioGroup.Item value="a" slotProps={{ indicator: { children: '•' } }} />);
+    // @ts-expect-error -- a part takes no children: the item draws its content
+    void (<RadioGroup.Item value="a" slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  // The root <label> was reachable by no ref before 1.0 (its `ref` reaches the radio, as do its
+  // rest props); `slotProps.root` opens it. testRootPartRef cannot find it by `data-testid`, which
+  // reaches the radio, so these tests find it from the radio.
+  describe('the root part', () => {
+    const radioNamed = (name: string) => screen.getByRole('radio', { name, hidden: true });
+    const rootOf = (name: string) => radioNamed(name).closest('label') as HTMLElement;
+
+    it('gives slotProps.root.ref the root <label>, while ref reaches the radio', () => {
+      const root = React.createRef<HTMLLabelElement>();
+      const ref = React.createRef<HTMLButtonElement>();
+      render(
+        <RadioGroup aria-label="Choice">
+          <RadioGroup.Item ref={ref} value="a" label="One" slotProps={{ root: { ref: root } }} />
+        </RadioGroup>,
+      );
+      expect(root.current).toBe(rootOf('One'));
+      expect(root.current?.tagName).toBe('LABEL');
+      expect(ref.current).toBe(radioNamed('One'));
+    });
+
+    it("puts your className, style, data-* and attributes on the root <label>, after the item's className", () => {
+      render(
+        <RadioGroup aria-label="Choice">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            className="mine"
+            style={{ width: 10 }}
+            slotProps={{
+              root: {
+                className: 'my-root',
+                style: { color: 'red' },
+                'data-part': 'root',
+                title: 'R',
+              },
+            }}
+          />
+        </RadioGroup>,
+      );
+      const root = rootOf('One');
+      expect(root.classList[0]).toBe(radioGroupItemClassNames.root);
+      expect(root.className).toMatch(/ mine my-root$/);
+      expect(root).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+      expect(root).toHaveAttribute('data-part', 'root');
+      expect(root).toHaveAttribute('title', 'R');
+      // The item's own style and attributes stay on the radio.
+      expect(radioNamed('One')).toHaveStyle({ width: '10px' });
+      expect(radioNamed('One')).not.toHaveAttribute('data-part');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(
+        <RadioGroup aria-label="Choice">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            slotProps={{ root: { className: 'items-center' } }}
+          />
+        </RadioGroup>,
+      );
+      expect(rootOf('One')).toHaveClass('items-center');
+      expect(rootOf('One')).not.toHaveClass('wave:items-start');
+    });
+
+    it('keeps the radio reachable: a part sets no hidden, inert or aria-hidden on the root', () => {
+      render(
+        <RadioGroup aria-label="Choice">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            slotProps={{ root: { hidden: true, inert: true, 'aria-hidden': true } }}
+          />
+        </RadioGroup>,
+      );
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(rootOf('One')).not.toHaveAttribute(attribute);
+      }
+    });
+
+    // State-off lock: the root has no `for` (it labels the radio it holds, and the item's own
+    // props reach the radio), so a part's `htmlFor` would send the text's clicks elsewhere.
+    it('keeps a part from giving the root a for: a click on the text still selects the radio once', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <>
+          <input type="checkbox" id="decoy" aria-label="Decoy" />
+          <RadioGroup aria-label="Choice" onValueChange={onValueChange}>
+            <RadioGroup.Item value="a" label="One" slotProps={{ root: { htmlFor: 'decoy' } }} />
+          </RadioGroup>
+        </>,
+      );
+      expect(rootOf('One')).not.toHaveAttribute('for');
+      await user.click(screen.getByText('One'));
+      expect(onValueChange.mock.calls.map(([value]) => value)).toEqual(['a']);
+      expect(radioNamed('One')).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Decoy' })).not.toBeChecked();
+    });
+
+    // A click on the label text reaches the root, then the <label> passes it to the radio, whose
+    // own click bubbles to the root again: the browser's label behaviour. It selects once.
+    it('selects once per click on the text or the radio, your root onClick seeing each click as it bubbles (StrictMode)', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const targets: EventTarget[] = [];
+      render(
+        <React.StrictMode>
+          <RadioGroup aria-label="Choice" onValueChange={onValueChange}>
+            <RadioGroup.Item
+              value="a"
+              label="One"
+              slotProps={{ root: { onClick: (event) => targets.push(event.target) } }}
+            />
+            <RadioGroup.Item value="b" label="Two" />
+          </RadioGroup>
+        </React.StrictMode>,
+      );
+      const text = screen.getByText('One');
+      await user.click(text);
+      expect(targets).toEqual([text, radioNamed('One')]);
+      expect(onValueChange.mock.calls).toEqual([['a']]);
+      await user.click(radioNamed('Two'));
+      targets.length = 0;
+      await user.click(radioNamed('One'));
+      expect(targets).toEqual([radioNamed('One')]);
+      expect(onValueChange.mock.calls).toEqual([['a'], ['b'], ['a']]);
+    });
+
+    it('keeps the label text from selecting when your root onClick prevents the default; the radio handles its own click first', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <RadioGroup aria-label="Choice" onValueChange={onValueChange}>
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+          />
+        </RadioGroup>,
+      );
+      await user.click(screen.getByText('One'));
+      expect(radioNamed('One')).toHaveAttribute('aria-checked', 'false');
+      expect(onValueChange).not.toHaveBeenCalled();
+      await user.click(radioNamed('One'));
+      expect(onValueChange.mock.calls).toEqual([['a']]);
+    });
+
+    it.each([
+      ['disabled by the item', {}, { disabled: true }],
+      ['disabled by the group', { disabled: true }, {}],
+    ] as const)('neither calls your root onClick nor selects while %s', async (_, group, item) => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onValueChange = vi.fn();
+      render(
+        <RadioGroup aria-label="Choice" onValueChange={onValueChange} {...group}>
+          <RadioGroup.Item value="a" label="One" {...item} slotProps={{ root: { onClick } }} />
+        </RadioGroup>,
+      );
+      await user.click(screen.getByText('One'));
+      fireEvent.click(rootOf('One'));
+      fireEvent.click(radioNamed('One'));
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(radioNamed('One')).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <RadioGroup aria-label="Choice" defaultValue="a">
+          <RadioGroup.Item
+            value="a"
+            label="One"
+            slotProps={{ root: { className: 'mine', title: 'R' } }}
+          />
+          <RadioGroup.Item value="b" label="Two" />
+        </RadioGroup>,
+      );
+      await expectNoA11yViolations();
+    });
+  });
+
+  // CLAUDE.md, Testing, "Roving markers" (ruling BO): the root and the label text sit in the
+  // group's roving container, which reads roles, tab indexes and markers on every element. Each
+  // part is tried with all of them at once; each lock is proven by the attribute it keeps off
+  // and by the arrow order with exactly one tab stop.
+  describe('the roving markers of the root and label parts', () => {
+    const ATTEMPT = {
+      role: 'radiogroup',
+      tabIndex: 0,
+      'data-roving-container': '',
+      'data-roving-disabled': '',
+      'data-roving-value': 'z',
+      'aria-disabled': true,
+    };
+    const ATTRIBUTES = [
+      'role',
+      'tabindex',
+      'data-roving-container',
+      'data-roving-disabled',
+      'data-roving-value',
+      'aria-disabled',
+    ];
+
+    it.each([
+      ['root', (name: string) => radio(name).closest('label') as HTMLElement],
+      ['label', (name: string) => screen.getByText(name)],
+    ] as const)(
+      'keeps the item in the arrow order with one tab stop when the %s part tries every marker',
+      async (part, elementOf) => {
+        const user = userEvent.setup();
+        render(
+          <RadioGroup aria-label="Choice" defaultValue="a">
+            <RadioGroup.Item value="a" label="One" />
+            <RadioGroup.Item value="b" label="Two" slotProps={{ [part]: ATTEMPT }} />
+            <RadioGroup.Item value="c" label="Three" />
+          </RadioGroup>,
+        );
+        const group = screen.getByRole('radiogroup', { name: 'Choice' });
+        for (const attribute of ATTRIBUTES) {
+          expect(elementOf('Two'), attribute).not.toHaveAttribute(attribute);
+        }
+        expect(group.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+        await user.tab();
+        expect(radio('One')).toHaveFocus();
+        const order: string[] = [];
+        for (let step = 0; step < 3; step++) {
+          await user.keyboard('{ArrowDown}');
+          order.push(document.activeElement?.getAttribute('data-roving-value') ?? '');
+          expect(document.activeElement).toHaveAttribute('aria-checked', 'true');
+          expect(group.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+        }
+        expect(order).toEqual(['b', 'c', 'a']);
+      },
+    );
   });
 });

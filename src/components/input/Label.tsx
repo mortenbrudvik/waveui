@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { labelClassNames } from '../../lib/classNames';
 import { markFieldLabel } from './fieldLabel';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
@@ -46,16 +46,16 @@ export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> 
 }
 
 const sizeMap: Record<CoreSize, string> = {
-  small: 'text-caption-1',
-  medium: 'text-body-1',
-  large: 'text-body-2',
+  small: 'wave:text-caption-1',
+  medium: 'wave:text-body-1',
+  large: 'wave:text-body-2',
 };
 
 const weightMap: Record<TextWeight, string | undefined> = {
   regular: undefined,
-  medium: 'font-medium',
-  semibold: 'font-semibold',
-  bold: 'font-bold',
+  medium: 'wave:font-medium',
+  semibold: 'wave:font-semibold',
+  bold: 'wave:font-bold',
 };
 
 /**
@@ -79,15 +79,15 @@ export const Label = ({
   ...rest
 }: LabelProps) => {
   const requiredProps = mergeSlotProps(slotProps?.required, {
-    className: cn(labelClassNames.required, 'ms-1 text-error'),
+    className: wcn(labelClassNames.required, 'wave:ms-1 wave:text-error'),
     locked: { 'aria-hidden': 'true', tabIndex: undefined },
   });
   return (
     <label
       ref={ref}
-      className={cn(
+      className={wcn(
         labelClassNames.root,
-        disabled ? 'text-muted-foreground' : 'text-foreground',
+        disabled ? 'wave:text-muted-foreground' : 'wave:text-foreground',
         sizeMap[size],
         weightMap[weight],
         className,

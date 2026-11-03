@@ -155,7 +155,7 @@ export const HoverCard: Story = {
         <Popover.Content title="Maria Lopez">
           <div className="flex items-center gap-3">
             <Avatar name="Maria Lopez" size="large" />
-            <span className="text-muted-foreground">Product designer, Oslo</span>
+            <span className="text-wave-muted-foreground">Product designer, Oslo</span>
           </div>
           <Button appearance="primary" size="small" className="mt-3">
             Follow

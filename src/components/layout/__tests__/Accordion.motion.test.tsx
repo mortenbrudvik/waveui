@@ -123,7 +123,7 @@ describe('the collapse wrapper (§5.1 markup)', () => {
     // The region keeps every 0.14 prop and attribute.
     const trigger = button('Shipping');
     expect(ref.current).toBe(el);
-    expect(el).toHaveClass(accordionPanelClassNames.root, 'px-4', 'pb-3', 'my-panel');
+    expect(el).toHaveClass(accordionPanelClassNames.root, 'wave:px-4', 'wave:pb-3', 'my-panel');
     expect(el.classList[0]).toBe(accordionPanelClassNames.root);
     expect(el.getAttributeNames().sort()).toEqual(
       ['aria-labelledby', 'class', 'data-state', 'data-testid', 'id', 'role'].sort(),

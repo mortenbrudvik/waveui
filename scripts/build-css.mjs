@@ -1,14 +1,35 @@
 #!/usr/bin/env node
 /**
  * Builds Wave's precompiled CSS with @tailwindcss/cli and asserts the result (repo-level#1,
- * spec §2.1.1 and §2.1.8):
+ * spec §2.1.1 and §2.1.8; Phase 14 spec R6):
  *
- *   src/styles/styles.css    -> <out>/styles.css     (`@mortenbrudvik/waveui/styles`)
- *   src/styles/preflight.css -> <out>/preflight.css  (`@mortenbrudvik/waveui/preflight.css`)
+ *   src/styles/styles.css    -> <out>/styles.css      (`@mortenbrudvik/waveui/styles`)
+ *   src/styles/styles.css    -> <out>/components.css  (internal: only `./tailwind` imports it)
+ *   src/styles/utilities.css -> <out>/utilities.css   (`@mortenbrudvik/waveui/utilities`)
+ *   src/styles/preflight.css -> <out>/preflight.css   (`@mortenbrudvik/waveui/preflight.css`)
  *
- * Both files are minified and unlayered. The assertions on styles.css:
+ * styles.css compiles the utilities against src/styles/theme.css, the internal, unnamespaced
+ * theme (`--color-primary: var(--wave-primary)`, the type ramp, the shadows, …), which only it
+ * imports: an `@theme inline reference` block, so no theme variable of it is emitted (1.0, spec
+ * R6 of Phase 14; apps get the namespaced keys of tokens.css).
+ *
+ * components.css is styles.css without its `@import` of tokens.css and of base.css (see
+ * `componentsSource`; the CLI reads that text from stdin in src/styles): the components'
+ * utilities alone, which the `./tailwind` entry imports into `layer(components)` next to
+ * tokens.css in `layer(theme)` and base.css in `layer(base)`, so an app's own layered token
+ * overrides and `@layer base` element styles keep winning over Wave's as in 0.18 (spec §6, Task 1,
+ * checks 15 and 18). utilities.css is src/styles/utilities.css plus an `@source inline()` list
+ * generated from the namespaced theme keys of tokens.css (see `namespacedUtilities`): the token
+ * utilities of apps without Tailwind (`bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`,
+ * `font-wave`, `animate-wave-spin`, …), without variants, unlayered (ruling BL: its class
+ * selectors beat the zero-specificity base styles of styles.css inside `.wave-root`, which a
+ * layered class would lose to; the app's own unlayered CSS after it wins by source order).
+ *
+ * The four outputs are minified and unlayered. The assertions on styles.css:
  *   - every theme rule of tokens.css (ramps, three theme groups, color-scheme rules) is present
- *     with the same properties, so every `--wave-*` variable ships;
+ *     with the same properties, so every `--wave-*` variable ships, and no rule selects `.dark`
+ *     or `.high-contrast`, the theme classes 1.0 removed (the themes are `.wave-light`,
+ *     `.wave-dark` and `.wave-high-contrast`);
  *   - every scoped base / native-reset rule of base.css is present with the same properties
  *     (property names only: the minifier rewrites values; the declared values of both source
  *     files are asserted by src/styles/__tests__/tokens.test.ts), and a declaration that is
@@ -16,7 +37,8 @@
  *   - the `@keyframes wave-*` rules and the `animate-wave-*`, `bg-primary` and `text-body-1`
  *     utilities are present (the sources were scanned), and so are three representatives of the
  *     motion recipes of src/lib/motion.ts (`duration-wave-gentle`,
- *     `data-[presence=exiting]:opacity-0`, `data-[presence=entered]:contents`);
+ *     `data-[presence=exiting]:opacity-0`, `data-[presence=entered]:contents`), each with the
+ *     utility prefix when one is set (`wave:bg-primary`);
  *   - no top-level `@layer` other than Tailwind's `properties` fallback (the output is
  *     unlayered), and no Tailwind directive or `@import` survived;
  *   - no Tailwind theme variables leak (`--spacing:`, `--font-sans:`, `--color-red-500`,
@@ -33,15 +55,58 @@
  *     is a whitespace-separated word of a string literal of a library script, a class of the
  *     style entries (safelist, selectors) or story-only (reported above). Tailwind reads every
  *     word of its sources, so a word of a comment or an identifier (`container`, `.filter(`)
- *     would otherwise ship as a global, unlayered utility; styles.css excludes such words with
- *     `@source not inline()`, and also the words of non-class strings, which this check cannot
- *     tell from classes;
+ *     would otherwise ship as a global, unlayered utility. With the utility prefix only a word
+ *     that carries it generates (a comment naming a `wave:` class that no string uses); without
+ *     one, styles.css excluded such words with `@source not inline()`, and also the words of
+ *     non-class strings, which this check cannot tell from classes;
  *   - every `wave-rtl:` class of a library class string is compiled with Wave's direction
  *     variant (src/styles/variants.css, C-LOGICAL): `:where(:nth-child(n of :dir(rtl)))` under
  *     `@supports selector(:nth-child(n of :dir(rtl)))` and the `[dir=rtl]` fallback under its
  *     negation (a bare `:dir(rtl)` does not count: an app's CSS minifier may rewrite it);
  *   - no class with Tailwind's bare `rtl:`/`ltr:` variant ships (C-LOGICAL): they also match inside
  *     a subtree of the opposite direction.
+ *
+ * The assertions on components.css (`assertComponentsCss`):
+ *   - unlayered (only Tailwind's `properties` fallback), no Tailwind directive;
+ *   - no token rule and no theme variable: no rule selects `:root` or a selector of a tokens.css
+ *     or base.css rule, no declaration of a token tokens.css declares (a component's own custom
+ *     property, `--wave-card-padding`, is none) or of a theme key (`--color-*`, `--text-*`,
+ *     `--shadow-*`, `--font-*`, `--animate-*`, `--ease-*`), and none of the Tailwind theme
+ *     variables of the styles.css list above;
+ *   - it is styles.css without the rules of tokens.css and base.css: the same other nodes
+ *     (utilities, `@supports` blocks, keyframes, `@property` registrations), byte for byte and in
+ *     the same order, so every utility, keyframe and `wave-rtl:` rule of styles.css is there.
+ *
+ * The assertions on utilities.css (`assertUtilitiesCss`):
+ *   - exactly the generated classes, every one of them: a namespaced theme key of tokens.css
+ *     yields its utilities, nothing else ships (no variant, no unnamespaced or other utility);
+ *   - unlayered: no `@layer` but Tailwind's `properties` fallback, no style rule of a class inside
+ *     one, no Tailwind directive;
+ *   - no token rule and no theme variable (no `:root` rule, no custom property other than
+ *     Tailwind's `--tw-*`), and the `@keyframes wave-*` of the animations;
+ *   - every custom property a declaration reads (`var(--name)`) is Tailwind's `--tw-*` or one that
+ *     styles.css declares (a token): a namespaced key mapped to a theme variable instead of a
+ *     token would read a `var(--color-wave-*)` that no stylesheet of a plain app declares.
+ *
+ * The utility prefix (Phase 14 spec R6): `UTILITY_PREFIX` of src/lib/cn.ts, read from the file's
+ * text (`readUtilityPrefix`; a declaration that cannot be read stops the build). While it is
+ * empty, the build says so in one line and checks nothing more. Once it is set:
+ *   - the compile check runs first, before any compile: scripts/prefix-codemod.mjs `--check` over
+ *     src/components, src/lib and src/hooks (the string literals of the TypeScript AST, in two
+ *     tiers: no unprefixed utility word, and no prefixed word that compiles to nothing, in a
+ *     literal the class-context tracing reaches; elsewhere only the words
+ *     scripts/prefix-allowlist.json names for that file; and no prefixed word at all in
+ *     src/hooks, which no `@source` scans). A finding fails the build, and a pass prints one line
+ *     with what it read;
+ *   - every class of styles.css that is no selector class of the style entries (`.wave-root`,
+ *     the theme classes) starts with `<prefix>:`, and the required utilities are looked up with
+ *     the prefix;
+ *   - every custom property styles.css declares is a token tokens.css declares, Tailwind's
+ *     `--tw-*`, or one an arbitrary-property utility of the library declares (`--option-bg`,
+ *     `--wave-card-padding`), and none refers to itself: no theme variable ships (the
+ *     `--spacing:`-style needles above cannot see a leak under the prefix, which would be named
+ *     `--wave-spacing`, and a theme key `--shadow-4` would become the self-reference
+ *     `--wave-shadow-4: var(--wave-shadow-4)`, a token's name).
  *
  * Usage: node scripts/build-css.mjs [--out-dir <dir>] [--check-only]
  *   --out-dir     output directory (default: dist)
@@ -62,10 +127,28 @@ import { runScript } from './verify-dist.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 
+/**
+ * The outputs, each compiled from `input` (relative to the project root). With `source`, the CLI
+ * compiles `source(text of input, style entries)` from stdin in the input's directory instead of
+ * the file itself, so relative `@import` and `@source` paths resolve as in the file.
+ */
 const ENTRIES = [
   { input: 'src/styles/styles.css', output: 'styles.css' },
+  {
+    input: 'src/styles/styles.css',
+    output: 'components.css',
+    source: (stylesCss) => componentsSource(stylesCss),
+  },
+  {
+    input: 'src/styles/utilities.css',
+    output: 'utilities.css',
+    source: (utilitiesCss, { tokensCss }) => utilitiesSource(utilitiesCss, tokensCss),
+  },
   { input: 'src/styles/preflight.css', output: 'preflight.css' },
 ];
+
+/** The output files, in the order of the build report. */
+export const OUTPUTS = ENTRIES.map(({ output }) => output);
 
 const KEYFRAMES = ['wave-spin', 'wave-pulse', 'wave-indeterminate', 'wave-indeterminate-rtl'];
 
@@ -87,6 +170,107 @@ const REQUIRED_UTILITIES = [
 
 /** Tailwind theme variables that must never ship in the precompiled CSS. */
 const FORBIDDEN = ['--spacing:', '--font-sans:', '--color-red-500', '--radius-'];
+
+/** The 0.4 theme classes, deprecated in 0.5 and removed in 1.0: no rule may select them. */
+const REMOVED_THEME_CLASSES = ['dark', 'high-contrast'];
+
+// -------------------------------------------------------------------------------------------
+// The utility prefix and the compile check (Phase 14 spec R6)
+// -------------------------------------------------------------------------------------------
+
+/** The module that declares the prefix, relative to the project root. */
+const CN_MODULE = 'src/lib/cn.ts';
+
+/** The directories the compile check reads, relative to the project root. */
+const COMPILE_CHECK_PATHS = ['src/components', 'src/lib', 'src/hooks'];
+
+/**
+ * The directories of COMPILE_CHECK_PATHS that hold no class string: no `@source` of styles.css
+ * scans them, so a prefixed word there would compile to nothing (`--class-free`).
+ */
+const CLASS_FREE_PATHS = ['src/hooks'];
+
+/**
+ * The value of `UTILITY_PREFIX` in the text of src/lib/cn.ts (`export const UTILITY_PREFIX:
+ * string = 'wave';`), read without importing TypeScript. Throws when the declaration is missing,
+ * declared twice or not a plain string literal: the check must never be skipped by accident.
+ */
+export function readUtilityPrefix(cnSource) {
+  const declarations = cnSource.match(/^export const UTILITY_PREFIX\b/gm) ?? [];
+  const found = [
+    ...cnSource.matchAll(
+      /^export const UTILITY_PREFIX(?:\s*:\s*string)?\s*=\s*(['"])([^'"\\]*)\1\s*;/gm,
+    ),
+  ];
+  if (declarations.length !== 1 || found.length !== 1) {
+    throw new Error(
+      `readUtilityPrefix: ${CN_MODULE} must declare \`export const UTILITY_PREFIX: string = '…';\` ` +
+        `once, with a string literal (found ${declarations.length} declaration(s), ` +
+        `${found.length} readable)`,
+    );
+  }
+  const prefix = found[0][2];
+  if (prefix && !/^[a-z][a-z0-9]*$/.test(prefix)) {
+    throw new Error(
+      `readUtilityPrefix: "${prefix}" is no Tailwind prefix (lowercase letters and digits)`,
+    );
+  }
+  return prefix;
+}
+
+/**
+ * The utility prefix of the project at `projectRoot` (see readUtilityPrefix), or `undefined` for a
+ * project without src/lib/cn.ts (a fixture of the tests: nothing to check, nothing said).
+ */
+export function utilityPrefixOf(projectRoot) {
+  const path = join(projectRoot, CN_MODULE);
+  return existsSync(path) ? readUtilityPrefix(readFileSync(path, 'utf8')) : undefined;
+}
+
+/**
+ * The compile check of the project at `projectRoot` for `prefix`: runs scripts/prefix-codemod.mjs
+ * `--check` (this repository's, with `--root projectRoot`; the allowlist is the project's
+ * scripts/prefix-allowlist.json) over the existing directories of src/components, src/lib and
+ * src/hooks, the last `--class-free` (no prefixed word: styles.css scans none of it).
+ * Returns `{ ok, lines }`: the check's report, or why it could not run.
+ */
+export function compileCheck(projectRoot, prefix) {
+  const codemod = join(dirname(fileURLToPath(import.meta.url)), 'prefix-codemod.mjs');
+  const paths = COMPILE_CHECK_PATHS.filter((path) => existsSync(join(projectRoot, path)));
+  if (paths.length === 0)
+    return { ok: true, lines: ['compile check: no src/components, src/lib or src/hooks'] };
+  const classFree = CLASS_FREE_PATHS.filter((path) => paths.includes(path)).flatMap((path) => [
+    '--class-free',
+    path,
+  ]);
+  const result = spawnSync(
+    process.execPath,
+    [codemod, '--check', '--root', projectRoot, '--prefix', prefix, ...classFree, ...paths],
+    { encoding: 'utf8' },
+  );
+  if (result.error) throw result.error;
+  const lines = `${result.stdout}${result.stderr}`.split(/\r?\n/).filter(Boolean);
+  if (result.status === 0) return { ok: true, lines };
+  if (result.status === 1 && /^prefix-codemod --check: /.test(lines[0] ?? '')) {
+    return { ok: false, lines };
+  }
+  return {
+    ok: false,
+    lines: [`prefix-codemod --check could not run (exit ${result.status})`, ...lines.slice(0, 20)],
+  };
+}
+
+/**
+ * The one-line summary of a passing compile check, from the report line of
+ * `prefix-codemod --check`: `prefix wave: 4355 class words in 273 files, 131 allowlisted pairs`.
+ */
+export function compileCheckSummary(lines, prefix) {
+  const report = lines[0] ?? '';
+  const words = /(\d+) prefixed class word\(s\)/.exec(report)?.[1] ?? '?';
+  const files = /of (\d+) file\(s\)/.exec(report)?.[1] ?? '?';
+  const pairs = /\((\d+) word-file pair\(s\)/.exec(report)?.[1] ?? '?';
+  return `prefix ${prefix}: ${words} class words in ${files} files, ${pairs} allowlisted pairs`;
+}
 
 // -------------------------------------------------------------------------------------------
 // Minimal CSS parser (rules, at-rules, declarations; escape-, string- and comment-aware)
@@ -309,7 +493,7 @@ export function expandBraces(pattern) {
 /**
  * Class names the style entries themselves put into the stylesheet: the `@source inline()`
  * safelist of styles.css (split and brace-expanded as Tailwind does; `@source not inline()` adds
- * nothing) and the selector classes of the entries (`.wave-dark`, `.dark`, `.wave-root`). Comments
+ * nothing) and the selector classes of the entries (`.wave-dark`, `.wave-root`). Comments
  * and declarations are never read, so a class that a style entry only names in a comment is not a
  * library class.
  */
@@ -328,6 +512,85 @@ export function styleEntryClasses({ stylesCss, tokensCss, baseCss }) {
 }
 
 // -------------------------------------------------------------------------------------------
+// Derived sources: components.css and utilities.css
+// -------------------------------------------------------------------------------------------
+
+/** The `@import` statements of tokens.css and base.css in a style entry, each with its line end. */
+const TOKEN_AND_BASE_IMPORT = /^@import\s+(["'])\.\/(tokens|base)\.css\1\s*;[^\S\n]*\n?/gm;
+
+/**
+ * The source of components.css: styles.css (`stylesCss`) without its `@import` of tokens.css and
+ * of base.css, so it compiles the same utilities, keyframes and `@property` registrations without
+ * the token rules and the scoped base. Throws unless styles.css imports each of the two once, as
+ * plain statements: a renamed import would otherwise put the tokens into the `./tailwind` entry's
+ * `components` layer (or leave the base out of `./styles`).
+ */
+export function componentsSource(stylesCss) {
+  const removed = [...stylesCss.matchAll(TOKEN_AND_BASE_IMPORT)].map((match) => match[2]).sort();
+  if (removed.join(' ') !== 'base tokens') {
+    throw new Error(
+      "componentsSource: styles.css must @import './tokens.css' and './base.css' once each " +
+        `(found: ${removed.length > 0 ? removed.join(', ') : 'neither'})`,
+    );
+  }
+  return stylesCss.replace(TOKEN_AND_BASE_IMPORT, '');
+}
+
+/**
+ * The utilities of a namespaced theme key of tokens.css, by the key's namespace. A color yields
+ * its six color utilities; the type ramp, the shadows, the font families and the animations one
+ * each. Sub-keys (`--text-wave-body-1--line-height`), the motion keys
+ * (`--transition-duration-wave-*`, `--ease-wave-*`) and any unnamespaced key yield none.
+ */
+const NAMESPACED_UTILITIES = [
+  [
+    /^--color-(wave-[\w-]+)$/,
+    (name) => ['bg', 'text', 'border', 'ring', 'fill', 'stroke'].map((u) => `${u}-${name}`),
+  ],
+  [/^--text-(wave-(?:(?!--)[\w-])+)$/, (name) => [`text-${name}`]],
+  [/^--shadow-(wave-[\w-]+)$/, (name) => [`shadow-${name}`]],
+  [/^--font-(wave(?:-[\w-]+)?)$/, (name) => [`font-${name}`]],
+  [/^--animate-(wave-[\w-]+)$/, (name) => [`animate-${name}`]],
+];
+
+/**
+ * The classes of utilities.css, generated from the namespaced keys of the `@theme` blocks of
+ * tokens.css (`tokensCss`): `bg-`, `text-`, `border-`, `ring-`, `fill-` and `stroke-wave-<color>`,
+ * `text-wave-<step>` of the type ramp, `shadow-wave-<level>`, `font-wave` and its families, and
+ * `animate-wave-<name>`; sorted, without duplicates. No list is kept by hand: a key added to
+ * tokens.css adds its utilities.
+ */
+export function namespacedUtilities(tokensCss) {
+  const classes = new Set();
+  walk(parseCss(tokensCss), (node, parents) => {
+    if (node.children !== null || !node.prelude.startsWith('--')) return;
+    if (!parents.some((parent) => /^@theme\b/.test(parent.prelude))) return;
+    const key = node.prelude.slice(0, node.prelude.indexOf(':')).trim();
+    for (const [pattern, utilities] of NAMESPACED_UTILITIES) {
+      const match = pattern.exec(key);
+      if (match) for (const name of utilities(match[1])) classes.add(name);
+    }
+  });
+  return [...classes].sort();
+}
+
+/**
+ * The source of utilities.css: src/styles/utilities.css (`utilitiesCss`, which imports tokens.css
+ * as a reference and Tailwind's utilities, unlayered, without sources) and an
+ * `@source inline()` of the classes `namespacedUtilities` generates from `tokensCss`. Throws when
+ * tokens.css declares no namespaced key.
+ */
+export function utilitiesSource(utilitiesCss, tokensCss) {
+  const classes = namespacedUtilities(tokensCss);
+  if (classes.length === 0) {
+    throw new Error(
+      'utilitiesSource: tokens.css declares no namespaced theme key (--color-wave-*, …)',
+    );
+  }
+  return `${utilitiesCss.trimEnd()}\n\n@source inline('${classes.join(' ')}');\n`;
+}
+
+// -------------------------------------------------------------------------------------------
 // Assertions
 // -------------------------------------------------------------------------------------------
 
@@ -343,9 +606,23 @@ function layerNames(nodes) {
 }
 
 function assertUnlayered(nodes, label, errors) {
-  const foreign = layerNames(nodes).filter((name) => name !== 'properties');
+  assertLayers(nodes, label, [], errors);
+}
+
+/**
+ * The output declares no `@layer` but the `allowed` ones and Tailwind's `properties` fallback
+ * (with no layer allowed, "layered output"), and no Tailwind directive survived.
+ */
+function assertLayers(nodes, label, allowed, errors) {
+  const foreign = layerNames(nodes).filter(
+    (name) => name !== 'properties' && !allowed.includes(name),
+  );
   if (foreign.length > 0) {
-    errors.push(`${label}: layered output (@layer ${[...new Set(foreign)].join(', ')})`);
+    errors.push(
+      allowed.length === 0
+        ? `${label}: layered output (@layer ${[...new Set(foreign)].join(', ')})`
+        : `${label}: a layer other than ${allowed.join(', ')} (@layer ${[...new Set(foreign)].join(', ')})`,
+    );
   }
   walk(nodes, (node) => {
     if (
@@ -669,7 +946,7 @@ export function loweredDirectionClasses(css) {
   return [...lowered].sort();
 }
 
-export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
+export function assertStylesCss(css, { tokensCss, baseCss, storySources, prefix = '' }) {
   const errors = [];
   const nodes = parseCss(css);
   assertUnlayered(nodes, 'styles.css', errors);
@@ -708,12 +985,26 @@ export function assertStylesCss(css, { tokensCss, baseCss, storySources }) {
   }
   const classes = selectorClasses(css);
   for (const name of REQUIRED_UTILITIES) {
-    if (!classes.has(name)) errors.push(`styles.css: missing utility .${name}`);
+    const required = prefix ? `${prefix}:${name}` : name;
+    if (!classes.has(required)) errors.push(`styles.css: missing utility .${required}`);
   }
 
   // No foreign theme variables.
   for (const needle of FORBIDDEN) {
     if (css.includes(needle)) errors.push(`styles.css: contains "${needle}"`);
+  }
+
+  // With the utility prefix (Phase 14 spec R6): every utility carries it, and no theme variable
+  // ships under any name.
+  if (prefix) errors.push(...assertPrefixedCss(css, { prefix, tokensCss, baseCss }));
+
+  // No rule of a removed theme class.
+  const removedThemes = REMOVED_THEME_CLASSES.filter((name) => classes.has(name));
+  if (removedThemes.length > 0) {
+    errors.push(
+      `styles.css: selects the theme classes 1.0 removed (${removedThemes.map((name) => `.${name}`).join(', ')}); ` +
+        'the themes are .wave-light, .wave-dark and .wave-high-contrast',
+    );
   }
 
   // No class with Tailwind's bare direction variants (C-LOGICAL).
@@ -768,6 +1059,282 @@ export function assertPreflightCss(css) {
   return errors;
 }
 
+/** Custom properties a theme key or a Tailwind default would declare as a theme variable. */
+const THEME_VARIABLE =
+  /^--(?:color|text|shadow|font|animate|ease|transition-duration|spacing|radius)(?:-|$)/;
+
+/** The names of every custom property the stylesheet declares (outside `@property` rules). */
+function declaredCustomProperties(nodes) {
+  const names = [];
+  walk(nodes, (node, parents) => {
+    if (node.children !== null || !node.prelude.startsWith('--')) return;
+    if (parents.some((parent) => /^@property\b/.test(parent.prelude))) return;
+    names.push(node.prelude.slice(0, node.prelude.indexOf(':')).trim());
+  });
+  return names;
+}
+
+/**
+ * The assertions of a prefixed styles.css (`css`, built with `prefix(<prefix>)`; see the header):
+ *   - every class is `<prefix>:`-prefixed, but the selector classes of tokens.css and base.css
+ *     (`.wave-root`, `.wave-portal`, the theme classes), which no utility declares;
+ *   - every declared custom property is a token tokens.css declares, Tailwind's `--tw-*`, or one
+ *     that an arbitrary-property utility declares in its own rule (`.wave:[--option-bg:…]`): a
+ *     theme variable (`--spacing`, `--color-primary`) is none of them;
+ *   - no declaration refers to itself (`--wave-shadow-4: var(--wave-shadow-4)`): what a theme
+ *     key `--shadow-4` becomes under the prefix `wave` when theme.css loses `reference`. Its name
+ *     is a token's, so the rule above lets it pass; the value never is a token's.
+ */
+export function assertPrefixedCss(css, { prefix, tokensCss, baseCss }) {
+  const errors = [];
+  const own = new Set([...selectorClasses(tokensCss), ...selectorClasses(baseCss)]);
+  const unprefixed = [...selectorClasses(css)]
+    .filter((name) => !own.has(name) && !name.startsWith(`${prefix}:`))
+    .sort();
+  if (unprefixed.length > 0) {
+    errors.push(
+      `styles.css: holds classes without the utility prefix ${prefix}: (is the sheet built with ` +
+        `prefix(${prefix})?): ${unprefixed.slice(0, 20).join(' ')}`,
+    );
+  }
+  const tokens = tokenNamesOf(tokensCss);
+  const foreign = new Set();
+  const selfReferences = new Set();
+  walk(parseCss(css), (node, parents) => {
+    if (node.children !== null || !node.prelude.startsWith('--')) return;
+    if (parents.some((parent) => /^@property\b/.test(parent.prelude))) return;
+    const colon = node.prelude.indexOf(':');
+    const name = node.prelude.slice(0, colon).trim();
+    const value = node.prelude.slice(colon + 1).trim();
+    if (value.replace(/\s+/g, '') === `var(${name})`) selfReferences.add(name);
+    if (tokens.has(name) || name.startsWith('--tw-')) return;
+    // A property an arbitrary-property utility sets (`[--option-bg:transparent]`), in its rule.
+    const rule = [...parents].reverse().find(isStyleRule);
+    const declaredByUtility =
+      rule && classesOf(rule.prelude).some((cls) => cls.includes(`[${name}:`));
+    if (!declaredByUtility) foreign.add(name);
+  });
+  if (foreign.size > 0) {
+    errors.push(
+      'styles.css: declares custom properties that are no token, no --tw-* property and no ' +
+        `arbitrary property of a utility (theme variables?): ${[...foreign].sort().slice(0, 20).join(', ')}`,
+    );
+  }
+  if (selfReferences.size > 0) {
+    errors.push(
+      'styles.css: declares custom properties that refer to themselves (a theme key emitted ' +
+        `under the prefix: has theme.css lost \`reference\`?): ${[...selfReferences].sort().join(', ')}`,
+    );
+  }
+  return errors;
+}
+
+/** The selectors (normalised) of the style rules of the stylesheets, which `:root` rules use. */
+function ruleSelectors(...sources) {
+  return new Set(
+    sources.flatMap((css) =>
+      parseCss(css)
+        .filter(isStyleRule)
+        .flatMap((rule) => selectorList(rule.prelude)),
+    ),
+  );
+}
+
+/** Whether a top-level node of a stylesheet is a rule of tokens.css or base.css. */
+function isTokenOrBaseRule(node, tokenAndBaseSelectors) {
+  return (
+    isStyleRule(node) &&
+    selectorList(node.prelude).every((selector) => tokenAndBaseSelectors.has(selector))
+  );
+}
+
+/** Minified CSS of parsed (comment-free) nodes, for comparing two outputs node by node. */
+function serializeNodes(nodes) {
+  return nodes.map((node) =>
+    node.children === null
+      ? `${node.prelude};`
+      : `${node.prelude}{${serializeNodes(node.children).join('')}}`,
+  );
+}
+
+/**
+ * No token rule, theme variable or `:root` rule in an output that must hold none (components.css,
+ * utilities.css). `allowedProperty(name)` tells a custom property the output may declare.
+ */
+function assertNoTokens(
+  nodes,
+  label,
+  { tokenAndBaseSelectors, tokenNames, allowedProperty },
+  errors,
+) {
+  const rootRules = [];
+  const foreignRules = [];
+  walk(nodes, (node, parents) => {
+    if (!isStyleRule(node) || parents.some(isKeyframes)) return;
+    for (const selector of selectorList(node.prelude)) {
+      if (selector.includes(':root')) rootRules.push(selector);
+      else if (tokenAndBaseSelectors.has(selector)) foreignRules.push(selector);
+    }
+  });
+  if (rootRules.length > 0) {
+    errors.push(`${label}: holds a :root rule (${[...new Set(rootRules)].join(' ')})`);
+  }
+  if (foreignRules.length > 0) {
+    errors.push(
+      `${label}: holds rules of tokens.css or base.css (${[...new Set(foreignRules)].slice(0, 8).join(' ')})`,
+    );
+  }
+  const declared = [...new Set(declaredCustomProperties(nodes))];
+  const tokens = declared.filter((name) => tokenNames.has(name));
+  if (tokens.length > 0) {
+    errors.push(`${label}: declares the tokens ${tokens.slice(0, 8).join(', ')}`);
+  }
+  const theme = declared.filter((name) => !tokenNames.has(name) && THEME_VARIABLE.test(name));
+  if (theme.length > 0) {
+    errors.push(`${label}: declares the theme variables ${theme.slice(0, 8).join(', ')}`);
+  }
+  const other = declared.filter(
+    (name) => !tokenNames.has(name) && !THEME_VARIABLE.test(name) && !allowedProperty(name),
+  );
+  if (other.length > 0) {
+    errors.push(`${label}: declares the custom properties ${other.slice(0, 8).join(', ')}`);
+  }
+}
+
+/** The `--wave-*` tokens a tokens.css declares. */
+function tokenNamesOf(tokensCss) {
+  return new Set(
+    [...stripComments(tokensCss).matchAll(/(--wave-[\w-]+)\s*:/g)].map((match) => match[1]),
+  );
+}
+
+/**
+ * components.css (`css`): the utilities of styles.css (`stylesCss`, the built dist/styles.css)
+ * without the token rules of tokens.css and the base rules of base.css, unlayered. See the header.
+ */
+export function assertComponentsCss(css, { stylesCss, tokensCss, baseCss }) {
+  const errors = [];
+  const nodes = parseCss(css);
+  assertUnlayered(nodes, 'components.css', errors);
+  const tokenAndBaseSelectors = ruleSelectors(tokensCss, baseCss);
+  assertNoTokens(
+    nodes,
+    'components.css',
+    // The components' own custom properties (`--option-bg`, `--wave-card-padding`) and
+    // Tailwind's `--tw-*` are allowed; a token of tokens.css is not.
+    { tokenAndBaseSelectors, tokenNames: tokenNamesOf(tokensCss), allowedProperty: () => true },
+    errors,
+  );
+  for (const needle of FORBIDDEN) {
+    if (css.includes(needle)) errors.push(`components.css: contains "${needle}"`);
+  }
+  if (stylesCss !== undefined) {
+    const expected = serializeNodes(
+      parseCss(stylesCss).filter((node) => !isTokenOrBaseRule(node, tokenAndBaseSelectors)),
+    );
+    const actual = serializeNodes(nodes);
+    const length = Math.max(expected.length, actual.length);
+    const first = Array.from({ length }, (_, i) => i).find((i) => expected[i] !== actual[i]);
+    if (first !== undefined) {
+      errors.push(
+        'components.css: is not styles.css without the rules of tokens.css and base.css ' +
+          `(${actual.length} nodes for ${expected.length}; the first difference, node ${first + 1}: ` +
+          `${JSON.stringify((actual[first] ?? '<none>').slice(0, 80))} for ` +
+          `${JSON.stringify((expected[first] ?? '<none>').slice(0, 80))})`,
+      );
+    }
+  }
+  return errors;
+}
+
+/** The custom properties the declarations of a stylesheet read (`var(--name…)`), sorted. */
+function readCustomProperties(nodes) {
+  const names = new Set();
+  walk(nodes, (node) => {
+    if (node.children !== null || node.prelude.startsWith('@')) return;
+    const value = emptyStrings(node.prelude.slice(node.prelude.indexOf(':') + 1));
+    for (const match of value.matchAll(/var\(\s*(--[\w-]+)/g)) names.add(match[1]);
+  });
+  return [...names].sort();
+}
+
+/**
+ * utilities.css (`css`): exactly the classes `namespacedUtilities` generates from `tokensCss`,
+ * unlayered, without tokens or theme variables, and, given the built styles.css (`stylesCss`),
+ * reading no custom property but Tailwind's `--tw-*` and those styles.css declares. See the header.
+ */
+export function assertUtilitiesCss(css, { tokensCss, baseCss = '', stylesCss }) {
+  const errors = [];
+  const nodes = parseCss(css);
+  assertUnlayered(nodes, 'utilities.css', errors);
+  // Tailwind's `properties` fallback is the one layer allowed; a class inside it, or inside any
+  // layer, would lose to the unlayered base styles of styles.css.
+  const layered = [];
+  walk(nodes, (node, parents) => {
+    if (!isStyleRule(node) || parents.some(isKeyframes)) return;
+    if (!parents.some((parent) => /^@layer\b/.test(parent.prelude))) return;
+    if (selectorList(node.prelude).some((selector) => /\.[\w\\-]/.test(selector))) {
+      layered.push(node.prelude);
+    }
+  });
+  if (layered.length > 0) {
+    errors.push(`utilities.css: classes inside a @layer (${layered.slice(0, 8).join(' ')})`);
+  }
+  assertNoTokens(
+    nodes,
+    'utilities.css',
+    {
+      tokenAndBaseSelectors: ruleSelectors(tokensCss, baseCss),
+      tokenNames: tokenNamesOf(tokensCss),
+      allowedProperty: (name) => name.startsWith('--tw-'),
+    },
+    errors,
+  );
+
+  const expected = namespacedUtilities(tokensCss);
+  if (expected.length === 0) errors.push('utilities.css: tokens.css declares no namespaced key');
+  const classes = selectorClasses(css);
+  const missing = expected.filter((name) => !classes.has(name));
+  if (missing.length > 0) {
+    errors.push(
+      `utilities.css: missing ${missing.length} of the ${expected.length} namespaced utilities ` +
+        `(${missing.slice(0, 8).join(' ')})`,
+    );
+  }
+  const wanted = new Set(expected);
+  const extra = [...classes].filter((name) => !wanted.has(name)).sort();
+  if (extra.length > 0) {
+    errors.push(
+      'utilities.css: holds classes other than the namespaced token utilities ' +
+        `(${extra.slice(0, 8).join(' ')})`,
+    );
+  }
+
+  const keyframes = new Set();
+  walk(nodes, (node) => {
+    const match = /^@keyframes\s+([\w-]+)$/.exec(node.prelude);
+    if (match) keyframes.add(match[1]);
+  });
+  const animated = expected.some((name) => name.startsWith('animate-wave-'));
+  for (const name of animated ? KEYFRAMES : []) {
+    if (!keyframes.has(name)) errors.push(`utilities.css: missing @keyframes ${name}`);
+  }
+
+  if (stylesCss !== undefined) {
+    const declared = new Set(declaredCustomProperties(parseCss(stylesCss)));
+    const unread = readCustomProperties(nodes).filter(
+      (name) => !name.startsWith('--tw-') && !declared.has(name),
+    );
+    if (unread.length > 0) {
+      errors.push(
+        'utilities.css: reads custom properties that styles.css does not declare (a namespaced ' +
+          `key mapped to a theme variable, not a token?): ${unread.slice(0, 8).join(', ')}`,
+      );
+    }
+  }
+  return errors;
+}
+
 // -------------------------------------------------------------------------------------------
 // Build
 // -------------------------------------------------------------------------------------------
@@ -779,16 +1346,23 @@ function tailwindCli() {
   return join(dirname(manifestPath), bin);
 }
 
-function compile(cli, input, output, cwd) {
+/**
+ * Compiles `input` to `output` (minified). With `stdin`, the CLI compiles that text instead,
+ * read from stdin in the input's directory, so its relative `@import` and `@source` paths resolve
+ * as in the file.
+ */
+function compile(cli, { input, output, cwd, stdin, label = input }) {
   const result = spawnSync(
     process.execPath,
-    [cli, '--input', input, '--output', output, '--minify'],
-    { cwd, encoding: 'utf8' },
+    [cli, '--input', stdin === undefined ? input : '-', '--output', output, '--minify'],
+    stdin === undefined
+      ? { cwd, encoding: 'utf8' }
+      : { cwd: dirname(input), input: stdin, encoding: 'utf8' },
   );
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(
-      `tailwindcss failed for ${input} (exit ${result.status}):\n${result.stderr}${result.stdout}`,
+      `tailwindcss failed for ${label} (exit ${result.status}):\n${result.stderr}${result.stdout}`,
     );
   }
 }
@@ -809,19 +1383,42 @@ function parseArgs(argv, projectRoot) {
  */
 export function main(argv = process.argv.slice(2), { projectRoot = root } = {}) {
   const { outDir, checkOnly } = parseArgs(argv, projectRoot);
+
+  // The compile check, before any compile (Phase 14 spec R6): only with a utility prefix.
+  const prefix = utilityPrefixOf(projectRoot);
+  if (prefix === '') {
+    console.log(`build-css: compile check skipped (UTILITY_PREFIX in ${CN_MODULE} is empty)`);
+  } else if (prefix !== undefined) {
+    const check = compileCheck(projectRoot, prefix);
+    if (!check.ok) {
+      console.error(`build-css: the compile check failed (prefix ${prefix}):`);
+      for (const line of check.lines) console.error(`  ${line}`);
+      return 1;
+    }
+    console.log(`build-css: compile check passed (${compileCheckSummary(check.lines, prefix)})`);
+  }
+
   if (!checkOnly) {
     mkdirSync(outDir, { recursive: true });
     const cli = tailwindCli();
-    for (const { input, output } of ENTRIES) {
-      compile(cli, join(projectRoot, input), join(outDir, output), projectRoot);
-    }
+    const entries = readStyleEntries(projectRoot);
+    // Every derived source first: one that cannot be derived stops the build before any output.
+    const jobs = ENTRIES.map(({ input, output, source }) => {
+      const path = join(projectRoot, input);
+      return {
+        input: path,
+        output: join(outDir, output),
+        cwd: projectRoot,
+        stdin: source && source(readFileSync(path, 'utf8'), entries),
+        label: source ? `${input} (for ${output})` : input,
+      };
+    });
+    for (const job of jobs) compile(cli, job);
   }
 
   const inside = relative(projectRoot, outDir);
   const where = (inside && !inside.startsWith('..') ? inside : outDir).split('\\').join('/');
-  const missing = ENTRIES.map(({ output }) => join(outDir, output)).filter(
-    (file) => !existsSync(file),
-  );
+  const missing = OUTPUTS.map((output) => join(outDir, output)).filter((file) => !existsSync(file));
   if (missing.length > 0) {
     for (const file of missing) {
       console.error(`build-css: ${file} does not exist (run without --check-only to build it)`);
@@ -829,15 +1426,19 @@ export function main(argv = process.argv.slice(2), { projectRoot = root } = {}) 
     return 1;
   }
 
-  const read = (file) => readFileSync(file, 'utf8');
+  const read = (name) => readFileSync(join(outDir, name), 'utf8');
   const { tokensCss, baseCss } = readStyleEntries(projectRoot);
+  const stylesCss = read('styles.css');
   const errors = [
-    ...assertStylesCss(read(join(outDir, 'styles.css')), {
+    ...assertStylesCss(stylesCss, {
       tokensCss,
       baseCss,
       storySources: collectStorySources(projectRoot),
+      prefix: prefix ?? '',
     }),
-    ...assertPreflightCss(read(join(outDir, 'preflight.css'))),
+    ...assertComponentsCss(read('components.css'), { stylesCss, tokensCss, baseCss }),
+    ...assertUtilitiesCss(read('utilities.css'), { tokensCss, baseCss, stylesCss }),
+    ...assertPreflightCss(read('preflight.css')),
   ];
 
   if (errors.length > 0) {
@@ -845,11 +1446,10 @@ export function main(argv = process.argv.slice(2), { projectRoot = root } = {}) 
     for (const error of errors) console.error(`  - ${error}`);
     return 1;
   }
-  const size = (name) => `${(statSync(join(outDir, name)).size / 1024).toFixed(1)} kB`;
-  console.log(
-    `build-css: ${where}/styles.css (${size('styles.css')}) and ${where}/preflight.css ` +
-      `(${size('preflight.css')}) OK`,
+  const report = OUTPUTS.map(
+    (name) => `${where}/${name} (${(statSync(join(outDir, name)).size / 1024).toFixed(1)} kB)`,
   );
+  console.log(`build-css: ${report.slice(0, -1).join(', ')} and ${report.at(-1)} OK`);
   return 0;
 }
 

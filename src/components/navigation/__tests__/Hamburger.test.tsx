@@ -34,7 +34,7 @@ describe('Hamburger', () => {
     testSystemProps(Hamburger, {
       expectedTag: 'button',
       displayName: 'Hamburger',
-      conflictingClass: { className: 'w-10', overrides: 'w-8' },
+      conflictingClass: { className: 'w-10', overrides: 'wave:w-8' },
     });
     testNoImplicitSubmit(Hamburger);
 
@@ -104,9 +104,9 @@ describe('Hamburger', () => {
   describe('look', () => {
     it('is a subtle, icon-only medium Button by default; appearance and size pass to Button', () => {
       const { rerender } = render(<Hamburger />);
-      expect(hamburger()).toHaveClass('h-8', 'w-8', 'bg-transparent');
+      expect(hamburger()).toHaveClass('wave:h-8', 'wave:w-8', 'wave:bg-transparent');
       rerender(<Hamburger appearance="primary" size="large" />);
-      expect(hamburger()).toHaveClass('h-10', 'w-10', 'bg-primary');
+      expect(hamburger()).toHaveClass('wave:h-10', 'wave:w-10', 'wave:bg-primary');
     });
 
     it.each([
@@ -220,7 +220,7 @@ describe('Hamburger', () => {
       onOpenChange = () => {},
       hamburgerProps,
     }: {
-      onOpenChange?: (open: boolean, details?: unknown) => void;
+      onOpenChange?: (open: boolean, details: unknown) => void;
       hamburgerProps?: React.ComponentProps<typeof Hamburger>;
     }) {
       return (

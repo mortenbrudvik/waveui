@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   toastBodyClassNames,
   toastFooterClassNames,
@@ -87,9 +87,9 @@ export const ToastTitle = ({
   const mergedRef = useMergedRefs(ref, rowRef);
   // The Toaster reads the label through this ref: a part's ref goes beside it.
   const labelRefs = useMergedRefs(labelRef, slotProps?.label?.ref);
-  const labelClassName = cn(
+  const labelClassName = wcn(
     toastTitleClassNames.label,
-    'min-w-0 flex-1 text-body-2 font-semibold text-foreground',
+    'wave:min-w-0 wave:flex-1 wave:text-body-2 wave:font-semibold wave:text-foreground',
   );
   React.useLayoutEffect(() => {
     if (titleId === undefined) return undefined;
@@ -104,7 +104,7 @@ export const ToastTitle = ({
     <div
       ref={mergedRef}
       {...rest}
-      className={cn(toastTitleClassNames.root, 'flex items-start gap-2', className)}
+      className={wcn(toastTitleClassNames.root, 'wave:flex wave:items-start wave:gap-2', className)}
     >
       <span
         id={titleId}
@@ -119,7 +119,7 @@ export const ToastTitle = ({
         {children}
       </span>
       {slotRendersContent(action)
-        ? renderSlot(action, 'span', cn(toastTitleClassNames.action, 'shrink-0'))
+        ? renderSlot(action, 'span', wcn(toastTitleClassNames.action, 'wave:shrink-0'))
         : null}
     </div>
   );
@@ -179,9 +179,9 @@ export const ToastBody = ({
   );
   let subtitleLine: React.ReactNode = null;
   if (slotRendersContent(subtitle)) {
-    const subtitleClassName = cn(
+    const subtitleClassName = wcn(
       toastBodyClassNames.subtitle,
-      'mt-1 text-caption-1 text-muted-foreground',
+      'wave:mt-1 wave:text-caption-1 wave:text-muted-foreground',
     );
     subtitleLine = (
       <div
@@ -201,9 +201,9 @@ export const ToastBody = ({
       ref={mergedRef}
       {...rest}
       id={id}
-      className={cn(
+      className={wcn(
         toastBodyClassNames.root,
-        'mt-0.5 text-body-1 text-muted-foreground',
+        'wave:mt-0.5 wave:text-body-1 wave:text-muted-foreground',
         className,
       )}
     >
@@ -238,7 +238,11 @@ export const ToastFooter = ({ className, ref, ...rest }: ToastFooterProps) => {
     <div
       ref={mergedRef}
       {...rest}
-      className={cn(toastFooterClassNames.root, 'mt-2 flex flex-wrap gap-2', className)}
+      className={wcn(
+        toastFooterClassNames.root,
+        'wave:mt-2 wave:flex wave:flex-wrap wave:gap-2',
+        className,
+      )}
     />
   );
 };

@@ -1,6 +1,15 @@
 /*
- * Tailwind 4 consumer entry, as documented: Tailwind first, then Wave's Tailwind entry. Compiled
- * by scripts/pack-smoke.mjs with @tailwindcss/cli inside an installed copy of this fixture.
+ * Tailwind 4 consumer entry, as documented: Tailwind first, then Wave's Tailwind entry, which
+ * scans nothing (the components' utilities come precompiled into `@layer components`). The app
+ * overrides a token in its own base layer, which wins over Wave's tokens in `theme`. Compiled by
+ * scripts/pack-smoke.mjs with @tailwindcss/cli inside an installed copy of this fixture.
  */
 @import 'tailwindcss';
 @import '@mortenbrudvik/waveui/tailwind';
+
+@layer base {
+  :root,
+  .wave-light {
+    --wave-primary: #c4314b;
+  }
+}

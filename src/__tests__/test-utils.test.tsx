@@ -17,7 +17,7 @@ import { useRestoreFocus } from '../hooks/useRestoreFocus';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { getElementType } from '../lib/children';
 import * as registry from '../lib/classNames';
-import { cn } from '../lib/cn';
+import { wcn } from '../lib/cn';
 import { composeEventHandlers } from '../lib/composeEventHandlers';
 import { warnOnce } from '../lib/dev';
 import { getOpenLayers, registerLayer } from '../lib/layers';
@@ -53,9 +53,12 @@ import {
   testCompoundExposure,
   testDisplayName,
   testFocusEvents,
+  testForwardRef,
   testNoImplicitSubmit,
   testRestSpread,
+  testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
   VARIANT_BASES,
 } from '../test-utils';
 import type { TestSystemPropsConfig } from '../test-utils';
@@ -142,25 +145,25 @@ interface BoxProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/** Correct merge: defaults first, consumer last (`cn`). */
+/** Correct merge: defaults first, consumer last (`wcn`), the defaults prefixed as Wave's are. */
 const GoodBox = ({ className, ...rest }: BoxProps) => (
-  <div className={cn('flex p-4', className)} {...rest} />
+  <div className={wcn('wave:flex wave:p-4', className)} {...rest} />
 );
 GoodBox.displayName = 'GoodBox';
 
 /** Bug: a consumer className replaces every default class. */
 const ReplacingBox = ({ className, ...rest }: BoxProps) => (
-  <div className={className ?? 'flex p-4'} {...rest} />
+  <div className={className ?? 'wave:flex wave:p-4'} {...rest} />
 );
 
 /** Bug: the consumer class goes first, so tailwind-merge drops a conflicting user class. */
 const UserFirstBox = ({ className, ...rest }: BoxProps) => (
-  <div className={cn(className, 'flex p-4')} {...rest} />
+  <div className={wcn(className, 'wave:flex wave:p-4')} {...rest} />
 );
 
 /** Bug: claims Button's display name, but its className target carries no stable class. */
 const UnclassedButton = ({ className, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-  <button type="button" className={cn('px-3', className)} {...rest} />
+  <button type="button" className={wcn('wave:px-3', className)} {...rest} />
 );
 UnclassedButton.displayName = 'Button';
 
@@ -205,6 +208,72 @@ const SiblingTestIdCheck = ({ 'aria-label': ariaLabel, ...rest }: CheckProps) =>
 /** A control that is its own root (everything lands on it legitimately). */
 const RootControl = (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
   <button type="button" role="checkbox" aria-checked="false" {...props} />
+);
+
+interface ControlRefProps extends Omit<CheckProps, 'ref'> {
+  ref?: React.Ref<HTMLButtonElement>;
+}
+
+/** Phase 14 (R5): `ref` reaches the focusable control; the rest stays on the root. */
+const ControlRefCheck = ({ ref, 'aria-label': ariaLabel, ...rest }: ControlRefProps) => (
+  <span {...rest}>
+    <button ref={ref} type="button" role="checkbox" aria-checked="false" aria-label={ariaLabel} />
+  </span>
+);
+
+type RootPartProps = Omit<CheckProps, 'ref'> & {
+  ref?: React.Ref<HTMLButtonElement>;
+  slotProps?: {
+    root?: React.HTMLAttributes<HTMLSpanElement> & { ref?: React.Ref<HTMLSpanElement> };
+  };
+};
+
+/** A root part: `slotProps.root` (its `ref` too) lands on the wrapper, `ref` on the control. */
+const RootPartCheck = ({ ref, slotProps, ...rest }: RootPartProps) => (
+  <span {...rest} {...slotProps?.root}>
+    <button ref={ref} type="button" role="checkbox" aria-checked="false" aria-label="Choice" />
+  </span>
+);
+
+/** Bug: the root part spreads its props but not its `ref`. */
+const RootPartWithoutRef = ({ ref, slotProps, ...rest }: RootPartProps) => {
+  const { ref: dropped, ...root } = slotProps?.root ?? {};
+  void dropped;
+  return (
+    <span {...rest} {...root}>
+      <button ref={ref} type="button" role="checkbox" aria-checked="false" aria-label="Choice" />
+    </span>
+  );
+};
+
+/** Bug: the root part's `ref` goes to the control, so it names the wrong element. */
+const RootPartRefOnControl = ({ ref, slotProps, ...rest }: RootPartProps) => {
+  const { ref: rootRef, ...root } = slotProps?.root ?? {};
+  return (
+    <span {...rest} {...root}>
+      <button
+        ref={(rootRef ?? ref) as React.Ref<HTMLButtonElement>}
+        type="button"
+        role="checkbox"
+        aria-checked="false"
+        aria-label="Choice"
+      />
+    </span>
+  );
+};
+
+/** Bug: `data-testid` is routed to the control, so the root is not the element found by it. */
+const TestIdOnControl = ({ ref, slotProps, ...rest }: RootPartProps) => (
+  <span {...slotProps?.root}>
+    <button
+      ref={ref}
+      type="button"
+      role="checkbox"
+      aria-checked="false"
+      aria-label="Choice"
+      {...(rest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
+    />
+  </span>
 );
 
 /** A wrapper that renders DOM of its own around the component. */
@@ -293,7 +362,13 @@ interface ChipProps extends React.HTMLAttributes<HTMLElement> {
 const Chip = ({ as: Component = 'span', className, ...rest }: ChipProps) => {
   const tone = React.useContext(ChipContext);
   if (tone === null) throw new Error('Chip must be used within ChipContext');
-  return <Component className={cn('inline-flex px-2', className)} data-tone={tone} {...rest} />;
+  return (
+    <Component
+      className={wcn('wave:inline-flex wave:px-2', className)}
+      data-tone={tone}
+      {...rest}
+    />
+  );
 };
 Chip.displayName = 'Chip';
 
@@ -776,7 +851,7 @@ describe('testSystemProps', () => {
         polymorphic: true,
         wrapper: ChipProvider,
         defaultProps: { children: 'Label' },
-        conflictingClass: { className: 'px-4', overrides: 'px-2' },
+        conflictingClass: { className: 'px-4', overrides: 'wave:px-2' },
         a11yVariants: [{ name: 'titled', props: { title: 'Chip title' } }],
       }),
     );
@@ -836,7 +911,13 @@ describe('testClassName', () => {
 
   it('conflictingClass: fails when tailwind-merge drops the consumer class', async () => {
     const tests = collect(() =>
-      testClassName(UserFirstBox, {}, { conflictingClass: { className: 'p-8', overrides: 'p-4' } }),
+      testClassName(
+        UserFirstBox,
+        {},
+        {
+          conflictingClass: { className: 'p-8', overrides: 'wave:p-4' },
+        },
+      ),
     );
     await expect(
       run(pick(tests, 'keeps its default classes when a className is added')),
@@ -848,14 +929,18 @@ describe('testClassName', () => {
 
   it('conflictingClass: passes when the consumer class wins and the default is gone', async () => {
     const tests = collect(() =>
-      testClassName(GoodBox, {}, { conflictingClass: { className: 'p-8', overrides: 'p-4' } }),
+      testClassName(GoodBox, {}, { conflictingClass: { className: 'p-8', overrides: 'wave:p-4' } }),
     );
     await runAll(tests);
   });
 
   it('conflictingClass: reports a misconfigured `overrides` that is not a default class', async () => {
     const tests = collect(() =>
-      testClassName(GoodBox, {}, { conflictingClass: { className: 'gap-8', overrides: 'gap-2' } }),
+      testClassName(
+        GoodBox,
+        {},
+        { conflictingClass: { className: 'gap-8', overrides: 'wave:gap-2' } },
+      ),
     );
     await expect(
       run(pick(tests, 'lets a conflicting consumer className win over the default')),
@@ -893,8 +978,6 @@ describe('getStableClassNames', () => {
     expect(getStableClassNames('Tab')?.constant).toBe('tabListTabClassNames');
     expect(getStableClassNames('TabPanel')?.constant).toBe('tabListPanelClassNames');
     expect(getStableClassNames('TabPanels')?.constant).toBe('tabListPanelsClassNames');
-    expect(getStableClassNames('TableHead')?.constant).toBe('tableHeaderClassNames');
-    expect(getStableClassNames('TableHeadCell')?.constant).toBe('tableHeaderCellClassNames');
   });
 
   it("puts a variant's base roots before its own in carries (VARIANT_BASES)", () => {
@@ -1056,6 +1139,188 @@ describe('testRestSpread', () => {
       ),
     );
     await expect(run(sibling)).rejects.toThrow(/root that contains the checkbox/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// testForwardRef `ref: 'control'` and testRootPartRef (Phase 14, R5)
+// ---------------------------------------------------------------------------
+
+describe('testForwardRef', () => {
+  it('root (the default): passes when ref is the data-testid element, fails when it is the control', async () => {
+    const [onRoot] = collect(() => testForwardRef(RoutedCheck, 'span'));
+    expect(onRoot.name).toBe('forwards ref to DOM element');
+    await expect(run(onRoot)).resolves.toBeUndefined();
+    const [onControl] = collect(() => testForwardRef(ControlRefCheck, 'span'));
+    await expect(run(onControl)).rejects.toThrow();
+  });
+
+  it("ref: 'control': passes when ref is the element getByRole finds, fails when it is the root", async () => {
+    const control = { role: 'checkbox' };
+    const [onControl] = collect(() =>
+      testForwardRef(ControlRefCheck, 'span', {}, { ref: 'control', control }),
+    );
+    expect(onControl.name).toBe('forwards ref to the control element');
+    await expect(run(onControl)).resolves.toBeUndefined();
+    const [onRoot] = collect(() =>
+      testForwardRef(RoutedCheck, 'span', {}, { ref: 'control', control }),
+    );
+    await expect(run(onRoot)).rejects.toThrow(/ref must reach the checkbox, not the root/);
+  });
+
+  it("ref: 'control': expectedTag keeps naming the root; control.tag names the control", async () => {
+    const control = { role: 'checkbox' };
+    const [wrongRoot] = collect(() =>
+      testForwardRef(ControlRefCheck, 'button', {}, { ref: 'control', control }),
+    );
+    await expect(run(wrongRoot)).rejects.toThrow();
+    const [tag] = collect(() =>
+      testForwardRef(
+        ControlRefCheck,
+        'span',
+        {},
+        { ref: 'control', control: { role: 'checkbox', tag: 'BUTTON' } },
+      ),
+    );
+    await expect(run(tag)).resolves.toBeUndefined();
+    const [wrongTag] = collect(() =>
+      testForwardRef(
+        ControlRefCheck,
+        'span',
+        {},
+        { ref: 'control', control: { role: 'checkbox', tag: 'input' } },
+      ),
+    );
+    await expect(run(wrongTag)).rejects.toThrow();
+  });
+
+  it("ref: 'control': a control that is its own root passes, and the control is required", async () => {
+    const [self] = collect(() =>
+      testForwardRef(RootControl, 'button', {}, { ref: 'control', control: { role: 'checkbox' } }),
+    );
+    await expect(run(self)).resolves.toBeUndefined();
+    expect(() =>
+      collect(() => testForwardRef(RootControl, 'button', {}, { ref: 'control' })),
+    ).toThrow(/needs a `control`/);
+  });
+
+  it("throws at registration on a control.tag without ref: 'control', which would be ignored", () => {
+    const tagOnly = /control\.tag is asserted only with ref: 'control'/;
+    for (const ref of [undefined, 'root'] as const) {
+      expect(() =>
+        collect(() =>
+          testForwardRef(
+            RoutedCheck,
+            'span',
+            {},
+            { ref, control: { role: 'checkbox', tag: 'button' } },
+          ),
+        ),
+      ).toThrow(tagOnly);
+      expect(() =>
+        collect(() =>
+          testSystemProps(RoutedCheck, {
+            expectedTag: 'span',
+            displayName: 'RoutedCheck',
+            a11y: false,
+            ref,
+            control: { role: 'checkbox', tag: 'button' },
+          }),
+        ),
+      ).toThrow(tagOnly);
+    }
+    // A control without a tag still serves testRestSpread, and the root's ref test registers.
+    const tests = collect(() =>
+      testSystemProps(RoutedCheck, {
+        expectedTag: 'span',
+        displayName: 'RoutedCheck',
+        a11y: false,
+        control: { role: 'checkbox' },
+      }),
+    );
+    expect(tests.map((t) => t.name)[0]).toBe('forwards ref to DOM element');
+  });
+
+  it("ref: 'control': a DOM-rendering wrapper does not change what ref must reach", async () => {
+    const options = {
+      ref: 'control',
+      control: { role: 'checkbox' },
+      wrapper: SectionWrapper,
+    } as const;
+    const [ok] = collect(() => testForwardRef(ControlRefCheck, 'span', {}, options));
+    await expect(run(ok)).resolves.toBeUndefined();
+    const [bad] = collect(() => testForwardRef(RoutedCheck, 'span', {}, options));
+    await expect(run(bad)).rejects.toThrow();
+  });
+
+  it("testSystemProps forwards `ref` and `control`, in place of the root's ref test", async () => {
+    const tests = collect(() =>
+      testSystemProps(ControlRefCheck, {
+        expectedTag: 'span',
+        displayName: 'ControlRefCheck',
+        a11y: false,
+        ref: 'control',
+        control: { role: 'checkbox', tag: 'button' },
+      }),
+    );
+    expect(tests.map((t) => t.name).slice(0, 2)).toEqual([
+      'forwards ref to the control element',
+      'spreads rest props to DOM element',
+    ]);
+    await run(pick(tests, 'forwards ref to the control element'));
+    await run(pick(tests, 'spreads rest props to DOM element'));
+    const wrong = collect(() =>
+      testSystemProps(RoutedCheck, {
+        expectedTag: 'span',
+        displayName: 'RoutedCheck',
+        a11y: false,
+        ref: 'control',
+        control: { role: 'checkbox' },
+      }),
+    );
+    await expect(run(pick(wrong, 'forwards ref to the control element'))).rejects.toThrow();
+    const roots = collect(() =>
+      testSystemProps(RoutedCheck, {
+        expectedTag: 'span',
+        displayName: 'RoutedCheck',
+        a11y: false,
+      }),
+    );
+    expect(roots.map((t) => t.name)[0]).toBe('forwards ref to DOM element');
+  });
+});
+
+describe('testRootPartRef', () => {
+  it('passes when slotProps.root.ref reaches the element that carries data-testid', async () => {
+    const [test] = collect(() => testRootPartRef(RootPartCheck));
+    expect(test.name).toBe('forwards slotProps.root.ref to the root element');
+    await expect(run(test)).resolves.toBeUndefined();
+  });
+
+  it('fails when the root part drops the ref', async () => {
+    const [test] = collect(() => testRootPartRef(RootPartWithoutRef));
+    await expect(run(test)).rejects.toThrow(/slotProps\.root\.ref must reach/);
+  });
+
+  it('fails when the ref goes to the control instead of the root', async () => {
+    const [test] = collect(() => testRootPartRef(RootPartRefOnControl));
+    await expect(run(test)).rejects.toThrow(/slotProps\.root\.ref must reach/);
+  });
+
+  it('fails when data-testid is not on the root the part reaches', async () => {
+    const [test] = collect(() => testRootPartRef(TestIdOnControl));
+    await expect(run(test)).rejects.toThrow(/slotProps\.root\.ref must reach/);
+  });
+
+  it('takes the props, the test id and the wrapper', async () => {
+    const [test] = collect(() =>
+      testRootPartRef(RootPartCheck, {
+        props: { slotProps: { root: { className: 'kept' } } },
+        rootTestId: 'my-root',
+        wrapper: SectionWrapper,
+      }),
+    );
+    await expect(run(test)).resolves.toBeUndefined();
   });
 });
 
@@ -1872,6 +2137,15 @@ describe('expectThrows', () => {
   });
 });
 
+describe('UNKNOWN_PROP', () => {
+  it("is the call React's development build logs for an unknown camel-case prop on an element", () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<span {...({ controlRef: { current: null } } as object)}>Text</span>);
+    expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+    expect(UNKNOWN_PROP('fooBar').slice(1)).toEqual(['fooBar', 'foobar']);
+  });
+});
+
 describe('sortAttributes', () => {
   it('puts the attributes of every element in alphabetical order, keeping their values', () => {
     expect(
@@ -2420,7 +2694,7 @@ function typeContracts(): void {
     displayName: 'ToggleLike',
     a11yScope: 'container',
     control: { role: 'button' },
-    conflictingClass: { className: 'p-8', overrides: 'p-4' },
+    conflictingClass: { className: 'p-8', overrides: 'wave:p-4' },
   };
   testSystemProps(ToggleLike, config);
 

@@ -12,7 +12,9 @@ import {
   expectNoA11yViolations,
   openingTags,
   renderWithProviders,
+  testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { PickerHarness } from './colorPartHarness';
@@ -30,7 +32,8 @@ describe('ColorSlider', () => {
   testSystemProps(ColorSlider, {
     expectedTag: 'div',
     displayName: 'ColorSlider',
-    control: { role: 'slider' },
+    ref: 'control',
+    control: { role: 'slider', tag: 'input' },
     a11yVariants: [
       { name: 'saturation', props: { channel: 'saturation' } },
       { name: 'vertical', props: { orientation: 'vertical' } },
@@ -38,6 +41,8 @@ describe('ColorSlider', () => {
       { name: 'in a form', props: { name: 'accent', required: true } },
     ],
   });
+
+  testRootPartRef(ColorSlider);
 
   it('is a hue slider named "Hue", 0–360, whose value text names the color', () => {
     render(<ColorSlider defaultValue={BRAND} />);
@@ -85,23 +90,23 @@ describe('ColorSlider', () => {
     expect(root.style.getPropertyValue('--wave-color-slider-position')).toBe('50%');
     expect(root.style.getPropertyValue('--wave-color-thumb')).toBe('#ff8080');
     expect(railOf(input)).toHaveClass(
-      'bg-(image:--wave-color-slider-gradient)',
-      'wave-rtl:-scale-x-100',
+      'wave:bg-(image:--wave-color-slider-gradient)',
+      'wave:wave-rtl:-scale-x-100',
     );
     expect(thumbOf(input)).toHaveClass(
-      'size-6',
-      'group-has-[:focus-visible]/color-slider:outline-2',
-      'group-has-[:focus-visible]/color-slider:outline-ring',
-      'group-has-[:focus-visible]/color-slider:ring-background',
-      'forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas]',
+      'wave:size-6',
+      'wave:group-has-[:focus-visible]/color-slider:outline-2',
+      'wave:group-has-[:focus-visible]/color-slider:outline-ring',
+      'wave:group-has-[:focus-visible]/color-slider:ring-background',
+      'wave:forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas]',
     );
-    expect(root).toHaveClass('group/color-slider');
+    expect(root).toHaveClass('wave:group/color-slider');
   });
 
   it('shape="square" removes the corner radius of the rail', () => {
     render(<ColorSlider shape="square" />);
-    expect(railOf(slider())).toHaveClass('rounded-none');
-    expect(railOf(slider())).not.toHaveClass('rounded-full');
+    expect(railOf(slider())).toHaveClass('wave:rounded-none');
+    expect(railOf(slider())).not.toHaveClass('wave:rounded-full');
   });
 
   describe('keyboard', () => {
@@ -187,7 +192,7 @@ describe('ColorSlider', () => {
       const input = slider('Brightness');
       expect(input).toHaveAttribute('aria-orientation', 'vertical');
       expect(input).toHaveAttribute('dir', 'ltr');
-      expect(railOf(input)).not.toHaveClass('wave-rtl:-scale-x-100');
+      expect(railOf(input)).not.toHaveClass('wave:wave-rtl:-scale-x-100');
       act(() => input.focus());
       await user.keyboard('{ArrowUp}');
       expect(onValueChange).toHaveBeenLastCalledWith({ h: 0, s: 1, v: 0.51 });
@@ -305,8 +310,8 @@ describe('ColorSlider', () => {
       expect(screen.queryByRole('slider', { name: 'Brightness' })).toBeNull();
     });
 
-    it('routes id, aria-describedby, aria-invalid, aria-errormessage, aria-details, tabIndex and controlRef to the input', () => {
-      const controlRef = React.createRef<HTMLInputElement>();
+    it('routes id, aria-describedby, aria-invalid, aria-errormessage, aria-details, tabIndex and ref to the input', () => {
+      const ref = React.createRef<HTMLInputElement>();
       render(
         <>
           <ColorSlider
@@ -317,7 +322,7 @@ describe('ColorSlider', () => {
             aria-errormessage="error"
             aria-details="more"
             tabIndex={-1}
-            controlRef={controlRef}
+            ref={ref}
           />
           <span id="hint">Pick a hue</span>
           <span id="error">Out of gamut</span>
@@ -325,7 +330,7 @@ describe('ColorSlider', () => {
         </>,
       );
       const input = slider();
-      expect(controlRef.current).toBe(input);
+      expect(ref.current).toBe(input);
       expect(input).toHaveAttribute('id', 'hue');
       expect(input).toHaveAttribute('aria-invalid', 'true');
       expect(input).toHaveAttribute('aria-errormessage', 'error');
@@ -420,7 +425,7 @@ describe('ColorSlider', () => {
       );
       const input = slider('Farbton');
       expect(input).toHaveValue('100');
-      expect(railOf(input)).toHaveClass('rounded-none');
+      expect(railOf(input)).toHaveClass('wave:rounded-none');
       act(() => input.focus());
       await user.keyboard('{ArrowRight}');
       expect(onHsvChange.mock.calls).toEqual([[{ h: 101, s: 1, v: 1 }]]);
@@ -489,7 +494,7 @@ describe('ColorSlider', () => {
 
 describe('ColorSlider — slotProps', () => {
   type ColorSliderSlotProps = NonNullable<ColorSliderProps['slotProps']>;
-  const EVERY_PART: ColorSliderSlotProps = { rail: {}, thumb: {} };
+  const EVERY_PART: ColorSliderSlotProps = { root: {}, rail: {}, thumb: {} };
   const DARK_BLUE: HsvColor = { h: 220, s: 0.72, v: 0.4 };
   const parts = (root: ParentNode) =>
     [`.${colorSliderClassNames.rail}`, `.${colorSliderClassNames.thumb}`].map(
@@ -503,8 +508,8 @@ describe('ColorSlider — slotProps', () => {
     template.innerHTML = renderToString(<ColorSlider defaultValue={DARK_BLUE} />);
     expect(openingTags(...parts(template.content))).toBe(
       [
-        '<div aria-hidden="true" class="wave-color-slider__rail rounded-full forced-colors:forced-color-adjust-none bg-(image:--wave-color-slider-gradient) mx-3 h-3 flex-1 wave-rtl:-scale-x-100">',
-        '<span class="wave-color-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] start-(--wave-color-slider-position) top-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 -translate-y-1/2 group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
+        '<div aria-hidden="true" class="wave-color-slider__rail wave:rounded-full wave:forced-colors:forced-color-adjust-none wave:bg-(image:--wave-color-slider-gradient) wave:mx-3 wave:h-3 wave:flex-1 wave:wave-rtl:-scale-x-100">',
+        '<span class="wave-color-slider__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:start-(--wave-color-slider-position) wave:top-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:-translate-y-1/2 wave:group-has-[:focus-visible]/color-slider:ring-2 wave:group-has-[:focus-visible]/color-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] wave:group-has-[:focus-visible]/color-slider:outline-2 wave:group-has-[:focus-visible]/color-slider:outline-offset-2 wave:group-has-[:focus-visible]/color-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
       ].join('\n'),
     );
     render(
@@ -517,8 +522,8 @@ describe('ColorSlider — slotProps', () => {
     );
     expect(openingTags(...parts(document))).toBe(
       [
-        '<div aria-hidden="true" class="wave-color-slider__rail forced-colors:forced-color-adjust-none bg-(image:--wave-color-slider-gradient) my-3 w-3 flex-1 rounded-none">',
-        '<span class="wave-color-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] bottom-(--wave-color-slider-position) start-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2 group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
+        '<div aria-hidden="true" class="wave-color-slider__rail wave:forced-colors:forced-color-adjust-none wave:bg-(image:--wave-color-slider-gradient) wave:my-3 wave:w-3 wave:flex-1 wave:rounded-none">',
+        '<span class="wave-color-slider__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:bottom-(--wave-color-slider-position) wave:start-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:translate-y-1/2 wave:group-has-[:focus-visible]/color-slider:ring-2 wave:group-has-[:focus-visible]/color-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] wave:group-has-[:focus-visible]/color-slider:outline-2 wave:group-has-[:focus-visible]/color-slider:outline-offset-2 wave:group-has-[:focus-visible]/color-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]">',
       ].join('\n'),
     );
   });
@@ -528,6 +533,16 @@ describe('ColorSlider — slotProps', () => {
       { defaultValue: DARK_BLUE },
       { channel: 'saturation', orientation: 'vertical', shape: 'square' },
       { channel: 'value', disabled: true, name: 'accent', required: true, 'aria-label': 'Tone' },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -535,6 +550,15 @@ describe('ColorSlider — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Bound to a ColorPicker.
+    expectInertSlotProps(
+      (slotProps) => (
+        <PickerHarness>
+          <ColorSlider slotProps={slotProps} />
+        </PickerHarness>
+      ),
+      EVERY_PART,
+    );
   });
 
   it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
@@ -549,8 +573,8 @@ describe('ColorSlider — slotProps', () => {
     );
     const input = slider();
     for (const [element, stable, own, mine, part, opacity] of [
-      [railOf(input), colorSliderClassNames.rail, 'flex-1', 'my-rail', 'rail', '0.5'],
-      [thumbOf(input), colorSliderClassNames.thumb, 'size-6', 'my-thumb', 'thumb', '0.25'],
+      [railOf(input), colorSliderClassNames.rail, 'wave:flex-1', 'my-rail', 'rail', '0.5'],
+      [thumbOf(input), colorSliderClassNames.thumb, 'wave:size-6', 'my-thumb', 'thumb', '0.25'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -566,27 +590,26 @@ describe('ColorSlider — slotProps', () => {
     );
     const rail = railOf(slider());
     expect(rail).toHaveClass('rounded-md');
-    expect(rail).not.toHaveClass('rounded-full');
+    expect(rail).not.toHaveClass('wave:rounded-full');
   });
 
-  it('attaches your refs to the parts, beside controlRef and ref', () => {
+  it('attaches your refs to the parts, beside ref', () => {
+    const root = React.createRef<HTMLDivElement>();
     const rail = React.createRef<HTMLDivElement>();
     const thumb = React.createRef<HTMLSpanElement>();
-    const controlRef = React.createRef<HTMLInputElement>();
-    const ref = React.createRef<HTMLDivElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <ColorSlider
         ref={ref}
-        controlRef={controlRef}
         defaultValue={DARK_BLUE}
-        slotProps={{ rail: { ref: rail }, thumb: { ref: thumb } }}
+        slotProps={{ root: { ref: root }, rail: { ref: rail }, thumb: { ref: thumb } }}
       />,
     );
     const input = slider();
     expect(rail.current).toBe(railOf(input));
     expect(thumb.current).toBe(thumbOf(input));
-    expect(controlRef.current).toBe(input);
-    expect(ref.current).toBe(rootOf(input));
+    expect(ref.current).toBe(input);
+    expect(root.current).toBe(rootOf(input));
   });
 
   it('keeps the rail out of the tab order: a part sets no tabIndex on it', () => {
@@ -641,8 +664,8 @@ describe('ColorSlider — slotProps', () => {
       { dir: 'rtl' },
     );
     const input = slider();
-    expect(railOf(input)).toHaveClass('wave-rtl:-scale-x-100', 'my-rail');
-    expect(thumbOf(input)).toHaveClass('wave-rtl:translate-x-1/2', 'my-thumb');
+    expect(railOf(input)).toHaveClass('wave:wave-rtl:-scale-x-100', 'my-rail');
+    expect(thumbOf(input)).toHaveClass('wave:wave-rtl:translate-x-1/2', 'my-thumb');
   });
 
   it('has no accessibility violations with every part customised', async () => {
@@ -659,7 +682,10 @@ describe('ColorSlider — slotProps', () => {
   });
 
   it('types each part for its element, and takes no children', () => {
-    expectTypeOf<keyof ColorSliderSlotProps>().toEqualTypeOf<'rail' | 'thumb'>();
+    expectTypeOf<keyof ColorSliderSlotProps>().toEqualTypeOf<'root' | 'rail' | 'thumb'>();
+    expectTypeOf<NonNullable<ColorSliderSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
     expectTypeOf<NonNullable<ColorSliderSlotProps['rail']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLDivElement> | undefined
     >();
@@ -668,5 +694,278 @@ describe('ColorSlider — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the slider draws them
     void (<ColorSlider slotProps={{ rail: { children: 'Rail' } }} />);
+    // @ts-expect-error -- a part takes no children: the slider draws its content
+    void (<ColorSlider slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const control = (label = 'Hue') => screen.getByRole('slider', { name: label, hidden: true });
+    const root = (label?: string) => rootOf(control(label));
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the slider's className and style", () => {
+      render(
+        <ColorSlider
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(colorSliderClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(control()).not.toHaveAttribute('data-part');
+      expect(control()).not.toHaveAttribute('title');
+    });
+
+    it("keeps the custom properties that draw the value the slider's: a part style does not move the thumb", () => {
+      const keys = [
+        '--wave-color-slider-gradient',
+        '--wave-color-slider-position',
+        '--wave-color-thumb',
+      ];
+      const { rerender } = render(<ColorSlider defaultValue={{ h: 0, s: 1, v: 1 }} />);
+      const drawn = keys.map((key) => root().style.getPropertyValue(key));
+      expect(drawn.every((value) => value !== '')).toBe(true);
+      const partStyle = Object.fromEntries(
+        keys.map((key) => [key, 'initial']),
+      ) as React.CSSProperties;
+      rerender(
+        <ColorSlider
+          defaultValue={{ h: 0, s: 1, v: 1 }}
+          slotProps={{ root: { style: partStyle } }}
+        />,
+      );
+      expect(keys.map((key) => root().style.getPropertyValue(key))).toEqual(drawn);
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<ColorSlider slotProps={{ root: { className: 'items-start' } }} />);
+      expect(root()).toHaveClass('items-start');
+      expect(root()).not.toHaveClass('wave:items-center');
+    });
+
+    it("keeps the props you give the slider over the part's", () => {
+      render(
+        <ColorSlider
+          title="Own"
+          data-x="own"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <ColorSlider
+          orientation="vertical"
+          channel="saturation"
+          slotProps={{
+            root: {
+              'data-orientation': 'horizontal',
+              'data-channel': 'hue',
+              'data-disabled': '',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root('Saturation')).toHaveAttribute('data-orientation', 'vertical');
+      expect(root('Saturation')).toHaveAttribute('data-channel', 'saturation');
+      expect(root('Saturation')).not.toHaveAttribute('data-disabled');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root('Saturation')).not.toHaveAttribute(attribute);
+      }
+      // The slider's own hidden state stays its own.
+      rerender(
+        <ColorSlider
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('keeps data-disabled the state of the slider, which a disabled slider sets', () => {
+      render(<ColorSlider disabled slotProps={{ root: { 'data-disabled': 'no' } }} />);
+      expect(root()).toHaveAttribute('data-disabled', '');
+    });
+
+    it("runs your root handlers before the slider's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <ColorSlider
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <ColorSlider
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it('calls your root onClick in every state, as the slider calls its own: only the range input is disabled', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(<ColorSlider onClick={own} slotProps={{ root: { onClick } }} />);
+      fireEvent.click(root());
+      rerender(<ColorSlider disabled onClick={own} slotProps={{ root: { onClick } }} />);
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('reaches the root of a slider bound to a ColorPicker', () => {
+      const ref = React.createRef<HTMLDivElement>();
+      render(
+        <PickerHarness>
+          <ColorSlider slotProps={{ root: { ref, className: 'my-root' } }} />
+        </PickerHarness>,
+      );
+      expect(ref.current).toBe(root());
+      expect(root()).toHaveClass('my-root');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(<ColorSlider slotProps={{ root: { className: 'my-root', title: 'Pick' } }} />);
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the range input, the slider itself; the root <div> is
+// `slotProps.root.ref`, and `controlRef` is gone.
+describe('ColorSlider — ref reaches the control', () => {
+  it('focuses the slider through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(<ColorSlider ref={ref} />);
+    act(() => ref.current?.focus());
+    expect(slider()).toHaveFocus();
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', () => {
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Form">
+        <ColorSlider
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          name="accent"
+          required
+          defaultValue={{ h: 0, s: 1, v: 1 }}
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { container, rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const input = slider();
+    expect(nodes.at(-1)).toBe(input);
+    // The hidden input's invalid event focuses the slider through the slider's own ref.
+    fireEvent.invalid(container.querySelector('input[name="accent"]') as HTMLInputElement);
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: '120' } });
+    rerender(ui(3));
+    expect(input).toHaveValue('120');
+    act(() => (screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).reset());
+    expect(input).toHaveValue('0');
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it('reaches the input of a slider bound to a ColorPicker', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(
+      <PickerHarness>
+        <ColorSlider ref={ref} />
+      </PickerHarness>,
+    );
+    expect(ref.current).toBe(slider());
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<ColorSlider ref={ref} />);
+    const input = slider();
+    rerender(<ColorSlider ref={ref} disabled orientation="vertical" />);
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <ColorSlider ref={ref} />
+      </React.StrictMode>,
+    );
+    const input = slider();
+    rerender(
+      <React.StrictMode>
+        <ColorSlider ref={ref} disabled />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<ColorSlider ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(slider(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref for the range input, and no controlRef', () => {
+    expectTypeOf<ColorSliderProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<ColorSliderProps>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the range input; the root <div> is slotProps.root.ref
+    void (<ColorSlider ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <ColorSlider
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the range input
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(rootOf(slider())).toHaveAttribute('controlref', '[object Object]');
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

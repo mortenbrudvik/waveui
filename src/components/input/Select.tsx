@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { selectClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp } from '../../lib/dev';
 import {
   inputAppearanceClasses,
   inputFocus,
@@ -13,7 +12,7 @@ import {
 import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
-import { legacyNativeSize, useInputLook } from './inputLook';
+import { useInputLook } from './inputLook';
 
 /** Properties for the Select component. */
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
@@ -35,14 +34,11 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
   errorMessageProps?: InputErrorMessageProps;
   /**
    * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
-   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
-   *
-   * A number is the native `size` attribute (the number of visible rows), as in 0.8: it still
-   * renders, warns once in development and is removed in 1.0. Use `htmlSize` for it.
-   * A string of digits only (`size="20"` from untyped code) counts as that number. Any other value
-   * outside the three sizes renders as if `size` were not set.
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. A value
+   * outside the three sizes (a number from untyped code included) renders as if `size` were not
+   * set. The native `size` attribute, the number of visible rows, is `htmlSize`.
    */
-  size?: CoreSize | number;
+  size?: CoreSize;
   /** The native `size` attribute: the number of visible rows. */
   htmlSize?: number;
   /**
@@ -58,11 +54,11 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
 /** Inline paddings and chevron geometry of each size (medium is the 0.7 look). */
 const SELECT_SIZE: Readonly<Record<CoreSize, string>> = {
   small:
-    'ps-2 pe-6 bg-[size:4px_4px,4px_4px] bg-[position:right_12px_center,right_8px_center] wave-rtl:bg-[position:left_8px_center,left_12px_center]',
+    'wave:ps-2 wave:pe-6 wave:bg-[size:4px_4px,4px_4px] wave:bg-[position:right_12px_center,right_8px_center] wave:wave-rtl:bg-[position:left_8px_center,left_12px_center]',
   medium:
-    'ps-3 pe-8 bg-[size:5px_5px,5px_5px] bg-[position:right_16px_center,right_11px_center] wave-rtl:bg-[position:left_11px_center,left_16px_center]',
+    'wave:ps-3 wave:pe-8 wave:bg-[size:5px_5px,5px_5px] wave:bg-[position:right_16px_center,right_11px_center] wave:wave-rtl:bg-[position:left_11px_center,left_16px_center]',
   large:
-    'ps-4 pe-10 bg-[size:6px_6px,6px_6px] bg-[position:right_20px_center,right_14px_center] wave-rtl:bg-[position:left_14px_center,left_20px_center]',
+    'wave:ps-4 wave:pe-10 wave:bg-[size:6px_6px,6px_6px] wave:bg-[position:right_20px_center,right_14px_center] wave:wave-rtl:bg-[position:left_14px_center,left_20px_center]',
 };
 
 /**
@@ -122,46 +118,35 @@ export const Select = ({
     { nativeRequired: true },
   );
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
-  const numericSize = legacyNativeSize(sizeProp);
-  const nativeSize = resolveDeprecatedProp(
-    'Select',
-    htmlSize,
-    numericSize,
-    'size={number}',
-    'htmlSize',
-  );
-  const { size, appearance } = useInputLook(
-    numericSize === undefined && typeof sizeProp !== 'number' ? sizeProp : undefined,
-    appearanceProp,
-  );
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const control = (
     <select
       ref={ref}
       data-size={size}
       data-appearance={appearance}
-      className={cn(
+      className={wcn(
         selectClassNames.root,
         inputHeightClasses[size],
-        'w-full appearance-none',
+        'wave:w-full wave:appearance-none',
         inputTextClasses[size],
         inputAppearanceClasses[appearance],
-        'text-foreground',
+        'wave:text-foreground',
         // Chevron: two token-colored gradient halves of a small triangle at the inline end.
-        'bg-no-repeat',
+        'wave:bg-no-repeat',
         SELECT_SIZE[size],
-        'bg-[image:linear-gradient(45deg,transparent_50%,var(--wave-muted-foreground)_50%),linear-gradient(135deg,var(--wave-muted-foreground)_50%,transparent_50%)]',
+        'wave:bg-[image:linear-gradient(45deg,transparent_50%,var(--wave-muted-foreground)_50%),linear-gradient(135deg,var(--wave-muted-foreground)_50%,transparent_50%)]',
         // Forced colors drop the background chevron: show the native arrow instead.
-        'forced-colors:appearance-auto forced-colors:bg-none',
+        'wave:forced-colors:appearance-auto wave:forced-colors:bg-none',
         inputFocus,
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
         invalidLook && inputInvalid,
         className,
       )}
       {...props}
       {...fieldProps}
       aria-errormessage={joinIds(ariaErrorMessage, messageId)}
-      size={nativeSize}
+      size={htmlSize}
     >
       {children}
     </select>

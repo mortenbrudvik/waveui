@@ -4,43 +4,45 @@
  * runs it last, after `vite build` and `scripts/build-css.mjs`.
  *
  * Checks:
- *   - directives: every component and hook module (`dist/components/**`, `dist/hooks/**`, both
- *     formats) starts with `"use client"`; no other file does — not `dist/lib/cn.*`, not
- *     `dist/index.*`, not any `index.*` barrel, not the bundler runtime (repo-level#2);
- *   - declarations: `dist/index.d.ts` and its `dist/index.d.cts` copy for the `require`
- *     condition (repo-level#5); each declares and exports the public names on
+ *   - ES modules only (1.0, spec R4): no `.cjs`, `.cjs.map` or `.d.cts` file in `dist`
+ *     ({@link checkNoCommonJs}), and `dist/index.mjs` loads through `require()` with the names it
+ *     has through `import()` ({@link checkRequireEsm}: a CommonJS consumer on Node.js 22.12 and
+ *     later loads the ES entry so, which a top-level `await` in its module graph would break);
+ *   - directives: every component and hook module (`dist/components/**`, `dist/hooks/**`)
+ *     starts with `"use client"`; no other file does — not `dist/lib/cn.mjs`, not
+ *     `dist/index.mjs`, not any `index.mjs` barrel, not the bundler runtime (repo-level#2);
+ *   - declarations: `dist/index.d.ts` (repo-level#5) declares and exports the public names on
  *     {@link REQUIRED_DECLARATIONS} (a class-name constant among them), so an empty roll-up
  *     (only `export { }`) fails the build; every component it exports carries a JSDoc (C-DOCS: a
  *     compound is documented on its `Object.assign` export, which is what the roll-up keeps);
- *   - development mode: `dist/lib/dev.mjs` and `dist/lib/dev.cjs` still read
- *     `process.env.NODE_ENV` at run time, so a consumer's bundler decides between development and
- *     production (a `define` in vite.config.ts would inline the library's own build mode);
+ *   - development mode: `dist/lib/dev.mjs` still reads `process.env.NODE_ENV` at run time, so a
+ *     consumer's bundler decides between development and production (a `define` in
+ *     vite.config.ts would inline the library's own build mode);
  *   - imports: every bare import is a dependency or peer dependency of package.json (or a
  *     subpath of one), relative imports resolve inside `dist/`, no Node.js builtin is imported
  *     and no dependency was bundled into `dist/` (repo-level#4);
  *   - react-server: the package loads in a React Server Component (repo-level#2). A copy of
  *     `dist/` in which every `"use client"` module is replaced by client references (what an RSC
  *     bundler does) is loaded under `node --conditions=react-server`: every other module — the
- *     `index.*` entries, `dist/lib/**`, the bundler runtime — must evaluate (no client-only
+ *     `index.mjs` entries, `dist/lib/**`, the bundler runtime — must evaluate (no client-only
  *     React API at module scope, no dotting into a client reference such as `Card.Header`);
- *     `dist/lib/cn.*` must work and `dist/index.*` must export the server-side `cn`;
- *     `dist/lib/color.*` and `dist/lib/toaster.*` must exist and work on the server (the color
- *     helpers convert; a handle's dispatch returns an id and adds no global), and `dist/index.*`
+ *     `dist/lib/cn.mjs` must work and `dist/index.mjs` must export the server-side `cn`;
+ *     `dist/lib/color.mjs` and `dist/lib/toaster.mjs` must exist and work on the server (the color
+ *     helpers convert; a handle's dispatch returns an id and adds no global), and `dist/index.mjs`
  *     must export `hsvToHex`, `hexToHsv` and `createToaster` from them, not from a client module;
- *     so must the token modules of 0.17 (`dist/lib/tokens.*`, `dist/lib/waveTokens.*`,
- *     `dist/lib/brand.*`: `getTokenStyle` writes the custom properties, `waveTokens` reads them,
- *     `createBrandTokens` gives the default ramp for the default seed), and `dist/index.*` must
+ *     so must the token modules of 0.17 (`dist/lib/tokens.mjs`, `dist/lib/waveTokens.mjs`,
+ *     `dist/lib/brand.mjs`: `getTokenStyle` writes the custom properties, `waveTokens` reads them,
+ *     `createBrandTokens` gives the default ramp for the default seed), and `dist/index.mjs` must
  *     export `getTokenStyle`, `createBrandTokens`, `waveTokens` and `chartPalette` from them;
- *   - class names (P3-00): every export of `dist/lib/classNames.*` (the stable class-name
- *     registry) is exported by `dist/index.*` with the same value, in both formats
- *     ({@link checkClassNameExports}); under the react-server condition `dist/index.*` exports
+ *   - class names (P3-00): every export of `dist/lib/classNames.mjs` (the stable class-name
+ *     registry) is exported by `dist/index.mjs` with the same value
+ *     ({@link checkClassNameExports}); under the react-server condition `dist/index.mjs` exports
  *     `buttonClassNames` as a plain object whose root is `wave-button`, and every export of
- *     `dist/lib/classNames.*` is an object of strings;
+ *     `dist/lib/classNames.mjs` is an object of strings;
  *   - flat names: every sub-component of a compound export (`Card.Header`) is also exported
  *     from `dist/index.mjs` under its flat name (`CardHeader`), bound to the same component
  *     (C-COMPOUND, repo-level#2) — except the components on {@link PENDING_FLAT_EXPORTS}, a
  *     bridge that closes before publishing (`--final`);
- *   - CommonJS parity: `dist/index.cjs` exports the same names as `dist/index.mjs`;
  *   - tree-shaking: a probe entry importing only `Button` from `dist/index.mjs`, bundled with
  *     Vite's own `build()` API, contains only Button's module and its static imports — no
  *     Dialog code (repo-level#3), and neither the presence core (`hooks/usePresence`) nor
@@ -51,9 +53,8 @@
  *     no InfoButton module, so a Field-only bundle never includes InfoButton's overlay code,
  *     nor its class string `'wave-info-button'`;
  *   - presence core: an import of only `Presence` contains `hooks/usePresence` (the probe finds
- *     the core where it is used), and the closure of `usePresence` + `Presence`, minified with
- *     bare imports external, stays within {@link PRESENCE_BUDGET} and imports nothing but
- *     `react` and `react/jsx-runtime`. The CLI prints the measured sizes;
+ *     the core where it is used); the closure of `usePresence` + `Presence` has its budget in
+ *     {@link RECORDED_IMPORTS_1_0};
  *   - opt-in modules (0.8): an import of only `Button` contains none of {@link OPT_IN_MODULES}
  *     (the color parts and helpers, the toaster handle), and an import of only `Toaster`
  *     contains `hooks/usePresence`;
@@ -78,10 +79,8 @@
  *     one of only `FlatTree` no DataGrid code, one of only `Button` or only `MessageBar` none of
  *     {@link DATA_SCALE_MODULES} and one of only `Tree` none but the moved cascade
  *     ({@link EXCLUSION_PROBES_0_16}, with the positive controls of {@link INCLUSION_PROBES_0_16});
- *     the closure of `useVirtualWindow`, minified, stays within {@link VIRTUAL_BUDGET} and imports
- *     nothing but `react`, and that of `DataGrid` within {@link DATA_GRID_BUDGET} (re-set in
- *     0.18). The CLI prints the measured sizes, and those of the imports of {@link
- *     RECORDED_IMPORTS} (DataGrid-only, Tree-only, Button-only, MessageBar-only) against 0.15.0;
+ *     the closures of `useVirtualWindow` and of `DataGrid` have their budgets in
+ *     {@link RECORDED_IMPORTS_1_0};
  *   - 0.17 (spec §10): an import of only `createBrandTokens` holds the brand generator and no
  *     names tuple, component or React module, and none of the development contrast check of a
  *     full ramp; one of only `waveTokens` the tuple and the token core, and no brand generator,
@@ -91,10 +90,9 @@
  *     fragment of their code: no token name, no brand warning key), one of only `Button` or only
  *     `MessageBar` none of {@link TOKEN_MODULES} and not the provider
  *     ({@link EXCLUSION_PROBES_0_17}, with the positive controls of {@link INCLUSION_PROBES_0_17});
- *     the imports of {@link RECORDED_IMPORTS_0_17} are printed with the 0.16.0 sizes, and
- *     createBrandTokens-only and waveTokens-only stay within their 3 KiB gzip budgets; no
- *     JavaScript, CSS or declaration file of dist names a chart library of the stories
- *     ({@link DEV_ONLY_LIBRARIES}, R14);
+ *     createBrandTokens-only and waveTokens-only have their budgets in {@link
+ *     RECORDED_IMPORTS_1_0}; no JavaScript, CSS or declaration file of dist names a chart library
+ *     of the stories ({@link DEV_ONLY_LIBRARIES}, R14);
  *   - 0.18 (Phase 13, spec §5, R23): an import of only `getNativeElementProps` or only
  *     `mergeSlotProps` holds its server-safe module (the latter with the helpers it merges with)
  *     and no component, hook or React module; an import of only one of the public context hooks
@@ -106,15 +104,12 @@
  *     `Dialog` none but `lib/slotProps` (no DataGrid hook), and one of only `DataGrid` not its
  *     hooks ({@link EXCLUSION_PROBES_0_18}, with the positive controls of {@link
  *     INCLUSION_PROBES_0_18}); no module that only the tests read is in dist ({@link
- *     TEST_ONLY_MODULES}); `dist/lib/slotProps.*` and `dist/lib/nativeProps.*` work on the
- *     server, and `dist/index.*` exports `mergeSlotProps` and `getNativeElementProps` from them;
- *     the imports of {@link RECORDED_IMPORTS_0_18} stay within their budgets, each the size
- *     measured at the end of the phase plus {@link BUDGET_MARGIN_0_18}, which the CLI prints
- *     with the 0.17.1 sizes. Growth of the release over 0.17.1, in bytes minified and gzip:
- *     Button-only -143 and -1, MessageBar-only +2,363 and +877, Tree-only +3,056 and +1,039,
- *     Dialog-only +1,749 and +680, `WaveProvider` with `Dialog` +1,744 and +680, DataGrid-only
- *     +3,209 and +1,207 (the budgets' basis, measured at `e7833a7`: MessageBar-only +2,327 and
- *     +864, Tree-only +3,060 and +1,028, DataGrid-only +3,213 and +1,202).
+ *     TEST_ONLY_MODULES}); `dist/lib/slotProps.mjs` and `dist/lib/nativeProps.mjs` work on the
+ *     server, and `dist/index.mjs` exports `mergeSlotProps` and `getNativeElementProps` from them;
+ *   - sizes (1.0, Phase 14 spec R7): the imports of {@link RECORDED_IMPORTS_1_0} stay within their
+ *     budgets, each the size measured at the flip plus {@link BUDGET_MARGIN_1_0}, and import no
+ *     package but their `allowedExternals`; the CLI prints each with its 0.18.1 size
+ *     ({@link BASELINES_0_18_1}). The growth over 0.18.1 is in the records' JSDoc.
  *
  * Every probe and size bundles as a consumer's production build: `process.env.NODE_ENV` is defined
  * as `"production"` whatever this process has (Vitest runs with `test`), so development-only code
@@ -175,21 +170,15 @@ const require = createRequire(import.meta.url);
 export const PENDING_FLAT_EXPORTS = [];
 
 /**
- * The presence core's probes: an import of only `Button` drops it, an import of only
- * `PRESENCE_INCLUDE_KEEP` holds it, and the closure of the two names fits the budget. The budget
- * is the first measured size plus 25 % (5,443 and 2,341 bytes in 0.7.0, against the 5 KiB and
- * 2 KiB of the phase 2 design, adjusted once as its open question 8 allows).
+ * The presence core's probes: an import of only `Button` drops it, and an import of only
+ * `PRESENCE_INCLUDE_KEEP` holds it. The closure of `usePresence` + `Presence` has its budget in
+ * {@link RECORDED_IMPORTS_1_0} (through 0.18 the first measured size plus 25 %: 5,443 and 2,341
+ * bytes in 0.7.0).
  */
 const PRESENCE_MODULE = 'hooks/usePresence.mjs';
 const PRESENCE_INCLUDE_KEEP = 'Menu';
 /** An import of only `Field` drops this module: Field imports a marker module, never InfoButton. */
 const INFO_BUTTON_MODULE = 'components/data-display/InfoButton.mjs';
-const PRESENCE_BUDGET = {
-  names: ['usePresence', 'Presence'],
-  maxMinifiedBytes: 6804,
-  maxGzipBytes: 2927,
-  allowedExternals: ['react', 'react/jsx-runtime'],
-};
 
 /**
  * Modules an import of only `Button` must not contain (spec D30, 0.8): the color parts, the public
@@ -226,21 +215,13 @@ const TOASTER_INCLUDE_KEEP = 'Toaster';
  */
 const SERVER_SAFE_MODULES = [
   'lib/brand.mjs',
-  'lib/brand.cjs',
   'lib/color.mjs',
-  'lib/color.cjs',
   'lib/date.mjs',
-  'lib/date.cjs',
   'lib/nativeProps.mjs',
-  'lib/nativeProps.cjs',
   'lib/slotProps.mjs',
-  'lib/slotProps.cjs',
   'lib/toaster.mjs',
-  'lib/toaster.cjs',
   'lib/tokens.mjs',
-  'lib/tokens.cjs',
   'lib/waveTokens.mjs',
-  'lib/waveTokens.cjs',
 ];
 
 /**
@@ -589,52 +570,6 @@ export const INCLUSION_PROBES_0_16 = [
   { keep: 'Tree', modules: [TREE_CASCADE_MODULE] },
 ];
 
-/**
- * The window's budget (spec §11): the closure of an import of only `useVirtualWindow`, minified
- * with bare imports external (the window, its layout core and the development warning it shares
- * with every component), imports nothing but `react`. The budget is the size first measured for
- * 0.16.0 (3,532 bytes minified, 1,695 gzip) plus 25 %, the gzip size held at the spec's ceiling of
- * 2 KiB (25 % more would be 2,119).
- */
-export const VIRTUAL_BUDGET = {
-  names: ['useVirtualWindow'],
-  maxMinifiedBytes: 4415,
-  maxGzipBytes: 2048,
-  allowedExternals: ['react'],
-};
-
-/**
- * The DataGrid-only budget: the import grew in 0.16 by the selection core, the column sizing and
- * the window support, so its size was measured first, for 0.16.0 (69,592 bytes minified, 23,545
- * gzip), and the budget was that plus 25 % (86,990 and 29,431). Phase 13 re-set it, as the other
- * budgets of {@link RECORDED_IMPORTS_0_18} (spec R23): the size measured at the end of the phase
- * (73,310 and 24,921) plus {@link BUDGET_MARGIN_0_18}; raise it only deliberately. The closure
- * imports nothing but the package's own dependencies and peers (every component reaches `clsx` and
- * `tailwind-merge` through `cn`; the grid uses `react-dom`), so a new dependency fails it.
- */
-export const DATA_GRID_BUDGET = {
-  names: ['DataGrid'],
-  maxMinifiedBytes: 73822,
-  maxGzipBytes: 25113,
-  allowedExternals: ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'],
-};
-
-/**
- * Imports whose size verify-dist measures and prints against their size in the published 0.15.0
- * package (minified and gzip bytes, bare imports external; spec §11, recorded in §16), for drift
- * only: in 0.16 a Tree-only import changed only by the moved cascade (R20), and Button-only and
- * MessageBar-only imports were as in 0.15.0. 0.17 budgeted all three against 0.16.0 ({@link
- * RECORDED_IMPORTS_0_17}), and 0.18 budgets them and the DataGrid-only import, which had its
- * budget here until then ({@link DATA_GRID_BUDGET}), against 0.17.1 ({@link
- * RECORDED_IMPORTS_0_18}).
- */
-export const RECORDED_IMPORTS = [
-  { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
-  { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
-  { names: ['Button'], baseline: { version: '0.15.0', minified: 11195, gzip: 3855 } },
-  { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
-];
-
 /** The token core of 0.17 (`src/lib/tokens.ts`): the provider's conversion and merge. */
 const TOKEN_CORE_MODULE = 'lib/tokens.mjs';
 /** The names tuple with `waveTokens` and `chartPalette` (`src/lib/waveTokens.ts`). */
@@ -666,8 +601,7 @@ const BRAND_CHECK_MARKER = 'createBrandTokens:contrast';
 /**
  * The key prefix of the provider's `tokens` warnings: since 0.17.1 their effect reads
  * `process.env.NODE_ENV`, so a production bundle drops them and their text, which held the
- * `WaveProvider` + `Dialog` budget of {@link RECORDED_IMPORTS_0_17} (now in {@link
- * RECORDED_IMPORTS_0_18}).
+ * `WaveProvider` + `Dialog` budget of 0.17 (now in {@link RECORDED_IMPORTS_1_0}).
  */
 const PROVIDER_WARNING_MARKER = 'WaveProvider:tokens:';
 
@@ -729,7 +663,7 @@ export const EXCLUSION_PROBES_0_17 = [
  * `createBrandTokens` the brand marker, both in a production build, so the fragments the Dialog
  * probe looks for are found where they are; an import of only `WaveProvider` holds the token core;
  * one of only `Tree` the provider's module (`useDirection` reads its context, so a Tree-only
- * import carries the context's defaults; its budget is the one of {@link RECORDED_IMPORTS_0_18}).
+ * import carries the context's defaults; its budget is the one of {@link RECORDED_IMPORTS_1_0}).
  */
 export const INCLUSION_PROBES_0_17 = [
   { keep: 'waveTokens', modules: [WAVE_TOKENS_MODULE], substrings: [TOKEN_NAMES_MARKER] },
@@ -737,29 +671,6 @@ export const INCLUSION_PROBES_0_17 = [
   { keep: 'WaveProvider', modules: [PROVIDER_MODULE, TOKEN_CORE_MODULE] },
   { keep: 'Tree', modules: [PROVIDER_MODULE] },
 ];
-
-/**
- * The budget of an import of only `createBrandTokens` (spec §10): 3 KiB gzip; minified, the size
- * first measured for 0.17.0 (3,596 bytes, 1,932 gzip) plus 25 %, as {@link VIRTUAL_BUDGET} has it.
- * The closure imports nothing.
- */
-export const BRAND_TOKENS_BUDGET = {
-  names: ['createBrandTokens'],
-  maxMinifiedBytes: 4495,
-  maxGzipBytes: 3072,
-  allowedExternals: [],
-};
-
-/**
- * The budget of an import of only `waveTokens` (spec §10): 3 KiB gzip; minified, the size first
- * measured for 0.17.0 (3,071 bytes, 969 gzip) plus 25 %. The closure imports nothing.
- */
-export const WAVE_TOKENS_BUDGET = {
-  names: ['waveTokens'],
-  maxMinifiedBytes: 3839,
-  maxGzipBytes: 3072,
-  allowedExternals: [],
-};
 
 /** The part helper of 0.18 (`src/lib/slotProps.ts`, server-safe): `mergeSlotProps`. */
 const SLOT_PROPS_MODULE = 'lib/slotProps.mjs';
@@ -801,7 +712,7 @@ const POPUP_PACKAGES = ['react-dom', '@floating-ui/react-dom'];
 
 /**
  * The helper and hook probes of 0.18 (spec §5): an import of only `getNativeElementProps` or only
- * `mergeSlotProps`, server-safe helpers, holds its own module (the latter with `cn` and the
+ * `mergeSlotProps`, server-safe helpers, holds its own module (the latter with `wcn` and the
  * helpers it merges with) and no component, hook or React module; an import of only one of the
  * public context hooks holds its context module, as far as the hook needs it (the Menu hooks the
  * Menu's context, the DataGrid hooks the grid's contexts, the selection hook also the selection
@@ -885,161 +796,99 @@ export const INCLUSION_PROBES_0_18 = [
 
 /**
  * Modules of `src/lib` that only the tests read, so the package holds no file of theirs (0.18):
- * the completeness gate's lists of the parts (`lib/slotParts`) and the inventory of the 1.0
- * removals (`lib/deprecations`). No module of the package imports them ({@link
- * checkTestOnlyModules}); their names are also on {@link MODULE_ONLY_NAMES}, so neither roll-up
- * exports one as a type.
+ * the completeness gate's lists of the parts (`lib/slotParts`). No module of the package imports
+ * one ({@link checkTestOnlyModules}); its names are also on {@link MODULE_ONLY_NAMES}, so neither
+ * roll-up exports one as a type.
  */
-export const TEST_ONLY_MODULES = ['lib/deprecations', 'lib/slotParts'];
+export const TEST_ONLY_MODULES = ['lib/slotParts'];
 
-/** The externals of a component's closure: `cn`'s two dependencies and React. */
+/**
+ * The sizes in the published 0.18.1 package of the imports of {@link RECORDED_IMPORTS_1_0},
+ * measured as {@link measureImport} measures: the base the 1.0 growth is printed against. The
+ * component imports are those of the 0.18.1 CHANGELOG's Size table. The presence core and the
+ * window, which no CHANGELOG table lists, are the sizes measured for 0.17 (the Phase 12 spec's
+ * notes of its Task 13), which no module of 0.18 changed (the 0.18.0 CHANGELOG: their closures
+ * hold none) and which Phase 14 measured again before the flip; `createBrandTokens` and
+ * `waveTokens` are those of the 0.17.0 CHANGELOG's Size table, unchanged in 0.18 alike.
+ */
+export const BASELINES_0_18_1 = {
+  Button: { minified: 11079, gzip: 3865 },
+  MessageBar: { minified: 29221, gzip: 10201 },
+  Tree: { minified: 50383, gzip: 17271 },
+  Dialog: { minified: 72599, gzip: 24466 },
+  'WaveProvider + Dialog': { minified: 75147, gzip: 25458 },
+  DataGrid: { minified: 73306, gzip: 24926 },
+  'usePresence + Presence': { minified: 5453, gzip: 2341 },
+  useVirtualWindow: { minified: 3868, gzip: 1817 },
+  createBrandTokens: { minified: 3630, gzip: 1956 },
+  waveTokens: { minified: 3071, gzip: 969 },
+};
+
+/**
+ * The margin of a 1.0 budget over the size measured at the flip, in bytes minified and gzip (spec
+ * R7, as 0.18's): about 1 % of the larger imports, so a later change that adds bytes to one of them
+ * re-sets its budget deliberately, and none can grow unnoticed.
+ */
+export const BUDGET_MARGIN_1_0 = { minified: 512, gzip: 192 };
+
+/** The externals of a component's closure: `wcn`'s two dependencies and React. */
 const COMPONENT_EXTERNALS = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
 /** The externals of a closure with a Portal, which also imports `react-dom`. */
 const PORTAL_EXTERNALS = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
 
-/**
- * The sizes of the imports of {@link RECORDED_IMPORTS_0_18} in the published 0.17.1 package, as
- * the CHANGELOG's Size tables give them (0.17.1 changed only the provider, so the others keep
- * their 0.17.0 sizes), measured as {@link measureImport} measures: the base the 0.18 growth is
- * printed against.
- */
-export const BASELINES_0_17_1 = {
-  Button: { minified: 11222, gzip: 3866 },
-  MessageBar: { minified: 26858, gzip: 9324 },
-  Tree: { minified: 47327, gzip: 16232 },
-  Dialog: { minified: 70850, gzip: 23786 },
-  'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
-  DataGrid: { minified: 70097, gzip: 23719 },
-};
+/** A record of {@link RECORDED_IMPORTS_1_0}: its 0.18.1 size, its size at the flip, its budget. */
+function record1_0(label, names, measured, allowedExternals) {
+  return {
+    names,
+    baseline: { version: '0.18.1', ...BASELINES_0_18_1[label] },
+    measured,
+    budget: {
+      names,
+      maxMinifiedBytes: measured.minified + BUDGET_MARGIN_1_0.minified,
+      maxGzipBytes: measured.gzip + BUDGET_MARGIN_1_0.gzip,
+      allowedExternals,
+    },
+  };
+}
 
 /**
- * The 0.17 records (spec §10, with the build's rulings, which correct it for Tree and add the
- * provider with a Dialog), measured as {@link measureImport} measures and printed against the size
- * in the published 0.16.0 package where the import had one (`baseline: null` for the new ones),
- * both measured with this release's build tools, as {@link RECORDED_IMPORTS} measures 0.15.0.
- * `createBrandTokens` and `waveTokens` keep their 3 KiB gzip budgets ({@link BRAND_TOKENS_BUDGET},
- * {@link WAVE_TOKENS_BUDGET}): no module of Phase 13 is in their closures. The five component
- * imports are printed for drift only since 0.18, which budgets them against 0.17.1 ({@link
- * RECORDED_IMPORTS_0_18}); in 0.17 each budget was the 0.16.0 size plus its allowance, in bytes
- * minified and gzip:
- *   - `Button` and `MessageBar`: +64 and +32, for `cn`, which recognises the two new font families
- *     (R13); otherwise byte for byte 0.16.0's;
- *   - `Tree`: +128 and +64, `cn`'s allowance and the provider's context, which Tree reads for its
- *     direction (`useDirection`) and which has three members more (R17);
- *   - `Dialog` without the provider component: +1 KiB and +0.4 KiB (1,024 and 409), the Portal's
- *     token style and the context;
- *   - `WaveProvider` with `Dialog`: +1.5 KiB and +0.7 KiB (1,536 and 716), the provider's token
- *     handling (`lib/tokens`) too.
- * A KiB fraction was rounded down, so no budget was above the spec's figure.
+ * The 1.0 records (Phase 14 spec R7): every budgeted import, in one list, folding the 0.18 records
+ * of the six component imports and the budgets the presence core, the window, `createBrandTokens`
+ * and `waveTokens` had since 0.7, 0.16 and 0.17 (their first measured size plus 25 %, or 3 KiB
+ * gzip), and the drift records of 0.15 and 0.17, which are gone. Each holds its size in the
+ * published 0.18.1 package (`baseline`, from {@link BASELINES_0_18_1}), the size measured at the
+ * flip (`measured`: {@link measureImport} on the build of the flip commit) and its `budget`, that
+ * size plus {@link BUDGET_MARGIN_1_0}, with the packages its closure may import. The CLI prints each
+ * import against 0.18.1. Growth over 0.18.1, in bytes minified and gzip:
+ *   - `Button`: +958 and +168; `MessageBar`: +849 and +21; `Tree`: +807 and +156; `Dialog`:
+ *     +1,335 and +201; `WaveProvider` with `Dialog`: +1,340 and +182. The utility prefix of 1.0
+ *     (`wave:`, about 5 bytes per class word before gzip) and `wcn`'s prefix-aware configuration
+ *     (about 220 bytes); the removals of Phase 14 pay for part of it (about 430 bytes of
+ *     MessageBar, about 200 of Tree and of Dialog);
+ *   - `DataGrid`: -1,183 and -601: the removed 0.x column and sort aliases and positional
+ *     callback forms outweigh the prefix;
+ *   - the presence core, the window, `createBrandTokens` and `waveTokens`: 0 and 0 (no class
+ *     string, no `wcn` in their closures).
  */
-export const RECORDED_IMPORTS_0_17 = [
-  { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
-  { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
-  { names: ['Button'], baseline: { version: '0.16.0', minified: 11195, gzip: 3855 } },
-  { names: ['MessageBar'], baseline: { version: '0.16.0', minified: 26831, gzip: 9312 } },
-  { names: ['Tree'], baseline: { version: '0.16.0', minified: 47248, gzip: 16196 } },
-  { names: ['Dialog'], baseline: { version: '0.16.0', minified: 70721, gzip: 23723 } },
-  {
-    names: ['WaveProvider', 'Dialog'],
-    baseline: { version: '0.16.0', minified: 71884, gzip: 24127 },
-  },
-];
-
-/**
- * The margin of a 0.18 budget over the size measured at the end of Phase 13, in bytes minified
- * and gzip (spec R23): about 1 % of the larger imports, so a later change that adds bytes to one of
- * them re-sets its budget deliberately, and none can grow unnoticed.
- */
-export const BUDGET_MARGIN_0_18 = { minified: 512, gzip: 192 };
-
-/**
- * The 0.18 records (spec §5, R23): every recorded import whose closure holds a module that Phase
- * 13 added or changed (`lib/slot`'s render-function children, which nearly every component holds;
- * `lib/slotProps` and the parts of the components that have them; the context modules of the
- * public hooks). Each holds its size in the published 0.17.1 package (`baseline`, from {@link
- * BASELINES_0_17_1}), the size measured at the end of the phase (`measured`: `measureImport` on
- * the build of the last rollout commit with the integration package's changes, which move no
- * byte of these imports) and its `budget`, that size plus {@link BUDGET_MARGIN_0_18}. The interim
- * allowance of the phase (the 0.17.1 size plus 4 KiB minified and 1.5 KiB gzip) ends here. The
- * CLI prints each import against 0.17.1. Growth over 0.17.1, in bytes minified and gzip, of the
- * release (of the `measured` basis at `e7833a7`, where the final lock fixes moved it):
- *   - `Button`: -143 and -1. Button has no part, so it holds no `lib/slotProps`; the
- *     render-function children of `lib/slot` were paid for by compacting that module;
- *   - `MessageBar`: +2,363 and +877 (+2,327 and +864), the `slotProps` helper, the body and
- *     dismiss button parts and the context of `useMessageBarContext`;
- *   - `Tree`: +3,056 and +1,039 (+3,060 and +1,028), the helper and the six parts of each item
- *     and its persona row;
- *   - `Dialog`: +1,749 and +680, the helper, the title actions and body parts, and the part that
- *     the shared close button takes for TeachingPopover;
- *   - `WaveProvider` with `Dialog`: +1,744 and +680, the same;
- *   - `DataGrid`: +3,209 and +1,207 (+3,213 and +1,202), the helper and the parts of the header
- *     cell, the resize handle and the selection controls ({@link DATA_GRID_BUDGET}, which was
- *     the 0.16.0 size plus 25 % until then).
- * The budgets of `createBrandTokens`, `waveTokens`, `useVirtualWindow` and the presence core stay
- * as they were: no module of Phase 13 is in their closures.
- */
-export const RECORDED_IMPORTS_0_18 = [
-  {
-    names: ['Button'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Button },
-    measured: { minified: 11079, gzip: 3865 },
-    budget: {
-      names: ['Button'],
-      maxMinifiedBytes: 11591,
-      maxGzipBytes: 4057,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
-  },
-  {
-    names: ['MessageBar'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.MessageBar },
-    measured: { minified: 29185, gzip: 10188 },
-    budget: {
-      names: ['MessageBar'],
-      maxMinifiedBytes: 29697,
-      maxGzipBytes: 10380,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
-  },
-  {
-    names: ['Tree'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Tree },
-    measured: { minified: 50387, gzip: 17260 },
-    budget: {
-      names: ['Tree'],
-      maxMinifiedBytes: 50899,
-      maxGzipBytes: 17452,
-      allowedExternals: COMPONENT_EXTERNALS,
-    },
-  },
-  {
-    names: ['Dialog'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.Dialog },
-    measured: { minified: 72599, gzip: 24466 },
-    budget: {
-      names: ['Dialog'],
-      maxMinifiedBytes: 73111,
-      maxGzipBytes: 24658,
-      allowedExternals: PORTAL_EXTERNALS,
-    },
-  },
-  {
-    names: ['WaveProvider', 'Dialog'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1['WaveProvider + Dialog'] },
-    measured: { minified: 75147, gzip: 25458 },
-    budget: {
-      names: ['WaveProvider', 'Dialog'],
-      maxMinifiedBytes: 75659,
-      maxGzipBytes: 25650,
-      allowedExternals: PORTAL_EXTERNALS,
-    },
-  },
-  {
-    names: ['DataGrid'],
-    baseline: { version: '0.17.1', ...BASELINES_0_17_1.DataGrid },
-    measured: { minified: 73310, gzip: 24921 },
-    budget: DATA_GRID_BUDGET,
-  },
+export const RECORDED_IMPORTS_1_0 = [
+  record1_0('Button', ['Button'], { minified: 12037, gzip: 4033 }, COMPONENT_EXTERNALS),
+  record1_0('MessageBar', ['MessageBar'], { minified: 30070, gzip: 10222 }, COMPONENT_EXTERNALS),
+  record1_0('Tree', ['Tree'], { minified: 51190, gzip: 17427 }, COMPONENT_EXTERNALS),
+  record1_0('Dialog', ['Dialog'], { minified: 73934, gzip: 24667 }, PORTAL_EXTERNALS),
+  record1_0(
+    'WaveProvider + Dialog',
+    ['WaveProvider', 'Dialog'],
+    { minified: 76487, gzip: 25640 },
+    PORTAL_EXTERNALS,
+  ),
+  record1_0('DataGrid', ['DataGrid'], { minified: 72123, gzip: 24325 }, PORTAL_EXTERNALS),
+  record1_0('usePresence + Presence', ['usePresence', 'Presence'], { minified: 5453, gzip: 2341 }, [
+    'react',
+    'react/jsx-runtime',
+  ]),
+  record1_0('useVirtualWindow', ['useVirtualWindow'], { minified: 3868, gzip: 1817 }, ['react']),
+  record1_0('createBrandTokens', ['createBrandTokens'], { minified: 3630, gzip: 1956 }, []),
+  record1_0('waveTokens', ['waveTokens'], { minified: 3071, gzip: 969 }, []),
 ];
 
 /**
@@ -1085,7 +934,7 @@ export const INCLUSION_PROBES_0_11 = [
  * D6) also the parts the tables share (`Table.shared`, the sort arrows), the Overflow store,
  * TeachingPopover's root, context and surface, and the event predicates of the selectable
  * containers; since 0.15 (spec §16 Q1) every export of the motion internals: the recipe
- * constants, `resolveMotion` and `usesLegacyMotion` of `lib/motion`, and the hooks `useMotion`,
+ * constants and `resolveMotion` of `lib/motion`, and the hooks `useMotion`,
  * `useCollapsePresence`, `useFocusBeforeClose` and `usePresenceGroup` with their types; since
  * 0.16 (spec §11) every export of the data-scale modules that the entry does not export: the pure
  * cores (`lib/selection`, `lib/virtual`, `lib/columnSizing`, `lib/treeCascade`, `lib/flatTree`),
@@ -1100,8 +949,11 @@ export const INCLUSION_PROBES_0_11 = [
  * the parts (`HIDDEN_PART_LOCKS`, `composeAfterPart`, the locks of each component family, …),
  * the lists of `getNativeElementProps`, the context objects and item state behind the public
  * hooks (`RadioGroupContext`, `MessageBarContext`, `MenuListElementContext`, …), the slot seams
- * of render-function children (`resolveWiredSlot`), and every export of the two modules that
- * only the tests read ({@link TEST_ONLY_MODULES}), so neither roll-up exports one as a type. The
+ * of render-function children (`resolveWiredSlot`), and every export of the module that
+ * only the tests read ({@link TEST_ONLY_MODULES}), so neither roll-up exports one as a type; since
+ * 1.0 (Phase 14, spec R6) every export of `lib/cn` but the public `cn`: the class merge of the
+ * components, `wcn` (the public `cn` is the same merge), its factory `createWcn` and its prefix
+ * `UTILITY_PREFIX`. The
  * roll-up declares `TokenVariable` and `WAVE_TOKEN_NAMES` without exporting them (the exported
  * `waveTokens` and `WaveTokenName` refer to them), which the check accepts.
  * `verify-dist.test.mjs` reads the groups from the sources (those of 0.16, 0.17 and 0.18 with the
@@ -1123,7 +975,6 @@ export const MODULE_ONLY_NAMES = [
   'DEFAULT_MIN_COLUMN_WIDTH',
   'DEFAULT_SELECTION_HEADER_LABEL',
   'DEFAULT_SELECT_ALL_LABEL',
-  'DEPRECATIONS',
   'DataGridColumnResizeHandle',
   'DataGridColumnSizing',
   'DataGridContext',
@@ -1153,8 +1004,6 @@ export const MODULE_ONLY_NAMES = [
   'DataGridWindowRow',
   'DataGridWindowRowContext',
   'DataGridWindowState',
-  'Deprecation',
-  'DeprecationKind',
   'DrawerCloseButton',
   'DrawerCloseButtonProps',
   'DrawerContext',
@@ -1225,6 +1074,7 @@ export const MODULE_ONLY_NAMES = [
   'PickerListboxSurface',
   'PresenceGroupEntry',
   'ROUNDS_DARKER',
+  'ROVING_PART_LOCKS',
   'RadioGroupContext',
   'RadioGroupItemsContextValue',
   'RadioItemState',
@@ -1282,6 +1132,7 @@ export const MODULE_ONLY_NAMES = [
   'TeachingSurface',
   'TokenVariable',
   'TreeNode',
+  'UTILITY_PREFIX',
   'UseCollapsePresenceOptions',
   'UseCollapsePresenceResult',
   'UseDataGridColumnSizingOptions',
@@ -1313,6 +1164,7 @@ export const MODULE_ONLY_NAMES = [
   'createOptionText',
   'createSelectionStore',
   'createTableFeaturePlugin',
+  'createWcn',
   'dialogBackdropMotion',
   'dialogMotion',
   'drawerBackdropMotion',
@@ -1392,7 +1244,6 @@ export const MODULE_ONLY_NAMES = [
   'useFocusWithin',
   'useHeldFocus',
   'useItemsAndChildrenWarning',
-  'useLegacyMotionWarning',
   'useModalOpener',
   'useMotionClasses',
   'useMotionPreference',
@@ -1412,20 +1263,26 @@ export const MODULE_ONLY_NAMES = [
   'useTagPickerControlContext',
   'useTeachingPopoverContext',
   'useToolbarNavigation',
-  'usesLegacyMotion',
   'visibleFlatItems',
-  'warnImportantColor',
+  'wcn',
   'withoutRenderFunction',
 ];
 
 /**
- * Names that `dist/index.d.ts` and `dist/index.d.cts` must export both as a type and as a value
- * (0.11 spec §6.2): `TagPickerOption` is the interface of an `options` entry and the
- * `TagPicker.Option` component. A roll-up that keeps only one meaning breaks one of the two uses.
+ * Names that `dist/index.d.ts` must export both as a type and as a value (0.11 spec §6.2):
+ * `TagPickerOption` is the interface of an `options` entry and the `TagPicker.Option` component.
+ * A roll-up that keeps only one meaning breaks one of the two uses.
  */
 export const VALUE_AND_TYPE_DECLARATIONS = ['TagPickerOption'];
 
-const JS_FILE = /\.(mjs|cjs|js)$/;
+/**
+ * A JavaScript module of `dist`: the build emits ES modules named `.mjs` only (vite.config.ts);
+ * {@link checkNoCommonJs} reports any CommonJS file.
+ */
+const JS_FILE = /\.mjs$/;
+
+/** A CommonJS file: a module, its source map or its declarations (1.0 ships none, spec R4). */
+const COMMONJS_FILE = /\.(cjs|cjs\.map|d\.cts)$/;
 
 // -------------------------------------------------------------------------------------------
 // Helpers
@@ -1571,7 +1428,7 @@ export function expectsUseClient(path) {
   const segments = path.split('/');
   if (segments[0] !== 'components' && segments[0] !== 'hooks') return false;
   if (segments.includes('node_modules')) return false;
-  return !/^index\.(mjs|cjs|js)$/.test(segments[segments.length - 1]);
+  return !/^index\.mjs$/.test(segments[segments.length - 1]);
 }
 
 /**
@@ -1604,6 +1461,88 @@ function readJson(file) {
 // Checks
 // -------------------------------------------------------------------------------------------
 
+/**
+ * `dist` holds ES modules only (1.0, spec R4): no CommonJS module, source map or declaration
+ * (`.cjs`, `.cjs.map`, `.d.cts`), which a second output format or a declaration copy in
+ * vite.config.ts would bring back.
+ */
+export function checkNoCommonJs(dist) {
+  return listFiles(dist)
+    .filter((path) => COMMONJS_FILE.test(path))
+    .map(
+      (path) =>
+        `${path} is CommonJS output: the package ships ES modules only ` +
+        '(one ES output in vite.config.ts, no index.d.cts)',
+    );
+}
+
+/** The export names of a module namespace. */
+function exportNames(mod) {
+  return Object.keys(mod).filter((name) => name !== 'default' && name !== '__esModule');
+}
+
+/**
+ * The source of the script that loads `entry` through `require()` and prints, on its last line,
+ * `{ names }` (the keys of what `require()` returned) or `{ error }` (its code and message).
+ */
+function requireProbeSource(entry) {
+  return `let result;
+try {
+  result = { names: Object.keys(require(${JSON.stringify(entry)})) };
+} catch (error) {
+  const message = String((error && error.message) || error).split('\\n')[0];
+  result = { error: error && error.code ? error.code + ': ' + message : message };
+}
+process.stdout.write('\\n' + JSON.stringify(result) + '\\n');
+`;
+}
+
+/**
+ * `require(esm)` (spec R4): `dist/index.mjs` loads through `require()`, as a CommonJS consumer on
+ * Node.js 22.12 and later loads the ES entry, with the export names it has through `import()`.
+ * Node.js refuses to `require()` a module graph with a top-level `await`
+ * (`ERR_REQUIRE_ASYNC_MODULE`), so one such `await` anywhere under the entry would break every
+ * CommonJS consumer. The entry is required in a child process of the Node.js running this check
+ * (the CI runs the build on every supported line), so the module cache of the check plays no part.
+ */
+export async function checkRequireEsm(dist) {
+  const entry = resolve(dist, 'index.mjs');
+  if (!existsSync(entry)) return ['index.mjs is missing'];
+  const child = spawnSync(
+    process.execPath,
+    ['--input-type=commonjs', '-e', requireProbeSource(entry)],
+    { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
+  );
+  if (child.error) throw child.error;
+  let result;
+  try {
+    result = JSON.parse((child.stdout ?? '').trim().split('\n').pop() ?? '');
+  } catch {
+    const output = `${child.stderr}${child.stdout}`.trim().split('\n');
+    throw new Error(`the require() probe exited with ${child.status}: ${output[0] ?? ''}`);
+  }
+  if (result.error !== undefined) {
+    return [
+      'index.mjs does not load through require(), so CommonJS consumers (Node.js 22.12 and ' +
+        `later) cannot use the package: ${result.error}`,
+    ];
+  }
+  const imported = exportNames(await import(pathToFileURL(entry).href));
+  const required = result.names.filter((name) => name !== 'default' && name !== '__esModule');
+  const errors = [];
+  const onlyImported = imported.filter((name) => !required.includes(name));
+  const onlyRequired = required.filter((name) => !imported.includes(name));
+  if (onlyImported.length > 0) {
+    errors.push(`require() of index.mjs lacks ${onlyImported.join(', ')}, which import() exports`);
+  }
+  if (onlyRequired.length > 0) {
+    errors.push(
+      `require() of index.mjs has ${onlyRequired.join(', ')}, which import() does not export`,
+    );
+  }
+  return errors;
+}
+
 /** `"use client"` on every component/hook module and on nothing else (repo-level#2). */
 export function checkDirectives(dist) {
   const errors = [];
@@ -1630,8 +1569,8 @@ export function checkDirectives(dist) {
 const COMPONENT_NAME = /^[A-Z](?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]*$/;
 
 /**
- * Public names that `dist/index.d.ts` and `dist/index.d.cts` must declare and export: a utility,
- * a component, a props type, a compound, a hook and a class-name constant. The build passes with
+ * Public names that `dist/index.d.ts` must declare and export: a utility, a component, a props
+ * type, a compound, a hook and a class-name constant. The build passes with
  * an empty roll-up: vite-plugin-dts 4 rolls up only `export { }` when TypeScript writes the
  * declarations somewhere else than it expects (TypeScript 6 without `rootDir` in tsconfig.json).
  * Without this list, only `npm run test:pack`, which type-checks the packed tarball, would notice.
@@ -1771,9 +1710,9 @@ export function missingValueAndTypeDeclarations(dts, names) {
 }
 
 /**
- * `index.d.ts` and its `index.d.cts` copy for the `require` condition (repo-level#5); each
- * declares and exports `requiredDeclarations` (default {@link REQUIRED_DECLARATIONS}), so an empty
- * or partial roll-up fails, and exports each of `valueAndTypeDeclarations` (default {@link
+ * `index.d.ts`, the rolled-up declarations (repo-level#5), declares and exports
+ * `requiredDeclarations` (default {@link REQUIRED_DECLARATIONS}), so an empty or partial roll-up
+ * fails, and exports each of `valueAndTypeDeclarations` (default {@link
  * VALUE_AND_TYPE_DECLARATIONS}) both as a type and as a value; every component the declarations
  * export has a JSDoc (C-DOCS).
  */
@@ -1785,39 +1724,27 @@ export function checkDeclarations(
   } = {},
 ) {
   const errors = [];
-  const dts = join(dist, 'index.d.ts');
-  const dcts = join(dist, 'index.d.cts');
-  const esm = existsSync(dts) ? readFileSync(dts, 'utf8') : undefined;
-  const cjs = existsSync(dcts) ? readFileSync(dcts, 'utf8') : undefined;
-  if (esm === undefined) errors.push('index.d.ts is missing');
-  else if (esm.trim() === '') errors.push('index.d.ts is empty');
-  if (cjs === undefined) {
-    errors.push('index.d.cts is missing (CommonJS consumers would get ESM-typed declarations)');
-  } else if (esm !== undefined && cjs !== esm) {
-    errors.push('index.d.cts differs from index.d.ts (it must be a copy of the rolled-up file)');
-  }
-  for (const [name, text] of [
-    ['index.d.ts', esm],
-    ['index.d.cts', cjs],
-  ]) {
-    // Reported above: a missing file, an empty index.d.ts, an index.d.cts that is not its copy.
-    if (text === undefined || text.trim() === '') continue;
-    const missing = missingDeclarations(text, requiredDeclarations);
+  const file = join(dist, 'index.d.ts');
+  const dts = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+  if (dts === undefined) errors.push('index.d.ts is missing');
+  else if (dts.trim() === '') errors.push('index.d.ts is empty');
+  else {
+    const missing = missingDeclarations(dts, requiredDeclarations);
     if (missing.length > 0) {
       errors.push(
-        `${name} does not declare and export ${missing.join(', ')} (an empty or partial ` +
+        `index.d.ts does not declare and export ${missing.join(', ')} (an empty or partial ` +
           "roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
       );
-      continue;
-    }
-    for (const both of missingValueAndTypeDeclarations(text, valueAndTypeDeclarations)) {
-      errors.push(
-        `${name} does not export ${both} both as a type and as a value (the interface and the ` +
-          'component of one name: export the name once, without `type`, from the barrel)',
-      );
+    } else {
+      for (const both of missingValueAndTypeDeclarations(dts, valueAndTypeDeclarations)) {
+        errors.push(
+          `index.d.ts does not export ${both} both as a type and as a value (the interface and ` +
+            'the component of one name: export the name once, without `type`, from the barrel)',
+        );
+      }
     }
   }
-  for (const name of esm ? undocumentedComponents(esm) : []) {
+  for (const name of dts ? undocumentedComponents(dts) : []) {
     errors.push(
       `index.d.ts: the exported component ${name} has no JSDoc (document it on its export, C-DOCS)`,
     );
@@ -1826,23 +1753,21 @@ export function checkDeclarations(
 }
 
 /**
- * `dist/lib/dev.mjs` and `dist/lib/dev.cjs` keep the literal `process.env.NODE_ENV` expression:
- * the consumer's bundler replaces it, so development warnings follow the consumer's
- * build mode. A `define` in vite.config.ts would inline the library's own mode instead.
+ * `dist/lib/dev.mjs` keeps the literal `process.env.NODE_ENV` expression: the consumer's bundler
+ * replaces it, so development warnings follow the consumer's build mode. A `define` in
+ * vite.config.ts would inline the library's own mode instead.
  */
 export function checkDevEnvironment(dist) {
-  const errors = [];
-  for (const path of ['lib/dev.mjs', 'lib/dev.cjs']) {
-    const file = join(dist, path);
-    if (!existsSync(file)) errors.push(`${path} is missing`);
-    else if (!readFileSync(file, 'utf8').includes('process.env.NODE_ENV')) {
-      errors.push(
-        `${path} does not read process.env.NODE_ENV: the build inlined the mode (a \`define\` in ` +
-          "vite.config.ts?), so the consumer's bundler can no longer choose development or production",
-      );
-    }
+  const path = 'lib/dev.mjs';
+  const file = join(dist, path);
+  if (!existsSync(file)) return [`${path} is missing`];
+  if (!readFileSync(file, 'utf8').includes('process.env.NODE_ENV')) {
+    return [
+      `${path} does not read process.env.NODE_ENV: the build inlined the mode (a \`define\` in ` +
+        "vite.config.ts?), so the consumer's bundler can no longer choose development or production",
+    ];
   }
-  return errors;
+  return [];
 }
 
 /**
@@ -1895,7 +1820,7 @@ export function checkImports(dist, pkg) {
  */
 export function checkDevOnlyLibraries(dist, names = DEV_ONLY_LIBRARIES) {
   const errors = [];
-  for (const path of listFiles(dist).filter((file) => /\.([cm]?js|css|d\.[cm]?ts)$/.test(file))) {
+  for (const path of listFiles(dist).filter((file) => /\.(mjs|css|d\.ts)$/.test(file))) {
     const text = readFileSync(join(dist, path), 'utf8');
     for (const name of names) {
       if (text.includes(name)) {
@@ -1995,21 +1920,16 @@ export function removeWorkDir({ work, created }) {
   }
 }
 
-/** Whether a built file is CommonJS (`.cjs`, or `.js` in a package without `type: module`). */
-function isCommonJs(path, packageType) {
-  return path.endsWith('.cjs') || (path.endsWith('.js') && packageType !== 'module');
-}
-
 /**
- * The source of a module standing in for a `"use client"` module on the server, as an RSC
+ * The source of an ES module standing in for a `"use client"` module on the server, as an RSC
  * bundler substitutes it: every export (`names`) is a client reference — a function that throws
  * when called and whose other properties can be neither read ("Cannot access Card.Header on the
  * server") nor assigned, like React's own client references — so evaluating the server module
  * graph never runs client code. As in React, reading `then` throws too ("Cannot await or return
  * from a thenable"), so server code that awaits a client reference or passes it to
- * `Promise.resolve` fails here as it does in an RSC bundler. `format` is `esm` or `cjs`.
+ * `Promise.resolve` fails here as it does in an RSC bundler.
  */
-export function clientReferenceStub(path, names, format) {
+export function clientReferenceStub(path, names) {
   const helper = `const clientReference = (name) => {
   const target = function () {
     throw new Error('Attempted to call ' + name + '() from the server: it is exported by the "use client" module ' + ${JSON.stringify(path)});
@@ -2046,20 +1966,6 @@ export function clientReferenceStub(path, names, format) {
   });
 };
 `;
-  if (format === 'cjs') {
-    const assignments = names
-      .filter((name) => name !== '__esModule')
-      .map(
-        (name) => `exports[${JSON.stringify(name)}] = clientReference(${JSON.stringify(name)});`,
-      );
-    return [
-      "'use strict';",
-      helper,
-      "Object.defineProperty(exports, '__esModule', { value: true });",
-      ...assignments,
-      '',
-    ].join('\n');
-  }
   const declarations = names.map(
     (name, index) => `const reference${index} = clientReference(${JSON.stringify(name)});`,
   );
@@ -2073,27 +1979,30 @@ export function clientReferenceStub(path, names, format) {
 }
 
 /**
- * The script run under `node --conditions=react-server` that loads each of `files` (paths
+ * The ES module run under `node --conditions=react-server` that imports each of `files` (paths
  * relative to `dir`) and prints `{ [path]: { phase, message } }` for the failures: `load` when
- * the module does not evaluate, `check` when it loads but `lib/cn.*` does not work, `index.*`
- * does not export the server-side `cn` and a plain `buttonClassNames`, or `lib/classNames.*`
- * exports anything but objects of strings.
+ * the module does not evaluate, `check` when it loads but `lib/cn.mjs` does not work (joining
+ * classes, and the prefix parse: `cn('wave:p-2', 'p-4')` is `p-4`),
+ * `index.mjs` does not export the server-side `cn` and a plain `buttonClassNames`, or
+ * `lib/classNames.mjs` exports anything but objects of strings.
  */
-function serverProbeSource(dir, files, format) {
-  const load =
-    format === 'cjs'
-      ? `const load = async (path) => require(require('node:path').join(${JSON.stringify(dir)}, path));`
-      : `const base = ${JSON.stringify(pathToFileURL(`${dir}/`).href)};\n` +
-        'const load = (path) => import(new URL(path, base).href);';
-  return `${load}
+function serverProbeSource(dir, files) {
+  return `const base = ${JSON.stringify(pathToFileURL(`${dir}/`).href)};
+const load = (path) => import(new URL(path, base).href);
 const files = ${JSON.stringify(files)};
 const check = (path, m) => {
-  if (/^lib\\/cn\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/cn\\.mjs$/.test(path)) {
     if (typeof m.cn !== 'function') throw new Error('cn is not exported');
     const out = m.cn('a', false, 'b');
     if (out !== 'a b') throw new Error("cn('a', false, 'b') returned " + JSON.stringify(out));
+    // The prefix parse (1.0): a class and its wave: twin are one utility, so an app's p-4
+    // replaces the library's wave:p-2.
+    const merged = m.cn('wave:p-2', 'p-4');
+    if (merged !== 'p-4') {
+      throw new Error("cn('wave:p-2', 'p-4') returned " + JSON.stringify(merged) + ", not 'p-4'");
+    }
   }
-  if (/^lib\\/classNames\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/classNames\\.mjs$/.test(path)) {
     const names = Object.keys(m).filter((name) => name !== 'default' && name !== '__esModule');
     if (names.length === 0) throw new Error('exports no class-name constant');
     for (const name of names) {
@@ -2107,7 +2016,7 @@ const check = (path, m) => {
       }
     }
   }
-  if (/^index\\.[cm]?js$/.test(path)) {
+  if (/^index\\.mjs$/.test(path)) {
     if (typeof m.cn !== 'function') throw new Error('cn is not exported');
     if (m.cn.$$typeof === Symbol.for('react.client.reference')) {
       throw new Error('cn is a client reference (re-exported from a "use client" module)');
@@ -2122,7 +2031,7 @@ const check = (path, m) => {
       throw new Error('buttonClassNames.root is ' + JSON.stringify(constants.root) + ", not 'wave-button'");
     }
   }
-  if (/^lib\\/color\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/color\\.mjs$/.test(path)) {
     if (typeof m.hsvToHex !== 'function' || typeof m.hexToHsv !== 'function') {
       throw new Error('hsvToHex and hexToHsv are not both exported');
     }
@@ -2135,7 +2044,7 @@ const check = (path, m) => {
       throw new Error("hexToHsv('#ff0000') returned " + JSON.stringify(hsv));
     }
   }
-  if (/^lib\\/toaster\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/toaster\\.mjs$/.test(path)) {
     if (typeof m.createToaster !== 'function') throw new Error('createToaster is not exported');
     const handle = m.createToaster();
     for (const key of ['dispatchToast', 'dismissToast', 'dismissAllToasts']) {
@@ -2158,7 +2067,7 @@ const check = (path, m) => {
       throw new Error('a dispatch on the server added a global (it must do nothing)');
     }
   }
-  if (/^lib\\/date\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/date\\.mjs$/.test(path)) {
     const day = new Date(2024, 0, 31);
     const next = typeof m.addDays === 'function' ? m.addDays(day, 1) : undefined;
     if (!(next instanceof Date) || next.getMonth() !== 1 || next.getDate() !== 1) {
@@ -2166,7 +2075,7 @@ const check = (path, m) => {
     }
     if (day.getDate() !== 31) throw new Error('addDays changed its argument');
   }
-  if (/^lib\\/tokens\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/tokens\\.mjs$/.test(path)) {
     const style =
       typeof m.getTokenStyle === 'function'
         ? m.getTokenStyle({ brand80: '#c43e00', zOverlay: 2000 })
@@ -2178,7 +2087,7 @@ const check = (path, m) => {
       throw new Error('getTokenStyle(null) returned ' + JSON.stringify(m.getTokenStyle(null)) + ', not undefined');
     }
   }
-  if (/^lib\\/waveTokens\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/waveTokens\\.mjs$/.test(path)) {
     const tokens = m.waveTokens;
     if (typeof tokens !== 'object' || tokens === null || !Array.isArray(m.chartPalette)) {
       throw new Error('waveTokens and chartPalette are not both exported');
@@ -2191,7 +2100,7 @@ const check = (path, m) => {
       );
     }
   }
-  if (/^lib\\/brand\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/brand\\.mjs$/.test(path)) {
     if (typeof m.createBrandTokens !== 'function') throw new Error('createBrandTokens is not exported');
     // The default seed gives the default ramp: its 16 stops, stop 80 the seed itself.
     const brand = m.createBrandTokens('#0f6cbd');
@@ -2204,7 +2113,7 @@ const check = (path, m) => {
       );
     }
   }
-  if (/^lib\\/slotProps\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/slotProps\\.mjs$/.test(path)) {
     if (typeof m.mergeSlotProps !== 'function') throw new Error('mergeSlotProps is not exported');
     // The part's attributes, the locked ones over them, and the component's class (without a
     // class of the part it calls no cn, so a broken lib/cn is reported alone).
@@ -2219,7 +2128,7 @@ const check = (path, m) => {
       );
     }
   }
-  if (/^lib\\/nativeProps\\.[cm]?js$/.test(path)) {
+  if (/^lib\\/nativeProps\\.mjs$/.test(path)) {
     if (typeof m.getNativeElementProps !== 'function') {
       throw new Error('getNativeElementProps is not exported');
     }
@@ -2238,7 +2147,7 @@ const check = (path, m) => {
       );
     }
   }
-  if (/^index\\.[cm]?js$/.test(path)) {
+  if (/^index\\.mjs$/.test(path)) {
     for (const name of ['hsvToHex', 'hexToHsv', 'createToaster', 'addDays', 'getTokenStyle', 'createBrandTokens', 'mergeSlotProps', 'getNativeElementProps']) {
       if (typeof m[name] !== 'function') throw new Error(name + ' is not exported');
       if (m[name].$$typeof === Symbol.for('react.client.reference')) {
@@ -2309,26 +2218,21 @@ function relativeImports(dist, path) {
 /**
  * The package loads in a React Server Component (repo-level#2). An RSC bundler replaces every
  * `"use client"` module with client references and evaluates the rest on the server — the
- * `index.*` entries, `dist/lib/**` and the bundler runtime. This check does the same with a copy
- * of `dist` (export names of the client modules read by loading them normally, the copy placed
- * next to `dist` so dependencies resolve alike) and loads every other module, both formats, under
+ * `index.mjs` entries, `dist/lib/**` and the bundler runtime. This check does the same with a copy
+ * of `dist` (export names of the client modules read by importing them normally, the copy placed
+ * next to `dist` so dependencies resolve alike) and imports every other module under
  * `node --conditions=react-server`. Reported: a module that does not evaluate (a client-only
  * React API at module scope, dotting into a client reference) — only the root cause, not the
- * modules that fail because they import it; a `lib/cn.*` that does not work; an `index.*` whose
- * `cn` is missing or a client reference, or whose `buttonClassNames` is no plain object with the
- * root `wave-button`; a `lib/classNames.*` export that is not an object of strings.
+ * modules that fail because they import it; a `lib/cn.mjs` that does not work; an `index.mjs`
+ * whose `cn` is missing or a client reference, or whose `buttonClassNames` is no plain object with
+ * the root `wave-button`; a `lib/classNames.mjs` export that is not an object of strings.
  */
 export async function checkServerImport(dist) {
   const errors = [];
   const distRoot = resolve(dist);
-  for (const path of ['lib/cn.mjs', 'lib/cn.cjs']) {
+  for (const path of ['lib/cn.mjs', ...SERVER_SAFE_MODULES]) {
     if (!existsSync(join(distRoot, path))) errors.push(`${path} is missing`);
   }
-  for (const path of SERVER_SAFE_MODULES) {
-    if (!existsSync(join(distRoot, path))) errors.push(`${path} is missing`);
-  }
-  const manifest = join(distRoot, '..', 'package.json');
-  const packageType = existsSync(manifest) ? readJson(manifest).type : undefined;
   const files = listFiles(distRoot).filter(
     (path) => JS_FILE.test(path) && !path.split('/').includes('node_modules'),
   );
@@ -2344,13 +2248,9 @@ export async function checkServerImport(dist) {
   const stubs = new Map();
   const unloadable = new Set();
   for (const path of clientFiles) {
-    const file = join(distRoot, path);
-    const format = isCommonJs(path, packageType) ? 'cjs' : 'esm';
     try {
-      const names = Object.keys(
-        format === 'cjs' ? require(file) : await import(pathToFileURL(file).href),
-      );
-      stubs.set(path, clientReferenceStub(path, names, format));
+      const names = Object.keys(await import(pathToFileURL(join(distRoot, path)).href));
+      stubs.set(path, clientReferenceStub(path, names));
     } catch {
       unloadable.add(path);
     }
@@ -2366,21 +2266,16 @@ export async function checkServerImport(dist) {
   try {
     const copy = join(work, 'dist');
     cpSync(distRoot, copy, { recursive: true, filter: (source) => !source.endsWith('.map') });
-    writeFileSync(join(work, 'package.json'), JSON.stringify({ type: packageType ?? 'commonjs' }));
     for (const [path, source] of stubs) writeFileSync(join(copy, path), source);
 
     const serverFiles = files.filter((path) => !clientFiles.has(path));
-    for (const format of ['esm', 'cjs']) {
-      const selected = serverFiles.filter(
-        (path) => isCommonJs(path, packageType) === (format === 'cjs'),
-      );
-      if (selected.length === 0) continue;
-      const probe = join(work, format === 'cjs' ? 'probe.cjs' : 'probe.mjs');
-      writeFileSync(probe, serverProbeSource(toPosix(copy), selected, format));
+    if (serverFiles.length > 0) {
+      const probe = join(work, 'probe.mjs');
+      writeFileSync(probe, serverProbeSource(toPosix(copy), serverFiles));
       try {
         Object.assign(failures, runServerProbe(probe));
       } catch (error) {
-        errors.push(`react-server check (${format}) failed: ${error.message}`);
+        errors.push(`react-server check failed: ${error.message}`);
       }
     }
   } finally {
@@ -2490,8 +2385,8 @@ export function checkFlatExports(
 
 /**
  * The names of `names` (default {@link MODULE_ONLY_NAMES}) that the package exports although
- * they are module-only: a value of the module namespace `mod` (`dist/index.mjs`; `index.cjs`
- * exports the same names, {@link checkCjsParity}), or a value or a type that the rolled-up
+ * they are module-only: a value of the module namespace `mod` (`dist/index.mjs`; `require()`
+ * gives the same names, {@link checkRequireEsm}), or a value or a type that the rolled-up
  * declarations `dts` (`dist/index.d.ts`, when given) export.
  */
 export function checkModuleOnlyNames(mod, dts, names = MODULE_ONLY_NAMES) {
@@ -2512,52 +2407,30 @@ export function checkModuleOnlyNames(mod, dts, names = MODULE_ONLY_NAMES) {
   return errors;
 }
 
-/** The export names of a namespace or CommonJS exports object. */
-function exportNames(mod) {
-  return Object.keys(mod).filter((name) => name !== 'default' && name !== '__esModule');
-}
-
-/** `dist/index.cjs` exports exactly the names of `dist/index.mjs`. */
-export async function checkCjsParity(dist) {
-  const esm = exportNames(await import(pathToFileURL(resolve(dist, 'index.mjs')).href));
-  const cjs = exportNames(require(resolve(dist, 'index.cjs')));
-  const errors = [];
-  const onlyEsm = esm.filter((name) => !cjs.includes(name));
-  const onlyCjs = cjs.filter((name) => !esm.includes(name));
-  if (onlyEsm.length > 0) errors.push(`index.cjs lacks ${onlyEsm.sort().join(', ')}`);
-  if (onlyCjs.length > 0) errors.push(`index.mjs lacks ${onlyCjs.sort().join(', ')}`);
-  return errors;
-}
-
 /**
- * The stable class-name registry (`dist/lib/classNames.*`, spec P3-00) is public API: every
- * constant it exports is exported by the entry of the same format (`dist/index.mjs`,
- * `dist/index.cjs`) with the same value. {@link checkFlatExports} walks only capitalised
- * components, so without this check a constant missing from the entry would pass.
+ * The stable class-name registry (`dist/lib/classNames.mjs`, spec P3-00) is public API: every
+ * constant it exports is exported by the entry (`dist/index.mjs`) with the same value.
+ * {@link checkFlatExports} walks only capitalised components, so without this check a constant
+ * missing from the entry would pass.
  */
 export async function checkClassNameExports(dist) {
-  const errors = [];
   const distRoot = resolve(dist);
-  const load = (file) => (file.endsWith('.cjs') ? require(file) : import(pathToFileURL(file).href));
-  for (const [registryPath, entryPath] of [
-    ['lib/classNames.mjs', 'index.mjs'],
-    ['lib/classNames.cjs', 'index.cjs'],
-  ]) {
-    const registryFile = join(distRoot, registryPath);
-    if (!existsSync(registryFile)) {
-      errors.push(`${registryPath} is missing (the class-name registry, src/lib/classNames.ts)`);
-      continue;
-    }
-    const registry = await load(registryFile);
-    const entry = await load(join(distRoot, entryPath));
-    for (const name of exportNames(registry)) {
-      if (!Object.hasOwn(entry, name)) {
-        errors.push(
-          `${entryPath} does not export ${name} (a class-name constant of ${registryPath})`,
-        );
-      } else if (!isDeepStrictEqual(entry[name], registry[name])) {
-        errors.push(`${entryPath} exports ${name} with another value than ${registryPath}`);
-      }
+  const registryPath = 'lib/classNames.mjs';
+  const entryPath = 'index.mjs';
+  const registryFile = join(distRoot, registryPath);
+  if (!existsSync(registryFile)) {
+    return [`${registryPath} is missing (the class-name registry, src/lib/classNames.ts)`];
+  }
+  const registry = await import(pathToFileURL(registryFile).href);
+  const entry = await import(pathToFileURL(join(distRoot, entryPath)).href);
+  const errors = [];
+  for (const name of exportNames(registry)) {
+    if (!Object.hasOwn(entry, name)) {
+      errors.push(
+        `${entryPath} does not export ${name} (a class-name constant of ${registryPath})`,
+      );
+    } else if (!isDeepStrictEqual(entry[name], registry[name])) {
+      errors.push(`${entryPath} exports ${name} with another value than ${registryPath}`);
     }
   }
   return errors;
@@ -2679,8 +2552,8 @@ async function minifiedCode(distRoot, keep) {
  * error for the same reason. `dropSubstrings` are fragments that no code of the bundle may contain
  * outside comments (`[presence=`: no string of a Button-only bundle may hold a presence variant),
  * checked on a second, minified bundle of the same entry, which drops comments and keeps string
- * contents. Since the motion resolver's own literal holds `[presence=`, a bundle that reaches
- * `lib/motion` always contains it: the positive control of the recipes is
+ * contents. Every recipe of `lib/motion` keyed on a phase holds `[presence=`, so the fragment
+ * alone cannot tell which recipes a bundle keeps: the positive control of the recipes is
  * {@link probeIncludes}'s `strings` (the recipe literals), never the fragment alone. `drop: null`
  * drops no component by name, only `dropModules` and the strings (the 0.17 token probes: a Dialog
  * holds the provider's module for its context, but none of the token modules it does not use).
@@ -2948,9 +2821,9 @@ export async function motionRecipeValues(dist, names) {
  * whole with their quotes, that the bundle must contain; `substrings` are fragments its code
  * (minified, so comments are dropped and string contents kept) must contain: the same matchers as
  * the tree-shaking probe's `dropStrings` and `dropSubstrings`, so a positive control proves they
- * see what they look for (spec D23). The recipes' control lists their literals in `strings`: the
- * motion resolver's own literal holds `[presence=`, so that fragment alone is found in any bundle
- * that reaches `lib/motion`, recipes or not.
+ * see what they look for (spec D23). The recipes' control lists their literals in `strings`: every
+ * recipe keyed on a phase holds `[presence=`, so that fragment alone does not say which recipes a
+ * bundle keeps.
  */
 export async function probeIncludes(dist, { keep, modules, strings = [], substrings = [] }) {
   const distRoot = realpathSync(resolve(dist));
@@ -3091,7 +2964,7 @@ export async function measureImport(dist, names) {
  * Size budget probe: measures an import of `names` ({@link measureImport}). Returns the minified
  * and gzip sizes in bytes, the external ids the closure imports (sorted), an error for each budget
  * exceeded, and an error for each external id not in `allowedExternals` (a dependency outside the
- * measurement, such as tailwind-merge through `cn`, would hide its size).
+ * measurement, such as tailwind-merge through `wcn`, would hide its size).
  */
 export async function probeSizeBudget(dist, budget) {
   const size = await measureImport(dist, budget.names);
@@ -3124,13 +2997,9 @@ function sizeBudgetErrors(
 /**
  * Runs every check on `dist` (its parent directory holds the package.json). Returns the errors,
  * the flat names still pending and the listed components that are no compound yet (see
- * {@link PENDING_FLAT_EXPORTS}), the measured sizes of the presence core (`budget`) and of the
- * window (`virtualBudget`; minified and gzip bytes, `null` when the probe failed), and the
- * measured sizes of {@link RECORDED_IMPORTS}, then of {@link RECORDED_IMPORTS_0_17} and then of
- * {@link RECORDED_IMPORTS_0_18} (`recorded`: each record with the `minified` and `gzip` sizes
- * measured, `baseline` `null` for an import new in 0.17; the errors of a record's `budget` join
- * the others; an import recorded in several lists is measured once); `final` closes the pending
- * bridge. `measure` measures each recorded import ({@link measureImport}; the tests pass a
+ * {@link PENDING_FLAT_EXPORTS}), and the measured sizes of {@link RECORDED_IMPORTS_1_0}
+ * (`recorded`: each record with the `minified` and `gzip` sizes measured; the errors of a
+ * record's `budget` join the others); `final` closes the pending bridge. `measure` measures each recorded import ({@link measureImport}; the tests pass a
  * wrapper that counts the measurements).
  */
 export async function verifyDist(
@@ -3143,11 +3012,11 @@ export async function verifyDist(
       errors: [`${dist} does not exist (run vite build first)`],
       pending: [],
       planned: [],
-      budget: null,
     };
   }
   const pkg = readJson(join(distRoot, '..', 'package.json'));
   const errors = [
+    ...checkNoCommonJs(distRoot),
     ...checkDeclarations(distRoot),
     ...checkDevEnvironment(distRoot),
     ...checkDirectives(distRoot),
@@ -3168,13 +3037,13 @@ export async function verifyDist(
     errors.push(...flat.errors);
     pending = flat.pending;
     planned = flat.planned;
-    errors.push(...(await checkCjsParity(distRoot)));
+    errors.push(...(await checkRequireEsm(distRoot)));
     const dts = join(distRoot, 'index.d.ts');
     errors.push(
       ...checkModuleOnlyNames(mod, existsSync(dts) ? readFileSync(dts, 'utf8') : undefined),
     );
   } catch (error) {
-    errors.push(`index.mjs/index.cjs do not load in Node.js: ${error.message}`);
+    errors.push(`index.mjs does not load in Node.js: ${error.message}`);
   }
   try {
     errors.push(...(await checkClassNameExports(distRoot)));
@@ -3338,7 +3207,7 @@ export async function verifyDist(
   }
   try {
     // D23 (0.15): the positive controls of the Button-only motion probe. Each component's own
-    // recipe literals prove its matchers (the resolver's literal alone holds the presence variant).
+    // recipe literals prove its matchers (any recipe keyed on a phase holds the presence variant).
     for (const { recipes, ...probe } of MOTION_INCLUDE_PROBES) {
       const values = await motionRecipeValues(distRoot, recipes);
       errors.push(...values.errors);
@@ -3347,49 +3216,17 @@ export async function verifyDist(
   } catch (error) {
     errors.push(`motion include probe failed: ${error.message}`);
   }
-  let budget = null;
-  try {
-    const {
-      minified,
-      gzip,
-      errors: budgetErrors,
-    } = await probeSizeBudget(distRoot, PRESENCE_BUDGET);
-    errors.push(...budgetErrors);
-    budget = { minified, gzip };
-  } catch (error) {
-    errors.push(`presence size budget probe failed: ${error.message}`);
-  }
-  let virtualBudget = null;
-  try {
-    const {
-      minified,
-      gzip,
-      errors: budgetErrors,
-    } = await probeSizeBudget(distRoot, VIRTUAL_BUDGET);
-    errors.push(...budgetErrors);
-    virtualBudget = { minified, gzip };
-  } catch (error) {
-    errors.push(`window size budget probe failed: ${error.message}`);
-  }
   const recorded = [];
   try {
-    // Button-only, Tree-only and MessageBar-only are recorded in all three lists: one build each.
-    const sizes = new Map();
-    for (const record of [
-      ...RECORDED_IMPORTS,
-      ...RECORDED_IMPORTS_0_17,
-      ...RECORDED_IMPORTS_0_18,
-    ]) {
-      const label = record.names.join(' + ');
-      if (!sizes.has(label)) sizes.set(label, await measure(distRoot, record.names));
-      const size = sizes.get(label);
-      if (record.budget) errors.push(...sizeBudgetErrors(size, record.budget));
+    for (const record of RECORDED_IMPORTS_1_0) {
+      const size = await measure(distRoot, record.names);
+      errors.push(...sizeBudgetErrors(size, record.budget));
       recorded.push({ ...record, minified: size.minified, gzip: size.gzip });
     }
   } catch (error) {
     errors.push(`recorded size measurement failed: ${error.message}`);
   }
-  return { errors, pending, planned, budget, virtualBudget, recorded };
+  return { errors, pending, planned, recorded };
 }
 
 /**
@@ -3419,36 +3256,18 @@ function parseArgs(argv) {
 /** CLI entry; returns the exit code. `io` receives the report (default: the console). */
 export async function main(argv = process.argv.slice(2), io = console) {
   const { dist, pendingFlatExports, final } = parseArgs(argv);
-  const { errors, pending, planned, budget, virtualBudget, recorded } = await verifyDist(dist, {
+  const { errors, pending, planned, recorded } = await verifyDist(dist, {
     pendingFlatExports,
     final,
   });
   const where = toPosix(relative(process.cwd(), dist) || dist);
-  if (budget) {
-    io.log(
-      `verify-dist: presence core (${PRESENCE_BUDGET.names.join(' + ')}): ` +
-        `${budget.minified} B minified (budget ${PRESENCE_BUDGET.maxMinifiedBytes}), ` +
-        `${budget.gzip} B gzip (budget ${PRESENCE_BUDGET.maxGzipBytes})`,
-    );
-  }
-  if (virtualBudget) {
-    io.log(
-      `verify-dist: window (${VIRTUAL_BUDGET.names.join(' + ')}): ` +
-        `${virtualBudget.minified} B minified (budget ${VIRTUAL_BUDGET.maxMinifiedBytes}), ` +
-        `${virtualBudget.gzip} B gzip (budget ${VIRTUAL_BUDGET.maxGzipBytes})`,
-    );
-  }
   for (const { names, minified, gzip, baseline, budget: importBudget } of recorded ?? []) {
-    const limit = (max) => (importBudget ? ` (budget ${max})` : '');
-    // An import new in 0.17 has no baseline to compare with.
-    const against = baseline
-      ? ` (${baseline.version}: ${baseline.minified} B, ${baseline.gzip} B; ` +
-        `${percentChange(minified, baseline.minified)}, ${percentChange(gzip, baseline.gzip)})`
-      : '';
     io.log(
       `verify-dist: ${names.join(' + ')}-only import: ` +
-        `${minified} B minified${limit(importBudget?.maxMinifiedBytes)}, ` +
-        `${gzip} B gzip${limit(importBudget?.maxGzipBytes)}${against}`,
+        `${minified} B minified (budget ${importBudget.maxMinifiedBytes}), ` +
+        `${gzip} B gzip (budget ${importBudget.maxGzipBytes}) ` +
+        `(${baseline.version}: ${baseline.minified} B, ${baseline.gzip} B; ` +
+        `${percentChange(minified, baseline.minified)}, ${percentChange(gzip, baseline.gzip)})`,
     );
   }
   if (errors.length > 0) {

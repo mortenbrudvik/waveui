@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import { cn } from '../lib/cn';
+import { wcn } from '../lib/cn';
 import { collapseMotion, collapseStructure } from '../lib/motion';
 import type { MotionSlot } from '../lib/types';
 import { useMotionClasses } from './useMotion';
@@ -66,7 +66,7 @@ export interface UseCollapsePresenceResult {
  *   getTrigger: () => triggerRef.current,
  * });
  * return isMounted ? (
- *   <div ref={wrapperRef} {...presenceProps} className={cn(stableCollapseClass, className)}>
+ *   <div ref={wrapperRef} {...presenceProps} className={wcn(stableCollapseClass, className)}>
  *     <div ref={partRef} role="region">…</div>
  *   </div>
  * ) : null;
@@ -87,6 +87,6 @@ export function useCollapsePresence(
     phase,
     wrapperRef: ref,
     presenceProps,
-    className: cn(collapseStructure, motionClassName),
+    className: wcn(collapseStructure, motionClassName),
   };
 }

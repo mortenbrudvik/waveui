@@ -1,10 +1,14 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { inputClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp } from '../../lib/dev';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart, type SlotPartWithRef } from '../../lib/slotProps';
+import {
+  mergeSlotProps,
+  ROVING_PART_LOCKS,
+  type SlotPart,
+  type SlotPartWithRef,
+} from '../../lib/slotProps';
 import {
   inputAppearanceClasses,
   inputFocus,
@@ -19,7 +23,7 @@ import type { CoreSize, InputAppearance, Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
-import { legacyNativeSize, useInputLook } from './inputLook';
+import { useInputLook } from './inputLook';
 
 /**
  * Props of the error message element that {@link Input}, `Select` and `Textarea` render after the
@@ -88,7 +92,11 @@ export function useControlErrorMessage(
       role="alert"
       {...messageRest}
       id={messageId}
-      className={cn(partClassName, 'mt-1 block text-caption-1 text-error', messageClassName)}
+      className={wcn(
+        partClassName,
+        'wave:mt-1 wave:block wave:text-caption-1 wave:text-error',
+        messageClassName,
+      )}
     >
       {error}
     </span>
@@ -119,9 +127,9 @@ const BLOCK_CLICK = ['onClick'] as const;
 
 /** Padding of the slot spans and the inner input of the slot wrapper, per size. */
 const SLOT_PADDING: Readonly<Record<CoreSize, { before: string; after: string; input: string }>> = {
-  small: { before: 'ps-1.5', after: 'pe-1.5', input: 'px-1.5' },
-  medium: { before: 'ps-2', after: 'pe-2', input: 'px-2' },
-  large: { before: 'ps-3', after: 'pe-3', input: 'px-3' },
+  small: { before: 'wave:ps-1.5', after: 'wave:pe-1.5', input: 'wave:px-1.5' },
+  medium: { before: 'wave:ps-2', after: 'wave:pe-2', input: 'wave:px-2' },
+  large: { before: 'wave:ps-3', after: 'wave:pe-3', input: 'wave:px-3' },
 };
 
 /** Properties for the Input component. */
@@ -145,14 +153,11 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   errorMessageProps?: InputErrorMessageProps;
   /**
    * Size of the field: `small` (24px tall), `medium` (32px) or `large` (40px). Default: the
-   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`.
-   *
-   * A number is the native `size` attribute (the visible width in characters), as in 0.8: it
-   * still renders, warns once in development and is removed in 1.0. Use `htmlSize` for it.
-   * A string of digits only (`size="20"` from untyped code) counts as that number. Any other value
-   * outside the three sizes renders as if `size` were not set.
+   * surrounding Field's `size`, else `WaveProvider inputDefaults.size`, else `'medium'`. A value
+   * outside the three sizes (a number from untyped code included) renders as if `size` were not
+   * set. The native `size` attribute, the visible width in characters, is `htmlSize`.
    */
-  size?: CoreSize | number;
+  size?: CoreSize;
   /** The native `size` attribute: the visible width of the field in characters. */
   htmlSize?: number;
   /**
@@ -198,7 +203,11 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
      * applies after it. Locked in both shapes: `hidden`, the Input's own. On the `<span>`, also
      * `data-size` and `data-appearance`, and `inert` and `aria-hidden` unset (the input inside
      * stays reachable), and your `onClick` is not called while the Input is `disabled`, as a
-     * disabled `<input>` calls none; on the `<input>`, the locked attributes of `input`.
+     * disabled `<input>` calls none; on the `<input>`, the locked attributes of `input`. In both
+     * shapes this part sets no `role`, `tabIndex` and the roving markers (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`): in a toolbar or another roving
+     * container the root is never a control of its own and never hides the input from the arrow
+     * order.
      */
     root?: SlotPartWithRef<'span', HTMLElement>;
     /**
@@ -279,18 +288,7 @@ export const Input = ({
     { nativeRequired: true },
   );
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
-  const numericSize = legacyNativeSize(sizeProp);
-  const nativeSize = resolveDeprecatedProp(
-    'Input',
-    htmlSize,
-    numericSize,
-    'size={number}',
-    'htmlSize',
-  );
-  const { size, appearance } = useInputLook(
-    numericSize === undefined && typeof sizeProp !== 'number' ? sizeProp : undefined,
-    appearanceProp,
-  );
+  const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
   const handleChange =
     onChange || onValueChange
@@ -319,7 +317,7 @@ export const Input = ({
     inert: props.inert,
     disabled: props.disabled,
     readOnly: props.readOnly,
-    size: nativeSize,
+    size: htmlSize,
   };
   const look = { 'data-size': size, 'data-appearance': appearance };
 
@@ -341,23 +339,26 @@ export const Input = ({
     // hide it; `ref`, `id`, `aria-*`, `data-*`, handlers and native attributes go to the input.
     const { hidden, ...inputProps } = controlPropsWithoutStyle;
     const rootProps = mergeSlotProps(slotProps?.root, {
-      className: cn(
+      className: wcn(
         inputClassNames.root,
-        'inline-flex w-full items-center',
+        'wave:inline-flex wave:w-full wave:items-center',
         inputHeightClasses[size],
         inputTextClasses[size],
         inputAppearanceClasses[appearance],
-        'text-foreground',
+        'wave:text-foreground',
         inputFocusWithin,
         invalidLook && inputInvalidWithin,
         // The dimmed look lifts while a focus ring shows inside the wrapper (focusable slot
         // content; the disabled input never takes focus): opacity would dim the ring below 3:1.
-        props.disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
+        props.disabled &&
+          'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
         className,
       ),
       style,
-      // The wrapper holds the input: a part neither hides it nor takes it out of reach.
-      locked: { hidden, inert: undefined, 'aria-hidden': undefined, ...look },
+      // The wrapper holds the input: a part neither hides it nor takes it out of reach, nor (in a
+      // toolbar or another roving container) makes it a composite that hides the input, an item
+      // or a second tab stop.
+      locked: { hidden, inert: undefined, 'aria-hidden': undefined, ...ROVING_PART_LOCKS, ...look },
       // A disabled Input activates nothing: no click handler of the wrapper either.
       blockHandlers: props.disabled ? BLOCK_CLICK : undefined,
     });
@@ -367,19 +368,19 @@ export const Input = ({
           renderSlot(
             contentBefore,
             'span',
-            cn(inputClassNames.contentBefore, 'shrink-0', SLOT_PADDING[size].before),
+            wcn(inputClassNames.contentBefore, 'wave:shrink-0', SLOT_PADDING[size].before),
           )}
         <input
           {...mergeSlotProps(slotProps?.input, {
-            className: cn(
+            className: wcn(
               inputClassNames.input,
-              'h-full w-full min-w-0 bg-transparent',
+              'wave:h-full wave:w-full wave:min-w-0 wave:bg-transparent',
               SLOT_PADDING[size].input,
               inputTextClasses[size],
-              'text-foreground',
-              'placeholder:text-muted-foreground',
-              'focus:outline-hidden',
-              'disabled:cursor-not-allowed',
+              'wave:text-foreground',
+              'wave:placeholder:text-muted-foreground',
+              'wave:focus:outline-hidden',
+              'wave:disabled:cursor-not-allowed',
             ),
             // The wrapper takes the Input's `hidden`; the input inside never is.
             locked: { ...inputProps, ...inputWiring, hidden: undefined },
@@ -390,26 +391,31 @@ export const Input = ({
           renderSlot(
             contentAfter,
             'span',
-            cn(inputClassNames.contentAfter, 'shrink-0', SLOT_PADDING[size].after),
+            wcn(inputClassNames.contentAfter, 'wave:shrink-0', SLOT_PADDING[size].after),
           )}
       </span>
     );
   } else {
-    // One element: the root part, then the input part, which wins a prop both set.
+    // One element: the root part, then the input part, which wins a prop both set. The root part
+    // sets no role, tab stop or roving marker here either, as on the wrapper with content slots.
+    const rootPart: NonNullable<InputProps['slotProps']>['root'] = slotProps?.root && {
+      ...slotProps.root,
+      ...ROVING_PART_LOCKS,
+    };
     control = (
       <input
-        {...mergeSlotProps([slotProps?.root, slotProps?.input], {
-          className: cn(
+        {...mergeSlotProps([rootPart, slotProps?.input], {
+          className: wcn(
             inputClassNames.root,
             inputClassNames.input,
             inputHeightClasses[size],
-            'w-full',
+            'wave:w-full',
             inputPaddingClasses[size],
             inputTextClasses[size],
             inputAppearanceClasses[appearance],
-            'text-foreground placeholder:text-muted-foreground',
+            'wave:text-foreground wave:placeholder:text-muted-foreground',
             inputFocus,
-            'disabled:cursor-not-allowed disabled:opacity-50',
+            'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
             invalidLook && inputInvalid,
             className,
           ),

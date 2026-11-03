@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { colorSliderClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getDirection } from '../../lib/direction';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import type { ColorPickerShape, HsvColor, Orientation } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -106,20 +106,38 @@ export interface ColorSliderProps extends Omit<
    * `aria-required` does the same: a slider supports neither, so neither is set on it.
    */
   required?: boolean;
-  /** Ref to the `<input type="range">`. */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the root element. */
-  ref?: React.Ref<HTMLDivElement>;
   /**
-   * Props for the elements the slider draws inside its root, by part, merged into each part's
-   * own (Fluent UI's `rail` and `thumb` slot props): your classes after the part's (yours win a
+   * Ref to the `<input type="range">`, the slider (Fluent UI's `ref`, on its primary element).
+   * The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the slider draws, by part, merged into each part's own (Fluent UI's
+   * `root`, `rail` and `thumb` slot props): your classes after the part's (yours win a
    * conflict), your styles over its styles, your handlers and attributes added, your ref
    * attached. Every attribute the slider sets on a part is locked. A part takes no `children`.
-   * Both parts are drawn only: the slider itself is the invisible range input over them, which
-   * takes the pointer and the keys and is reached through the slider's own props and
-   * `controlRef`, so a part receives no press of its own.
+   * The rail and the thumb are drawn only: the slider itself is the invisible range input over
+   * them, which takes the pointer and the keys and is reached through the slider's own props and
+   * `ref`, so a part receives no press of its own.
    */
   slotProps?: {
+    /**
+     * The root `<div>` around the rail, the range input and the thumb (stable class
+     * `wave-color-slider`), which the slider's `className`, `style`, `data-*` and other root props
+     * reach as well; its `ref` is the way to the root, since the slider's `ref` reaches the range
+     * input. Your classes come after the slider's `className`, your style over its `style`; the
+     * custom properties that draw the value (the gradient, the thumb's position and color) stay the
+     * slider's. Locked: every prop you give the slider itself that reaches the root,
+     * `data-orientation`, `data-channel`, `data-disabled`, and `hidden`, `inert` and `aria-hidden`
+     * (the slider's own: the root holds the input). Also locked, unset: `role`, `tabIndex` and the
+     * roving markers (`data-roving-container`, `data-roving-disabled`, `data-roving-value`,
+     * `aria-disabled`), so in a toolbar or another roving container the root is never a control of
+     * its own and never hides the control from the arrow order. Your handlers run before the
+     * slider's own root handlers (`preventDefault()` in yours skips them), and your `onClick` is
+     * called in every state, as the slider's own `onClick` is: only the range input inside is
+     * natively disabled.
+     */
+    root?: SlotPart<'div'>;
     /**
      * The `<div>` that draws the gradient rail (stable class `wave-color-slider__rail`).
      * Locked: `aria-hidden`, which keeps the drawing out of the accessibility tree, and
@@ -147,8 +165,10 @@ const NAME_KEY = { hue: 'hue', saturation: 'saturation', value: 'brightness' } a
  * Up or Page Down by 10, Home and End to the ends. It is named by `aria-label`, else the
  * surrounding Field's label, else "Hue", "Saturation" or "Brightness"; a hue slider's value text
  * names the color ("210°, blue"). Inside a ColorPicker, leave `value` and `defaultValue` out and
- * it binds to the picker. Fluent's `ColorSlider`, with `value`/`onValueChange` for its
- * `color`/`onChange` and `orientation` for its `vertical`.
+ * it binds to the picker. `ref` reaches the range input, as the naming, validation and focus
+ * props do; `className`, `style` and `data-*` stay on the root (`slotProps.root.ref` reaches it).
+ * Fluent's `ColorSlider`, with `value`/`onValueChange` for its `color`/`onChange` and
+ * `orientation` for its `vertical`.
  *
  * @example
  * <ColorSlider value={color} onValueChange={setColor} />
@@ -165,7 +185,6 @@ export const ColorSlider = ({
   name,
   form,
   required,
-  controlRef,
   className,
   style,
   id,
@@ -227,7 +246,7 @@ export const ColorSlider = ({
     required ?? (ariaRequired === true || ariaRequired === 'true' || (field?.required ?? false));
 
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedControlRef = useMergedRefs(inputRef, controlRef);
+  const mergedControlRef = useMergedRefs(inputRef, ref);
   useFormReset(inputRef, part.reset, form);
 
   /** Applies a value of the slider's range (the hue in degrees, the others in percent). */
@@ -265,8 +284,32 @@ export const ColorSlider = ({
     apply(Math.min(max, Math.max(0, Math.round(Number(event.currentTarget.value)))));
   };
 
-  const sliderStyle = {
-    ...style,
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      colorSliderClassNames.root,
+      'wave:group/color-slider wave:relative wave:flex wave:touch-none wave:select-none wave:data-[disabled]:cursor-not-allowed wave:data-[disabled]:opacity-50',
+      vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
+      className,
+    ),
+    style,
+    locked: {
+      'data-orientation': orientation,
+      'data-channel': channel,
+      'data-disabled': part.disabled ? '' : undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
+      // The slider's own root props, after the data attributes as in 0.18, and over the part's;
+      // the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+  // The value's drawing (the gradient, the thumb's position and color) after every other style.
+  const rootStyle = {
+    ...(rootProps.style as React.CSSProperties | undefined),
     '--wave-color-slider-gradient': colorSliderGradient(channel, shown, orientation),
     '--wave-color-slider-position': toPosition(current / max),
     '--wave-color-thumb':
@@ -276,28 +319,15 @@ export const ColorSlider = ({
   } as React.CSSProperties;
 
   return (
-    <div
-      data-orientation={orientation}
-      data-channel={channel}
-      data-disabled={part.disabled ? '' : undefined}
-      className={cn(
-        colorSliderClassNames.root,
-        'group/color-slider relative flex touch-none select-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-        vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
-        className,
-      )}
-      style={sliderStyle}
-      {...rest}
-      ref={ref}
-    >
+    <div {...rootProps} style={rootStyle}>
       <div
         {...mergeSlotProps(slotProps?.rail, {
-          className: cn(
+          className: wcn(
             colorSliderClassNames.rail,
-            'rounded-full forced-colors:forced-color-adjust-none',
+            'wave:rounded-full wave:forced-colors:forced-color-adjust-none',
             RAIL_GRADIENT,
             vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
-            resolvedShape === 'square' && 'rounded-none',
+            resolvedShape === 'square' && 'wave:rounded-none',
           ),
           locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
@@ -323,16 +353,16 @@ export const ColorSlider = ({
         onKeyDown={handleKeyDown}
         onKeyUp={onKeyUp}
         onChange={handleChange}
-        className={cn(RAIL_INPUT_CLASSES, vertical ? RAIL_INPUT_VERTICAL : RAIL_INPUT_HORIZONTAL)}
+        className={wcn(RAIL_INPUT_CLASSES, vertical ? RAIL_INPUT_VERTICAL : RAIL_INPUT_HORIZONTAL)}
       />
       <span aria-hidden="true" className={vertical ? THUMB_TRACK_VERTICAL : THUMB_TRACK_HORIZONTAL}>
         <span
           {...mergeSlotProps(slotProps?.thumb, {
-            className: cn(
+            className: wcn(
               colorSliderClassNames.thumb,
               COLOR_THUMB_CLASSES,
               vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
-              'group-has-[:focus-visible]/color-slider:ring-2 group-has-[:focus-visible]/color-slider:ring-background forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] group-has-[:focus-visible]/color-slider:outline-2 group-has-[:focus-visible]/color-slider:outline-offset-2 group-has-[:focus-visible]/color-slider:outline-ring forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]',
+              'wave:group-has-[:focus-visible]/color-slider:ring-2 wave:group-has-[:focus-visible]/color-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/color-slider:ring-[Canvas] wave:group-has-[:focus-visible]/color-slider:outline-2 wave:group-has-[:focus-visible]/color-slider:outline-offset-2 wave:group-has-[:focus-visible]/color-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/color-slider:outline-[Highlight]',
             ),
           })}
         />

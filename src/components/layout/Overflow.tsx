@@ -5,7 +5,7 @@ import {
   overflowItemClassNames,
 } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
 import { mergeProps } from '../../lib/mergeProps';
@@ -98,10 +98,9 @@ export interface OverflowProps extends React.HTMLAttributes<HTMLDivElement> {
    * Called, from an effect, when the set of hidden items changes (not for the initial, empty set),
    * with the hidden `itemId`s in DOM order and the {@link OverflowChangeDetails}. Called once per
    * change in StrictMode, and only for a set that has been rendered. The Overflow always passes
-   * `details`; it is typed optional until 1.0, as the second argument of every callback is, so a
-   * handler of the hidden ids alone fits.
+   * `details`; a handler of the hidden ids alone fits.
    */
-  onOverflowChange?: (hiddenItems: string[], details?: OverflowChangeDetails) => void;
+  onOverflowChange?: (hiddenItems: string[], details: OverflowChangeDetails) => void;
   ref?: React.Ref<HTMLDivElement>;
   /**
    * Props for the wrapper the row draws around what `overflowButton` returns, merged into its
@@ -428,16 +427,16 @@ export function useIsOverflowing(
 // ---------------------------------------------------------------------------
 
 const ROOT_ORIENTATION_CLASSES: Record<Orientation, string> = {
-  horizontal: 'items-center',
-  vertical: 'flex-col items-start',
+  horizontal: 'wave:items-center',
+  vertical: 'wave:flex-col wave:items-start',
 };
 
 // The divider stretches across the row (to its height, or to a column's width) and lays its child
 // out on the row's cross axis: a child that stretches itself (Toolbar.Divider) spans the row, and
 // an explicitly sized child is centred in a row and kept at the start of a column.
 const DIVIDER_ORIENTATION_CLASSES: Record<Orientation, string> = {
-  horizontal: 'flex shrink-0 items-center self-stretch',
-  vertical: 'flex shrink-0 flex-col items-start self-stretch',
+  horizontal: 'wave:flex wave:shrink-0 wave:items-center wave:self-stretch',
+  vertical: 'wave:flex wave:shrink-0 wave:flex-col wave:items-start wave:self-stretch',
 };
 
 // The button sticks to the end of the axis and keeps room inside for its own focus indicator while
@@ -446,19 +445,19 @@ const DIVIDER_ORIENTATION_CLASSES: Record<Orientation, string> = {
 const BUTTON_CLASSES = {
   end: {
     horizontal:
-      'sticky -end-1 flex shrink-0 items-center self-stretch ps-1 ' +
-      'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1',
+      'wave:sticky wave:-end-1 wave:flex wave:shrink-0 wave:items-center wave:self-stretch wave:ps-1 ' +
+      'wave:data-[overflow-pinned]:bg-background wave:data-[overflow-pinned]:pe-1',
     vertical:
-      'sticky -bottom-1 flex shrink-0 items-center self-stretch pt-1 ' +
-      'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pb-1',
+      'wave:sticky wave:-bottom-1 wave:flex wave:shrink-0 wave:items-center wave:self-stretch wave:pt-1 ' +
+      'wave:data-[overflow-pinned]:bg-background wave:data-[overflow-pinned]:pb-1',
   },
   'before-hidden': {
     horizontal:
-      'sticky -end-1 flex shrink-0 items-center self-stretch ' +
-      'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1',
+      'wave:sticky wave:-end-1 wave:flex wave:shrink-0 wave:items-center wave:self-stretch ' +
+      'wave:data-[overflow-pinned]:bg-background wave:data-[overflow-pinned]:pe-1',
     vertical:
-      'sticky -bottom-1 flex shrink-0 items-center self-stretch ' +
-      'data-[overflow-pinned]:bg-background data-[overflow-pinned]:pb-1',
+      'wave:sticky wave:-bottom-1 wave:flex wave:shrink-0 wave:items-center wave:self-stretch ' +
+      'wave:data-[overflow-pinned]:bg-background wave:data-[overflow-pinned]:pb-1',
   },
 } as const satisfies Record<
   NonNullable<OverflowProps['buttonPosition']>,
@@ -684,7 +683,7 @@ const OverflowRoot = ({
   const buttonRole = rest.role === 'list' ? 'listitem' : undefined;
   const buttonPinned = buttonCovers ? '' : undefined;
   const buttonClassName = showButton
-    ? cn(overflowClassNames.overflowButton, BUTTON_CLASSES[buttonPosition][orientation])
+    ? wcn(overflowClassNames.overflowButton, BUTTON_CLASSES[buttonPosition][orientation])
     : undefined;
   const buttonPart = slotProps?.overflowButton;
   const button = showButton ? (
@@ -745,9 +744,9 @@ const OverflowRoot = ({
         // row's box would then reach past its container, which a scroll container around an
         // edge-to-edge row (or the page) counts as overflow. The store measures the room without
         // the padding.
-        className={cn(
+        className={wcn(
           overflowClassNames.root,
-          'flex overflow-hidden p-1',
+          'wave:flex wave:overflow-hidden wave:p-1',
           ROOT_ORIENTATION_CLASSES[orientation],
           className,
         )}
@@ -828,7 +827,7 @@ export const OverflowItem = ({
     if (elementRef.current) store.setItemMeta(elementRef.current, priority, pinned, groupId);
   });
 
-  const itemClassName = cn(overflowItemClassNames.root, 'shrink-0', className);
+  const itemClassName = wcn(overflowItemClassNames.root, 'wave:shrink-0', className);
 
   if (childElement) {
     // Only a hidden item sets these (and a consumer's own values), so a shown item keeps the
@@ -899,7 +898,7 @@ export const OverflowDivider = ({
   return (
     <div
       ref={mergedRef}
-      className={cn(
+      className={wcn(
         overflowDividerClassNames.root,
         DIVIDER_ORIENTATION_CLASSES[orientation],
         className,

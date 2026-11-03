@@ -1,9 +1,8 @@
 import * as React from 'react';
 import type { WaveDir } from '../components/provider/WaveProvider';
-import { isDev, warnDeprecated, warnOnce } from '../lib/dev';
+import { isDev, warnOnce } from '../lib/dev';
 import { getArrowIntent, getDirection } from '../lib/direction';
 import { getFirstTabbable, isHiddenInput } from '../lib/focus';
-import { setRef } from '../lib/mergeRefs';
 import { useEventCallback } from './useEventCallback';
 import { isAltGraphCharacter, useTypeahead, type TypeaheadItem } from './useTypeahead';
 
@@ -19,7 +18,7 @@ export interface UseRovingTabIndexOptions {
    */
   activeValue?: string | null;
   /**
-   * Explicit item order (0.4 call shape). Omitted ⇒ the DOM order of the elements matching
+   * Explicit item order. Omitted ⇒ the DOM order of the elements matching
    * `itemSelector`. Disabled items are skipped either way, and so are listed values with no
    * element in the container (not rendered, or `hidden`/`inert`): they never hold the tab stop.
    */
@@ -224,8 +223,8 @@ interface StoreOptions {
   tabStop: 'active' | 'last-focused' | 'none';
   /**
    * Whether an element with a composite role but no roving container of its own is a nested
-   * composite (one item). Off in the 0.4 call shape and with explicit `items`, where such an element
-   * is usually the widget's own root inside a wrapper that carries the container ref.
+   * composite (one item). Off with explicit `items`, where such an element is usually the widget's
+   * own root inside a wrapper that carries the container props.
    */
   roleComposites: boolean;
 }
@@ -883,9 +882,9 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   `data-roving-transparent` is never a nested composite by its role: its items are items of this
  *   container (the radios of `Toolbar.RadioGroup`); it must not carry a `data-roving-container`.
  *   Pass `items` to fix the order instead.
- *   In the 0.4 call shape and with explicit `items`, only elements with their own roving container
- *   are nested composites: a role-only `radiogroup`/`tablist`/… element between the container and
- *   the items (the widget's root inside a wrapper that holds the ref) does not swallow them.
+ *   With explicit `items`, only elements with their own roving container are nested composites: a
+ *   role-only `radiogroup`/`tablist`/… element between the container and the items (the widget's
+ *   root inside a wrapper that holds the container props) does not swallow them.
  * - **Disabled items** (`data-roving-disabled`, `disabled`, `aria-disabled="true"`) are skipped and
  *   never hold the tab stop. Items marked `data-disabled-focusable` (the `disabledFocusable` prop
  *   of WaveUI buttons, links and choice controls) stay reachable and may hold the tab stop: APG
@@ -927,26 +926,14 @@ function startsOnItem(item: ResolvedItem | null, target: EventTarget | null, con
  *   <button role="radio" data-roving-value="a" tabIndex={getTabIndex('a')} />
  * </div>
  *
- * The 0.4 call shape `useRovingTabIndex(containerRef, options)` still works until 1.0 (deprecated,
- * with a development warning): pass the container's ref object and attach `handleKeyDown` (and
- * ideally `handleFocus`, and with `typeahead` `handleKeyDownCapture` as `onKeyDownCapture`)
- * yourself. Prefer `useRovingTabIndex(options)` and spread `containerProps`.
+ * Spread `containerProps` on the container: its `ref` is how the hook finds the container and its
+ * items. To compose the handlers with your own, take `handleKeyDown`, `handleKeyDownCapture` and
+ * `handleFocus` (the same functions), and still pass `containerProps.ref`.
  *
  * @param options - See {@link UseRovingTabIndexOptions}.
  * @returns See {@link UseRovingTabIndexResult}.
  */
-export function useRovingTabIndex(options: UseRovingTabIndexOptions): UseRovingTabIndexResult;
-export function useRovingTabIndex(
-  containerRef: React.RefObject<HTMLElement | null>,
-  options: UseRovingTabIndexOptions,
-): UseRovingTabIndexResult;
-export function useRovingTabIndex(
-  refOrOptions: React.RefObject<HTMLElement | null> | UseRovingTabIndexOptions,
-  maybeOptions?: UseRovingTabIndexOptions,
-): UseRovingTabIndexResult {
-  const legacyRef =
-    maybeOptions !== undefined ? (refOrOptions as React.RefObject<HTMLElement | null>) : undefined;
-  const options = (maybeOptions ?? refOrOptions) as UseRovingTabIndexOptions;
+export function useRovingTabIndex(options: UseRovingTabIndexOptions): UseRovingTabIndexResult {
   const {
     activeValue = null,
     items,
@@ -972,36 +959,14 @@ export function useRovingTabIndex(
   // The last focused item that can hold the tab stop ('last-focused' during render).
   const [focusedStop, setFocusedStop] = React.useState<string | null>(null);
 
-  // 0.4 call shape or explicit `items`: only elements with their own roving container are nested
-  // composites (a role=radiogroup/tablist/… around the items is the widget's own root).
-  const roleComposites = legacyRef === undefined && items === undefined;
+  // Explicit `items`: only elements with their own roving container are nested composites (a
+  // role=radiogroup/tablist/… around the items is the widget's own root).
+  const roleComposites = items === undefined;
 
   React.useLayoutEffect(() => {
     store.setOptions({ itemSelector, manageTabIndex, items, activeValue, tabStop, roleComposites });
-    if (legacyRef) store.setContainer(legacyRef.current);
     store.stamp();
   });
-
-  // C-DEV: the 0.4 call shape is removed in 1.0.
-  const positional = legacyRef !== undefined;
-  React.useEffect(() => {
-    if (!positional) return;
-    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
-    // production bundle then drops the warning and its text. Without a bundler and without
-    // `process` (an unbundled import in a browser), the read throws and it is skipped.
-    try {
-      if (process.env.NODE_ENV !== 'production') {
-        warnDeprecated(
-          'useRovingTabIndex',
-          'useRovingTabIndex(containerRef, options)',
-          'useRovingTabIndex(options)',
-          'Attach the returned `containerProps` to the container.',
-        );
-      }
-    } catch {
-      // No `process`: see above.
-    }
-  }, [positional]);
 
   // C-DEV: `resolveOwn` treats a selector the browser rejects as "no items" (it runs during render,
   // where it must not throw), so the developer hears about it here.
@@ -1058,9 +1023,8 @@ export function useRovingTabIndex(
   const containerRef = React.useCallback(
     (node: HTMLElement | null) => {
       store.setContainer(node);
-      if (legacyRef) setRef(legacyRef, node);
     },
-    [store, legacyRef],
+    [store],
   );
 
   const typeaheadItemsRef = React.useRef<TypeaheadItem[]>([]);

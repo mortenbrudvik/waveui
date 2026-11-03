@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { waveProviderClassNames } from '../../lib/classNames';
 import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
@@ -131,7 +131,7 @@ export interface WaveContextValue {
   /** The active text direction. */
   dir: WaveDir;
   /**
-   * Theme classes of the nearest provider (see {@link getThemeClassName}); portals put them on
+   * The theme class of the nearest provider (see {@link getThemeClassName}); portals put it on
    * their wrapper so overlays inherit the theme. `''` outside a provider (the page's own theme).
    */
   themeClassName: string;
@@ -345,10 +345,10 @@ export const WaveProvider = ({
         ref={ref}
         dir={dir}
         data-wave-theme={resolvedTheme}
-        className={cn(
+        className={wcn(
           waveProviderClassNames.root,
           themeClassName,
-          'bg-background text-foreground font-wave text-body-1',
+          'wave:bg-background wave:text-foreground wave:font-wave wave:text-body-1',
           className,
         )}
       >

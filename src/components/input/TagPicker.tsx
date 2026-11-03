@@ -52,17 +52,18 @@ export type { TagPickerOptionProps } from './TagPicker.option';
  * - **Names.** The tags form a list named "Selected"; the trigger is described by a summary of the
  *   selected labels ("Selected: Apple, Banana"). These built-in texts are English; `labels`
  *   localizes them.
- * - **Routing.** The trigger (`TagPicker.Input` or `TagPicker.Button`) receives `id`,
- *   `aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`,
- *   `aria-errormessage`, `aria-details`, `tabIndex` and `autoFocus`; the Input also
- *   `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp`, `controlRef` and the text input attributes
- *   `autoComplete`, `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and
- *   `enterKeyHint` (with the Button, pass handlers and `ref` on it). `ref`, `className`, `style`,
- *   other `aria-*` attributes and the remaining props stay on the root `<div>`. Inside a `Field`
- *   the trigger is labelled and described by it; the field shows the error look whenever the
- *   trigger ends up `aria-invalid`. With `name`/`required` the values take part in form
- *   submission, validation and reset. Selected values without a matching option show their raw
- *   value.
+ * - **Routing.** The trigger that renders (`TagPicker.Input` or `TagPicker.Button`) receives
+ *   `ref`, `id`, `aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`,
+ *   `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex` and `autoFocus`; the Input
+ *   also `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes `autoComplete`,
+ *   `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and `enterKeyHint`
+ *   (with the Button, pass handlers on it). `ref` follows the trigger: the built-in Input, your
+ *   `TagPicker.Input`, or `TagPicker.Button` in its place. `className`, `style`, other `aria-*`
+ *   attributes and the remaining props stay on the root `<div>` (`slotProps.root.ref` reaches
+ *   it). Inside a `Field` the trigger is labelled and described by it; the field shows the error
+ *   look whenever the trigger ends up `aria-invalid`. With `name`/`required` the values take part
+ *   in form submission, validation and reset. Selected values without a matching option show
+ *   their raw value.
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'` (a Field or provider `small`
  *   gives `'medium'` too, since TagPicker has no `small`); `appearance` from its own prop, then

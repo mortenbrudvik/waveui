@@ -53,7 +53,7 @@ describe('CompoundButton', () => {
     displayName: 'CompoundButton',
     polymorphic: true,
     defaultProps: { children: 'Send mail', secondaryText: 'Opens your email client' },
-    conflictingClass: { className: 'px-8', overrides: 'px-3' },
+    conflictingClass: { className: 'px-8', overrides: 'wave:px-3' },
     a11yVariants: [
       { name: 'disabled', props: { disabled: true } },
       { name: 'primary', props: { appearance: 'primary' } },
@@ -125,24 +125,30 @@ describe('CompoundButton', () => {
     render(<CompoundButton secondaryText="Details">Main</CompoundButton>);
     const button = screen.getByRole('button', { name: /Main/ });
     // The text lines sit in one column wrapper; the root is a start-aligned row (room for an icon).
-    expect(button).toHaveClass('h-auto', 'items-center', 'justify-start', 'gap-3', 'text-start');
-    expect(button).not.toHaveClass('h-8');
-    expect(button).not.toHaveClass('flex-col');
-    expect(button).not.toHaveClass('justify-center');
+    expect(button).toHaveClass(
+      'wave:h-auto',
+      'wave:items-center',
+      'wave:justify-start',
+      'wave:gap-3',
+      'wave:text-start',
+    );
+    expect(button).not.toHaveClass('wave:h-8');
+    expect(button).not.toHaveClass('wave:flex-col');
+    expect(button).not.toHaveClass('wave:justify-center');
     const wrapper = contentWrapper(button);
     expect(Array.from(button.children)).toEqual([wrapper]);
-    expect(wrapper).toHaveClass('flex', 'min-w-0', 'flex-col', 'items-start');
+    expect(wrapper).toHaveClass('wave:flex', 'wave:min-w-0', 'wave:flex-col', 'wave:items-start');
     expect(textLines(button).map((line) => line.textContent)).toEqual(['Main', 'Details']);
   });
 
   describe('icon', () => {
     const SIZES: Size[] = ['extra-small', 'small', 'medium', 'large', 'extra-large'];
     const iconBox: Record<Size, string> = {
-      'extra-small': 'size-6',
-      small: 'size-8',
-      medium: 'size-10',
-      large: 'size-10',
-      'extra-large': 'size-10',
+      'extra-small': 'wave:size-6',
+      small: 'wave:size-8',
+      medium: 'wave:size-10',
+      large: 'wave:size-10',
+      'extra-large': 'wave:size-10',
     };
 
     it.each([
@@ -194,8 +200,8 @@ describe('CompoundButton', () => {
       );
       expect(screen.getByTestId('mail-icon').parentElement).toHaveClass(
         iconBox[size],
-        '[&>svg]:size-full',
-        'shrink-0',
+        'wave:[&>svg]:size-full',
+        'wave:shrink-0',
       );
     });
 
@@ -235,7 +241,7 @@ describe('CompoundButton', () => {
           expect(Array.from(compound.classList).sort()).toEqual(
             [...Array.from(button.classList), compoundButtonClassNames.root].sort(),
           );
-          for (const cls of ['h-auto', 'gap-3', 'justify-start', 'py-2']) {
+          for (const cls of ['wave:h-auto', 'wave:gap-3', 'wave:justify-start', 'wave:py-2']) {
             expect(compound).not.toHaveClass(cls);
           }
         },
@@ -269,7 +275,7 @@ describe('CompoundButton', () => {
         </CompoundButton>,
       );
       const secondary = screen.getByText('Free for 30 days');
-      expect(secondary).toHaveClass('text-primary-foreground');
+      expect(secondary).toHaveClass('wave:text-primary-foreground');
       expect(Array.from(secondary.classList).filter((c) => c.includes('/'))).toEqual([]);
     });
 
@@ -281,7 +287,7 @@ describe('CompoundButton', () => {
             Main
           </CompoundButton>,
         );
-        expect(screen.getByText('Details')).toHaveClass('text-muted-foreground');
+        expect(screen.getByText('Details')).toHaveClass('wave:text-muted-foreground');
       },
     );
 
@@ -291,7 +297,10 @@ describe('CompoundButton', () => {
           Main
         </CompoundButton>,
       );
-      expect(screen.getByText('Details')).toHaveClass('text-caption-1', 'text-primary-foreground');
+      expect(screen.getByText('Details')).toHaveClass(
+        'wave:text-caption-1',
+        'wave:text-primary-foreground',
+      );
     });
 
     it('keeps the size typography token when the consumer adds a text color', () => {
@@ -301,7 +310,7 @@ describe('CompoundButton', () => {
         </CompoundButton>,
       );
       expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass(
-        'text-body-2',
+        'wave:text-body-2',
         'text-error',
       );
     });
@@ -310,25 +319,25 @@ describe('CompoundButton', () => {
   describe('styles (button-provider#3, #10, #19, #20)', () => {
     const distinguishing: Record<Appearance, string[]> = {
       primary: [
-        'bg-primary',
-        'text-primary-foreground',
-        `${HOVER_GATE}bg-primary-hover`,
-        `${ACTIVE_GATE}bg-primary-pressed`,
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+        `wave:${HOVER_GATE}bg-primary-hover`,
+        `wave:${ACTIVE_GATE}bg-primary-pressed`,
       ],
       outline: [
-        'border-stroke',
-        'bg-background',
-        'text-foreground',
-        `${HOVER_GATE}bg-subtle-hover`,
-        `${ACTIVE_GATE}bg-subtle-pressed`,
+        'wave:border-stroke',
+        'wave:bg-background',
+        'wave:text-foreground',
+        `wave:${HOVER_GATE}bg-subtle-hover`,
+        `wave:${ACTIVE_GATE}bg-subtle-pressed`,
       ],
       subtle: [
-        'bg-transparent',
-        'text-foreground',
-        `${HOVER_GATE}bg-subtle-hover`,
-        `${ACTIVE_GATE}bg-subtle-pressed`,
+        'wave:bg-transparent',
+        'wave:text-foreground',
+        `wave:${HOVER_GATE}bg-subtle-hover`,
+        `wave:${ACTIVE_GATE}bg-subtle-pressed`,
       ],
-      transparent: ['bg-transparent', 'text-primary', `${HOVER_GATE}underline`],
+      transparent: ['wave:bg-transparent', 'wave:text-primary', `wave:${HOVER_GATE}underline`],
     };
 
     it.each(Object.keys(distinguishing) as Appearance[])(
@@ -343,23 +352,27 @@ describe('CompoundButton', () => {
         expect(
           classes.filter(
             (c) =>
-              /(^|:)(hover|active):/.test(c) && !c.startsWith('not-disabled:not-aria-disabled:'),
+              /(^|:)(hover|active):/.test(c) &&
+              !c.startsWith('wave:not-disabled:not-aria-disabled:'),
           ),
         ).toEqual([]);
       },
     );
 
     const padding: Record<Size, string> = {
-      'extra-small': 'py-0.5',
-      small: 'py-1',
-      medium: 'py-2',
-      large: 'py-3',
-      'extra-large': 'py-4',
+      'extra-small': 'wave:py-0.5',
+      small: 'wave:py-1',
+      medium: 'wave:py-2',
+      large: 'wave:py-3',
+      'extra-large': 'wave:py-4',
     };
 
     it.each(Object.keys(padding) as Size[])('%s size keeps its vertical padding', (size) => {
       render(<CompoundButton size={size}>Main</CompoundButton>);
-      expect(screen.getByRole('button', { name: 'Main' })).toHaveClass(padding[size], 'min-w-24');
+      expect(screen.getByRole('button', { name: 'Main' })).toHaveClass(
+        padding[size],
+        'wave:min-w-24',
+      );
     });
 
     it('extra-large uses a larger font than large (button-provider#19)', () => {
@@ -369,10 +382,10 @@ describe('CompoundButton', () => {
           <CompoundButton size="extra-large">Extra large</CompoundButton>
         </>,
       );
-      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('text-body-2');
+      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('wave:text-body-2');
       const xl = screen.getByRole('button', { name: 'Extra large' });
-      expect(xl).toHaveClass('text-[18px]/[24px]');
-      expect(xl).not.toHaveClass('text-sm');
+      expect(xl).toHaveClass('wave:text-[18px]/[24px]');
+      expect(xl).not.toHaveClass('wave:text-sm');
     });
   });
 
@@ -387,7 +400,7 @@ describe('CompoundButton', () => {
       expect(link.tagName).toBe('A');
       expect(link).toHaveAttribute('href', '/mail');
       expect(link).not.toHaveAttribute('type');
-      expect(link).toHaveClass(`${HOVER_GATE}bg-subtle-hover`);
+      expect(link).toHaveClass(`wave:${HOVER_GATE}bg-subtle-hover`);
     });
 
     it('as="a" disabled: aria-disabled, no href, not focusable and clicks are prevented', async () => {
@@ -406,7 +419,7 @@ describe('CompoundButton', () => {
       expect(link).toHaveAttribute('tabindex', '-1');
       expect(link).not.toHaveAttribute('href');
       expect(link).not.toHaveAttribute('disabled');
-      expect(link).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(link).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
       expect(fireEvent.click(link)).toBe(false);
       expect(onClick).not.toHaveBeenCalled();
 
@@ -463,7 +476,7 @@ describe('CompoundButton', () => {
     render(<CompoundButton disabled>Disabled</CompoundButton>);
     const button = screen.getByRole('button', { name: 'Disabled' });
     expect(button).toBeDisabled();
-    expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+    expect(button).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
   });
 
   it('disabledFocusable: focusable, the three attributes, and activation prevented', async () => {
@@ -482,7 +495,7 @@ describe('CompoundButton', () => {
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).toHaveAttribute('data-disabled', '');
     expect(button).toHaveAttribute('data-disabled-focusable', '');
-    expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+    expect(button).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
 
     await user.tab();
     expect(button).toHaveFocus();
@@ -580,11 +593,11 @@ describe('CompoundButton — slotProps', () => {
       ),
     ).toBe(
       [
-        '<button class="wave-button inline-flex rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-w-24 px-3 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-compound-button h-auto items-center justify-start gap-3 text-start py-2" type="button">',
-        '<span aria-hidden="true" class="wave-button__icon wave-compound-button__icon inline-flex shrink-0 items-center justify-center [&amp;>svg]:size-full size-10">★</span>',
-        '<span class="wave-compound-button__content-container flex min-w-0 flex-col items-start" data-wave-compound-content="">',
-        '<span class="wave-compound-button__primary-text font-bold">Send mail</span>',
-        '<span class="wave-compound-button__secondary-text text-caption-1 font-normal text-muted-foreground">Opens your email client</span>',
+        '<button class="wave-button wave:inline-flex wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:min-w-24 wave:px-3 wave:text-body-1 wave:border wave:border-stroke wave:bg-background wave:text-foreground wave:not-disabled:not-aria-disabled:hover:border-stroke-hover wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-compound-button wave:h-auto wave:items-center wave:justify-start wave:gap-3 wave:text-start wave:py-2" type="button">',
+        '<span aria-hidden="true" class="wave-button__icon wave-compound-button__icon wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center wave:[&amp;>svg]:size-full wave:size-10">★</span>',
+        '<span class="wave-compound-button__content-container wave:flex wave:min-w-0 wave:flex-col wave:items-start" data-wave-compound-content="">',
+        '<span class="wave-compound-button__primary-text wave:font-bold">Send mail</span>',
+        '<span class="wave-compound-button__secondary-text wave:text-caption-1 wave:font-normal wave:text-muted-foreground">Opens your email client</span>',
         '</span>',
         '</button>',
       ].join(''),
@@ -599,18 +612,18 @@ describe('CompoundButton — slotProps', () => {
       ),
     ).toBe(
       [
-        '<button class="wave-button inline-flex rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring min-w-24 px-2 text-caption-1 border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed wave-compound-button h-auto items-center justify-start gap-3 text-start py-1" type="button">',
-        '<span class="wave-compound-button__content-container flex min-w-0 flex-col items-start" data-wave-compound-content="">',
-        '<span class="wave-compound-button__primary-text font-bold">Send mail</span>',
+        '<button class="wave-button wave:inline-flex wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:min-w-24 wave:px-2 wave:text-caption-1 wave:border wave:border-transparent wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed wave-compound-button wave:h-auto wave:items-center wave:justify-start wave:gap-3 wave:text-start wave:py-1" type="button">',
+        '<span class="wave-compound-button__content-container wave:flex wave:min-w-0 wave:flex-col wave:items-start" data-wave-compound-content="">',
+        '<span class="wave-compound-button__primary-text wave:font-bold">Send mail</span>',
         '</span>',
-        '<span aria-hidden="true" class="wave-button__icon wave-compound-button__icon inline-flex shrink-0 items-center justify-center [&amp;>svg]:size-full size-8">★</span>',
+        '<span aria-hidden="true" class="wave-button__icon wave-compound-button__icon wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center wave:[&amp;>svg]:size-full wave:size-8">★</span>',
         '</button>',
       ].join(''),
     );
     expect(sortAttributes(renderToString(<CompoundButton icon="★" aria-label="Star" />))).toBe(
       [
-        '<button aria-label="Star" class="wave-button inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring h-8 w-8 px-0 text-body-1 border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-compound-button" type="button">',
-        '<span aria-hidden="true" class="wave-button__icon inline-flex shrink-0 items-center wave-compound-button__icon">★</span>',
+        '<button aria-label="Star" class="wave-button wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:h-8 wave:w-8 wave:px-0 wave:text-body-1 wave:border wave:border-stroke wave:bg-background wave:text-foreground wave:not-disabled:not-aria-disabled:hover:border-stroke-hover wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave-compound-button" type="button">',
+        '<span aria-hidden="true" class="wave-button__icon wave:inline-flex wave:shrink-0 wave:items-center wave-compound-button__icon">★</span>',
         '</button>',
       ].join(''),
     );
@@ -628,9 +641,9 @@ describe('CompoundButton — slotProps', () => {
     );
     expect(openingTags(...(parts as HTMLElement[]))).toBe(
       [
-        '<span class="wave-compound-button__content-container flex min-w-0 flex-col items-start" data-wave-compound-content="">',
-        '<span class="wave-compound-button__primary-text font-bold">',
-        '<span class="wave-compound-button__secondary-text text-caption-1 font-normal text-primary-foreground">',
+        '<span class="wave-compound-button__content-container wave:flex wave:min-w-0 wave:flex-col wave:items-start" data-wave-compound-content="">',
+        '<span class="wave-compound-button__primary-text wave:font-bold">',
+        '<span class="wave-compound-button__secondary-text wave:text-caption-1 wave:font-normal wave:text-primary-foreground">',
       ].join('\n'),
     );
   });
@@ -688,9 +701,9 @@ describe('CompoundButton — slotProps', () => {
     const button = screen.getByRole('button', { name: /^Send mail\s*Opens your email client$/ });
     const parts = partsOf(button);
     for (const [index, [stable, own, mine, part]] of [
-      [compoundButtonClassNames.contentContainer, 'flex-col', 'my-content', 'content'],
-      [compoundButtonClassNames.primaryText, 'font-bold', 'my-primary', 'primary'],
-      [compoundButtonClassNames.secondaryText, 'text-caption-1', 'my-secondary', 'secondary'],
+      [compoundButtonClassNames.contentContainer, 'wave:flex-col', 'my-content', 'content'],
+      [compoundButtonClassNames.primaryText, 'wave:font-bold', 'my-primary', 'primary'],
+      [compoundButtonClassNames.secondaryText, 'wave:text-caption-1', 'my-secondary', 'secondary'],
     ].entries()) {
       const element = parts[index] as HTMLElement;
       expect(refs[index].current).toBe(element);
@@ -713,7 +726,7 @@ describe('CompoundButton — slotProps', () => {
     );
     const primary = partsOf(screen.getByRole('button', { name: 'Send mail' }))[1];
     expect(primary).toHaveClass('font-normal');
-    expect(primary).not.toHaveClass('font-bold');
+    expect(primary).not.toHaveClass('wave:font-bold');
   });
 
   it('keeps the marker of the text column, and adds the attributes it does not set', () => {

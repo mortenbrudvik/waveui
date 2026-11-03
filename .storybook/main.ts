@@ -6,7 +6,7 @@ import { exportDocblockPlugin, STORYBOOK_DOCGEN_PLUGIN } from './exportDocblocks
 /**
  * Removes the `vite:dts` plugin from a (nested, possibly promised) Vite plugin list. Storybook's
  * Vite builder loads the plugins of the library config (vite.config.ts), never its `build`
- * block; the declaration build and its `afterBuild` copy step belong to the library build only.
+ * block; the declaration build belongs to the library build only.
  */
 async function withoutDts(plugins: PluginOption[]): Promise<PluginOption[]> {
   const kept: PluginOption[] = [];
@@ -61,8 +61,9 @@ const config: StorybookConfig = {
   },
   /**
    * The library build compiles no CSS (scripts/build-css.mjs does), so Storybook adds the
-   * Tailwind plugin itself: it compiles `.storybook/preview.css`, the library stylesheet plus
-   * the stories as a source (scripts/verify-storybook.mjs checks the result). The autodocs
+   * Tailwind plugin itself: it compiles `.storybook/preview.css`, the library stylesheet with its
+   * `wave:` prefix, and `.storybook/stories.css`, the stories' own classes as an app's unprefixed
+   * build compiles them (scripts/verify-storybook.mjs checks the result). The autodocs
    * description of a component documented on its export comes from `withExportDocblocks`.
    */
   async viteFinal(viteConfig) {

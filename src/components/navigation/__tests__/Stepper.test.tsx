@@ -133,7 +133,7 @@ describe('Stepper', () => {
       expect(list.tagName).toBe('OL');
       // Explicit role: WebKit/VoiceOver drops list semantics from a `list-style: none` list
       // outside a <nav> unless role="list" is set.
-      expect(list).toHaveClass('list-none');
+      expect(list).toHaveClass('wave:list-none');
       expect(list).toHaveAttribute('role', 'list');
       expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     });
@@ -184,7 +184,7 @@ describe('Stepper', () => {
       expect(within(items[2]).getByRole('button')).toHaveAccessibleName('Completed: 3. Shipping');
       expect(within(items[3]).getByRole('button')).toHaveAccessibleName('4. Complete');
       // The status text is visually hidden; the visible label is unchanged.
-      expect(within(items[1]).getByText('Error:', { exact: false })).toHaveClass('sr-only');
+      expect(within(items[1]).getByText('Error:', { exact: false })).toHaveClass('wave:sr-only');
     });
 
     describe('statusLabels (C-NAMING)', () => {
@@ -646,9 +646,9 @@ describe('Stepper', () => {
       renderSteps();
       for (const button of stepButtons()) {
         expect(button).toHaveClass(
-          'focus-visible:outline-2',
-          'focus-visible:outline-offset-2',
-          'focus-visible:outline-ring',
+          'wave:focus-visible:outline-2',
+          'wave:focus-visible:outline-offset-2',
+          'wave:focus-visible:outline-ring',
         );
       }
     });
@@ -743,9 +743,9 @@ describe('Stepper', () => {
           <Stepper.Step label="Profile" />
         </Stepper>,
       );
-      expect(screen.getByTestId('stepper')).toHaveClass('flex-col');
+      expect(screen.getByTestId('stepper')).toHaveClass('wave:flex-col');
       expect(screen.getByTestId('stepper')).toHaveAttribute('data-orientation', 'vertical');
-      expect(screen.getByRole('list')).toHaveClass('flex-col');
+      expect(screen.getByRole('list')).toHaveClass('wave:flex-col');
     });
 
     it('draws the active circle and label with theme tokens (input-basic#8)', () => {
@@ -757,10 +757,12 @@ describe('Stepper', () => {
       );
       const active = screen.getByTestId('active');
       const indicator = active.querySelector('[aria-hidden="true"]');
-      expect(indicator).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(indicator).toHaveClass('wave:bg-primary', 'wave:text-primary-foreground');
       expect(indicator?.className).not.toMatch(/text-white/);
-      expect(within(active).getByText('Profile')).toHaveClass('text-primary');
-      expect(within(screen.getByTestId('done')).getByText('Account')).toHaveClass('text-success');
+      expect(within(active).getByText('Profile')).toHaveClass('wave:text-primary');
+      expect(within(screen.getByTestId('done')).getByText('Account')).toHaveClass(
+        'wave:text-success',
+      );
     });
 
     it('marks an error step with error tokens', () => {
@@ -770,7 +772,9 @@ describe('Stepper', () => {
           <Stepper.Step label="Profile" error data-testid="error" />
         </Stepper>,
       );
-      expect(within(screen.getByTestId('error')).getByText('Profile')).toHaveClass('text-error');
+      expect(within(screen.getByTestId('error')).getByText('Profile')).toHaveClass(
+        'wave:text-error',
+      );
     });
 
     it('turns off color transitions for reduced motion', () => {
@@ -782,9 +786,9 @@ describe('Stepper', () => {
       );
       const step = screen.getByTestId('step');
       const indicator = step.querySelector('[aria-hidden="true"]');
-      expect(indicator).toHaveClass('transition-colors', 'motion-reduce:transition-none');
+      expect(indicator).toHaveClass('wave:transition-colors', 'wave:motion-reduce:transition-none');
       expect(step.querySelector('[data-wave-stepper-connector]')).toHaveClass(
-        'motion-reduce:transition-none',
+        'wave:motion-reduce:transition-none',
       );
     });
 
@@ -797,7 +801,7 @@ describe('Stepper', () => {
         { dir: 'rtl' },
       );
       const connector = screen.getByTestId('step').querySelector('[data-wave-stepper-connector]');
-      expect(connector).toHaveClass('ms-3.75');
+      expect(connector).toHaveClass('wave:ms-3.75');
       expect(connector?.className).not.toMatch(/\bml-/);
     });
 
@@ -813,8 +817,8 @@ describe('Stepper', () => {
       const connector = step.querySelector('[data-wave-stepper-connector]');
       // Circle size-8 and connector w-0.5 are spacing units (rem), so the offset (8 - 0.5) / 2 =
       // 3.75 units follows them at any root font size; a px offset only fits a 16px root.
-      expect(circle).toHaveClass('size-8');
-      expect(connector).toHaveClass('w-0.5', 'ms-3.75');
+      expect(circle).toHaveClass('wave:size-8');
+      expect(connector).toHaveClass('wave:w-0.5', 'wave:ms-3.75');
       expect(connector?.className).not.toMatch(/\d+px/);
     });
 
@@ -831,16 +835,16 @@ describe('Stepper', () => {
       // Author backgrounds become Canvas in forced colors: the completed part is painted in
       // Highlight (forcedColors.fill), the rest in CanvasText, like a Slider rail.
       expect(connectorOf('done')).toHaveClass(
-        'bg-success',
-        'forced-colors:bg-[Highlight]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:bg-success',
+        'wave:forced-colors:bg-[Highlight]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
       expect(connectorOf('active')).toHaveClass(
-        'bg-border',
-        'forced-colors:bg-[CanvasText]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:bg-border',
+        'wave:forced-colors:bg-[CanvasText]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
-      expect(connectorOf('active')).not.toHaveClass('forced-colors:bg-[Highlight]');
+      expect(connectorOf('active')).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
     });
   });
 
@@ -1012,36 +1016,37 @@ describe('Stepper and Stepper.Step — slotProps', () => {
   ];
 
   // Captured from 414fe7d's dist (client and server agree).
-  const ITEM = 'wave-stepper-step__list-item flex min-w-0';
+  const ITEM = 'wave-stepper-step__list-item wave:flex wave:min-w-0';
   const BUTTON =
-    'wave-stepper-step__button relative flex rounded flex-col items-center gap-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+    'wave-stepper-step__button wave:relative wave:flex wave:rounded wave:flex-col wave:items-center wave:gap-1 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring';
   const INDICATOR =
-    'wave-stepper-step__indicator flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors motion-reduce:transition-none';
-  const LABEL = 'wave-stepper-step__label font-semibold text-caption-1 whitespace-nowrap';
+    'wave-stepper-step__indicator wave:flex wave:size-8 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border-2 wave:transition-colors wave:motion-reduce:transition-none';
+  const LABEL =
+    'wave-stepper-step__label wave:font-semibold wave:text-caption-1 wave:whitespace-nowrap';
   const CONNECTOR =
-    'wave-stepper-step__connector transition-colors motion-reduce:transition-none mx-2 h-0.5 flex-1';
+    'wave-stepper-step__connector wave:transition-colors wave:motion-reduce:transition-none wave:mx-2 wave:h-0.5 wave:flex-1';
   const BASE_PINS = [
-    '<ol class="wave-stepper__list m-0 flex list-none p-0 flex-1 flex-row items-start" role="list">',
-    `<li class="${ITEM} flex-1">`,
-    `<li class="${ITEM} flex-1">`,
-    `<li class="${ITEM} flex-1">`,
+    '<ol class="wave-stepper__list wave:m-0 wave:flex wave:list-none wave:p-0 wave:flex-1 wave:flex-row wave:items-start" role="list">',
+    `<li class="${ITEM} wave:flex-1">`,
+    `<li class="${ITEM} wave:flex-1">`,
+    `<li class="${ITEM} wave:flex-1">`,
     `<li class="${ITEM}">`,
-    `<div aria-describedby="wave-step-_id0_-description" aria-labelledby="wave-step-_id0_-label" class="${BUTTON} cursor-pointer" role="button" tabindex="0">`,
-    `<div aria-current="step" aria-labelledby="wave-step-_id1_-label" class="${BUTTON} cursor-pointer" role="button" tabindex="0">`,
-    `<div aria-labelledby="wave-step-_id2_-label" class="${BUTTON} cursor-pointer" role="button" tabindex="0">`,
-    `<div aria-disabled="true" aria-labelledby="wave-step-_id3_-label" class="${BUTTON} cursor-default opacity-50" role="button" tabindex="-1">`,
-    `<span aria-hidden="true" class="${INDICATOR} border-success bg-success-tint text-success-tint-foreground">`,
-    `<span aria-hidden="true" class="${INDICATOR} border-primary bg-primary text-primary-foreground forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none">`,
-    `<span aria-hidden="true" class="${INDICATOR} border-error bg-error-tint text-error-tint-foreground">`,
-    `<span aria-hidden="true" class="${INDICATOR} border-border bg-background text-muted-foreground">`,
-    `<span class="${LABEL} text-success" id="wave-step-_id0_-label">`,
-    `<span class="${LABEL} text-primary" id="wave-step-_id1_-label">`,
-    `<span class="${LABEL} text-error" id="wave-step-_id2_-label">`,
-    `<span class="${LABEL} text-foreground" id="wave-step-_id3_-label">`,
-    '<span class="wave-stepper-step__description text-muted-foreground text-caption-2 whitespace-nowrap" id="wave-step-_id0_-description">',
-    `<div aria-hidden="true" class="${CONNECTOR} bg-success forced-colors:bg-[Highlight] forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
-    `<div aria-hidden="true" class="${CONNECTOR} bg-border forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
-    `<div aria-hidden="true" class="${CONNECTOR} bg-border forced-colors:bg-[CanvasText] forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
+    `<div aria-describedby="wave-step-_id0_-description" aria-labelledby="wave-step-_id0_-label" class="${BUTTON} wave:cursor-pointer" role="button" tabindex="0">`,
+    `<div aria-current="step" aria-labelledby="wave-step-_id1_-label" class="${BUTTON} wave:cursor-pointer" role="button" tabindex="0">`,
+    `<div aria-labelledby="wave-step-_id2_-label" class="${BUTTON} wave:cursor-pointer" role="button" tabindex="0">`,
+    `<div aria-disabled="true" aria-labelledby="wave-step-_id3_-label" class="${BUTTON} wave:cursor-default wave:opacity-50" role="button" tabindex="-1">`,
+    `<span aria-hidden="true" class="${INDICATOR} wave:border-success wave:bg-success-tint wave:text-success-tint-foreground">`,
+    `<span aria-hidden="true" class="${INDICATOR} wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none">`,
+    `<span aria-hidden="true" class="${INDICATOR} wave:border-error wave:bg-error-tint wave:text-error-tint-foreground">`,
+    `<span aria-hidden="true" class="${INDICATOR} wave:border-border wave:bg-background wave:text-muted-foreground">`,
+    `<span class="${LABEL} wave:text-success" id="wave-step-_id0_-label">`,
+    `<span class="${LABEL} wave:text-primary" id="wave-step-_id1_-label">`,
+    `<span class="${LABEL} wave:text-error" id="wave-step-_id2_-label">`,
+    `<span class="${LABEL} wave:text-foreground" id="wave-step-_id3_-label">`,
+    '<span class="wave-stepper-step__description wave:text-muted-foreground wave:text-caption-2 wave:whitespace-nowrap" id="wave-step-_id0_-description">',
+    `<div aria-hidden="true" class="${CONNECTOR} wave:bg-success wave:forced-colors:bg-[Highlight] wave:forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
+    `<div aria-hidden="true" class="${CONNECTOR} wave:bg-border wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
+    `<div aria-hidden="true" class="${CONNECTOR} wave:bg-border wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none" data-wave-stepper-connector="">`,
   ].join('\n');
 
   it('renders the parts of 414fe7d (attributes sorted), on the client and the server', () => {
@@ -1129,13 +1134,13 @@ describe('Stepper and Stepper.Step — slotProps', () => {
     );
     const first = (name: (typeof STEP_PARTS)[number]) =>
       all(document, stepperStepClassNames[name])[0];
-    expect(all(document, stepperClassNames.list)[0]).not.toHaveClass('p-0');
-    expect(first('listItem')).not.toHaveClass('min-w-0');
-    expect(first('button')).not.toHaveClass('rounded');
-    expect(first('indicator')).not.toHaveClass('size-8');
-    expect(first('label')).not.toHaveClass('font-semibold');
-    expect(first('description')).not.toHaveClass('text-muted-foreground');
-    expect(first('connector')).not.toHaveClass('h-0.5');
+    expect(all(document, stepperClassNames.list)[0]).not.toHaveClass('wave:p-0');
+    expect(first('listItem')).not.toHaveClass('wave:min-w-0');
+    expect(first('button')).not.toHaveClass('wave:rounded');
+    expect(first('indicator')).not.toHaveClass('wave:size-8');
+    expect(first('label')).not.toHaveClass('wave:font-semibold');
+    expect(first('description')).not.toHaveClass('wave:text-muted-foreground');
+    expect(first('connector')).not.toHaveClass('wave:h-0.5');
   });
 
   it('attaches your refs to the parts', () => {
@@ -1514,7 +1519,7 @@ describe('Stepper and Stepper.Step — slotProps', () => {
       { dir: 'rtl' },
     );
     const [connector] = all(document, stepperStepClassNames.connector);
-    expect(connector).toHaveClass('my-connector', 'ms-3.75');
+    expect(connector).toHaveClass('my-connector', 'wave:ms-3.75');
     expect(all(document, stepperStepClassNames.label)[0]).toHaveAttribute('dir', 'ltr');
   });
 

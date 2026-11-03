@@ -75,7 +75,7 @@ describe('dispatchToast with content (P3-01, toast-1)', () => {
     expect(container).toHaveAccessibleName('Warning:');
     // First in the container's content element (0.15), its only child.
     const content = container.firstElementChild;
-    expect(content?.firstElementChild).toHaveClass('sr-only');
+    expect(content?.firstElementChild).toHaveClass('wave:sr-only');
     expect(content?.firstElementChild).toHaveTextContent('Warning:');
     expect(container).toHaveTextContent(/^Warning:\s*Connection lost$/);
     // No Toast inside, so no Dismiss button (D11).

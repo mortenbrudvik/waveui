@@ -17,11 +17,14 @@ import {
   expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
+  mockRect,
   openingTags,
   renderWithProviders,
   testCompoundExposure,
   testNoImplicitSubmit,
+  testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { dropdownClassNames } from '../../../lib/classNames';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
@@ -91,10 +94,6 @@ const CONTROLLED_TO_UNCONTROLLED =
   'uncontrolled, and the empty value (for example `[]`, `null` or `""`) to clear a controlled ' +
   'value.';
 
-const DEPRECATED_ON_OPTION_SELECT =
-  '[WaveUI] Dropdown: `onOptionSelect` is deprecated and will be removed in 1.0. Use ' +
-  '`onValueChange` instead.';
-
 afterEach(() => {
   vi.restoreAllMocks();
   __resetAnnouncer();
@@ -106,9 +105,10 @@ describe('Dropdown', () => {
   testSystemProps(Dropdown, {
     expectedTag: 'div',
     displayName: 'Dropdown',
-    control: { role: 'combobox' },
+    ref: 'control',
+    control: { role: 'combobox', tag: 'button' },
     defaultProps: { 'aria-label': 'Fruit', children: FRUITS },
-    conflictingClass: { className: 'flex-row', overrides: 'flex-col' },
+    conflictingClass: { className: 'flex-row', overrides: 'wave:flex-col' },
     a11yVariants: [
       { name: 'open', props: { defaultOpen: true } },
       { name: 'with a value', props: { defaultValue: 'b' } },
@@ -141,6 +141,8 @@ describe('Dropdown', () => {
       },
     ],
   });
+
+  testRootPartRef(Dropdown, { props: { 'aria-label': 'Fruit', children: FRUITS } });
 
   testNoImplicitSubmit(Dropdown, {
     defaultProps: { 'aria-label': 'Fruit', defaultOpen: true, children: FRUITS },
@@ -637,47 +639,45 @@ describe('Dropdown', () => {
   });
 
   describe('value callbacks (input-basic#29, table-core#3)', () => {
-    it('onValueChange fires only on change; the deprecated onOptionSelect on every activation', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('onValueChange fires only on change: selecting the current option again does not call it', async () => {
       const user = userEvent.setup();
       const onValueChange = vi.fn();
-      const onOptionSelect = vi.fn();
-      renderDropdown({ defaultValue: 'a', onValueChange, onOptionSelect });
+      renderDropdown({ defaultValue: 'a', onValueChange });
       await user.click(combobox());
       await user.click(option('Apple'));
       expect(onValueChange).not.toHaveBeenCalled();
-      expect(onOptionSelect).toHaveBeenCalledWith('a');
       await user.click(combobox());
       await user.click(option('Banana'));
-      expect(onValueChange).toHaveBeenCalledTimes(1);
-      expect(onValueChange).toHaveBeenCalledWith('b');
-      expect(onOptionSelect).toHaveBeenCalledTimes(2);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+      expect(onValueChange.mock.calls).toEqual([['b']]);
     });
 
-    it('calls onValueChange before the deprecated onOptionSelect (0.7 order)', async () => {
+    it('has no onOptionSelect alias: the 0.4 name is removed in 1.0', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const user = userEvent.setup();
-      const calls: string[] = [];
-      renderDropdown({
-        onValueChange: () => calls.push('onValueChange'),
-        onOptionSelect: () => calls.push('onOptionSelect'),
-      });
-      await user.click(combobox());
-      await user.click(option('Apple'));
-      expect(calls).toEqual(['onValueChange', 'onOptionSelect']);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
-    });
-
-    it('warns once that onOptionSelect is deprecated', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const { rerender } = renderDropdown({ onOptionSelect: () => {} });
-      rerender(
-        <Dropdown aria-label="Fruit" onOptionSelect={() => {}}>
+      const onOptionSelect = vi.fn();
+      const onValueChange = vi.fn();
+      const { container } = render(
+        <Dropdown
+          aria-label="Fruit"
+          // @ts-expect-error -- `onOptionSelect(value)` is removed in 1.0: use `onValueChange`
+          onOptionSelect={onOptionSelect}
+          onValueChange={onValueChange}
+        >
           {FRUITS}
         </Dropdown>,
       );
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+      await user.click(combobox());
+      await user.click(option('Apple'));
+      expect(onValueChange.mock.calls).toEqual([['a']]);
+      expect(onOptionSelect).not.toHaveBeenCalled();
+      // Untyped code that still passes it reaches the root as an unknown prop: React reports it
+      // and renders nothing for it.
+      expect(container.querySelector('[onoptionselect]')).toBeNull();
+      expect(error.mock.calls).toEqual([
+        ['Unknown event handler property `%s`. It will be ignored.', 'onOptionSelect'],
+      ]);
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('fires the value callback exactly once per selection in StrictMode', async () => {
@@ -937,13 +937,13 @@ describe('Dropdown', () => {
       expect(control).toHaveAttribute('id', 'own-id');
     });
 
-    it('routes id and aria props to the button and keeps data-* and ref on the root', () => {
-      const ref = React.createRef<HTMLDivElement>();
-      const controlRef = React.createRef<HTMLButtonElement>();
+    it('routes id, aria props and ref to the button and keeps data-* on the root', () => {
+      const ref = React.createRef<HTMLButtonElement>();
+      const rootRef = React.createRef<HTMLDivElement>();
       render(
         <Dropdown
           ref={ref}
-          controlRef={controlRef}
+          slotProps={{ root: { ref: rootRef } }}
           id="fruit"
           aria-label="Fruit"
           aria-describedby="help"
@@ -954,8 +954,8 @@ describe('Dropdown', () => {
       );
       expect(combobox()).toHaveAttribute('id', 'fruit');
       expect(combobox()).toHaveAttribute('aria-describedby', 'help');
-      expect(controlRef.current).toBe(combobox());
-      expect(ref.current).toBe(screen.getByTestId('root'));
+      expect(ref.current).toBe(combobox());
+      expect(rootRef.current).toBe(screen.getByTestId('root'));
       expect(screen.getByTestId('root')).not.toHaveAttribute('id');
     });
   });
@@ -1035,12 +1035,12 @@ describe('Dropdown', () => {
     it('draws the field boundary with the accessible bottom stroke (WCAG 1.4.11)', () => {
       renderDropdown();
       expect(combobox()).toHaveClass(
-        'border',
-        'border-input',
-        'border-b-stroke-accessible',
-        'focus:border-b-primary',
+        'wave:border',
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+        'wave:focus:border-b-primary',
       );
-      expect(combobox()).not.toHaveClass('border-destructive');
+      expect(combobox()).not.toHaveClass('wave:border-destructive');
     });
 
     it.each([
@@ -1058,8 +1058,12 @@ describe('Dropdown', () => {
       expect(control).toHaveAttribute('aria-invalid', 'true');
       // Keeps the destructive border and shows the focus color on the focused bottom border
       // (Phase 4 D4).
-      expect(control).toHaveClass('border', 'border-destructive', 'focus:border-b-primary');
-      for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
+      expect(control).toHaveClass(
+        'wave:border',
+        'wave:border-destructive',
+        'wave:focus:border-b-primary',
+      );
+      for (const replaced of ['wave:border-input', 'wave:border-b-stroke-accessible']) {
         expect(control).not.toHaveClass(replaced);
       }
     });
@@ -1070,8 +1074,8 @@ describe('Dropdown', () => {
       });
       const control = screen.getByRole('combobox');
       expect(control).toHaveAttribute('aria-invalid', 'false');
-      expect(control).toHaveClass('border-input', 'border-b-stroke-accessible');
-      expect(control).not.toHaveClass('border-destructive');
+      expect(control).toHaveClass('wave:border-input', 'wave:border-b-stroke-accessible');
+      expect(control).not.toHaveClass('wave:border-destructive');
     });
   });
 
@@ -1117,11 +1121,11 @@ describe('Dropdown', () => {
       expect(apple).toHaveAttribute('data-active');
       // The hover/selected/active variants only set `--option-bg`: no state class declares a
       // background of its own that would out-specify (class + attribute) a consumer's plain `bg-*`.
-      expect(backgroundClasses(apple)).toEqual(['bg-(--option-bg)']);
-      expect(backgroundClasses(option('Banana'))).toEqual(['bg-(--option-bg)']);
+      expect(backgroundClasses(apple)).toEqual(['wave:bg-(--option-bg)']);
+      expect(backgroundClasses(option('Banana'))).toEqual(['wave:bg-(--option-bg)']);
       expect(apple).toHaveClass(
-        'data-[selected]:[--option-bg:var(--wave-subtle-selected)]',
-        'data-[active]:[--option-bg:var(--wave-subtle-hover)]',
+        'wave:data-[selected]:[--option-bg:var(--wave-subtle-selected)]',
+        'wave:data-[active]:[--option-bg:var(--wave-subtle-hover)]',
       );
     });
 
@@ -1136,8 +1140,8 @@ describe('Dropdown', () => {
       // background left on the option, so it wins the cascade in every state.
       expect(backgroundClasses(apple)).toEqual(['bg-primary']);
       expect(apple).toHaveClass('text-primary-foreground');
-      expect(apple).not.toHaveClass('text-foreground');
-      expect(backgroundClasses(option('Banana'))).toEqual(['bg-(--option-bg)']);
+      expect(apple).not.toHaveClass('wave:text-foreground');
+      expect(backgroundClasses(option('Banana'))).toEqual(['wave:bg-(--option-bg)']);
     });
 
     it('lets a consumer restyle one state with a data variant', async () => {
@@ -1147,15 +1151,18 @@ describe('Dropdown', () => {
       const apple = option('Apple');
       expect(apple).toHaveAttribute('data-active');
       // The variant (class + attribute) out-specifies the unconditional `bg-(--option-bg)`.
-      expect(backgroundClasses(apple)).toEqual(['bg-(--option-bg)', 'data-[active]:bg-selected']);
+      expect(backgroundClasses(apple)).toEqual([
+        'data-[active]:bg-selected',
+        'wave:bg-(--option-bg)',
+      ]);
     });
 
     it('uses logical classes in RTL', () => {
       renderWithProviders(<Dropdown aria-label="Fruit">{FRUITS}</Dropdown>, { dir: 'rtl' });
-      expect(combobox()).toHaveClass('text-start', 'pe-8');
+      expect(combobox()).toHaveClass('wave:text-start', 'wave:pe-8');
       // The chevron sits at the end of the button, in the room its end padding keeps free.
       const chevron = combobox().querySelector('svg');
-      expect(chevron).toHaveClass('absolute', 'end-3');
+      expect(chevron).toHaveClass('wave:absolute', 'wave:end-3');
       expect(chevron?.getAttribute('class')).not.toMatch(/\b(left|right)-/);
       expect(combobox().closest('[dir]')).toHaveAttribute('dir', 'rtl');
     });
@@ -1191,15 +1198,15 @@ describe('Dropdown', () => {
 
     it('keeps the 0.7 chevron by default and hides it with false', () => {
       const { rerender } = renderDropdown({ clearable: true, defaultValue: 'a' });
-      expect(combobox().querySelector('svg')).toHaveClass('absolute', 'end-3'); // 0.7
+      expect(combobox().querySelector('svg')).toHaveClass('wave:absolute', 'wave:end-3'); // 0.7
       rerender(
         <Dropdown aria-label="Fruit" clearable defaultValue="a" expandIcon={false}>
           {FRUITS}
         </Dropdown>,
       );
       expect(combobox().querySelector('svg')).toBeNull();
-      expect(combobox()).toHaveClass('pe-8'); // one button: the clear button
-      expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('end-1');
+      expect(combobox()).toHaveClass('wave:pe-8'); // one button: the clear button
+      expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('wave:end-1');
     });
 
     it.each([
@@ -1218,14 +1225,14 @@ describe('Dropdown', () => {
     ])('hides the chevron with expandIcon %s (renders nothing)', (_label, expandIcon) => {
       renderDropdown({ expandIcon, clearable: true, defaultValue: 'a' });
       expect(chevron()).toBeNull();
-      expect(combobox()).toHaveClass('pe-8'); // one button: the clear button
+      expect(combobox()).toHaveClass('wave:pe-8'); // one button: the clear button
     });
 
     it('renders custom content as the decorative glyph, in place of the chevron', () => {
       renderDropdown({ expandIcon: <svg data-testid="caret" /> });
       const caret = screen.getByTestId('caret');
       expect(caret.parentElement).toHaveAttribute('aria-hidden', 'true');
-      expect(caret.parentElement).toHaveClass('absolute', 'end-3', 'inline-flex');
+      expect(caret.parentElement).toHaveClass('wave:absolute', 'wave:end-3', 'wave:inline-flex');
       expect(combobox().querySelector('[data-wave-icon="chevron-down"]')).toBeNull();
     });
 
@@ -1233,10 +1240,13 @@ describe('Dropdown', () => {
       const user = userEvent.setup();
       renderDropdown({ expandIcon: <svg data-testid="caret" /> });
       const glyph = () => screen.getByTestId('caret').parentElement;
-      expect(glyph()).toHaveClass('transition-transform', 'motion-reduce:transition-none');
-      expect(glyph()).not.toHaveClass('rotate-180');
+      expect(glyph()).toHaveClass(
+        'wave:transition-transform',
+        'wave:motion-reduce:transition-none',
+      );
+      expect(glyph()).not.toHaveClass('wave:rotate-180');
       await user.click(combobox());
-      expect(glyph()).toHaveClass('rotate-180');
+      expect(glyph()).toHaveClass('wave:rotate-180');
     });
 
     it('unwraps a button passed as expandIcon and warns once', () => {
@@ -1328,7 +1338,7 @@ describe('Dropdown', () => {
       const wrapper = combobox().parentElement as HTMLElement;
       expect(wrapper.parentElement).toBe(root);
       expect(wrapper.tagName).toBe('DIV');
-      expect(wrapper).toHaveClass('relative', 'flex', 'items-center');
+      expect(wrapper).toHaveClass('wave:relative', 'wave:flex', 'wave:items-center');
       expect(combobox().nextElementSibling).toBe(clearButton());
       expect(container.querySelector('input[name="fruit"]')?.parentElement).toBe(root);
     });
@@ -1422,8 +1432,8 @@ describe('Dropdown', () => {
         </Dropdown>,
         { dir: 'rtl' },
       );
-      expect(combobox()).toHaveClass('pe-14');
-      expect(clearButton()).toHaveClass('absolute', 'end-7', 'h-6', 'w-6');
+      expect(combobox()).toHaveClass('wave:pe-14');
+      expect(clearButton()).toHaveClass('wave:absolute', 'wave:end-7', 'wave:h-6', 'wave:w-6');
       expect(clearButton().className).not.toMatch(/\b(left|right)-/);
       expect(combobox().className).not.toMatch(/\bp[lr]-/);
     });
@@ -1431,19 +1441,19 @@ describe('Dropdown', () => {
     it('gives the clear button its own padding, background and focus ring (C-NATIVE, C-FOCUS)', () => {
       renderDropdown({ defaultValue: 'a', clearable: true });
       expect(clearButton()).toHaveClass(
-        'p-0',
-        'bg-transparent',
-        'focus-visible:outline-2',
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:p-0',
+        'wave:bg-transparent',
+        'wave:focus-visible:outline-2',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
       );
     });
   });
 
   it('sets the vertical padding of its button, so an app-wide button rule cannot pad it (C-NATIVE)', () => {
     renderDropdown();
-    expect(combobox()).toHaveClass('px-3');
-    expect(combobox()).toHaveClass('py-0');
-    expect(combobox()).toHaveClass('bg-background');
+    expect(combobox()).toHaveClass('wave:px-3');
+    expect(combobox()).toHaveClass('wave:py-0');
+    expect(combobox()).toHaveClass('wave:bg-background');
   });
 
   it('is disabled', () => {
@@ -1569,7 +1579,7 @@ describe('Dropdown', () => {
       renderMulti({ defaultValue: ['c', 'zz', 'a'] });
       const text = combobox().querySelector('span');
       expect(text).toHaveTextContent('Cherry, Apple');
-      expect(text).toHaveClass('truncate');
+      expect(text).toHaveClass('wave:truncate');
     });
 
     it('localizes the joined text', () => {
@@ -1733,16 +1743,9 @@ describe('Dropdown', () => {
       });
     });
 
-    it('fires the deprecated onOptionSelect per toggle', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const user = userEvent.setup();
-      const onOptionSelect = vi.fn();
-      renderMulti({ onOptionSelect });
-      await user.click(combobox());
-      await user.click(option('Apple'));
-      await user.click(option('Apple'));
-      expect(onOptionSelect.mock.calls).toEqual([['a'], ['a']]);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_OPTION_SELECT]]);
+    it('has no onOptionSelect alias with multiselect either (removed in 1.0)', () => {
+      // @ts-expect-error -- `onOptionSelect(value)` is removed in 1.0: use `onValueChange`
+      void (<Dropdown aria-label="Fruit" multiselect onOptionSelect={() => {}} />);
     });
 
     it('warns once for a duplicated value and toggles the first', async () => {
@@ -1895,14 +1898,24 @@ describe('Dropdown', () => {
 
     it('keeps the 0.7 classes at medium', () => {
       renderDropdown();
-      expect(button()).toHaveClass('h-8', 'px-3', 'text-body-1', 'pe-14');
-      expect(chevron()).toHaveClass('end-3');
-      expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+      expect(button()).toHaveClass('wave:h-8', 'wave:px-3', 'wave:text-body-1', 'wave:pe-14');
+      expect(chevron()).toHaveClass('wave:end-3');
+      expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-7');
     });
 
     it.each([
-      ['small', ['h-6', 'px-2', 'text-caption-1', 'pe-13'], 'end-2', ['size-5', 'end-7']],
-      ['large', ['h-10', 'px-4', 'text-body-2', 'pe-18'], 'end-3', ['size-8', 'end-9']],
+      [
+        'small',
+        ['wave:h-6', 'wave:px-2', 'wave:text-caption-1', 'wave:pe-13'],
+        'wave:end-2',
+        ['wave:size-5', 'wave:end-7'],
+      ],
+      [
+        'large',
+        ['wave:h-10', 'wave:px-4', 'wave:text-body-2', 'wave:pe-18'],
+        'wave:end-3',
+        ['wave:size-8', 'wave:end-9'],
+      ],
     ] as const)('%s', (size, buttonClasses, chevronOffset, clearClasses) => {
       renderDropdown({ size });
       expect(button()).toHaveClass(...buttonClasses);
@@ -1912,7 +1925,10 @@ describe('Dropdown', () => {
 
     it('renders the appearance on the button and the attributes on the root', () => {
       renderDropdown({ appearance: 'filled-lighter' });
-      expect(button()).toHaveClass('bg-input-filled-lighter', 'border-input-filled-stroke');
+      expect(button()).toHaveClass(
+        'wave:bg-input-filled-lighter',
+        'wave:border-input-filled-stroke',
+      );
       const root = button().closest('[data-appearance]') as HTMLElement;
       expect(root).toHaveAttribute('data-appearance', 'filled-lighter');
       expect(root).toHaveAttribute('data-size', 'medium');
@@ -1933,8 +1949,8 @@ describe('Dropdown', () => {
     });
 
     it.each([
-      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
+      ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+      ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
     ] as const)(
       'appearance="%s" renders its classes and data-appearance',
       (appearance, classes) => {
@@ -1993,7 +2009,7 @@ describe('Dropdown', () => {
           { errorId: FIELD_TEST_IDS.errorId },
         );
         const control = screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label });
-        expect(control).toHaveClass('border-destructive', 'focus:border-b-primary');
+        expect(control).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
       },
     );
 
@@ -2001,7 +2017,7 @@ describe('Dropdown', () => {
       "an invalid %s field keeps the destructive border and the focus color on its bottom (Dropdown's own invalid state)",
       (appearance) => {
         renderDropdown({ appearance, 'aria-invalid': true });
-        expect(button()).toHaveClass('border-destructive', 'focus:border-b-primary');
+        expect(button()).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
       },
     );
 
@@ -2017,7 +2033,7 @@ describe('Dropdown', () => {
 
     it('extends the small clear button hit area with a transparent layer (WCAG 2.5.8)', () => {
       renderDropdown({ size: 'small' });
-      expect(clear()).toHaveClass('before:absolute', 'before:-inset-0.5');
+      expect(clear()).toHaveClass('wave:before:absolute', 'wave:before:-inset-0.5');
     });
 
     it('keeps the chevron and the clear button at the inline end in RTL', () => {
@@ -2028,34 +2044,34 @@ describe('Dropdown', () => {
         { dir: 'rtl' },
       );
       expect(screen.getByRole('combobox', { name: 'Role' }).querySelector('svg')).toHaveClass(
-        'end-3',
+        'wave:end-3',
       );
-      expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('end-9');
+      expect(screen.getByRole('button', { name: 'Clear selection' })).toHaveClass('wave:end-9');
     });
 
     // The 0.10 parts at each size (spec §3.3 step 4): the expandIcon slot (D15) takes the
     // chevron's per-size offset; without a chevron the clear button is the first button; a
     // multi-select Dropdown takes the size and appearance with nothing of its own.
     it.each([
-      ['small', 'end-2'],
-      ['medium', 'end-3'],
-      ['large', 'end-3'],
+      ['small', 'wave:end-2'],
+      ['medium', 'wave:end-3'],
+      ['large', 'wave:end-3'],
     ] as const)('a custom expandIcon glyph takes the offset of size=%s', (size, offset) => {
       renderDropdown({ size, expandIcon: <svg data-testid="caret" /> });
-      expect(screen.getByTestId('caret').parentElement).toHaveClass('absolute', offset);
+      expect(screen.getByTestId('caret').parentElement).toHaveClass('wave:absolute', offset);
     });
 
     it.each([
-      ['small', 'pe-7'],
-      ['medium', 'pe-8'],
-      ['large', 'pe-10'],
+      ['small', 'wave:pe-7'],
+      ['medium', 'wave:pe-8'],
+      ['large', 'wave:pe-10'],
     ] as const)(
       'with expandIcon={false} at size=%s the clear button is the only button',
       (size, padding) => {
         renderDropdown({ size, expandIcon: false });
         expect(button()).toHaveClass(padding);
         expect(button().querySelector('svg')).toBeNull();
-        expect(clear()).toHaveClass('end-1');
+        expect(clear()).toHaveClass('wave:end-1');
       },
     );
 
@@ -2073,11 +2089,17 @@ describe('Dropdown', () => {
           <Dropdown.Option value="admin">Admin</Dropdown.Option>
         </Dropdown>,
       );
-      expect(button()).toHaveClass('h-6', 'px-2', 'text-caption-1', 'pe-13', 'border-b');
-      expect(button().querySelector('span')).toHaveClass('truncate');
+      expect(button()).toHaveClass(
+        'wave:h-6',
+        'wave:px-2',
+        'wave:text-caption-1',
+        'wave:pe-13',
+        'wave:border-b',
+      );
+      expect(button().querySelector('span')).toHaveClass('wave:truncate');
       expect(button()).toHaveTextContent('User, Admin');
       expect(chevron()).toHaveAttribute('width', '12');
-      expect(clear()).toHaveClass('size-5', 'end-7');
+      expect(clear()).toHaveClass('wave:size-5', 'wave:end-7');
       const root = button().closest('[data-size]') as HTMLElement;
       expect(root).toHaveAttribute('data-size', 'small');
       expect(root).toHaveAttribute('data-appearance', 'underline');
@@ -2088,6 +2110,7 @@ describe('Dropdown', () => {
 describe('Dropdown — slotProps', () => {
   type DropdownSlotProps = NonNullable<DropdownProps['slotProps']>;
   const EVERY_PART: DropdownSlotProps = {
+    root: {},
     button: {},
     value: {},
     clearButton: {},
@@ -2118,11 +2141,11 @@ describe('Dropdown — slotProps', () => {
       openingTags(...[button, value, clearButton, listbox, surface].map((name) => part(name)!)),
     ).toBe(
       [
-        '<button aria-activedescendant="dropdown-listbox-_id0_-opt-0" aria-controls="dropdown-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Fruit" class="wave-dropdown__button relative flex w-full items-center justify-between py-0 text-start h-8 px-3 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground pe-14 focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" role="combobox" type="button">',
-        '<span class="wave-dropdown__value truncate">',
-        '<button aria-label="Clear selection" class="wave-dropdown__clear-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
-        '<ul aria-label="Fruit" class="wave-listbox-surface__list min-h-0 max-h-60 overflow-auto wave-dropdown__listbox" id="dropdown-listbox-_id0_" role="listbox" tabindex="-1">',
-        '<div class="wave-listbox-surface flex flex-col overflow-hidden rounded border border-border bg-background py-1 text-foreground shadow-4 wave-dropdown__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<button aria-activedescendant="dropdown-listbox-_id0_-opt-0" aria-controls="dropdown-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Fruit" class="wave-dropdown__button wave:relative wave:flex wave:w-full wave:items-center wave:justify-between wave:py-0 wave:text-start wave:h-8 wave:px-3 wave:text-body-1 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:text-foreground wave:pe-14 wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" role="combobox" type="button">',
+        '<span class="wave-dropdown__value wave:truncate">',
+        '<button aria-label="Clear selection" class="wave-dropdown__clear-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-7 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
+        '<ul aria-label="Fruit" class="wave-listbox-surface__list wave:min-h-0 wave:max-h-60 wave:overflow-auto wave-dropdown__listbox" id="dropdown-listbox-_id0_" role="listbox" tabindex="-1">',
+        '<div class="wave-listbox-surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4 wave-dropdown__surface" data-align="start" data-side="bottom" data-wave-listbox-surface="" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
       ].join('\n'),
     );
   });
@@ -2142,6 +2165,17 @@ describe('Dropdown — slotProps', () => {
         clearable: true,
         defaultValue: 'b',
       },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Fruit',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -2153,6 +2187,15 @@ describe('Dropdown — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Your own data attributes on the root, the locked ones among them.
+    expectInertSlotProps(
+      (slotProps) => (
+        <Dropdown aria-label="Fruit" data-size="large" data-x="1" slotProps={slotProps}>
+          {TWO}
+        </Dropdown>
+      ),
+      EVERY_PART,
+    );
     expectInertSlotProps(
       (slotProps) => (
         <Dropdown
@@ -2220,26 +2263,28 @@ describe('Dropdown — slotProps', () => {
     // The placeholder's muted colour gives way to yours.
     const value = part(dropdownClassNames.value);
     expect(value).toHaveClass('text-error');
-    expect(value).not.toHaveClass('text-muted-foreground');
+    expect(value).not.toHaveClass('wave:text-muted-foreground');
   });
 
-  it('attaches your refs to the parts, beside controlRef and the positioning', async () => {
+  it('attaches your refs to the parts, beside ref and the positioning', async () => {
     const refs = {
+      root: React.createRef<HTMLDivElement>(),
       button: React.createRef<HTMLButtonElement>(),
       value: React.createRef<HTMLSpanElement>(),
       clearButton: React.createRef<HTMLButtonElement>(),
       listbox: React.createRef<HTMLUListElement>(),
       surface: React.createRef<HTMLDivElement>(),
     };
-    const controlRef = React.createRef<HTMLButtonElement>();
+    const ref = React.createRef<HTMLButtonElement>();
     render(
       <Dropdown
         aria-label="Fruit"
         defaultOpen
         defaultValue="a"
         clearable
-        controlRef={controlRef}
+        ref={ref}
         slotProps={{
+          root: { ref: refs.root },
           button: { ref: refs.button },
           value: { ref: refs.value },
           clearButton: { ref: refs.clearButton },
@@ -2253,7 +2298,8 @@ describe('Dropdown — slotProps', () => {
     await act(async () => {});
     const combobox = screen.getByRole('combobox', { name: 'Fruit' });
     expect(refs.button.current).toBe(combobox);
-    expect(controlRef.current).toBe(combobox);
+    expect(ref.current).toBe(combobox);
+    expect(refs.root.current).toBe(part(dropdownClassNames.root));
     expect(refs.value.current).toBe(part(dropdownClassNames.value));
     expect(refs.clearButton.current).toBe(screen.getByRole('button', { name: 'Clear selection' }));
     expect(refs.listbox.current).toBe(screen.getByRole('listbox', { name: 'Fruit' }));
@@ -2547,7 +2593,10 @@ describe('Dropdown — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof DropdownSlotProps>().toEqualTypeOf<
-      'button' | 'value' | 'clearButton' | 'listbox' | 'surface'
+      'root' | 'button' | 'value' | 'clearButton' | 'listbox' | 'surface'
+    >();
+    expectTypeOf<NonNullable<DropdownSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
     >();
     expectTypeOf<NonNullable<DropdownSlotProps['button']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLButtonElement> | undefined
@@ -2563,5 +2612,446 @@ describe('Dropdown — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the Dropdown draws its content
     void (<Dropdown slotProps={{ value: { children: 'Other' } }} />);
+    // @ts-expect-error -- a part takes no children: the Dropdown draws its content
+    void (<Dropdown slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => part(dropdownClassNames.root)!;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the Dropdown's className and style", () => {
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root().classList[0]).toBe(dropdownClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(combobox()).not.toHaveAttribute('data-part');
+      expect(combobox()).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(
+        <Dropdown aria-label="Fruit" slotProps={{ root: { className: 'flex-row' } }}>
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root()).toHaveClass('flex-row');
+      expect(root()).not.toHaveClass('wave:flex-col');
+    });
+
+    it("keeps the props you give the Dropdown over the part's", () => {
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          title="Own"
+          data-x="own"
+          data-size="large"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+      // Your own data-size reaches the root as in 0.18 (after the resolved one).
+      expect(root()).toHaveAttribute('data-size', 'large');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <Dropdown
+          aria-label="Fruit"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The Dropdown's own hidden state stays its own.
+      rerender(
+        <Dropdown
+          aria-label="Fruit"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the Dropdown's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <Dropdown
+          aria-label="Fruit"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <Dropdown
+          aria-label="Fruit"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("opens on a click on the button whatever your root onClick does: the toggle is the button's own, before the click reaches the root", async () => {
+      const user = userEvent.setup();
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      await user.click(combobox());
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('calls your root onClick in every state, as the Dropdown calls its own: the root passes no click to the button', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <Dropdown aria-label="Fruit" onClick={own} slotProps={{ root: { onClick } }}>
+          {TWO}
+        </Dropdown>,
+      );
+      fireEvent.click(root());
+      rerender(
+        <Dropdown aria-label="Fruit" disabled onClick={own} slotProps={{ root: { onClick } }}>
+          {TWO}
+        </Dropdown>,
+      );
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps a press inside the root from dismissing the open list, also with an inline part ref', async () => {
+      const user = userEvent.setup();
+      const nodes: (HTMLDivElement | null)[] = [];
+      const ui = (pass: number) => (
+        <>
+          <Dropdown
+            aria-label="Fruit"
+            data-pass={pass}
+            slotProps={{
+              root: {
+                ref: (node) => {
+                  nodes.push(node);
+                },
+              },
+            }}
+          >
+            {TWO}
+          </Dropdown>
+          <p>Outside</p>
+        </>
+      );
+      const { rerender } = render(ui(0));
+      await user.click(combobox());
+      rerender(ui(1));
+      rerender(ui(2));
+      expect(nodes.at(-1)).toBe(root());
+      // A press on the root itself (no focus move): inside the popup's tree.
+      fireEvent.pointerDown(root());
+      fireEvent.click(root());
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.pointerDown(screen.getByText('Outside'));
+      fireEvent.click(screen.getByText('Outside'));
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    // The second path of the Dropdown's own root ref: focus moving to an element inside the root
+    // but outside the button (the clear button) is not focus outside the popup.
+    it('keeps focus moving inside the root from dismissing the open list, also with an inline part ref', async () => {
+      const user = userEvent.setup();
+      const nodes: (HTMLDivElement | null)[] = [];
+      const ui = (pass: number) => (
+        <>
+          <Dropdown
+            aria-label="Fruit"
+            data-pass={pass}
+            defaultValue="a"
+            clearable
+            slotProps={{
+              root: {
+                ref: (node) => {
+                  nodes.push(node);
+                },
+              },
+            }}
+          >
+            {TWO}
+          </Dropdown>
+          <button type="button">Outside</button>
+        </>
+      );
+      const { rerender } = render(ui(0));
+      await user.click(combobox());
+      rerender(ui(1));
+      rerender(ui(2));
+      expect(nodes.at(-1)).toBe(root());
+      act(() => screen.getByRole('button', { name: 'Clear selection' }).focus());
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      act(() => screen.getByRole('button', { name: 'Outside' }).focus());
+      await act(async () => {});
+      expect(combobox()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          defaultOpen
+          slotProps={{ root: { className: 'my-root', title: 'Pick a fruit' } }}
+        >
+          {TWO}
+        </Dropdown>,
+      );
+      await act(async () => {});
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the <button role="combobox">, the focusable control, in both
+// signatures; the root <div> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('Dropdown — ref reaches the control', () => {
+  it('focuses the button through ref', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    renderDropdown({ ref });
+    act(() => ref.current?.focus());
+    expect(combobox()).toHaveFocus();
+  });
+
+  it('gives ref the button beside slotProps.button.ref, and slotProps.root.ref the root, with multiselect too', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const root = React.createRef<HTMLDivElement>();
+    const button = React.createRef<HTMLButtonElement>();
+    render(
+      <Dropdown
+        ref={ref}
+        multiselect
+        aria-label="Fruit"
+        slotProps={{ root: { ref: root }, button: { ref: button } }}
+      >
+        {FRUITS}
+      </Dropdown>,
+    );
+    expect(ref.current).toBe(combobox());
+    expect(button.current).toBe(combobox());
+    expect(root.current).toHaveClass(dropdownClassNames.root);
+    expect(root.current).toContainElement(combobox());
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLButtonElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Order">
+        <Dropdown
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          multiselect
+          name="fruit"
+          required
+          aria-label="Fruit"
+          data-pass={pass}
+        >
+          {FRUITS}
+        </Dropdown>
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const button = combobox();
+    expect(nodes.at(-1)).toBe(button);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the combobox through the Dropdown's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(button).toHaveFocus();
+    await user.click(button);
+    await user.click(option('Banana'));
+    rerender(ui(3));
+    expect(form.checkValidity()).toBe(true);
+    act(() => form.reset());
+    expect(form.checkValidity()).toBe(false);
+    expect(nodes.at(-1)).toBe(button);
+  });
+
+  it('keeps the popup placed against the button with an inline ref that changes on every render', async () => {
+    const html = document.documentElement;
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+    try {
+      const user = userEvent.setup();
+      const nodes: (HTMLButtonElement | null)[] = [];
+      const ui = (pass: number) => (
+        <Dropdown
+          aria-label="Fruit"
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          data-pass={pass}
+        >
+          {FRUITS}
+        </Dropdown>
+      );
+      const { rerender } = render(ui(0));
+      mockRect(combobox(), { x: 100, y: 100, width: 200, height: 32 });
+      rerender(ui(1));
+      await user.click(combobox());
+      rerender(ui(2));
+      rerender(ui(3));
+      const surface = () => listbox().closest<HTMLElement>('[data-wave-listbox-surface]')!;
+      // As wide as the button (the size middleware reads the reference the positioning holds).
+      await waitFor(() =>
+        expect(surface().style.getPropertyValue('--wave-popup-reference-width')).toBe('200px'),
+      );
+      expect(surface()).toHaveAttribute('data-side', 'bottom');
+      expect(nodes.at(-1)).toBe(combobox());
+    } finally {
+      Reflect.deleteProperty(html, 'clientWidth');
+      Reflect.deleteProperty(html, 'clientHeight');
+    }
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <Dropdown ref={ref} aria-label="Fruit">
+        {FRUITS}
+      </Dropdown>,
+    );
+    const button = combobox();
+    rerender(
+      <Dropdown ref={ref} aria-label="Fruit" defaultValue="b" disabled>
+        {FRUITS}
+      </Dropdown>,
+    );
+    expect(ref.mock.calls).toEqual([[button]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[button], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <Dropdown ref={ref} aria-label="Fruit">
+          {FRUITS}
+        </Dropdown>
+      </React.StrictMode>,
+    );
+    const button = combobox();
+    rerender(
+      <React.StrictMode>
+        <Dropdown ref={ref} aria-label="Fruit" disabled>
+          {FRUITS}
+        </Dropdown>
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[button], [null], [button]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    renderWithFieldContext(<Dropdown ref={ref}>{FRUITS}</Dropdown>);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(combobox(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref (for the button) in both signatures, and no controlRef', () => {
+    expectTypeOf<DropdownProps['ref']>().toEqualTypeOf<React.Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<DropdownProps<true>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<DropdownProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<DropdownProps<true>>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the button; the root <div> is slotProps.root.ref
+    void (<Dropdown aria-label="Fruit" ref={divRef} />);
+    // @ts-expect-error -- the same with multiselect
+    void (<Dropdown aria-label="Fruit" multiselect ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLButtonElement>();
+      render(
+        <Dropdown
+          aria-label="Fruit"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the button
+          controlRef={controlRef}
+        >
+          {FRUITS}
+        </Dropdown>,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(document.querySelector(`.${dropdownClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

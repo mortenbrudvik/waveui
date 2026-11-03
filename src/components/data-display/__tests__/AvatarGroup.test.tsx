@@ -5,7 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { avatarGroupClassNames, avatarGroupItemClassNames } from '../../../lib/classNames';
 import { AvatarGroup, AvatarGroupItem, AvatarGroupPopover } from '../AvatarGroup';
-import type { AvatarGroupProps, AvatarGroupItemProps } from '../AvatarGroup';
+import type {
+  AvatarGroupProps,
+  AvatarGroupItemProps,
+  AvatarGroupOpenChangeDetails,
+} from '../AvatarGroup';
 import { Avatar } from '../Avatar';
 import { AvatarGroupContext } from '../AvatarGroup.context';
 import type { AvatarProps } from '../Avatar';
@@ -225,8 +229,8 @@ describe('AvatarGroup', () => {
       expect(screen.getByRole('button', { name: '1 more' })).toHaveTextContent('+1');
       // Each member has its own overlap wrapper.
       expect(alice.parentElement).not.toBe(bob.parentElement);
-      expect(alice.parentElement).not.toHaveClass('-ms-2');
-      expect(bob.parentElement).toHaveClass('-ms-2', 'ring-2', 'ring-background');
+      expect(alice.parentElement).not.toHaveClass('wave:-ms-2');
+      expect(bob.parentElement).toHaveClass('wave:-ms-2', 'wave:ring-2', 'wave:ring-background');
     });
   });
 
@@ -795,11 +799,11 @@ describe('AvatarGroup', () => {
 
   // data-display#16
   it.each([
-    ['extra-small', 'w-6'],
-    ['small', 'w-8'],
-    ['medium', 'w-10'],
-    ['large', 'w-12'],
-    ['extra-large', 'w-14'],
+    ['extra-small', 'wave:w-6'],
+    ['small', 'wave:w-8'],
+    ['medium', 'wave:w-10'],
+    ['large', 'wave:w-12'],
+    ['extra-large', 'wave:w-14'],
   ] as Array<[Size, string]>)('size %s renders a %s overflow button', (size, width) => {
     render(
       <AvatarGroup aria-label="Team" max={1} size={size}>
@@ -812,7 +816,9 @@ describe('AvatarGroup', () => {
     expect(button).toHaveClass(width, width.replace('w-', 'h-'));
     // The button takes the same-size avatars' own size classes.
     const sizeClasses = (el: Element) =>
-      Array.from(el.classList).filter((cls) => /^(w-|h-|text-(\[|xs$|sm$|base$|lg$))/.test(cls));
+      Array.from(el.classList).filter((cls) =>
+        /^wave:(w-|h-|text-(\[|xs$|sm$|base$|lg$))/.test(cls),
+      );
     expect(sizeClasses(button)).toHaveLength(3);
     expect(sizeClasses(button)).toEqual(sizeClasses(screen.getByRole('img', { name: 'Alice' })));
   });
@@ -827,10 +833,10 @@ describe('AvatarGroup', () => {
     );
     const second = screen.getByRole('img', { name: 'Bob' }).parentElement!;
     const first = screen.getByRole('img', { name: 'Alice' }).parentElement!;
-    expect(first).not.toHaveClass('-ms-2');
-    expect(second).toHaveClass('-ms-2', 'ring-2', 'ring-background');
+    expect(first).not.toHaveClass('wave:-ms-2');
+    expect(second).toHaveClass('wave:-ms-2', 'wave:ring-2', 'wave:ring-background');
     expect(second.className).not.toMatch(/-ml-|ring-white/);
-    expect(screen.getByRole('button')).toHaveClass('-ms-2', 'ring-background');
+    expect(screen.getByRole('button')).toHaveClass('wave:-ms-2', 'wave:ring-background');
   });
 
   // button-provider#27 (C-REF): ref is declared in the props interface.
@@ -855,7 +861,7 @@ describe('AvatarGroup', () => {
       );
       const group = screen.getByRole('group', { name: 'Team' });
       expect(group.querySelector('.wave-avatar')).toHaveAttribute('data-size', 'large');
-      expect(screen.getByRole('button', { name: '1 more' }).className).toContain('w-12');
+      expect(screen.getByRole('button', { name: '1 more' }).className).toContain('wave:w-12');
     });
 
     it('a member with its own size keeps it', () => {
@@ -893,8 +899,8 @@ describe('AvatarGroup', () => {
     it('stack overlaps every member after the first', () => {
       render(<AvatarGroup aria-label="Team">{members()}</AvatarGroup>);
       const [first, ...rest] = items(screen.getByRole('group'));
-      expect(first!.className).not.toContain('-ms-2');
-      for (const item of rest) expect(item).toHaveClass('-ms-2');
+      expect(first!.className).not.toContain('wave:-ms-2');
+      for (const item of rest) expect(item).toHaveClass('wave:-ms-2');
     });
 
     it('spread puts the members side by side with a gap and no overlap', () => {
@@ -905,8 +911,8 @@ describe('AvatarGroup', () => {
       );
       const group = screen.getByRole('group', { name: 'Team' });
       expect(group).toHaveAttribute('data-layout', 'spread');
-      expect(group).toHaveClass('gap-1');
-      for (const item of items(group)) expect(item.className).not.toContain('-ms-2');
+      expect(group).toHaveClass('wave:gap-1');
+      for (const item of items(group)) expect(item.className).not.toContain('wave:-ms-2');
     });
 
     it('spread keeps the overflow button without overlap', () => {
@@ -915,7 +921,7 @@ describe('AvatarGroup', () => {
           {members()}
         </AvatarGroup>,
       );
-      expect(screen.getByRole('button', { name: '2 more' }).className).not.toContain('-ms-2');
+      expect(screen.getByRole('button', { name: '2 more' }).className).not.toContain('wave:-ms-2');
     });
 
     it('pie draws up to three wedges as one circle, hidden from assistive technology', () => {
@@ -1165,7 +1171,7 @@ describe('AvatarGroup', () => {
       );
     });
 
-    it('calls onOpenChange once per request in StrictMode', async () => {
+    it('calls onOpenChange once per request in StrictMode, with its details', async () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
       render(
@@ -1177,6 +1183,16 @@ describe('AvatarGroup', () => {
       );
       await user.click(screen.getByRole('button', { name: '1 more' }));
       expect(onOpenChange).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenCalledWith(true, {
+        reason: 'trigger',
+        event: expect.any(Event),
+      });
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).toHaveBeenCalledTimes(2);
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, {
+        reason: 'escape',
+        event: expect.any(Event),
+      });
     });
 
     it('is axe clean closed and open, with Items', async () => {
@@ -1199,6 +1215,10 @@ describe('AvatarGroup', () => {
       >();
       expectTypeOf<AvatarGroupProps['open']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<NonNullable<AvatarGroupProps['onOpenChange']>>().toBeFunction();
+      // `details` is required (1.0).
+      expectTypeOf<NonNullable<AvatarGroupProps['onOpenChange']>>().parameters.toEqualTypeOf<
+        [open: boolean, details: AvatarGroupOpenChangeDetails]
+      >();
       expectTypeOf<Omit<AvatarGroupItemProps, 'slotProps'>>().toEqualTypeOf<
         Omit<AvatarProps, 'slotProps'>
       >();
@@ -1214,13 +1234,13 @@ describe('AvatarGroup', () => {
       );
       const initials = () => Array.from(container.querySelectorAll('.wave-avatar__initials'));
       expect(initials()).toHaveLength(3);
-      for (const el of initials()) expect(el).toHaveClass('invisible');
+      for (const el of initials()) expect(el).toHaveClass('wave:invisible');
       rerender(
         <AvatarGroup aria-label="Team" layout="stack">
           {members(['Alice Smith', 'Bob Jones', 'Carol White'])}
         </AvatarGroup>,
       );
-      for (const el of initials()) expect(el).not.toHaveClass('invisible');
+      for (const el of initials()) expect(el).not.toHaveClass('wave:invisible');
     });
   });
 });
@@ -1260,22 +1280,23 @@ describe('AvatarGroup and AvatarGroup.Item — slotProps', () => {
 
   // Captured from 112d7f8's dist: the open popup on the client (a portal renders nothing on the
   // server); the pie on the client and the server alike.
-  const ITEM = 'wave-avatar-group__item inline-flex rounded-full ring-2 ring-background';
+  const ITEM =
+    'wave-avatar-group__item wave:inline-flex wave:rounded-full wave:ring-2 wave:ring-background';
   const SURFACE =
-    'wave-avatar-group__surface min-w-32 max-w-xs rounded-md border border-border bg-background p-2 text-body-1 text-foreground shadow-16 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+    'wave-avatar-group__surface wave:min-w-32 wave:max-w-xs wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-2 wave:text-body-1 wave:text-foreground wave:shadow-16 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring';
   const OPEN_PINS = [
     `<span class="${ITEM}">`,
-    `<span class="${ITEM} -ms-2">`,
+    `<span class="${ITEM} wave:-ms-2">`,
     `<div aria-label="2 more" class="${SURFACE}" data-align="start" data-side="bottom" data-state="open" id="avatar-group-overflow-_id0_" role="dialog" tabindex="-1">`,
-    '<ul class="wave-avatar-group__list m-0 flex list-none flex-col gap-1 p-0">',
-    '<li class="wave-avatar-group__list-item px-1 py-0.5">',
-    '<li class="wave-avatar-group__list-item px-1 py-0.5">',
+    '<ul class="wave-avatar-group__list wave:m-0 wave:flex wave:list-none wave:flex-col wave:gap-1 wave:p-0">',
+    '<li class="wave-avatar-group__list-item wave:px-1 wave:py-0.5">',
+    '<li class="wave-avatar-group__list-item wave:px-1 wave:py-0.5">',
     '<span class="wave-avatar-group-item__name">',
   ].join('\n');
   const PIE_PINS = [
-    '<span class="wave-avatar-group__pie relative inline-block shrink-0 overflow-hidden rounded-full w-12 h-12 text-base">',
-    '<span aria-hidden="true" class="wave-avatar-group__item absolute inset-0 inline-flex [clip-path:inset(0_50%_0_0)]">',
-    '<span aria-hidden="true" class="wave-avatar-group__item absolute inset-0 inline-flex [clip-path:inset(0_0_0_50%)]">',
+    '<span class="wave-avatar-group__pie wave:relative wave:inline-block wave:shrink-0 wave:overflow-hidden wave:rounded-full wave:w-12 wave:h-12 wave:text-base">',
+    '<span aria-hidden="true" class="wave-avatar-group__item wave:absolute wave:inset-0 wave:inline-flex wave:[clip-path:inset(0_50%_0_0)]">',
+    '<span aria-hidden="true" class="wave-avatar-group__item wave:absolute wave:inset-0 wave:inline-flex wave:[clip-path:inset(0_0_0_50%)]">',
   ].join('\n');
   const openParts = () => [
     ...all(document, avatarGroupClassNames.item),
@@ -1355,10 +1376,10 @@ describe('AvatarGroup and AvatarGroup.Item — slotProps', () => {
       />,
     );
     for (const [cls, name, conflict, count] of [
-      [avatarGroupClassNames.item, 'item', 'ring-2', 2],
-      [avatarGroupClassNames.surface, 'surface', 'shadow-16', 1],
-      [avatarGroupClassNames.list, 'list', 'gap-1', 1],
-      [avatarGroupClassNames.listItem, 'listItem', 'px-1', 2],
+      [avatarGroupClassNames.item, 'item', 'wave:ring-2', 2],
+      [avatarGroupClassNames.surface, 'surface', 'wave:shadow-16', 1],
+      [avatarGroupClassNames.list, 'list', 'wave:gap-1', 1],
+      [avatarGroupClassNames.listItem, 'listItem', 'wave:px-1', 2],
       [avatarGroupItemClassNames.name, 'name', undefined, 1],
     ] as const) {
       const elements = all(document, cls);
@@ -1392,7 +1413,7 @@ describe('AvatarGroup and AvatarGroup.Item — slotProps', () => {
     const [pie] = all(document, avatarGroupClassNames.pie);
     expect(pie.classList[0]).toBe(avatarGroupClassNames.pie);
     expect(pie).toHaveClass('my-pie', 'rounded-md');
-    expect(pie).not.toHaveClass('rounded-full');
+    expect(pie).not.toHaveClass('wave:rounded-full');
     expect(pie).toHaveAttribute('data-part', 'pie');
     expect(pieRef.current).toBe(pie);
     const wedges = all(document, avatarGroupClassNames.item);
@@ -1672,8 +1693,8 @@ describe('AvatarGroup and AvatarGroup.Item — slotProps', () => {
     renderWithProviders(<Team parts={{ item: { className: 'my-item' } }} />, { dir: 'rtl' });
     const [first, second] = all(document, avatarGroupClassNames.item);
     expect(first).toHaveClass('my-item');
-    expect(first).not.toHaveClass('-ms-2');
-    expect(second).toHaveClass('my-item', '-ms-2');
+    expect(first).not.toHaveClass('wave:-ms-2');
+    expect(second).toHaveClass('my-item', 'wave:-ms-2');
   });
 
   it('has no accessibility violations with every part customised', async () => {

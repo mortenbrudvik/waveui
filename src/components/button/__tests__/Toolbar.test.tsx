@@ -141,7 +141,7 @@ describe('Toolbar', () => {
       render(<Toolbar aria-label="Formatting">Content</Toolbar>);
       const toolbar = screen.getByRole('toolbar', { name: 'Formatting' });
       expect(toolbar).toHaveAttribute('aria-orientation', 'horizontal');
-      expect(toolbar).not.toHaveClass('flex-col');
+      expect(toolbar).not.toHaveClass('wave:flex-col');
     });
 
     it('vertical sets aria-orientation and stacks the items', () => {
@@ -152,7 +152,7 @@ describe('Toolbar', () => {
       );
       const toolbar = screen.getByRole('toolbar', { name: 'Formatting' });
       expect(toolbar).toHaveAttribute('aria-orientation', 'vertical');
-      expect(toolbar).toHaveClass('flex-col');
+      expect(toolbar).toHaveClass('wave:flex-col');
     });
 
     it('a forwarded undefined keeps role="toolbar" and aria-orientation', () => {
@@ -796,7 +796,11 @@ describe('Toolbar', () => {
 
   it('uses tokens for its border', () => {
     render(<Toolbar aria-label="Formatting">Content</Toolbar>);
-    expect(screen.getByRole('toolbar')).toHaveClass('border', 'border-border', 'rounded');
+    expect(screen.getByRole('toolbar')).toHaveClass(
+      'wave:border',
+      'wave:border-border',
+      'wave:rounded',
+    );
   });
 
   describe('size and state attributes', () => {
@@ -824,11 +828,11 @@ describe('Toolbar', () => {
     });
 
     it.each([
-      ['extra-small', 'p-0.5'],
-      ['small', 'p-0.5'],
-      ['medium', 'p-1'],
-      ['large', 'p-1.5'],
-      ['extra-large', 'p-2'],
+      ['extra-small', 'wave:p-0.5'],
+      ['small', 'wave:p-0.5'],
+      ['medium', 'wave:p-1'],
+      ['large', 'wave:p-1.5'],
+      ['extra-large', 'wave:p-2'],
     ] as const)('size="%s" sets data-size and the padding %s', (size, padding) => {
       render(
         <Toolbar aria-label="Formatting" size={size}>
@@ -838,7 +842,7 @@ describe('Toolbar', () => {
       const toolbar = screen.getByRole('toolbar', { name: 'Formatting' });
       expect(toolbar).toHaveAttribute('data-size', size);
       expect(toolbar).toHaveClass(padding);
-      const paddings = classesOf(toolbar).filter((cls) => /^p-/.test(cls));
+      const paddings = classesOf(toolbar).filter((cls) => /^wave:p-/.test(cls));
       expect(paddings).toEqual([padding]);
     });
 
@@ -964,8 +968,8 @@ describe('Toolbar', () => {
         ],
       ]);
       const [values, details] = onCheckedValuesChange.mock.calls[0];
-      expect(details?.event.type).toBe('click');
-      expect(details?.checkedItems).toBe(values.format);
+      expect(details.event.type).toBe('click');
+      expect(details.checkedItems).toBe(values.format);
     });
 
     it('controlled: follows the prop, and a parent that ignores the callback keeps its value', async () => {

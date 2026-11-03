@@ -34,20 +34,20 @@ export const AVATAR_NAMED_COLORS: readonly AvatarNamedColor[] = [
 
 /** Fill and text classes of each resolved color. Literal strings only (Tailwind scans them). */
 export const avatarColorClasses: Readonly<Record<Exclude<AvatarColor, 'colorful'>, string>> = {
-  neutral: 'bg-muted text-muted-foreground',
-  brand: 'bg-primary text-primary-foreground',
-  red: 'bg-palette-red text-palette-red-foreground',
-  pumpkin: 'bg-palette-pumpkin text-palette-pumpkin-foreground',
-  gold: 'bg-palette-gold text-palette-gold-foreground',
-  forest: 'bg-palette-forest text-palette-forest-foreground',
-  teal: 'bg-palette-teal text-palette-teal-foreground',
-  blue: 'bg-palette-blue text-palette-blue-foreground',
-  navy: 'bg-palette-navy text-palette-navy-foreground',
-  lavender: 'bg-palette-lavender text-palette-lavender-foreground',
-  purple: 'bg-palette-purple text-palette-purple-foreground',
-  magenta: 'bg-palette-magenta text-palette-magenta-foreground',
-  brown: 'bg-palette-brown text-palette-brown-foreground',
-  steel: 'bg-palette-steel text-palette-steel-foreground',
+  neutral: 'wave:bg-muted wave:text-muted-foreground',
+  brand: 'wave:bg-primary wave:text-primary-foreground',
+  red: 'wave:bg-palette-red wave:text-palette-red-foreground',
+  pumpkin: 'wave:bg-palette-pumpkin wave:text-palette-pumpkin-foreground',
+  gold: 'wave:bg-palette-gold wave:text-palette-gold-foreground',
+  forest: 'wave:bg-palette-forest wave:text-palette-forest-foreground',
+  teal: 'wave:bg-palette-teal wave:text-palette-teal-foreground',
+  blue: 'wave:bg-palette-blue wave:text-palette-blue-foreground',
+  navy: 'wave:bg-palette-navy wave:text-palette-navy-foreground',
+  lavender: 'wave:bg-palette-lavender wave:text-palette-lavender-foreground',
+  purple: 'wave:bg-palette-purple wave:text-palette-purple-foreground',
+  magenta: 'wave:bg-palette-magenta wave:text-palette-magenta-foreground',
+  brown: 'wave:bg-palette-brown wave:text-palette-brown-foreground',
+  steel: 'wave:bg-palette-steel wave:text-palette-steel-foreground',
 };
 
 /**

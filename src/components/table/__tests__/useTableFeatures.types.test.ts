@@ -122,8 +122,9 @@ describe('useTableFeatures types', () => {
     expectTypeOf<UseTableSortOptions['defaultSort']>().toEqualTypeOf<
       DataGridSort | null | undefined
     >();
+    // `details` is required (1.0), also without an event.
     expectTypeOf<NonNullable<UseTableSortOptions['onSortChange']>>().toEqualTypeOf<
-      (sort: DataGridSort, details?: DataGridSortChangeDetails) => void
+      (sort: DataGridSort, details: DataGridSortChangeDetails) => void
     >();
     expectTypeOf(useTableSort<Person>)
       .parameter(0)
@@ -140,7 +141,7 @@ describe('useTableFeatures types', () => {
     >();
     expectTypeOf<
       NonNullable<UseTableSelectionOptions<Person>['onSelectedItemsChange']>
-    >().toEqualTypeOf<(selectedItems: string[], details?: UseSelectionChangeDetails) => void>();
+    >().toEqualTypeOf<(selectedItems: string[], details: UseSelectionChangeDetails) => void>();
     expectTypeOf<UseTableSelectionOptions<Person>['isDisabled']>().toEqualTypeOf<
       ((item: Person, index: number) => boolean) | undefined
     >();
@@ -206,10 +207,13 @@ describe('useTableFeatures types', () => {
     }>();
   });
 
-  it('types the details of onColumnWidthsChange as optional, as every 0.x details argument', () => {
+  it('types the details of onColumnWidthsChange as required (1.0)', () => {
     expectTypeOf<UseTableColumnSizingOptions['onColumnWidthsChange']>().toEqualTypeOf<
-      | ((widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void)
+      | ((widths: Record<string, number>, details: TableColumnWidthsChangeDetails) => void)
       | undefined
     >();
+    type OnColumnWidthsChange = NonNullable<UseTableColumnSizingOptions['onColumnWidthsChange']>;
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<OnColumnWidthsChange>().toBeCallableWith({});
   });
 });

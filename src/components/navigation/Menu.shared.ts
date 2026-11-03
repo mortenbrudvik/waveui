@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 
@@ -78,16 +78,16 @@ export function useStaticMenuPartWarning(componentName: string, popup: boolean):
  * one, so the labels line up.
  */
 export const menuSurfaceClasses =
-  'group/menu min-w-[180px] rounded-md border border-border bg-background py-1 shadow-4';
+  'wave:group/menu wave:min-w-[180px] wave:rounded-md wave:border wave:border-border wave:bg-background wave:py-1 wave:shadow-4';
 
 /**
  * The popup surface is limited to the space the viewport leaves it next to the trigger (the CSS
  * variables usePopupPosition's `fitViewport` writes) and scrolls when it is taller. The limits are
  * classes, not inline styles, so a consumer `max-h-*`/`max-w-*` class replaces them (C-COMPOSE).
  */
-export const menuPopoverClasses = cn(
+export const menuPopoverClasses = wcn(
   menuSurfaceClasses,
-  'max-h-(--wave-popup-available-height) max-w-(--wave-popup-available-width) overflow-y-auto overscroll-contain',
+  'wave:max-h-(--wave-popup-available-height) wave:max-w-(--wave-popup-available-width) wave:overflow-y-auto wave:overscroll-contain',
 );
 
 /**
@@ -96,13 +96,13 @@ export const menuPopoverClasses = cn(
  * mirrors in RTL; the 4px bar plus `ps-2` keeps the `px-3` inset), which cannot be mistaken for
  * the focus ring's inset outline.
  */
-export const menuItemClasses = cn(
-  'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-body-1 text-foreground',
-  'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+export const menuItemClasses = wcn(
+  'wave:flex wave:cursor-pointer wave:select-none wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground',
+  'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   // Gated like hover: a disabled item can still take focus from a mouse click (tabindex -1).
-  'not-disabled:not-aria-disabled:focus:bg-subtle-hover',
-  'aria-expanded:bg-subtle-hover',
-  'forced-colors:aria-expanded:border-s-4 forced-colors:aria-expanded:border-[Highlight] forced-colors:aria-expanded:ps-2',
+  'wave:not-disabled:not-aria-disabled:focus:bg-subtle-hover',
+  'wave:aria-expanded:bg-subtle-hover',
+  'wave:forced-colors:aria-expanded:border-s-4 wave:forced-colors:aria-expanded:border-[Highlight] wave:forced-colors:aria-expanded:ps-2',
   focusRingInset,
   disabledStyles,
 );

@@ -122,7 +122,7 @@ export interface TeachingPopoverContextValue {
    * `onDismiss`.
    */
   dismiss: () => void;
-  /** Done, or a primary action on the last step: closes, then calls `onFinish` (and `onDismiss`). */
+  /** Done, or a primary action on the last step: closes, then calls `onFinish`. */
   finish: () => void;
   /** How many steps there are. */
   count: number;

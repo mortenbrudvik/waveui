@@ -55,7 +55,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
-/** The `normal` appearance: the page background with a border (replaces 0.4's `variant="light"`). */
+/** The `normal` appearance: the page background with a border. */
 export const Normal: Story = {
   args: {
     content: 'Normal tooltip',
@@ -133,7 +133,8 @@ export const InsideATrigger: Story = {
 /**
  * `openDelay` is how long the pointer rests on the child, or the child has keyboard focus, before
  * the tooltip appears; `closeDelay` is how long it stays once the pointer has left the child and
- * the tooltip. Blur and Escape hide it at once. `delay` is the deprecated name of `openDelay`.
+ * the tooltip. Blur and Escape hide it at once. Without them it appears after 200 ms and hides
+ * 100 ms after the pointer leaves.
  */
 export const Delays: Story = {
   args: {

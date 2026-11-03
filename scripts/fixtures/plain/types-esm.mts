@@ -1,7 +1,7 @@
 /**
- * ES-module TypeScript consumer (`module`/`moduleResolution` node16): the `import` condition
- * resolves `dist/index.d.ts`. The `@ts-expect-error` proves the declarations are real types, not
- * `any`. Type-checked by scripts/pack-smoke.mjs.
+ * ES-module TypeScript consumer (`module` node16, which implies `moduleResolution` node16): the
+ * package's `exports` resolve `dist/index.d.ts`. The `@ts-expect-error` proves the declarations
+ * are real types, not `any`. Type-checked by scripts/pack-smoke.mjs (tsconfig.json).
  */
 import { cn, type ButtonProps } from '@mortenbrudvik/waveui';
 

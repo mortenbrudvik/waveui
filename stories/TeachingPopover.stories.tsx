@@ -273,7 +273,7 @@ export const PageCountHeaderAndMedia: Story = {
           <TeachingPopover.Carousel>
             <TeachingPopover.Title />
             <TeachingPopover.Body
-              media={<span className="block h-16 w-full rounded-md bg-card" />}
+              media={<span className="block h-16 w-full rounded-md bg-wave-card" />}
             />
             <TeachingPopover.CarouselFooter>
               <TeachingPopover.CarouselNav />

@@ -237,7 +237,8 @@ export const Sizes: Story = {
 };
 
 /** The look of an outline Input, for the native controls of the function child story. */
-const OUTLINE_BOX = 'rounded border border-input border-b-stroke-accessible bg-background';
+const OUTLINE_BOX =
+  'rounded border border-wave-input border-b-wave-stroke-accessible bg-wave-background';
 
 /** Props of {@link PhoneInput}. */
 interface PhoneInputProps {
@@ -254,12 +255,12 @@ interface PhoneInputProps {
 function PhoneInput({ inputProps, countryCode = '+47' }: PhoneInputProps) {
   return (
     <span className={cn('flex h-8 items-center gap-2 px-3', OUTLINE_BOX, inputFocusWithin)}>
-      <span className="text-body-1 text-muted-foreground">{countryCode}</span>
+      <span className="text-wave-body-1 text-wave-muted-foreground">{countryCode}</span>
       <input
         type="tel"
         autoComplete="tel"
         {...inputProps}
-        className="min-w-0 flex-1 bg-transparent text-body-1 text-foreground focus:outline-hidden"
+        className="min-w-0 flex-1 bg-transparent text-wave-body-1 text-wave-foreground focus:outline-hidden"
       />
     </span>
   );
@@ -286,7 +287,11 @@ export const WithFunctionChild: Story = {
             type="email"
             autoComplete="email"
             {...props}
-            className={cn('h-8 px-3 text-body-1 text-foreground', OUTLINE_BOX, inputFocus)}
+            className={cn(
+              'h-8 px-3 text-wave-body-1 text-wave-foreground',
+              OUTLINE_BOX,
+              inputFocus,
+            )}
           />
         )}
       </Field>

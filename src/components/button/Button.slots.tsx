@@ -3,9 +3,11 @@
  * Internal (not exported from the package).
  *
  * - Dismiss and clear slots (MessageBar `dismiss`, SearchBox `dismiss`, Tag `dismissIcon`) merge
- *   it into their own wired `<button>`. {@link BUTTON_OWN_PROP_KEYS} lists the Button props that
- *   must not reach that element; {@link placeButtonIcon} and {@link MERGED_DISABLED_FOCUSABLE_PROPS}
- *   give it what the Button would have done with `icon`, `iconPosition` and `disabledFocusable`.
+ *   a button element into their own wired `<button>`. {@link BUTTON_OWN_PROP_KEYS} lists the
+ *   Button props that must not reach that element; {@link placeButtonIcon} and
+ *   {@link MERGED_DISABLED_FOCUSABLE_PROPS} give it what the Button would have done with `icon`,
+ *   `iconPosition` and `disabledFocusable`. A slot object whose `as` is a button is unwrapped
+ *   there (Tag through {@link unwrapButtonGlyph}).
  * - Glyph slots inside a wired button (SplitButton and MenuButton `menuIcon`, Combobox and
  *   TimePicker `expandIcon`) unwrap it: {@link unwrapButtonGlyph}.
  * - Variants that hand their `icon` to Button (ToggleButton, CompoundButton, MenuButton,
@@ -94,7 +96,7 @@ export const MERGED_DISABLED_FOCUSABLE_PROPS = {
  * it shows its focus ring, which `opacity` would dim too.
  */
 export const mergedAriaDisabledClasses =
-  'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100';
+  'wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100';
 
 /**
  * `slot` as a slot object whose element also carries `className`: a variant's part class on the

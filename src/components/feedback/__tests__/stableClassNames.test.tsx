@@ -112,7 +112,7 @@ describe('stable class names (P3-00): feedback folder', () => {
     // The same element, visually hidden: it keeps its class (judgement 29).
     expect(
       screen.getByTestId('hidden-label').querySelector('[data-wave-spinner-label]'),
-    ).toHaveClass(spinnerClassNames.label, 'sr-only');
+    ).toHaveClass(spinnerClassNames.label, 'wave:sr-only');
   });
 
   it('Skeleton and Skeleton.Group', () => {

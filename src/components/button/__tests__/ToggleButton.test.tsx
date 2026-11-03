@@ -38,7 +38,7 @@ const classesFrom = (value: string) =>
   ].sort();
 /** The forced-colors classes of an element, sorted. */
 const forcedColorsOf = (el: Element) =>
-  classesOf(el).filter((cls) => cls.startsWith('forced-colors:'));
+  classesOf(el).filter((cls) => cls.startsWith('wave:forced-colors:'));
 
 /** The roles that report the state with `aria-checked` instead of `aria-pressed`. */
 const CHECKED_ROLES = [
@@ -64,7 +64,7 @@ describe('ToggleButton', () => {
     expectedTag: 'button',
     displayName: 'ToggleButton',
     defaultProps: { children: 'Bold' },
-    conflictingClass: { className: 'px-8', overrides: 'px-3' },
+    conflictingClass: { className: 'px-8', overrides: 'wave:px-3' },
     a11yVariants: [
       { name: 'disabled', props: { disabled: true } },
       { name: 'pressed', props: { pressed: true } },
@@ -94,7 +94,7 @@ describe('ToggleButton', () => {
       render(<ToggleButton icon={<BoldIcon />}>Bold</ToggleButton>);
       const icon = screen.getByTestId('bold-icon');
       expect(icon.parentElement).toHaveAttribute('aria-hidden', 'true');
-      expect(icon.parentElement).toHaveClass('inline-flex', 'shrink-0');
+      expect(icon.parentElement).toHaveClass('wave:inline-flex', 'wave:shrink-0');
     });
 
     it('renders icon as SlotObject', () => {
@@ -106,7 +106,7 @@ describe('ToggleButton', () => {
         </ToggleButton>,
       );
       const icon = screen.getByTestId('slot-icon');
-      expect(icon.parentElement).toHaveClass('custom', 'shrink-0');
+      expect(icon.parentElement).toHaveClass('custom', 'wave:shrink-0');
       expect(icon.parentElement).toHaveAttribute('aria-hidden', 'true');
     });
 
@@ -149,8 +149,8 @@ describe('ToggleButton', () => {
       const button = screen.getByRole('button', { name: 'Bold' });
       expect(button.childNodes).toHaveLength(1);
       expect(button.firstChild).toHaveAttribute('aria-hidden', 'true');
-      expect(button).toHaveClass('h-10', 'w-10');
-      expect(button).not.toHaveClass('min-w-24');
+      expect(button).toHaveClass('wave:h-10', 'wave:w-10');
+      expect(button).not.toHaveClass('wave:min-w-24');
     });
 
     it('iconPosition keeps the DOM order in RTL (the writing direction mirrors it)', () => {
@@ -175,7 +175,7 @@ describe('ToggleButton', () => {
     it('does not warn for an icon-only toggle with an aria-label', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<ToggleButton icon={<BoldIcon />} aria-label="Bold" />);
-      expect(screen.getByRole('button', { name: 'Bold' })).toHaveClass('w-8');
+      expect(screen.getByRole('button', { name: 'Bold' })).toHaveClass('wave:w-8');
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -481,27 +481,27 @@ describe('ToggleButton', () => {
       render(<ToggleButton appearance="primary">Toggle</ToggleButton>);
       const btn = screen.getByRole('button');
       expect(btn).toHaveClass(
-        'bg-primary',
-        'text-primary-foreground',
-        'not-disabled:not-aria-disabled:hover:bg-primary-hover',
-        'not-disabled:not-aria-disabled:active:bg-primary-pressed',
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+        'wave:not-disabled:not-aria-disabled:hover:bg-primary-hover',
+        'wave:not-disabled:not-aria-disabled:active:bg-primary-pressed',
       );
     });
 
     it('a pressed outline toggle uses the selected tokens', () => {
       render(<ToggleButton defaultPressed>Toggle</ToggleButton>);
       expect(screen.getByRole('button')).toHaveClass(
-        'bg-selected',
-        'text-selected-foreground',
-        'border-primary',
+        'wave:bg-selected',
+        'wave:text-selected-foreground',
+        'wave:border-primary',
       );
     });
 
     it('shows the pressed state in forced colors with the container recipe', () => {
       render(<ToggleButton defaultPressed>Toggle</ToggleButton>);
       const btn = screen.getByRole('button');
-      expect(btn).toHaveClass('forced-colors:outline-[Highlight]');
-      expect(btn).not.toHaveClass('forced-colors:forced-color-adjust-none');
+      expect(btn).toHaveClass('wave:forced-colors:outline-[Highlight]');
+      expect(btn).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
     });
 
     it('gates every hover and pressed class and never uses the enabled: variant', () => {
@@ -517,7 +517,8 @@ describe('ToggleButton', () => {
         expect(
           classes.filter(
             (c) =>
-              /(^|:)(hover|active):/.test(c) && !c.startsWith('not-disabled:not-aria-disabled:'),
+              /(^|:)(hover|active):/.test(c) &&
+              !c.startsWith('wave:not-disabled:not-aria-disabled:'),
           ),
         ).toEqual([]);
       }
@@ -530,17 +531,17 @@ describe('ToggleButton', () => {
           <ToggleButton size="extra-large">Extra large</ToggleButton>
         </>,
       );
-      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('text-body-2');
+      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('wave:text-body-2');
       const xl = screen.getByRole('button', { name: 'Extra large' });
-      expect(xl).toHaveClass('text-[18px]/[24px]');
-      expect(xl).not.toHaveClass('text-sm');
+      expect(xl).toHaveClass('wave:text-[18px]/[24px]');
+      expect(xl).not.toHaveClass('wave:text-sm');
     });
 
     it('follows the provider theme through tokens', () => {
       renderWithProviders(<ToggleButton defaultPressed>Toggle</ToggleButton>, { theme: 'dark' });
       const btn = screen.getByRole('button', { name: 'Toggle' });
       expect(btn.closest('.wave-dark')).not.toBeNull();
-      expect(btn).toHaveClass('bg-selected', 'text-selected-foreground');
+      expect(btn).toHaveClass('wave:bg-selected', 'wave:text-selected-foreground');
     });
   });
 
@@ -557,9 +558,11 @@ describe('ToggleButton', () => {
         expect(classesOf(btn)).toEqual(
           classesFrom(buttonClassName({ appearance, pressed: true, accessible: true })),
         );
-        expect(btn).toHaveClass('text-primary-foreground');
-        expect(btn).toHaveClass(appearance === 'primary' ? 'bg-primary-pressed' : 'bg-primary');
-        expect(btn).not.toHaveClass('bg-selected', 'text-selected-foreground');
+        expect(btn).toHaveClass('wave:text-primary-foreground');
+        expect(btn).toHaveClass(
+          appearance === 'primary' ? 'wave:bg-primary-pressed' : 'wave:bg-primary',
+        );
+        expect(btn).not.toHaveClass('wave:bg-selected', 'wave:text-selected-foreground');
       },
     );
 
@@ -570,8 +573,8 @@ describe('ToggleButton', () => {
         </ToggleButton>,
       );
       expect(screen.getByRole('button', { name: 'Toggle' })).toHaveClass(
-        'inset-ring-2',
-        'inset-ring-primary-foreground',
+        'wave:inset-ring-2',
+        'wave:inset-ring-primary-foreground',
       );
     });
 
@@ -622,8 +625,8 @@ describe('ToggleButton', () => {
               buttonClassName({ appearance, pressed: true, disabled: true, accessible: true }),
             ),
           );
-          expect(btn).toHaveClass('opacity-50', 'forced-colors:outline-[GrayText]');
-          expect(btn).not.toHaveClass('forced-colors:outline-[Highlight]');
+          expect(btn).toHaveClass('wave:opacity-50', 'wave:forced-colors:outline-[GrayText]');
+          expect(btn).not.toHaveClass('wave:forced-colors:outline-[Highlight]');
         }
       },
     );
@@ -649,7 +652,7 @@ describe('ToggleButton', () => {
         );
         const byName = (name: string) => screen.getByRole('button', { name });
         expect(forcedColorsOf(byName('Brand'))).toEqual(forcedColorsOf(byName('Tint')));
-        expect(forcedColorsOf(byName('Brand'))).toContain('forced-colors:outline-[Highlight]');
+        expect(forcedColorsOf(byName('Brand'))).toContain('wave:forced-colors:outline-[Highlight]');
         expect(forcedColorsOf(byName('Brand disabled'))).toEqual(
           forcedColorsOf(byName('Tint disabled')),
         );

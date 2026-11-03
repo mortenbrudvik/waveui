@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { flushSync } from 'react-dom';
 import { dataGridHeaderCellClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   clampColumnWidth,
   DEFAULT_MIN_COLUMN_WIDTH,
@@ -46,8 +46,7 @@ export interface UseDataGridColumnSizingOptions {
   columnWidths: Record<string, number> | undefined;
   defaultColumnWidths: Record<string, number> | undefined;
   onColumnWidthsChange:
-    | ((widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void)
-    | undefined;
+    ((widths: Record<string, number>, details: TableColumnWidthsChangeDetails) => void) | undefined;
   /** `labels.resizeColumn` of the grid. */
   resizeColumnLabel: string | undefined;
   /** `labels.columnWidth` of the grid. */
@@ -390,17 +389,14 @@ export function DataGridColumnResizeHandle({
       minWidth={minWidths[columnId]}
       label={label}
       valueText={valueText}
-      className={cn(
+      className={wcn(
         dataGridHeaderCellClassNames.resizeHandle,
         // The cell clips what overflows it, the outer ring included.
         focusRingInset,
         // The header ignores the pointer while the grid resizes; the dragged handle does not.
-        'data-[dragging]:pointer-events-auto',
+        'wave:data-[dragging]:pointer-events-auto',
       )}
-      onResize={(next, details) =>
-        // The handle always passes `details`; typed optional, as every `details` argument.
-        setColumnWidth(columnId, next, details?.event ?? new Event('resize'))
-      }
+      onResize={(next, { event }) => setColumnWidth(columnId, next, event)}
       onReset={({ event }) => resetColumnWidth(columnId, event)}
       onLeave={() => {
         if (handleRef.current) returnFocusToGridCell(handleRef.current);

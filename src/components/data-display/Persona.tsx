@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { personaClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import type { PresenceStatus, Size, Slot } from '../../lib/types';
@@ -85,19 +85,19 @@ function derivePresenceOnlySize(size: PersonaSize): Size {
 
 /** Type steps of the first line and of the other lines, per size. Literal strings only. */
 const textClasses: Readonly<Record<PersonaSize, { primary: string; other: string }>> = {
-  'extra-small': { primary: 'text-caption-1', other: 'text-caption-2' },
-  small: { primary: 'text-body-1', other: 'text-caption-1' },
-  medium: { primary: 'text-body-1', other: 'text-caption-1' },
-  large: { primary: 'text-subtitle-2', other: 'text-body-1' },
-  'extra-large': { primary: 'text-subtitle-1', other: 'text-body-1' },
-  huge: { primary: 'text-title-3', other: 'text-body-2' },
+  'extra-small': { primary: 'wave:text-caption-1', other: 'wave:text-caption-2' },
+  small: { primary: 'wave:text-body-1', other: 'wave:text-caption-1' },
+  medium: { primary: 'wave:text-body-1', other: 'wave:text-caption-1' },
+  large: { primary: 'wave:text-subtitle-2', other: 'wave:text-body-1' },
+  'extra-large': { primary: 'wave:text-subtitle-1', other: 'wave:text-body-1' },
+  huge: { primary: 'wave:text-title-3', other: 'wave:text-body-2' },
 };
 
 /** The layout of the root per text position. Logical: `flex-row-reverse` mirrors in RTL by itself. */
 const positionClasses = {
-  after: 'inline-flex items-center gap-3',
-  before: 'inline-flex flex-row-reverse items-center gap-3',
-  below: 'inline-flex flex-col items-center gap-2',
+  after: 'wave:inline-flex wave:items-center wave:gap-3',
+  before: 'wave:inline-flex wave:flex-row-reverse wave:items-center wave:gap-3',
+  below: 'wave:inline-flex wave:flex-col wave:items-center wave:gap-2',
 } as const;
 
 /**
@@ -158,22 +158,22 @@ export const Persona = ({
     {
       key: 'primaryText',
       slot: primaryText ?? name,
-      className: cn(personaClassNames.primaryText, text.primary, 'font-semibold'),
+      className: wcn(personaClassNames.primaryText, text.primary, 'wave:font-semibold'),
     },
     {
       key: 'secondaryText',
       slot: secondaryText,
-      className: cn(personaClassNames.secondaryText, text.other, 'text-muted-foreground'),
+      className: wcn(personaClassNames.secondaryText, text.other, 'wave:text-muted-foreground'),
     },
     {
       key: 'tertiaryText',
       slot: tertiaryText,
-      className: cn(personaClassNames.tertiaryText, text.other, 'text-muted-foreground'),
+      className: wcn(personaClassNames.tertiaryText, text.other, 'wave:text-muted-foreground'),
     },
     {
       key: 'quaternaryText',
       slot: quaternaryText,
-      className: cn(personaClassNames.quaternaryText, text.other, 'text-muted-foreground'),
+      className: wcn(personaClassNames.quaternaryText, text.other, 'wave:text-muted-foreground'),
     },
   ] as const;
 
@@ -184,15 +184,17 @@ export const Persona = ({
       data-text-position={textPosition}
       data-text-alignment={resolvedAlignment}
       data-presence-only={presenceOnly ? '' : undefined}
-      className={cn(personaClassNames.root, positionClasses[textPosition], className)}
+      className={wcn(personaClassNames.root, positionClasses[textPosition], className)}
       {...props}
     >
       {presenceOnly ? (
         badgeNode && (
-          <span className={cn(personaClassNames.badge, 'inline-flex shrink-0')}>{badgeNode}</span>
+          <span className={wcn(personaClassNames.badge, 'wave:inline-flex wave:shrink-0')}>
+            {badgeNode}
+          </span>
         )
       ) : (
-        <div className="relative inline-flex shrink-0">
+        <div className="wave:relative wave:inline-flex wave:shrink-0">
           {avatar && slotRendersContent(avatar) ? (
             renderSlot(avatar, 'span', personaClassNames.avatar)
           ) : (
@@ -205,16 +207,23 @@ export const Persona = ({
             />
           )}
           {badgeNode && (
-            <span className={cn(personaClassNames.badge, 'absolute bottom-0 end-0 inline-flex')}>
+            <span
+              className={wcn(
+                personaClassNames.badge,
+                'wave:absolute wave:bottom-0 wave:end-0 wave:inline-flex',
+              )}
+            >
               {badgeNode}
             </span>
           )}
         </div>
       )}
       <div
-        className={cn(
-          'flex flex-col',
-          resolvedAlignment === 'center' ? 'items-center text-center' : 'items-start text-start',
+        className={wcn(
+          'wave:flex wave:flex-col',
+          resolvedAlignment === 'center'
+            ? 'wave:items-center wave:text-center'
+            : 'wave:items-start wave:text-start',
         )}
       >
         {lines.map(

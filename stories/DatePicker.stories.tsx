@@ -136,7 +136,7 @@ export const Controlled: Story = {
             args.onValueChange?.(date);
           }}
         />
-        <p className="mt-2 text-body-1">Selected: {value ? toISO(value) : '(none)'}</p>
+        <p className="mt-2 text-wave-body-1">Selected: {value ? toISO(value) : '(none)'}</p>
       </div>
     );
   },

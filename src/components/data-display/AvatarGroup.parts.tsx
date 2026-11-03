@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   avatarGroupClassNames,
   avatarGroupItemClassNames,
@@ -87,14 +87,18 @@ export interface AvatarGroupItemProps extends Omit<AvatarProps, 'slotProps'> {
 const AvatarGroupItemImpl = ({ className, slotProps, ...props }: AvatarGroupItemProps) => {
   const overflow = React.useContext(OverflowContext);
   if (!overflow) {
-    return <Avatar {...props} className={cn(avatarGroupItemClassNames.root, className)} />;
+    return <Avatar {...props} className={wcn(avatarGroupItemClassNames.root, className)} />;
   }
   const { name, 'aria-label': ariaLabel, size, ref, ...avatarProps } = props;
   const text = [ariaLabel, name].find(nonBlank)?.trim() ?? overflow.unnamedMemberLabel;
   const namePart = slotProps?.name;
   return (
     <span
-      className={cn(avatarGroupItemClassNames.root, 'inline-flex items-center gap-2', className)}
+      className={wcn(
+        avatarGroupItemClassNames.root,
+        'wave:inline-flex wave:items-center wave:gap-2',
+        className,
+      )}
     >
       <Avatar {...avatarProps} name={name} size={size ?? 'small'} decorative />
       <span
@@ -197,8 +201,11 @@ export interface AvatarGroupPopoverProps {
    * @default false
    */
   defaultOpen?: boolean;
-  /** Called when the popup asks to open or close, with the reason (`trigger`, `escape`, …). */
-  onOpenChange?: (open: boolean, details?: AvatarGroupOpenChangeDetails) => void;
+  /**
+   * Called when the popup asks to open or close, with the reason (`trigger`, `escape`, …) and the
+   * event in `details`, which WaveUI always passes.
+   */
+  onOpenChange?: (open: boolean, details: AvatarGroupOpenChangeDetails) => void;
   /** Extra classes for the overflow button. */
   className?: string;
   /** Ref to the overflow `<button>`. */
@@ -352,9 +359,9 @@ const AvatarGroupPopoverImpl = ({
   const overflowContext = React.useMemo(() => ({ unnamedMemberLabel }), [unnamedMemberLabel]);
 
   // The popup's parts, declared by the group (`slotProps`), each merged only when given.
-  const surfaceClassName = cn(
+  const surfaceClassName = wcn(
     avatarGroupClassNames.surface,
-    'min-w-32 max-w-xs rounded-md border border-border bg-background p-2 text-body-1 text-foreground shadow-16',
+    'wave:min-w-32 wave:max-w-xs wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-2 wave:text-body-1 wave:text-foreground wave:shadow-16',
     focusRing,
   );
   const surfaceProps =
@@ -377,7 +384,10 @@ const AvatarGroupPopoverImpl = ({
           },
         })
       : undefined;
-  const listClassName = cn(avatarGroupClassNames.list, 'm-0 flex list-none flex-col gap-1 p-0');
+  const listClassName = wcn(
+    avatarGroupClassNames.list,
+    'wave:m-0 wave:flex wave:list-none wave:flex-col wave:gap-1 wave:p-0',
+  );
   const listItemPart = group?.listItem;
 
   return (
@@ -389,14 +399,14 @@ const AvatarGroupPopoverImpl = ({
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-controls={isOpen ? popupId : undefined}
-        className={cn(
+        className={wcn(
           avatarGroupClassNames.overflowButton,
           avatarGroupPopoverClassNames.root,
-          'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full border-0 p-0 font-semibold',
-          'bg-muted text-muted-foreground ring-2 ring-background',
-          'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+          'wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded-full wave:border-0 wave:p-0 wave:font-semibold',
+          'wave:bg-muted wave:text-muted-foreground wave:ring-2 wave:ring-background',
+          'wave:not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
           focusRing,
-          group?.layout === 'stack' && group.hasInlineItems && '-ms-2',
+          group?.layout === 'stack' && group.hasInlineItems && 'wave:-ms-2',
           avatarSizeClassesFor(size),
           className,
         )}
@@ -430,7 +440,10 @@ const AvatarGroupPopoverImpl = ({
                   }))}
               >
                 {items.map(({ key, node }) => {
-                  const listItemClassName = cn(avatarGroupClassNames.listItem, 'px-1 py-0.5');
+                  const listItemClassName = wcn(
+                    avatarGroupClassNames.listItem,
+                    'wave:px-1 wave:py-0.5',
+                  );
                   return (
                     <li
                       key={key}

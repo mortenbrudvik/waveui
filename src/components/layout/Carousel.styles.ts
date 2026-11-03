@@ -7,14 +7,15 @@ import type { CarouselControlsLayout } from './Carousel.context';
  * disabled look.
  */
 export const CAROUSEL_CONTROL_BASE = [
-  'z-10 inline-flex items-center justify-center text-foreground',
-  'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+  'wave:z-10 wave:inline-flex wave:items-center wave:justify-center wave:text-foreground',
+  'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   focusRing,
   disabledStyles,
 ].join(' ');
 
-const ROUND = 'h-8 w-8 rounded-full border border-border bg-background shadow-2';
-const WIDE = 'w-10 rounded-none bg-background/70';
+const ROUND =
+  'wave:h-8 wave:w-8 wave:rounded-full wave:border wave:border-border wave:bg-background wave:shadow-2';
+const WIDE = 'wave:w-10 wave:rounded-none wave:bg-background/70';
 
 /**
  * Position and shape per layout and direction: round buttons floating over the slides, full-height
@@ -25,19 +26,19 @@ export const CAROUSEL_CONTROL_LAYOUT: Record<
   Record<'previous' | 'next', string>
 > = {
   overlay: {
-    previous: `absolute top-1/2 start-2 -translate-y-1/2 ${ROUND}`,
-    next: `absolute top-1/2 end-2 -translate-y-1/2 ${ROUND}`,
+    previous: `wave:absolute wave:top-1/2 wave:start-2 wave:-translate-y-1/2 ${ROUND}`,
+    next: `wave:absolute wave:top-1/2 wave:end-2 wave:-translate-y-1/2 ${ROUND}`,
   },
   'overlay-wide': {
-    previous: `absolute inset-y-0 start-0 ${WIDE}`,
-    next: `absolute inset-y-0 end-0 ${WIDE}`,
+    previous: `wave:absolute wave:inset-y-0 wave:start-0 ${WIDE}`,
+    next: `wave:absolute wave:inset-y-0 wave:end-0 ${WIDE}`,
   },
   inline: {
-    previous: `relative mx-1 shrink-0 self-center ${ROUND}`,
-    next: `relative mx-1 shrink-0 self-center ${ROUND}`,
+    previous: `wave:relative wave:mx-1 wave:shrink-0 wave:self-center ${ROUND}`,
+    next: `wave:relative wave:mx-1 wave:shrink-0 wave:self-center ${ROUND}`,
   },
   'inline-wide': {
-    previous: `relative shrink-0 self-stretch ${WIDE}`,
-    next: `relative shrink-0 self-stretch ${WIDE}`,
+    previous: `wave:relative wave:shrink-0 wave:self-stretch ${WIDE}`,
+    next: `wave:relative wave:shrink-0 wave:self-stretch ${WIDE}`,
   },
 };

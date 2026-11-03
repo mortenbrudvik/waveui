@@ -74,10 +74,6 @@ function SampleNav(props: Partial<NavProps>) {
 const button = (name: string) => screen.getByRole('button', { name });
 const toggle = () => screen.getByRole('button', { name: 'Docs' });
 
-/** The deprecation warning of a renamed Nav prop (asserted, never silenced). */
-const deprecated = (oldName: string, newName: string) =>
-  `[WaveUI] Nav: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.`;
-
 /**
  * Icons that render nothing: `icon={name && <Icon />}` with `name` '' or a count of 0, and a list
  * mapped to nothing (F2 `slotRendersContent`). A factory each, since a generator is one-shot.
@@ -118,7 +114,7 @@ describe('Nav', () => {
         props: { defaultValue: 'intro', defaultOpenCategories: [] },
       },
     ],
-    conflictingClass: { className: 'w-72', overrides: 'w-60' },
+    conflictingClass: { className: 'w-72', overrides: 'wave:w-60' },
   });
 
   testCompoundExposure(Nav, [
@@ -366,74 +362,71 @@ describe('Nav', () => {
       expect(onValueChange).toHaveBeenCalledTimes(1);
     });
 
-    describe('deprecated aliases', () => {
-      it('selectedValue still controls the selection and warns once', () => {
+    // Untyped code that still passes a 0.4 name: it lands on the <nav> element as an unknown prop,
+    // which React reports in development (once per name and page load), and changes nothing.
+    describe('the 0.4 names are removed in 1.0', () => {
+      const unknownProp = (name: string) => [
+        'React does not recognize the `%s` prop on a DOM element. If you intentionally want it ' +
+          'to appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If ' +
+          'you accidentally passed it from a parent component, remove it from the DOM element.',
+        name,
+        name.toLowerCase(),
+      ];
+
+      it('has no selectedValue alias of value: nothing is current and no category opens', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        render(<SampleNav selectedValue="settings" />);
-        expect(button('Settings')).toHaveAttribute('aria-current', 'page');
-        expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(
+          <SampleNav
+            // @ts-expect-error -- `selectedValue` is removed in 1.0: use `value`
+            selectedValue="api"
+          />,
+        );
+        expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+        expect(toggle()).not.toHaveAttribute('aria-current');
+        expect(document.querySelector('[aria-current]')).toBeNull();
+        expect(screen.getByRole('navigation')).toHaveAttribute('selectedvalue', 'api');
+        expect(error.mock.calls).toEqual([unknownProp('selectedValue')]);
+        expect(warn).not.toHaveBeenCalled();
       });
 
-      it('defaultSelectedValue still sets the initial selection and warns', () => {
+      it('has no defaultSelectedValue alias of defaultValue: nothing is current', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        render(<SampleNav defaultSelectedValue="home" />);
-        expect(button('Home')).toHaveAttribute('aria-current', 'page');
-        expect(warn.mock.calls).toEqual([[deprecated('defaultSelectedValue', 'defaultValue')]]);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(
+          <SampleNav
+            // @ts-expect-error -- `defaultSelectedValue` is removed in 1.0: use `defaultValue`
+            defaultSelectedValue="home"
+          />,
+        );
+        expect(button('Home')).not.toHaveAttribute('aria-current');
+        expect(error.mock.calls).toEqual([unknownProp('defaultSelectedValue')]);
+        expect(warn).not.toHaveBeenCalled();
       });
 
-      it('value wins over selectedValue when both are given', () => {
+      it('has no onNavItemSelect alias of onValueChange: only onValueChange is called', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        render(<SampleNav value="home" selectedValue="settings" />);
-        expect(button('Home')).toHaveAttribute('aria-current', 'page');
-        expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
-      });
-
-      it('onNavItemSelect warns once and still fires on every activation, re-selection included', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
         const user = userEvent.setup();
         const onNavItemSelect = vi.fn();
         const onValueChange = vi.fn();
         render(
           <SampleNav
             defaultValue="home"
+            // @ts-expect-error -- `onNavItemSelect(value)` is removed in 1.0: use `onValueChange`
             onNavItemSelect={onNavItemSelect}
             onValueChange={onValueChange}
           />,
         );
         await user.click(button('Home'));
-        await user.click(button('Home'));
-        expect(onNavItemSelect).toHaveBeenCalledTimes(2);
-        expect(onNavItemSelect).toHaveBeenCalledWith('home');
-        expect(onValueChange).not.toHaveBeenCalled();
         await user.click(button('Settings'));
-        expect(onNavItemSelect).toHaveBeenLastCalledWith('settings');
-        expect(onValueChange).toHaveBeenCalledWith('settings');
-        expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
-      });
-
-      it('onNavItemSelect does not fire when a disabled item is activated, the current one included', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const user = userEvent.setup();
-        const onNavItemSelect = vi.fn();
-        render(
-          <Nav value="docs" onNavItemSelect={onNavItemSelect}>
-            <Nav.Item value="home" disabled>
-              Home
-            </Nav.Item>
-            <Nav.Item value="docs" href="#docs" disabled>
-              Docs
-            </Nav.Item>
-            <Nav.Item value="settings">Settings</Nav.Item>
-          </Nav>,
-        );
-        await user.click(button('Home'));
-        // Re-selection fires the alias for an enabled item; a disabled current item stays silent.
-        await user.click(screen.getByRole('link', { name: 'Docs' }));
+        expect(onValueChange.mock.calls).toEqual([['settings']]);
         expect(onNavItemSelect).not.toHaveBeenCalled();
-        await user.click(button('Settings'));
-        expect(onNavItemSelect).toHaveBeenCalledTimes(1);
-        expect(onNavItemSelect).toHaveBeenCalledWith('settings');
-        expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
+        expect(screen.getByRole('navigation')).not.toHaveAttribute('onnavitemselect');
+        expect(error.mock.calls).toEqual([
+          ['Unknown event handler property `%s`. It will be ignored.', 'onNavItemSelect'],
+        ]);
+        expect(warn).not.toHaveBeenCalled();
       });
     });
   });
@@ -507,27 +500,31 @@ describe('Nav', () => {
       expect(screen.getByRole('button', { name: 'Inbox (3)' })).toBeInTheDocument();
     });
 
-    it('deprecated: text children still label the category (all text parts) and warn', async () => {
+    // `label` is required in 1.0. Untyped code without it gets a toggle without a name, and the
+    // text children render in the list as they are, where the list-child check names them.
+    it('has no text children label: a category without label is a type error (removed in 1.0)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const user = userEvent.setup();
-      const count = 3;
       render(
         <Nav>
+          {/* @ts-expect-error -- the text children as the label are removed in 1.0: pass `label` */}
           <Nav.Category value="inbox">
-            Inbox ({count})<Nav.SubItem value="unread">Unread</Nav.SubItem>
+            Inbox<Nav.SubItem value="unread">Unread</Nav.SubItem>
           </Nav.Category>
         </Nav>,
       );
-      const categoryButton = screen.getByRole('button', { name: 'Inbox (3)' });
+      const categoryButton = screen.getByRole('button', { expanded: false });
+      expect(categoryButton).toHaveAccessibleName('');
       await user.click(categoryButton);
       const list = button('Unread').closest('ul') as HTMLElement;
-      expect(within(list).getAllByRole('listitem')).toHaveLength(1);
-      expect(list.textContent).toBe('Unread');
+      expect(list.textContent).toBe('InboxUnread');
       expect(warn.mock.calls).toEqual([
         [
-          '[WaveUI] Nav.Category: `text children as the label` is deprecated and will be removed in 1.0. Use `label` instead. Pass the category label in `label` and only the sub-items as children.',
+          '[WaveUI] Nav.Category: its list holds text, but a list can hold only <li> elements. Use Nav.SubItem, Nav.SectionHeader and Nav.Divider as its children, or wrap your own content in an <li>.',
         ],
       ]);
+      expect(error.mock.calls).toEqual([]);
     });
 
     it('defaultOpenCategories opens categories initially', () => {
@@ -547,14 +544,6 @@ describe('Nav', () => {
       render(<SampleNav value="api" />);
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
       expect(button('API')).toHaveAttribute('aria-current', 'page');
-    });
-
-    it('deprecated selectedValue also opens the category that contains it', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(<SampleNav selectedValue="api" />);
-      expect(toggle()).toHaveAttribute('aria-expanded', 'true');
-      expect(button('API')).toHaveAttribute('aria-current', 'page');
-      expect(warn.mock.calls).toEqual([[deprecated('selectedValue', 'value')]]);
     });
 
     it('defaultOpenCategories replaces the automatic opening, an empty list included', () => {
@@ -681,10 +670,10 @@ describe('Nav', () => {
     it('gives the marked toggle the selected look of an item, with logical classes', () => {
       render(<SampleNav defaultValue="api" defaultOpenCategories={[]} />);
       expect(toggle()).toHaveClass(
-        'data-[contains-current]:bg-subtle-selected',
-        'data-[contains-current]:text-primary',
-        'data-[contains-current]:border-s-2',
-        'data-[contains-current]:border-s-primary',
+        'wave:data-[contains-current]:bg-subtle-selected',
+        'wave:data-[contains-current]:text-primary',
+        'wave:data-[contains-current]:border-s-2',
+        'wave:data-[contains-current]:border-s-primary',
       );
       expect(toggle().className).not.toMatch(/border-(l|r)\b|border-(l|r)-/);
     });
@@ -944,19 +933,17 @@ describe('Nav', () => {
     describe('a click that opens the link somewhere else', () => {
       function ReportsNav({
         onValueChange,
-        onNavItemSelect,
         onReportsClick,
         target,
         download,
       }: {
         onValueChange?: (value: string) => void;
-        onNavItemSelect?: (value: string) => void;
         onReportsClick?: React.MouseEventHandler<HTMLAnchorElement>;
         target?: string;
         download?: boolean;
       }) {
         return (
-          <Nav defaultValue="home" onValueChange={onValueChange} onNavItemSelect={onNavItemSelect}>
+          <Nav defaultValue="home" onValueChange={onValueChange}>
             <Nav.Item value="home" href="#home">
               Home
             </Nav.Item>
@@ -1002,19 +989,9 @@ describe('Nav', () => {
         async (target) => {
           const user = userEvent.setup();
           const onValueChange = vi.fn();
-          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-          const onNavItemSelect = vi.fn();
-          render(
-            <ReportsNav
-              target={target}
-              onValueChange={onValueChange}
-              onNavItemSelect={onNavItemSelect}
-            />,
-          );
+          render(<ReportsNav target={target} onValueChange={onValueChange} />);
           await user.click(link('Reports'));
           expectHomeStillCurrent(onValueChange);
-          expect(onNavItemSelect).not.toHaveBeenCalled();
-          expect(warn.mock.calls).toEqual([[deprecated('onNavItemSelect', 'onValueChange')]]);
         },
       );
 
@@ -1383,7 +1360,7 @@ describe('Nav', () => {
       // The current value belongs to the app: disabling the entry does not hide where the user is.
       expect(button('Home')).toBeDisabled();
       expect(button('Home')).toHaveAttribute('aria-current', 'page');
-      expect(button('Home')).toHaveClass('bg-subtle-selected', 'border-s-primary');
+      expect(button('Home')).toHaveClass('wave:bg-subtle-selected', 'wave:border-s-primary');
       await user.click(button('Home'));
       expect(onValueChange).not.toHaveBeenCalled();
       expect(screen.getByRole('link', { name: 'Docs' })).not.toHaveAttribute('aria-current');
@@ -1432,9 +1409,9 @@ describe('Nav', () => {
       render(<SampleNav defaultOpenCategories={['docs']} />);
       for (const name of ['Home', 'Docs', 'Introduction']) {
         expect(button(name)).toHaveClass(
-          'focus-visible:outline-2',
-          'focus-visible:outline-ring',
-          'focus-visible:-outline-offset-2',
+          'wave:focus-visible:outline-2',
+          'wave:focus-visible:outline-ring',
+          'wave:focus-visible:-outline-offset-2',
         );
       }
     });
@@ -1448,39 +1425,46 @@ describe('Nav', () => {
         </Nav>,
       );
       expect(screen.getByRole('link', { name: 'Home' })).toHaveClass(
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
       );
     });
 
     it('gates the category toggle hover like the items (C-TOKENS)', () => {
       render(<SampleNav />);
-      expect(toggle()).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-hover');
-      expect(toggle()).not.toHaveClass('hover:bg-subtle-hover');
+      expect(toggle()).toHaveClass('wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover');
+      expect(toggle()).not.toHaveClass('wave:hover:bg-subtle-hover');
     });
 
     it('uses a token background and a logical indicator for the selected item', () => {
       render(<SampleNav defaultValue="home" />);
-      expect(button('Home')).toHaveClass('bg-subtle-selected', 'border-s-2', 'border-s-primary');
+      expect(button('Home')).toHaveClass(
+        'wave:bg-subtle-selected',
+        'wave:border-s-2',
+        'wave:border-s-primary',
+      );
       expect(button('Home').className).not.toMatch(/border-l|#[0-9a-f]{3,6}/i);
     });
 
     it('reduces the chevron and color transitions for reduced motion (C-MOTION)', () => {
       render(<SampleNav />);
-      expect(button('Home')).toHaveClass('motion-reduce:transition-none');
+      expect(button('Home')).toHaveClass('wave:motion-reduce:transition-none');
       const chevron = toggle().querySelector('svg');
-      expect(chevron).toHaveClass('transition-transform', 'motion-reduce:transition-none');
+      expect(chevron).toHaveClass(
+        'wave:transition-transform',
+        'wave:motion-reduce:transition-none',
+      );
     });
 
     it('RTL: uses logical utilities for the indicator, indent, alignment and border', () => {
       renderWithProviders(<SampleNav defaultValue="intro" />, { dir: 'rtl' });
       const nav = screen.getByRole('navigation');
       expect(nav.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-      expect(nav).toHaveClass('border-e');
-      expect(nav).not.toHaveClass('border-r');
+      expect(nav).toHaveClass('wave:border-e');
+      expect(nav).not.toHaveClass('wave:border-r');
       const intro = button('Introduction');
-      expect(intro).toHaveClass('ps-11', 'pe-4', 'text-start');
+      expect(intro).toHaveClass('wave:ps-11', 'wave:pe-4', 'wave:text-start');
       expect(intro.className).not.toMatch(/\b(pl|pr)-/);
-      expect(button('Home')).toHaveClass('text-start');
+      expect(button('Home')).toHaveClass('wave:text-start');
     });
 
     it('icon slot is aria-hidden and accepts a slot object with className (C-SLOTS)', () => {
@@ -1544,7 +1528,7 @@ describe('Nav', () => {
         wrapper: NavWrapper,
         defaultProps: { value: 'home', children: 'Home' },
         a11yVariants: [{ name: 'disabled', props: { disabled: true } }],
-        conflictingClass: { className: 'px-8', overrides: 'px-4' },
+        conflictingClass: { className: 'px-8', overrides: 'wave:px-4' },
       });
     });
 
@@ -1563,7 +1547,7 @@ describe('Nav', () => {
         displayName: 'NavSubItem',
         wrapper: NavWrapper,
         defaultProps: { value: 'intro', children: 'Introduction' },
-        conflictingClass: { className: 'py-3', overrides: 'py-1.5' },
+        conflictingClass: { className: 'py-3', overrides: 'wave:py-1.5' },
       });
     });
 
@@ -2157,21 +2141,21 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
   };
 
   const ACTIONS_CLASSES =
-    'flex shrink-0 items-center gap-1 pe-2 *:opacity-0 group-hover/nav-row:*:opacity-100 group-focus-within/nav-row:*:opacity-100 forced-colors:*:opacity-100 [@media(hover:none)]:*:opacity-100 *:has-[[aria-pressed=true]]:opacity-100 *:has-[[aria-expanded=true]]:opacity-100 [&amp;>[aria-pressed=true]]:opacity-100 [&amp;>[aria-expanded=true]]:opacity-100 *:transition *:duration-wave-fast *:ease-wave-easy-ease motion-reduce:*:transition-none';
+    'wave:flex wave:shrink-0 wave:items-center wave:gap-1 wave:pe-2 wave:*:opacity-0 wave:group-hover/nav-row:*:opacity-100 wave:group-focus-within/nav-row:*:opacity-100 wave:forced-colors:*:opacity-100 wave:[@media(hover:none)]:*:opacity-100 wave:*:has-[[aria-pressed=true]]:opacity-100 wave:*:has-[[aria-expanded=true]]:opacity-100 wave:[&amp;>[aria-pressed=true]]:opacity-100 wave:[&amp;>[aria-expanded=true]]:opacity-100 wave:*:transition wave:*:duration-wave-fast wave:*:ease-wave-easy-ease wave:motion-reduce:*:transition-none';
   const BUTTON_CLASSES =
-    'flex w-full items-center gap-2 px-4 py-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover transition-colors motion-reduce:transition-none data-[contains-current]:bg-subtle-selected data-[contains-current]:text-primary data-[contains-current]:border-s-2 data-[contains-current]:border-s-primary focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
+    'wave:flex wave:w-full wave:items-center wave:gap-2 wave:px-4 wave:py-2 wave:text-body-1 wave:font-semibold wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none wave:data-[contains-current]:bg-subtle-selected wave:data-[contains-current]:text-primary wave:data-[contains-current]:border-s-2 wave:data-[contains-current]:border-s-primary wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring';
   // Captured from 73e9b81's dist (client and server agree).
   const BASE_PINS = [
-    '<ul class="wave-nav__list m-0 list-none p-0">',
-    '<li class="wave-nav-item__list-item group/nav-row flex items-center transition-colors motion-reduce:transition-none bg-subtle-selected border-s-2 border-s-primary">',
-    '<span class="wave-nav-item__content flex-1 text-start">',
+    '<ul class="wave-nav__list wave:m-0 wave:list-none wave:p-0">',
+    '<li class="wave-nav-item__list-item wave:group/nav-row wave:flex wave:items-center wave:transition-colors wave:motion-reduce:transition-none wave:bg-subtle-selected wave:border-s-2 wave:border-s-primary">',
+    '<span class="wave-nav-item__content wave:flex-1 wave:text-start">',
     `<span aria-labelledby="wave-nav-item-_id0_" class="wave-nav-item__actions ${ACTIONS_CLASSES}" data-wave-nav-actions="" role="group">`,
     '<li class="wave-nav-item__list-item">',
-    '<span class="wave-nav-item__content flex-1 text-start">',
+    '<span class="wave-nav-item__content wave:flex-1 wave:text-start">',
     `<button aria-controls="wave-nav-category-_id1_" aria-expanded="true" class="wave-nav-category__button ${BUTTON_CLASSES}" type="button">`,
-    '<span class="wave-nav-category__label flex-1 text-start">',
-    '<ul class="wave-nav-category__list m-0 list-none p-0" id="wave-nav-category-_id1_">',
-    '<li class="wave-nav-sub-item__list-item group/nav-row flex items-center transition-colors motion-reduce:transition-none hover:bg-subtle-hover">',
+    '<span class="wave-nav-category__label wave:flex-1 wave:text-start">',
+    '<ul class="wave-nav-category__list wave:m-0 wave:list-none wave:p-0" id="wave-nav-category-_id1_">',
+    '<li class="wave-nav-sub-item__list-item wave:group/nav-row wave:flex wave:items-center wave:transition-colors wave:motion-reduce:transition-none wave:hover:bg-subtle-hover">',
     `<span aria-labelledby="wave-nav-item-_id2_" class="wave-nav-sub-item__actions ${ACTIONS_CLASSES}" data-wave-nav-actions="" role="group">`,
     '<li class="wave-nav-sub-item__list-item">',
   ].join('\n');
@@ -2316,15 +2300,15 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     );
     const parts = partsOf();
     for (const [name, mine, theirs] of [
-      ['navList', 'p-2', 'p-0'],
-      ['home', 'items-start', 'items-center'],
-      ['homeContent', 'flex-none', 'flex-1'],
-      ['homeActions', 'gap-2', 'gap-1'],
-      ['button', 'px-6', 'px-4'],
-      ['label', 'text-end', 'text-start'],
-      ['list', 'p-1', 'p-0'],
-      ['intro', 'items-end', 'items-center'],
-      ['introActions', 'gap-3', 'gap-1'],
+      ['navList', 'p-2', 'wave:p-0'],
+      ['home', 'items-start', 'wave:items-center'],
+      ['homeContent', 'flex-none', 'wave:flex-1'],
+      ['homeActions', 'gap-2', 'wave:gap-1'],
+      ['button', 'px-6', 'wave:px-4'],
+      ['label', 'text-end', 'wave:text-start'],
+      ['list', 'p-1', 'wave:p-0'],
+      ['intro', 'items-end', 'wave:items-center'],
+      ['introActions', 'gap-3', 'wave:gap-1'],
     ] as const) {
       expect(parts[name]).toHaveClass(mine);
       expect(parts[name]).not.toHaveClass(theirs);
@@ -3112,7 +3096,7 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     // @ts-expect-error -- a part takes no children: the Nav renders them
     void (<Nav slotProps={{ list: { children: 'List' } }} />);
     // @ts-expect-error -- a part takes no children: the category renders them
-    void (<Nav.Category value="docs" slotProps={{ label: { children: 'Docs' } }} />);
+    void (<Nav.Category value="docs" label="Docs" slotProps={{ label: { children: 'Docs' } }} />);
     void (
       (
         // @ts-expect-error -- a part takes no children: the item renders them

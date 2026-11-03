@@ -28,18 +28,18 @@ const STATUS_ICONS: Readonly<Record<Status, IconComponent>> = {
  * (MessageBar) and the page background (Toast) in every theme, unlike the `warning` fill.
  */
 export const STATUS_ICON_COLOR: Readonly<Record<Status, string>> = {
-  info: 'text-info-tint-foreground',
-  success: 'text-success-tint-foreground',
-  warning: 'text-warning-tint-foreground',
-  error: 'text-error-tint-foreground',
+  info: 'wave:text-info-tint-foreground',
+  success: 'wave:text-success-tint-foreground',
+  warning: 'wave:text-warning-tint-foreground',
+  error: 'wave:text-error-tint-foreground',
 };
 
 /** Logical start border color per status. */
 export const STATUS_BORDER: Readonly<Record<Status, string>> = {
-  info: 'border-s-info',
-  success: 'border-s-success',
-  warning: 'border-s-warning',
-  error: 'border-s-error',
+  info: 'wave:border-s-info',
+  success: 'wave:border-s-success',
+  warning: 'wave:border-s-warning',
+  error: 'wave:border-s-error',
 };
 
 /** The resolved status text: `statusLabel` when given (`''` hides it), else the default. */
@@ -62,7 +62,7 @@ StatusIcon.displayName = 'StatusIcon';
 export function StatusText({ label, id }: { label: string; id?: string }) {
   if (!label) return null;
   return (
-    <span id={id} className="sr-only">
+    <span id={id} className="wave:sr-only">
       {`${label} `}
     </span>
   );

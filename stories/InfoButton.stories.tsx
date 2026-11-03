@@ -16,7 +16,7 @@ type Story = StoryObj<typeof meta>;
 export const NextToAHeading: Story = {
   render: (args) => (
     <div className="flex items-center gap-1">
-      <h2 id="billing-heading" className="text-subtitle-2">
+      <h2 id="billing-heading" className="text-wave-subtitle-2">
         Billing
       </h2>
       <InfoButton
@@ -44,7 +44,7 @@ export const Motion: Story = {
     <div className="flex flex-col gap-3">
       {motionCases(fadeAndZoom).map(({ label, motion }, index) => (
         <div key={label} className="flex items-center gap-1">
-          <span id={`motion-label-${index}`} className="text-body-1">
+          <span id={`motion-label-${index}`} className="text-wave-body-1">
             {label}
           </span>
           {/* The story renders one button per case; every other arg is forwarded. */}

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { carouselButtonClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
@@ -34,7 +34,7 @@ export const CarouselButton = ({
   const previous = direction === 'previous';
   const disabled = previous ? carousel.previousDisabled : carousel.nextDisabled;
   const go = previous ? carousel.goPrevious : carousel.goNext;
-  const mirror = carousel.dir === 'rtl' ? '-scale-x-100' : undefined;
+  const mirror = carousel.dir === 'rtl' ? 'wave:-scale-x-100' : undefined;
   return (
     <button
       type="button"
@@ -45,7 +45,7 @@ export const CarouselButton = ({
       {...focusableDisabledProps(disabled)}
       ref={ref}
       onClick={preventIfDisabled(disabled, composeEventHandlers(onClick, go))}
-      className={cn(
+      className={wcn(
         carouselButtonClassNames.root,
         CAROUSEL_CONTROL_BASE,
         CAROUSEL_CONTROL_LAYOUT[carousel.controlsLayout][direction],

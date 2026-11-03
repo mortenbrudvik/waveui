@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { getElementType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { SortArrowDownIcon, SortArrowUpIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -48,7 +48,8 @@ export function getTablePartKind(node: React.ReactNode): TablePartKind | null {
 // ---------------------------------------------------------------------------
 
 /** The box of a selection cell (DataGrid's and Table.SelectionCell's): 40px wide, a row's rule. */
-export const SELECTION_CELL_CLASSES = 'w-10 px-3 py-3 border-b border-border';
+export const SELECTION_CELL_CLASSES =
+  'wave:w-10 wave:px-3 wave:py-3 wave:border-b wave:border-border';
 
 /**
  * A subtle control is transparent while it is not checked, until the group named by `reveal` is
@@ -56,8 +57,8 @@ export const SELECTION_CELL_CLASSES = 'w-10 px-3 py-3 border-b border-border';
  * draw it (a control outside such a group still shows its focus ring). It stays focusable and named.
  */
 const SUBTLE_CONTROL_CLASSES = {
-  row: 'opacity-0 group-hover/table-row:opacity-100 group-focus-within/table-row:opacity-100 focus-visible:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
-  grid: 'opacity-0 group-hover/grid:opacity-100 group-focus-within/grid:opacity-100 focus-visible:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100 transition-opacity motion-reduce:transition-none',
+  row: 'wave:opacity-0 wave:group-hover/table-row:opacity-100 wave:group-focus-within/table-row:opacity-100 wave:focus-visible:opacity-100 wave:forced-colors:opacity-100 wave:pointer-coarse:opacity-100 wave:transition-opacity wave:motion-reduce:transition-none',
+  grid: 'wave:opacity-0 wave:group-hover/grid:opacity-100 wave:group-focus-within/grid:opacity-100 wave:focus-visible:opacity-100 wave:forced-colors:opacity-100 wave:pointer-coarse:opacity-100 wave:transition-opacity wave:motion-reduce:transition-none',
 } as const;
 
 /**
@@ -183,12 +184,12 @@ export const TableSelectionControl = ({
     if (mixed) setMixedChanges((count) => count + 1);
     onChange?.(event);
   };
-  const classes = cn(
+  const classes = wcn(
     className,
-    'accent-primary cursor-pointer disabled:cursor-not-allowed',
+    'wave:accent-primary wave:cursor-pointer wave:disabled:cursor-not-allowed',
     focusRingInset,
     subtle && checked === false && SUBTLE_CONTROL_CLASSES[reveal],
-    invisible && 'invisible',
+    invisible && 'wave:invisible',
   );
 
   return (
@@ -286,18 +287,23 @@ export const TableSortButton = ({
   if (direction) {
     if (sortIcon == null || (button !== null && !slotRendersContent(glyph))) {
       const Arrow = direction === 'ascending' ? SortArrowUpIcon : SortArrowDownIcon;
-      icon = <Arrow data-direction={direction} className={cn(iconClassName, 'shrink-0')} />;
+      icon = <Arrow data-direction={direction} className={wcn(iconClassName, 'wave:shrink-0')} />;
     } else if (slotRendersContent(glyph)) {
-      icon = renderSlot(glyph, 'span', cn(iconClassName, 'inline-flex shrink-0 items-center'), {
-        'aria-hidden': true,
-        'data-direction': direction,
-      });
+      icon = renderSlot(
+        glyph,
+        'span',
+        wcn(iconClassName, 'wave:inline-flex wave:shrink-0 wave:items-center'),
+        {
+          'aria-hidden': true,
+          'data-direction': direction,
+        },
+      );
     }
   }
 
-  const classes = cn(
+  const classes = wcn(
     className,
-    'inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider',
+    'wave:inline-flex wave:w-full wave:cursor-pointer wave:select-none wave:items-center wave:gap-1 wave:border-0 wave:bg-transparent wave:px-4 wave:py-3 wave:text-start wave:text-inherit wave:[font:inherit] wave:uppercase wave:tracking-wider',
     focusRingInset,
   );
   return (

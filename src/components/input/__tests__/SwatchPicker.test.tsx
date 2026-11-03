@@ -131,23 +131,25 @@ describe('SwatchPicker', () => {
     expect(onValueChange).toHaveBeenLastCalledWith('green');
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = spyWarn();
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      const { rerender } = render(
-        <SwatchPicker items={defaultItems} aria-label="Brand colors" onChange={onChange} />,
+      const onValueChange = vi.fn();
+      render(
+        <SwatchPicker
+          items={defaultItems}
+          aria-label="Brand colors"
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
       );
-      rerender(<SwatchPicker items={defaultItems} aria-label="Brand colors" onChange={onChange} />);
       await user.click(swatch('Green'));
-      expect(onChange).toHaveBeenCalledWith('green');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] SwatchPicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
-      ]);
+      expect(onValueChange.mock.calls).toEqual([['green']]);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -157,23 +159,24 @@ describe('SwatchPicker', () => {
 describe('SwatchPicker — shape and size', () => {
   it('gives the swatches their own padding, so an app-wide button rule cannot shift the check (C-NATIVE)', () => {
     render(<SwatchPicker items={defaultItems} aria-label="Brand colors" />);
-    for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveClass('p-0');
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveClass('wave:p-0');
   });
 
   it('uses rounded-full for the default circular shape', () => {
     render(<SwatchPicker items={defaultItems} aria-label="Brand colors" />);
-    for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveClass('rounded-full');
+    for (const radio of screen.getAllByRole('radio'))
+      expect(radio).toHaveClass('wave:rounded-full');
   });
 
   it.each([
-    ['square', 'rounded-none'],
-    ['rounded', 'rounded'],
-    ['circular', 'rounded-full'],
+    ['square', 'wave:rounded-none'],
+    ['rounded', 'wave:rounded'],
+    ['circular', 'wave:rounded-full'],
   ] as const)('shape="%s" renders every swatch with %s', (shape, expected) => {
     render(<SwatchPicker items={defaultItems} aria-label="Brand colors" shape={shape} />);
     for (const radio of screen.getAllByRole('radio')) {
       expect(radio).toHaveClass(expected);
-      for (const other of ['rounded-none', 'rounded', 'rounded-full'].filter(
+      for (const other of ['wave:rounded-none', 'wave:rounded', 'wave:rounded-full'].filter(
         (c) => c !== expected,
       )) {
         expect(radio).not.toHaveClass(other);
@@ -182,9 +185,9 @@ describe('SwatchPicker — shape and size', () => {
   });
 
   it.each([
-    ['small', 'w-6', 'h-6'],
-    ['medium', 'w-8', 'h-8'],
-    ['large', 'w-10', 'h-10'],
+    ['small', 'wave:w-6', 'wave:h-6'],
+    ['medium', 'wave:w-8', 'wave:h-8'],
+    ['large', 'wave:w-10', 'wave:h-10'],
   ] as const)('size="%s" renders every swatch with %s %s', (size, width, height) => {
     render(<SwatchPicker items={defaultItems} aria-label="Brand colors" size={size} />);
     for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveClass(width, height);
@@ -210,16 +213,16 @@ describe('SwatchPicker — selected indicator (input-pickers#16)', () => {
     render(<SwatchPicker items={defaultItems} aria-label="Brand colors" defaultValue="blue" />);
     const blue = swatch('Blue');
     expect(blue).toHaveClass(
-      'ring-2',
-      'ring-offset-2',
-      'ring-foreground',
-      'ring-offset-background',
+      'wave:ring-2',
+      'wave:ring-offset-2',
+      'wave:ring-foreground',
+      'wave:ring-offset-background',
     );
     expect(blue).toHaveAttribute('data-selected');
     expect(blue.querySelector('[data-wave-icon="check"]')).not.toBeNull();
 
     const red = swatch('Red');
-    expect(red).not.toHaveClass('ring-2');
+    expect(red).not.toHaveClass('wave:ring-2');
     expect(red).not.toHaveAttribute('data-selected');
     expect(red.querySelector('[data-wave-icon="check"]')).toBeNull();
   });

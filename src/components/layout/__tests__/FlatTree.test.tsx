@@ -150,10 +150,10 @@ describe('FlatTree', () => {
       expect(item('Annual Report.docx').style.paddingInlineStart).toBe('2rem');
       const collapsed = item('Images').querySelector(`.${flatTreeItemClassNames.expandIcon}`);
       const expanded = item('Documents').querySelector(`.${flatTreeItemClassNames.expandIcon}`);
-      expect(collapsed).toHaveClass('wave-rtl:-scale-x-100');
-      expect(collapsed?.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
-      expect(expanded).toHaveClass('rotate-90');
-      expect(expanded).not.toHaveClass('wave-rtl:-scale-x-100');
+      expect(collapsed).toHaveClass('wave:wave-rtl:-scale-x-100');
+      expect(collapsed?.getAttribute('class')).not.toMatch(/(^|\s)wave:rtl:/);
+      expect(expanded).toHaveClass('wave:rotate-90');
+      expect(expanded).not.toHaveClass('wave:wave-rtl:-scale-x-100');
     });
 
     it('puts ref, className and rest props on the role="tree" element', () => {
@@ -710,13 +710,13 @@ describe('FlatTree — slotProps', () => {
 
   // Captured from ce1620c's dist (client and server agree).
   const BASE_PINS = [
-    '<div class="wave-flat-tree-item__row box-border flex items-center gap-1.5 rounded px-2 py-1 cursor-pointer hover:bg-subtle-hover" data-flat-tree-row="">',
-    '<svg aria-hidden="true" class="wave-flat-tree-item__expand-icon shrink-0 transition-transform motion-reduce:transition-none rotate-90" data-wave-icon="chevron-right" fill="currentColor" focusable="false" height="12" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
-    '<span aria-checked="true" aria-labelledby="flat-tree-item-label-_id0_" class="wave-flat-tree-item__indicator relative inline-flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors motion-reduce:transition-none before:absolute before:-inset-1 border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" data-flat-tree-checkbox="" role="checkbox" tabindex="-1">',
-    '<span class="wave-flat-tree-item__label min-w-0 truncate" id="flat-tree-item-label-_id0_">',
+    '<div class="wave-flat-tree-item__row wave:box-border wave:flex wave:items-center wave:gap-1.5 wave:rounded wave:px-2 wave:py-1 wave:cursor-pointer wave:hover:bg-subtle-hover" data-flat-tree-row="">',
+    '<svg aria-hidden="true" class="wave-flat-tree-item__expand-icon wave:shrink-0 wave:transition-transform wave:motion-reduce:transition-none wave:rotate-90" data-wave-icon="chevron-right" fill="currentColor" focusable="false" height="12" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+    '<span aria-checked="true" aria-labelledby="flat-tree-item-label-_id0_" class="wave-flat-tree-item__indicator wave:relative wave:inline-flex wave:size-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-xs wave:border wave:transition-colors wave:motion-reduce:transition-none wave:before:absolute wave:before:-inset-1 wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]" data-flat-tree-checkbox="" role="checkbox" tabindex="-1">',
+    '<span class="wave-flat-tree-item__label wave:min-w-0 wave:truncate" id="flat-tree-item-label-_id0_">',
   ].join('\n');
   const RADIO_PIN =
-    '<span aria-hidden="true" class="wave-flat-tree-item__indicator inline-flex size-4 shrink-0 items-center justify-center rounded-full transition-colors motion-reduce:transition-none border-2 border-primary forced-colors:border-[Highlight]">';
+    '<span aria-hidden="true" class="wave-flat-tree-item__indicator wave:inline-flex wave:size-4 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:transition-colors wave:motion-reduce:transition-none wave:border-2 wave:border-primary wave:forced-colors:border-[Highlight]">';
 
   const DOCS: FlatTreeItemData[] = [
     { value: 'docs', label: 'Documents' },
@@ -826,13 +826,13 @@ describe('FlatTree — slotProps', () => {
     );
     const [row, chevron, box, text] = partsOf(item('Documents'));
     expect(row).toHaveClass('px-4');
-    expect(row).not.toHaveClass('px-2');
+    expect(row).not.toHaveClass('wave:px-2');
     expect(chevron).toHaveClass('shrink');
-    expect(chevron).not.toHaveClass('shrink-0');
+    expect(chevron).not.toHaveClass('wave:shrink-0');
     expect(box).toHaveClass('size-5');
-    expect(box).not.toHaveClass('size-4');
+    expect(box).not.toHaveClass('wave:size-4');
     expect(text).toHaveClass('min-w-8');
-    expect(text).not.toHaveClass('min-w-0');
+    expect(text).not.toHaveClass('wave:min-w-0');
   });
 
   it('attaches your ref to the part of every rendered item', () => {
@@ -1120,7 +1120,10 @@ describe('FlatTree — slotProps', () => {
       <Files items={MIXED} slotProps={{ expandIcon: { className: 'my-chevron' } }} />,
       { dir: 'rtl' },
     );
-    expect(part(item('Gamma'), 'expandIcon')).toHaveClass('wave-rtl:-scale-x-100', 'my-chevron');
+    expect(part(item('Gamma'), 'expandIcon')).toHaveClass(
+      'wave:wave-rtl:-scale-x-100',
+      'my-chevron',
+    );
   });
 
   it('has no accessibility violations with every part customised', async () => {

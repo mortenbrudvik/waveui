@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { tableResizeHandleClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { composeAfterPart, mergeSlotProps } from '../../lib/slotProps';
@@ -59,11 +59,10 @@ export interface TableResizeHandleProps extends Omit<
   /**
    * Called with the width the user asks for, in whole pixels, held between `minWidth` and
    * `maxWidth`: while a pointer drags (at most once per animation frame) and for every handled
-   * key, then `details` with the event behind it. The handle always passes `details`; it is typed
-   * optional through 0.x, as every `details` argument. The handle keeps no width of its own, so a
-   * parent that ignores the call leaves the column where it is.
+   * key, then `details` with the event behind it. The handle always passes `details`. The handle
+   * keeps no width of its own, so a parent that ignores the call leaves the column where it is.
    */
-  onResize: (width: number, details?: { event: Event }) => void;
+  onResize: (width: number, details: { event: Event }) => void;
   /** Called with the event when the handle is double-clicked: reset the column's width. */
   onReset?: (details: { event: Event }) => void;
   /**
@@ -279,12 +278,12 @@ const TableResizeHandle = ({
   // the public handle.
   const { slotPart: part, ...divProps } = rest as typeof rest &
     Pick<TableResizeHandlePartProps, 'slotPart'>;
-  const classes = cn(
+  const classes = wcn(
     tableResizeHandleClassNames.root,
-    'absolute inset-y-0 end-0 z-1 w-2 cursor-col-resize touch-none select-none border-e-2 border-transparent',
-    'hover:border-stroke-accessible focus-visible:border-primary data-[dragging]:border-primary',
+    'wave:absolute wave:inset-y-0 wave:end-0 wave:z-1 wave:w-2 wave:cursor-col-resize wave:touch-none wave:select-none wave:border-e-2 wave:border-transparent',
+    'wave:hover:border-stroke-accessible wave:focus-visible:border-primary wave:data-[dragging]:border-primary',
     // The line is a border, so forced colors paint it only where it shows.
-    'forced-colors:forced-color-adjust-none forced-colors:hover:border-[ButtonText] forced-colors:focus-visible:border-[Highlight] forced-colors:data-[dragging]:border-[Highlight]',
+    'wave:forced-colors:forced-color-adjust-none wave:forced-colors:hover:border-[ButtonText] wave:forced-colors:focus-visible:border-[Highlight] wave:forced-colors:data-[dragging]:border-[Highlight]',
     focusRing,
     className,
   );

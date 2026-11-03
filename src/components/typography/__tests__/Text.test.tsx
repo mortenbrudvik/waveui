@@ -21,9 +21,9 @@ const VARIANTS: TypographyVariant[] = [
   'display',
 ];
 
-/** Text color utilities (theme tokens and the Tailwind palette), not the type-ramp sizes. */
+/** Text color utilities of Wave's (theme tokens and the Tailwind palette), not the type-ramp sizes. */
 const isTextColorClass = (cls: string) =>
-  /^text-(?!(caption|body|subtitle|title|large-title|display)(-|$))(?!(xs|sm|base|lg|[0-9]?xl)$)(?!(left|right|center|start|end|justify)$)/.test(
+  /^wave:text-(?!(caption|body|subtitle|title|large-title|display)(-|$))(?!(xs|sm|base|lg|[0-9]?xl)$)(?!(left|right|center|start|end|justify)$)/.test(
     cls,
   );
 
@@ -38,7 +38,7 @@ describe('Text', () => {
     displayName: 'Text',
     polymorphic: true,
     defaultProps: { children: 'The quick brown fox' },
-    conflictingClass: { className: 'text-title-1', overrides: 'text-body-1' },
+    conflictingClass: { className: 'text-title-1', overrides: 'wave:text-body-1' },
     a11yVariants: [
       { name: 'as heading', props: { as: 'h2', variant: 'title-2' } },
       { name: 'bold', props: { weight: 'bold' } },
@@ -58,7 +58,7 @@ describe('Text', () => {
       </Text>,
     );
     expect(screen.getByRole('heading', { level: 1, name: 'Page heading' })).toHaveClass(
-      'text-title-1',
+      'wave:text-title-1',
     );
   });
 
@@ -66,14 +66,14 @@ describe('Text', () => {
     it.each(VARIANTS)('variant %s applies text-%s', (variant) => {
       render(<Text variant={variant}>Content</Text>);
       const text = screen.getByText('Content');
-      expect(text).toHaveClass(`text-${variant}`);
-      const otherVariants = VARIANTS.filter((v) => v !== variant).map((v) => `text-${v}`);
+      expect(text).toHaveClass(`wave:text-${variant}`);
+      const otherVariants = VARIANTS.filter((v) => v !== variant).map((v) => `wave:text-${v}`);
       expect(Array.from(text.classList).filter((c) => otherVariants.includes(c))).toEqual([]);
     });
 
     it('defaults to body-1', () => {
       render(<Text>Content</Text>);
-      expect(screen.getByText('Content')).toHaveClass('text-body-1');
+      expect(screen.getByText('Content')).toHaveClass('wave:text-body-1');
     });
 
     it('keeps the variant next to a color className (table-core#1)', () => {
@@ -82,7 +82,7 @@ describe('Text', () => {
           Content
         </Text>,
       );
-      expect(screen.getByText('Content')).toHaveClass('text-body-1', 'text-primary');
+      expect(screen.getByText('Content')).toHaveClass('wave:text-body-1', 'text-primary');
     });
 
     it('keeps the variant next to a muted color className', () => {
@@ -91,14 +91,17 @@ describe('Text', () => {
           Content
         </Text>,
       );
-      expect(screen.getByText('Content')).toHaveClass('text-caption-1', 'text-muted-foreground');
+      expect(screen.getByText('Content')).toHaveClass(
+        'wave:text-caption-1',
+        'text-muted-foreground',
+      );
     });
 
     it('a font-size className wins over the variant', () => {
       render(<Text className="text-sm">Content</Text>);
       const text = screen.getByText('Content');
       expect(text).toHaveClass('text-sm');
-      expect(text).not.toHaveClass('text-body-1');
+      expect(text).not.toHaveClass('wave:text-body-1');
     });
   });
 
@@ -108,17 +111,17 @@ describe('Text', () => {
       const text = screen.getByText('Dark theme text');
       expect(Array.from(text.classList).filter(isTextColorClass)).toEqual([]);
       const root = container.querySelector('.wave-root');
-      expect(root).toHaveClass('wave-dark', 'text-foreground');
+      expect(root).toHaveClass('wave-dark', 'wave:text-foreground');
       expect(root).toContainElement(text);
     });
   });
 
   describe('weight (layout#16)', () => {
     const weights: Array<[TextWeight, string]> = [
-      ['regular', 'font-normal'],
-      ['medium', 'font-medium'],
-      ['semibold', 'font-semibold'],
-      ['bold', 'font-bold'],
+      ['regular', 'wave:font-normal'],
+      ['medium', 'wave:font-medium'],
+      ['semibold', 'wave:font-semibold'],
+      ['bold', 'wave:font-bold'],
     ];
 
     it.each(weights)('weight "%s" applies %s', (weight, cls) => {
@@ -128,31 +131,43 @@ describe('Text', () => {
       expect(warn).not.toHaveBeenCalled();
     });
 
-    it.each([
-      [400, 'regular', 'font-normal'],
-      [600, 'semibold', 'font-semibold'],
-      [700, 'bold', 'font-bold'],
-    ] as const)(
-      'the deprecated numeric weight %s still applies and warns once (use "%s")',
-      (numeric, name, cls) => {
+    // Untyped code that still passes a 0.4 number: no weight class (the variant's own weight
+    // applies), nothing reaches the element and nothing is logged.
+    it.each([400, 600, 700] as const)(
+      'has no numeric weight %s (removed in 1.0): no weight class, no warning',
+      (numeric) => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const { rerender } = render(<Text weight={numeric}>Content</Text>);
-        rerender(<Text weight={numeric}>Content again</Text>);
-        expect(screen.getByText('Content again')).toHaveClass(cls);
-        const messages = warn.mock.calls.map((call) => String(call[0]));
-        expect(messages).toEqual([
-          `[WaveUI] Text: \`weight={${numeric}}\` is deprecated and will be removed in 1.0. Use \`weight="${name}"\` instead.`,
-        ]);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(
+          <Text
+            // @ts-expect-error -- removed in 1.0: use "regular", "semibold" or "bold"
+            weight={numeric}
+          >
+            Content
+          </Text>,
+        );
+        const text = screen.getByText('Content');
+        for (const cls of [
+          'wave:font-normal',
+          'wave:font-medium',
+          'wave:font-semibold',
+          'wave:font-bold',
+        ]) {
+          expect(text).not.toHaveClass(cls);
+        }
+        expect(text).not.toHaveAttribute('weight');
+        expect(warn).not.toHaveBeenCalled();
+        expect(error).not.toHaveBeenCalled();
       },
     );
 
     it('does not apply a weight class when weight is not provided', () => {
       render(<Text>No weight</Text>);
       const text = screen.getByText('No weight');
-      expect(text).not.toHaveClass('font-normal');
-      expect(text).not.toHaveClass('font-semibold');
-      expect(text).not.toHaveClass('font-bold');
-      expect(text).not.toHaveClass('font-medium');
+      expect(text).not.toHaveClass('wave:font-normal');
+      expect(text).not.toHaveClass('wave:font-semibold');
+      expect(text).not.toHaveClass('wave:font-bold');
+      expect(text).not.toHaveClass('wave:font-medium');
     });
 
     it('a consumer weight class replaces the weight prop', () => {
@@ -163,14 +178,14 @@ describe('Text', () => {
       );
       const text = screen.getByText('Content');
       expect(text).toHaveClass('font-bold');
-      expect(text).not.toHaveClass('font-medium');
+      expect(text).not.toHaveClass('wave:font-medium');
     });
   });
 
   describe('font (R13)', () => {
     it.each([
-      ['monospace', 'font-wave-mono'],
-      ['numeric', 'font-wave-numeric'],
+      ['monospace', 'wave:font-wave-mono'],
+      ['numeric', 'wave:font-wave-numeric'],
     ] as const)('font "%s" applies %s', (font, cls) => {
       render(<Text font={font}>Content</Text>);
       expect(screen.getByText('Content')).toHaveClass(cls);
@@ -179,7 +194,7 @@ describe('Text', () => {
     it.each([undefined, 'base'] as const)('font %s adds no font family class', (font) => {
       render(<Text font={font}>Content</Text>);
       const families = Array.from(screen.getByText('Content').classList).filter((c) =>
-        /^font-wave/.test(c),
+        /^wave:font-wave/.test(c),
       );
       expect(families).toEqual([]);
     });
@@ -192,7 +207,7 @@ describe('Text', () => {
       );
       const text = screen.getByText('Content');
       expect(text).toHaveClass('font-wave-mono');
-      expect(text).not.toHaveClass('font-wave-numeric');
+      expect(text).not.toHaveClass('wave:font-wave-numeric');
     });
 
     it('a consumer font-wave replaces the font prop', () => {
@@ -203,7 +218,7 @@ describe('Text', () => {
       );
       const text = screen.getByText('Content');
       expect(text).toHaveClass('font-wave');
-      expect(text).not.toHaveClass('font-wave-mono');
+      expect(text).not.toHaveClass('wave:font-wave-mono');
     });
 
     it('keeps the font next to a weight and the stable class', () => {
@@ -214,8 +229,8 @@ describe('Text', () => {
       );
       expect(screen.getByText('Content')).toHaveClass(
         textClassNames.root,
-        'font-wave-mono',
-        'font-medium',
+        'wave:font-wave-mono',
+        'wave:font-medium',
       );
     });
 
@@ -262,7 +277,7 @@ describe('Text', () => {
         <Text key="1" as="a" href="/docs" />,
         // @ts-expect-error href does not exist on <span>
         <Text key="2" href="/nope" />,
-        // @ts-expect-error weight uses the TextWeight vocabulary (or the deprecated 400/600/700)
+        // @ts-expect-error weight uses the TextWeight vocabulary
         <Text key="3" weight={500} />,
         // @ts-expect-error variant keeps its literal type
         <Text key="4" variant="headline" />,
@@ -279,7 +294,7 @@ describe('Text', () => {
       expectTypeOf<TextProps>().toEqualTypeOf<TextProps<'span'>>();
       expectTypeOf<TextProps['ref']>().toEqualTypeOf<React.Ref<HTMLSpanElement> | undefined>();
       expectTypeOf<keyof TextOwnProps>().toEqualTypeOf<'variant' | 'weight' | 'font'>();
-      expectTypeOf<TextWeight>().toMatchTypeOf<NonNullable<TextOwnProps['weight']>>();
+      expectTypeOf<NonNullable<TextOwnProps['weight']>>().toEqualTypeOf<TextWeight>();
     });
   });
 });

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { focusElement, getLastTabbable, getTabbableElements } from '../../lib/focus';
 import { getGlobalRegistry } from '../../lib/globalRegistry';
 import { getLayerTreeElements } from '../../lib/layers';
@@ -15,13 +15,13 @@ export type PopoverPhysicalSide = UsePopupPositionResult['side'];
 /** Borders of the rotated square beak that face the anchor, per final physical side. */
 const BEAK_BORDER: Record<PopoverPhysicalSide, string> = {
   // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  top: 'border-b border-r',
+  top: 'wave:border-b wave:border-r',
   // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  bottom: 'border-t border-l',
+  bottom: 'wave:border-t wave:border-l',
   // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  left: 'border-t border-r',
+  left: 'wave:border-t wave:border-r',
   // wave-allow-physical: the beak follows the physical side resolved by the positioning
-  right: 'border-b border-l',
+  right: 'wave:border-b wave:border-l',
 };
 
 /** Properties for the internal PopoverBeak. */
@@ -43,7 +43,11 @@ export const PopoverBeak = ({ side, className, ref, ...rest }: PopoverBeakProps)
     ref={ref}
     aria-hidden="true"
     {...rest}
-    className={cn('size-2 rotate-45 border-inherit bg-inherit', BEAK_BORDER[side], className)}
+    className={wcn(
+      'wave:size-2 wave:rotate-45 wave:border-inherit wave:bg-inherit',
+      BEAK_BORDER[side],
+      className,
+    )}
   />
 );
 PopoverBeak.displayName = 'PopoverBeak';
@@ -219,7 +223,7 @@ interface FocusOrigin {
 /**
  * One per copy of the library, not in the global registry: every field is derived from document
  * and window events, and only this copy's hooks read it, each of which keeps this copy's
- * listeners installed from its mount on. A second copy (ESM and CJS side by side) installs its own
+ * listeners installed from its mount on. A second copy of the package installs its own
  * listeners and derives the same state; `epoch` is compared only within the copy that set it.
  */
 const focusOrigin: FocusOrigin = {
@@ -254,7 +258,8 @@ function startsAfter(el: HTMLElement, surface: HTMLElement): boolean {
  * The surfaces whose keyboard order a {@link usePopoverTabOrder} manages right now. Their content
  * takes its place after its anchor, not at the end of the document where its portal is, so none
  * of it is "the last element of the page". Kept in `getGlobalRegistry('orderedSurfaces')`, so an
- * app that loads both the ESM and the CJS copy of the library excludes the surfaces of both.
+ * app that loads two copies of the package (duplicate installs, bundler duplicates, hot reload)
+ * excludes the surfaces of both.
  */
 function getOrderedSurfaces(): Set<HTMLElement> {
   return getGlobalRegistry('orderedSurfaces', () => new Set<HTMLElement>());

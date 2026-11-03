@@ -22,7 +22,7 @@ describe('Textarea', () => {
       { name: 'disabled', props: { disabled: true } },
       { name: 'error message', props: { error: 'Message is required' } },
     ],
-    conflictingClass: { className: 'px-4', overrides: 'px-3' },
+    conflictingClass: { className: 'px-4', overrides: 'wave:px-3' },
   });
 
   testFocusEvents(Textarea, { 'aria-label': 'Message' }, 'textarea');
@@ -59,11 +59,11 @@ describe('Textarea', () => {
     render(<Textarea aria-label="Message" />);
     const textarea = screen.getByRole('textbox', { name: 'Message' });
     expect(textarea).toHaveClass(
-      'border-input',
-      'border-b-stroke-accessible',
-      'placeholder:text-muted-foreground',
-      'focus:outline-hidden',
-      'focus:border-b-primary',
+      'wave:border-input',
+      'wave:border-b-stroke-accessible',
+      'wave:placeholder:text-muted-foreground',
+      'wave:focus:outline-hidden',
+      'wave:focus:border-b-primary',
     );
     expect(textarea.className).not.toMatch(/#[0-9a-f]{3,8}|outline-none/i);
   });
@@ -77,7 +77,7 @@ describe('Textarea', () => {
       expect(textarea).toHaveAttribute('aria-invalid', 'true');
       expect(textarea).toHaveAccessibleDescription('Message is required');
       expect(textarea).toHaveAttribute('aria-errormessage', alert.id);
-      expect(textarea).toHaveClass('border-destructive');
+      expect(textarea).toHaveClass('wave:border-destructive');
       expect(container.firstElementChild).toBe(textarea);
     });
 
@@ -111,7 +111,7 @@ describe('Textarea', () => {
       for (const name of ['Message', 'Notes']) {
         const textarea = screen.getByRole('textbox', { name });
         expect(textarea).toHaveAttribute('aria-invalid', 'false');
-        expect(textarea).not.toHaveClass('border-destructive');
+        expect(textarea).not.toHaveClass('wave:border-destructive');
         expect(textarea).not.toHaveAttribute('aria-describedby');
         expect(textarea).not.toHaveAttribute('aria-errormessage');
       }
@@ -129,7 +129,7 @@ describe('Textarea', () => {
       for (const name of ['Message', 'Notes']) {
         const textarea = screen.getByRole('textbox', { name });
         expect(textarea).toHaveClass(...inputInvalid.split(' '));
-        expect(textarea).not.toHaveClass('border-input');
+        expect(textarea).not.toHaveClass('wave:border-input');
       }
     });
 
@@ -150,20 +150,20 @@ describe('Textarea', () => {
     it('renders the 0.7 classes and medium outline attributes by default', () => {
       render(<Textarea aria-label="Notes" />);
       expect(box()).toHaveClass(
-        'min-h-20',
-        'px-3',
-        'py-2',
-        'text-body-1',
-        'resize-y',
-        'border-input',
+        'wave:min-h-20',
+        'wave:px-3',
+        'wave:py-2',
+        'wave:text-body-1',
+        'wave:resize-y',
+        'wave:border-input',
       );
       expect(box()).toHaveAttribute('data-size', 'medium');
       expect(box()).toHaveAttribute('data-appearance', 'outline');
     });
 
     it.each([
-      ['small', ['min-h-16', 'px-2', 'py-1', 'text-caption-1']],
-      ['large', ['min-h-24', 'px-4', 'py-2.5', 'text-body-2']],
+      ['small', ['wave:min-h-16', 'wave:px-2', 'wave:py-1', 'wave:text-caption-1']],
+      ['large', ['wave:min-h-24', 'wave:px-4', 'wave:py-2.5', 'wave:text-body-2']],
     ] as const)('size="%s"', (size, classes) => {
       render(<Textarea aria-label="Notes" size={size} />);
       expect(box()).toHaveClass(...classes);
@@ -171,9 +171,9 @@ describe('Textarea', () => {
     });
 
     it.each([
-      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-      ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+      ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+      ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+      ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
     ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
       render(<Textarea aria-label="Notes" appearance={appearance} />);
       expect(box()).toHaveClass(...classes);
@@ -182,7 +182,12 @@ describe('Textarea', () => {
 
     it('underline keeps vertical resizing and square corners', () => {
       render(<Textarea aria-label="Notes" appearance="underline" />);
-      expect(box()).toHaveClass('resize-y', 'rounded-none', 'border-0', 'border-b');
+      expect(box()).toHaveClass(
+        'wave:resize-y',
+        'wave:rounded-none',
+        'wave:border-0',
+        'wave:border-b',
+      );
     });
 
     it('takes the Field size; its own size wins', () => {
@@ -219,7 +224,7 @@ describe('Textarea', () => {
       'an invalid %s field keeps the destructive border and the focus color on its bottom',
       (appearance) => {
         render(<Textarea aria-label="Notes" appearance={appearance} error />);
-        expect(box()).toHaveClass('border-destructive', 'focus:border-b-primary');
+        expect(box()).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
       },
     );
 
@@ -230,8 +235,8 @@ describe('Textarea', () => {
           errorId: FIELD_TEST_IDS.errorId,
         });
         expect(box(FIELD_TEST_TEXT.label)).toHaveClass(
-          'border-destructive',
-          'focus:border-b-primary',
+          'wave:border-destructive',
+          'wave:focus:border-b-primary',
         );
       },
     );

@@ -1,6 +1,7 @@
 /*
- * Wave's direction variant `wave-rtl:`, imported by every entry that compiles Wave's classes
- * (styles.css, tailwind.css, globals.css).
+ * Wave's direction variant `wave-rtl:`, imported by every style entry: styles.css, whose
+ * components write it after Wave's prefix (`wave:wave-rtl:`), and tailwind.css and globals.css
+ * (and `./variants`), for an app's own classes.
  *
  * Tailwind's `rtl:` also matches `[dir=rtl] *`, so it applies inside an LTR subtree of an RTL
  * page. `wave-rtl:` follows the element's own direction with `:dir(rtl)`; browsers without

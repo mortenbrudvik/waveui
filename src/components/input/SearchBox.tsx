@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { getElementType, isElementOfType } from '../../lib/children';
 import { searchBoxClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { DismissIcon, SearchIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
 import { mergeProps } from '../../lib/mergeProps';
@@ -15,7 +15,7 @@ import {
   slotRendersContent,
   slotWrapsDefaultContent,
 } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import {
   focusRing,
   hitAreaLayer,
@@ -25,7 +25,7 @@ import {
   inputInvalidWithin,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance, Slot, SlotObject } from '../../lib/types';
+import type { CoreSize, InputAppearance, Slot } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { fieldLocks, useFieldControl } from '../../hooks/useFieldControl';
@@ -93,11 +93,6 @@ export interface SearchBoxProps
   /** Called with the new search text when it changes (typing or clearing). */
   onValueChange?: (value: string) => void;
   /**
-   * Called with the new search text when it changes.
-   * @deprecated Use `onValueChange`. (`onChange` is reserved for native change events.)
-   */
-  onChange?: (value: string) => void;
-  /**
    * Called when the user clears the search: with the clear button, or with Escape while there is
    * text (after `onValueChange('')`).
    */
@@ -145,44 +140,66 @@ export interface SearchBoxProps
    * children become the content, with a development warning. A Wave `Button`'s own props are not
    * attributes: its `icon` becomes decorative content before its children (after them with
    * `iconPosition="after"`), `disabledFocusable` makes the clear button unavailable but focusable
-   * as on the Button (nothing is cleared), and `appearance` and `size` are ignored. The 0.4
-   * button-object form (`{ as: 'button', onClick, … }` or an object with button props) is
-   * **deprecated**: its button props are merged the same way. Pass icon content instead.
+   * as on the Button (nothing is cleared), and `appearance` and `size` are ignored.
+   *
+   * A slot object is the content element, not the button: its attributes, event handlers
+   * included, go to that element (only the naming attributes below reach the button), so handle
+   * the press in `onClear`. A slot object whose `as` is a `<button>` or a Wave `Button` cannot
+   * render inside the button: its children render as the content (the default icon when it has
+   * none) and its props are dropped, with a development warning.
    *
    * Name (WCAG 2.5.3 Label in Name): content is decorative (`aria-hidden`), so the button keeps
    * the name "Clear search". An `aria-label`, `aria-labelledby` or `title` on the merged button or
    * on a slot object names the button instead (`{ children: 'Reset', 'aria-label': 'Reset' }`).
-   * The children of a merged `<button>`/`Button` (or of `{ as: 'button' }`) are rendered as is:
+   * The children of a merged `<button>`/`Button` are rendered as is:
    * when they render a text label (at least two letters or digits outside `aria-hidden`/`hidden`
    * content, text from components such as translations included), that text names the button;
    * an icon or a lone character (`X`, `×`) keeps "Clear search". Text hidden only with CSS still
    * counts as the label, so give a button with a responsive label an explicit `aria-label`.
    */
-  dismiss?: Slot<'span'> | SlotObject<'button'>;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
-  /** Ref to the `<input type="search">` (the focusable control). */
-  controlRef?: React.Ref<HTMLInputElement>;
+  dismiss?: Slot<'span'>;
   /**
-   * Props for the elements the SearchBox draws inside its root, by part, merged into each part's
-   * own (Fluent UI's `input` and `dismiss` slot props): your classes after the part's (yours win
-   * a conflict), your styles over its styles, your handlers before its handlers
-   * (`preventDefault()` in yours skips the SearchBox's handling of the event, its own `on…` prop
-   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
-   * `aria-describedby`. Every attribute the SearchBox sets on a part is locked and keeps the
-   * SearchBox's value (set it through its own props); you add the attributes it does not set. A
-   * part takes no `children` (`dismiss` fills the clear button).
+   * Ref to the `<input type="search">`, the focusable control (Fluent UI's `ref`, on its primary
+   * element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the SearchBox draws, by part, merged into each part's own (Fluent UI's
+   * `root`, `input` and `dismiss` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers before its handlers (`preventDefault()`
+   * in yours skips the SearchBox's handling of the event, its own `on…` prop included), your ref
+   * beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every
+   * attribute the SearchBox sets on a part is locked and keeps the SearchBox's value (set it
+   * through its own props); you add the attributes it does not set. A part takes no `children`
+   * (`dismiss` fills the clear button).
    */
   slotProps?: {
     /**
+     * The root `<div>` that draws the field around the icon (or `contentBefore`), the input,
+     * `contentAfter` and the clear button (stable class `wave-search-box`), which the SearchBox's
+     * `className`, `style`, `data-*` and other root props reach as well; its `ref` is the way to
+     * the root, since the SearchBox's `ref` reaches the input. Your classes come after the
+     * SearchBox's `className`, your style over its `style`. Locked: every prop you give the
+     * SearchBox itself that reaches the root, `data-size`, `data-appearance`, and `hidden`, `inert`
+     * and `aria-hidden` (the SearchBox's own: the root holds the input). Also locked, unset:
+     * `role`, `tabIndex` and the roving markers (`data-roving-container`, `data-roving-disabled`,
+     * `data-roving-value`, `aria-disabled`), so in a toolbar or another roving container the root
+     * is never a control of its own and never hides the control from the arrow order. Your handlers
+     * run before the SearchBox's own root handlers: `preventDefault()` in your `onMouseDown` skips
+     * the SearchBox's `onMouseDown` and the press that moves focus to the input. The root passes no
+     * click to the input, so your `onClick` is called in every state, as the SearchBox's own
+     * `onClick` is.
+     */
+    root?: SlotPart<'div'>;
+    /**
      * The `<input type="search">`, the focusable control (stable class `wave-search-box__input`;
-     * `controlRef` reaches it as well). Locked: `type`, `value` (and, unset, `defaultValue`: the
-     * SearchBox controls the text), `id`, the naming and Field attributes (`aria-label`,
-     * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`), `required`,
-     * `disabled`, `placeholder`, every input prop routed to it (`name`, `form`, `readOnly`,
-     * `tabIndex`, `maxLength`, …), `hidden`, `inert` and `aria-hidden` (a focusable control is
-     * never hidden). Your handlers run before the SearchBox's: `preventDefault()` in your
-     * `onChange` ignores the typed text, in your `onKeyDown` keeps the text on Escape.
+     * the SearchBox's `ref` reaches it as well). Locked: `type`, `value` (and, unset,
+     * `defaultValue`: the SearchBox controls the text), `id`, the naming and Field attributes
+     * (`aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`),
+     * `required`, `disabled`, `placeholder`, every input prop routed to it (`name`, `form`,
+     * `readOnly`, `tabIndex`, `maxLength`, …), `hidden`, `inert` and `aria-hidden` (a focusable
+     * control is never hidden). Your handlers run before the SearchBox's: `preventDefault()` in
+     * your `onChange` ignores the typed text, in your `onKeyDown` keeps the text on Escape.
      */
     input?: SlotPart<'input'>;
     /**
@@ -204,29 +221,30 @@ export interface SearchBoxProps
 const SEARCH_SIZE: Readonly<
   Record<CoreSize, { before: string; after: string; input: string; clear: string; glyph: number }>
 > = {
-  small: { before: 'ps-1.5', after: 'pe-1.5', input: 'px-1.5', clear: 'size-5', glyph: 12 },
-  medium: { before: 'ps-2', after: 'pe-2', input: 'px-2', clear: 'h-6 w-6', glyph: 16 },
-  large: { before: 'ps-3', after: 'pe-3', input: 'px-3', clear: 'size-8', glyph: 20 },
+  small: {
+    before: 'wave:ps-1.5',
+    after: 'wave:pe-1.5',
+    input: 'wave:px-1.5',
+    clear: 'wave:size-5',
+    glyph: 12,
+  },
+  medium: {
+    before: 'wave:ps-2',
+    after: 'wave:pe-2',
+    input: 'wave:px-2',
+    clear: 'wave:h-6 wave:w-6',
+    glyph: 16,
+  },
+  large: {
+    before: 'wave:ps-3',
+    after: 'wave:pe-3',
+    input: 'wave:px-3',
+    clear: 'wave:size-8',
+    glyph: 20,
+  },
 };
 
 type UnknownProps = Record<string, unknown>;
-
-/** Attributes that only make sense on the clear `<button>` itself (merged onto it). */
-const BUTTON_ONLY_KEYS: ReadonlySet<string> = new Set([
-  'type',
-  'disabled',
-  'form',
-  'formAction',
-  'formEncType',
-  'formMethod',
-  'formNoValidate',
-  'formTarget',
-  'name',
-  'value',
-  'popoverTarget',
-  'popoverTargetAction',
-]);
-const HANDLER_KEY = /^on[A-Z]/;
 
 /**
  * Attributes that name the clear button (C-SLOTS naming). On a merged button or a slot object they
@@ -241,17 +259,18 @@ const DEFAULT_CLEAR_LABEL = 'Clear search';
 interface DismissParts {
   /**
    * `default`: no slot (default icon); `content`: icon content; `element`: a `<button>`/`Button`
-   * element; `button-object`: the deprecated button-object form.
+   * element (merged); `unwrapped`: a slot object whose `as` is a button (its children are the
+   * content, its props dropped).
    */
-  kind: 'default' | 'content' | 'element' | 'button-object';
+  kind: 'default' | 'content' | 'element' | 'unwrapped';
   /** Props merged onto the built-in clear button. */
   buttonProps: UnknownProps;
   /** Content of the clear button (`null` = the default icon, except for `content`). */
   content: React.ReactNode;
   /**
-   * `true` when the content is rendered as is (a merged `<button>`/`Button` or `{ as: 'button' }`),
-   * so a text label in it names the button (C-SLOTS naming, WCAG 2.5.3); `false` when the content
-   * is decorative (`aria-hidden`).
+   * `true` when the content is rendered as is (a merged `<button>`/`Button`), so a text label in
+   * it names the button (C-SLOTS naming, WCAG 2.5.3); `false` when the content is decorative
+   * (`aria-hidden`).
    */
   contentMayName: boolean;
   /**
@@ -289,9 +308,10 @@ function isButtonType(type: unknown): boolean {
 }
 
 /**
- * Splits the props of a button-like element or object into button props and content. The content
- * is rendered as is, so a text label in it names the button (C-SLOTS naming). Content that renders
- * nothing is `null` (the default icon); a generator is read once and rendered as its items.
+ * Splits the props of a `<button>` or Wave `Button` element into button props and content. The
+ * content is rendered as is, so a text label in it names the button (C-SLOTS naming). Content
+ * that renders nothing is `null` (the default icon); a generator is read once and rendered as its
+ * items.
  */
 function splitButtonLike(type: unknown, props: UnknownProps, children: React.ReactNode) {
   const hasChildren = slotRendersContent(children);
@@ -307,7 +327,7 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
     const iconNode = renderSlot(
       props.icon as Slot<'span'>,
       'span',
-      cn(searchBoxClassNames.dismissIcon, 'inline-flex'),
+      wcn(searchBoxClassNames.dismissIcon, 'wave:inline-flex'),
       { 'aria-hidden': true },
     );
     const buttonContent =
@@ -320,7 +340,7 @@ function splitButtonLike(type: unknown, props: UnknownProps, children: React.Rea
       disabledFocusable: Boolean(props.disabledFocusable),
     };
   }
-  const { as, children: _children, ...buttonProps } = props;
+  const { children: _children, ...buttonProps } = props;
   // `null` content falls back to the default icon.
   return {
     buttonProps,
@@ -351,40 +371,34 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): Dis
   }
   // Resolved once: a generator is materialised (and cached) by resolveSlot, so it can be checked
   // for emptiness and rendered without being consumed twice.
-  // A render function is merged with a button `as`, or dropped when it renders nothing.
+  // A render function is resolved with a button `as` (it renders the content), or dropped when it
+  // renders nothing.
   const resolved = resolveWiredSlot(resolveSlot(dismiss as Slot<'span'>, 'span'), isButtonType);
   if (!resolved) return DEFAULT_DISMISS;
-  const { Component, props, children } = resolved;
-  if (isButtonType(Component)) {
-    return { kind: 'button-object', ...splitButtonLike(Component, props, children) };
-  }
+  const { children } = resolved;
+  // A slot object whose `as` is a button cannot render inside the clear button: it is unwrapped,
+  // so its children are the content of a span and its props are dropped.
+  const unwrapped = isButtonType(resolved.Component);
+  const kind = unwrapped ? 'unwrapped' : 'content';
+  const Component: React.ElementType = unwrapped ? 'span' : resolved.Component;
   const buttonProps: UnknownProps = {};
   const contentProps: UnknownProps = {};
-  let hasButtonProps = false;
-  for (const [key, value] of Object.entries(props)) {
+  for (const [key, value] of Object.entries(unwrapped ? {} : resolved.props)) {
     // resolveSlot sets `className: undefined` when there are no classes.
     if (value === undefined) continue;
-    if (BUTTON_ONLY_KEYS.has(key) || HANDLER_KEY.test(key)) {
-      buttonProps[key] = value;
-      hasButtonProps = true;
-    } else if (NAMING_KEYS.has(key)) {
-      // The content is aria-hidden, so a naming attribute names the clear button instead (not the
-      // deprecated button-object form).
-      buttonProps[key] = value;
-    } else {
-      contentProps[key] = value;
-    }
+    // The content is aria-hidden, so a naming attribute names the clear button instead.
+    (NAMING_KEYS.has(key) ? buttonProps : contentProps)[key] = value;
   }
   // A void (`img`), component (`{ as: MyIcon }`) or markup (`dangerouslySetInnerHTML`) slot
   // renders content of its own.
   const hasChildren = slotRendersContent(children);
   const empty = slotWrapsDefaultContent(Component, { ...contentProps, children });
   if (empty && Object.keys(buttonProps).length === 0 && Object.keys(contentProps).length === 0) {
-    return DEFAULT_DISMISS;
+    return unwrapped ? { ...DEFAULT_DISMISS, kind } : DEFAULT_DISMISS;
   }
-  // A button object without content (`{ onClick }`, `{ type: 'button' }`) or a content object
-  // without children (`{ className }`) keeps the default icon inside the object's own element (its
-  // className/style/attributes still apply). Markup of its own takes no children at all.
+  // A content object without children (`{ className }`, `{ 'aria-label': 'Reset' }`) keeps the
+  // default icon inside the object's own element (its className/style/attributes still apply).
+  // Markup of its own takes no children at all.
   const contentChildren = empty ? (
     <DismissIcon size={SEARCH_SIZE[size].glyph} />
   ) : hasChildren ? (
@@ -394,14 +408,14 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): Dis
   const iconProps = {
     'aria-hidden': true,
     ...contentProps,
-    className: cn(searchBoxClassNames.dismissIcon, contentProps.className as string | undefined),
+    className: wcn(searchBoxClassNames.dismissIcon, contentProps.className as string | undefined),
   };
   const content =
     contentChildren === undefined
       ? React.createElement(Component, iconProps)
       : React.createElement(Component, iconProps, contentChildren);
   return {
-    kind: hasButtonProps ? 'button-object' : 'content',
+    kind,
     buttonProps,
     content,
     contentMayName: false,
@@ -420,10 +434,10 @@ function resolveDismiss(dismiss: SearchBoxProps['dismiss'], size: CoreSize): Dis
  * - **Clearing**: the clear button clears the text and moves focus back to the input. Escape
  *   clears the text too while there is any, and is then consumed, so an enclosing Dialog, Drawer
  *   or Popover stays open; in an empty field Escape reaches them. Both call `onClear`.
- * - **Routing**: `id`, ARIA and native input attributes and the focus/keyboard handlers go to the
- *   `<input type="search">` (role `searchbox`); `className`, `style`, `data-*`, other handlers and
- *   `ref` stay on the root `<div>` (`controlRef` reaches the input). Inside a `Field` it picks up
- *   the label, hint, error and required state automatically.
+ * - **Routing**: `ref`, `id`, ARIA and native input attributes and the focus/keyboard handlers
+ *   go to the `<input type="search">` (role `searchbox`); `className`, `style`, `data-*` and other
+ *   handlers stay on the root `<div>` (`slotProps.root.ref` reaches it). Inside a `Field` it picks
+ *   up the label, hint, error and required state automatically.
  * - **Forms**: with `name` the text is submitted with the form; a form reset restores
  *   `defaultValue`.
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
@@ -438,7 +452,6 @@ export const SearchBox = ({
   value: controlledValue,
   defaultValue = '',
   onValueChange,
-  onChange,
   onClear,
   placeholder = 'Search',
   disabled,
@@ -448,8 +461,8 @@ export const SearchBox = ({
   contentAfter,
   dismiss,
   className,
+  style,
   ref,
-  controlRef,
   slotProps,
   // Routed to the input (C-ROUTING)
   id,
@@ -483,15 +496,10 @@ export const SearchBox = ({
   hidden,
   ...rest
 }: SearchBoxProps) => {
-  if (onChange !== undefined) warnDeprecated('SearchBox', 'onChange', 'onValueChange');
-
-  const [value, setValue] = useControllable(controlledValue, defaultValue, (next: string) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [value, setValue] = useControllable(controlledValue, defaultValue, onValueChange);
 
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedInputRef = useMergedRefs(inputRef, controlRef, slotProps?.input?.ref);
+  const mergedInputRef = useMergedRefs(inputRef, ref, slotProps?.input?.ref);
   // The input is always React-controlled, so the browser's own reset would put the current text
   // back: restore the default here instead (C-FORMS).
   useFormReset(inputRef, () => setValue(defaultValue), form);
@@ -519,10 +527,10 @@ export const SearchBox = ({
         'SearchBox:dismiss-button-element',
         'SearchBox: `dismiss` received a button element; its props were merged into the built-in clear button (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<MyIcon />}`.',
       );
-    } else if (dismissKind === 'button-object') {
+    } else if (dismissKind === 'unwrapped') {
       warnOnce(
-        'SearchBox:dismiss-button-object',
-        'SearchBox: `dismiss` with button props (`as: "button"`, `onClick`, `type`, …) is deprecated and will be removed in 1.0; the props were merged into the built-in clear button. Pass icon content instead, e.g. `dismiss={<MyIcon />}`.',
+        'SearchBox:dismiss-button-slot-object',
+        'SearchBox: `dismiss` received a slot object that renders a button; its children render inside the built-in clear button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<MyIcon />}`.',
       );
     }
   }, [dismissKind]);
@@ -545,8 +553,10 @@ export const SearchBox = ({
   };
 
   // The whole box is the field: pressing the icon, a slot or the padding around the text focuses
-  // the input, as it does in a native search field. A control inside a slot keeps its press.
-  const handleRootMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+  // the input, as it does in a native search field. A control inside a slot keeps its press. An
+  // event callback, so the root part's props merged during render hold no function that reads a
+  // ref.
+  const handleRootMouseDown = useEventCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const input = inputRef.current;
     const root = event.currentTarget;
     const target = event.target;
@@ -557,7 +567,7 @@ export const SearchBox = ({
     if (control && root.contains(control)) return;
     event.preventDefault(); // keeps the press from moving focus to the page
     input.focus();
-  };
+  });
 
   // The slot's onClick runs before the clear (preventDefault() cancels it). The slot's ref joins
   // ours through a stable merged ref (never a new callback per render).
@@ -601,17 +611,17 @@ export const SearchBox = ({
       type: 'button',
       disabled,
       'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_CLEAR_LABEL,
-      className: cn(
+      className: wcn(
         searchBoxClassNames.dismissButton,
         // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill it.
-        'me-1 flex shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground',
+        'wave:me-1 wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground',
         SEARCH_SIZE[size].clear,
         // hitAreaLayer needs a positioned element: unlike the picker buttons, the small clear
         // button sits in the row without its own position, so it sets one here.
-        size === 'small' && cn('relative', hitAreaLayer),
-        'not-disabled:not-aria-disabled:hover:text-foreground',
+        size === 'small' && wcn('wave:relative', hitAreaLayer),
+        'wave:not-disabled:not-aria-disabled:hover:text-foreground',
         focusRing,
-        'disabled:cursor-not-allowed',
+        'wave:disabled:cursor-not-allowed',
         mergedAriaDisabledClasses,
       ),
     },
@@ -630,11 +640,10 @@ export const SearchBox = ({
               className={searchBoxClassNames.dismissIcon}
             />
           ));
-  // The props a `dismiss` button (a `<button>` or `Button` element, or the deprecated button
-  // object) merged into the clear button are the defaults of its part: `slotProps.dismissButton`
-  // replaces them, its handlers run first and its classes come last. The type, the disabled
-  // state, the tab stop, the visibility, the name and the clear stay locked, at the values the
-  // two give together.
+  // The props a `dismiss` button (a `<button>` or `Button` element) merged into the clear button
+  // are the defaults of its part: `slotProps.dismissButton` replaces them, its handlers run first
+  // and its classes come last. The type, the disabled state, the tab stop, the visibility, the
+  // name and the clear stay locked, at the values the two give together.
   const {
     className: clearClassName,
     style: clearStyle,
@@ -671,58 +680,69 @@ export const SearchBox = ({
   const hasBefore = slotRendersContent(contentBefore);
   const hasAfter = slotRendersContent(contentAfter);
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      searchBoxClassNames.root,
+      // The root draws the field; the slots, the text and the clear button are laid out side by
+      // side inside it, so a slot never covers the text.
+      'wave:relative wave:inline-flex wave:w-full wave:items-center',
+      inputHeightClasses[size],
+      inputTextClasses[size],
+      inputAppearanceClasses[appearance],
+      'wave:text-foreground',
+      inputFocusWithin,
+      invalidLook && inputInvalidWithin,
+      // The dimmed look lifts while a focus ring shows inside the root (a clear button kept
+      // focusable by a merged `disabledFocusable` Button, focusable slot content; the disabled
+      // input never takes focus): opacity would dim the ring below 3:1.
+      disabled && 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
+      className,
+    ),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
+      // The SearchBox's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+      // After a part's onMouseDown, whose preventDefault() skips both.
+      onMouseDown: composeEventHandlers(onMouseDown, handleRootMouseDown),
+    },
+  });
+
   return (
-    <div
-      ref={ref}
-      data-size={size}
-      data-appearance={appearance}
-      className={cn(
-        searchBoxClassNames.root,
-        // The root draws the field; the slots, the text and the clear button are laid out side by
-        // side inside it, so a slot never covers the text.
-        'relative inline-flex w-full items-center',
-        inputHeightClasses[size],
-        inputTextClasses[size],
-        inputAppearanceClasses[appearance],
-        'text-foreground',
-        inputFocusWithin,
-        invalidLook && inputInvalidWithin,
-        // The dimmed look lifts while a focus ring shows inside the root (a clear button kept
-        // focusable by a merged `disabledFocusable` Button, focusable slot content; the disabled
-        // input never takes focus): opacity would dim the ring below 3:1.
-        disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
-        className,
-      )}
-      hidden={hidden}
-      {...rest}
-      // Composed at press time, like the clear button's click: the handler reads the input ref.
-      onMouseDown={(event) => composeEventHandlers(onMouseDown, handleRootMouseDown)(event)}
-    >
+    <div {...rootProps}>
       <span
-        className={cn(
+        className={wcn(
           searchBoxClassNames.contentBefore,
-          'flex shrink-0 items-center',
+          'wave:flex wave:shrink-0 wave:items-center',
           SEARCH_SIZE[size].before,
         )}
       >
         {hasBefore ? (
-          renderSlot(contentBefore, 'span', 'shrink-0')
+          renderSlot(contentBefore, 'span', 'wave:shrink-0')
         ) : (
-          <SearchIcon size={SEARCH_SIZE[size].glyph} className="text-muted-foreground" />
+          <SearchIcon size={SEARCH_SIZE[size].glyph} className="wave:text-muted-foreground" />
         )}
       </span>
 
       <input
         {...mergeSlotProps(slotProps?.input, {
-          className: cn(
+          className: wcn(
             searchBoxClassNames.input,
-            'h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground',
+            'wave:h-full wave:min-w-0 wave:flex-1 wave:appearance-none wave:border-none wave:bg-transparent wave:text-foreground',
             SEARCH_SIZE[size].input,
             inputTextClasses[size],
-            'placeholder:text-muted-foreground',
-            'focus:outline-hidden',
-            'disabled:cursor-not-allowed',
-            '[&::-webkit-search-cancel-button]:hidden',
+            'wave:placeholder:text-muted-foreground',
+            'wave:focus:outline-hidden',
+            'wave:disabled:cursor-not-allowed',
+            'wave:[&::-webkit-search-cancel-button]:hidden',
           ),
           locked: {
             type: 'search',
@@ -766,13 +786,13 @@ export const SearchBox = ({
 
       {hasAfter && (
         <span
-          className={cn(
+          className={wcn(
             searchBoxClassNames.contentAfter,
-            'flex shrink-0 items-center',
+            'wave:flex wave:shrink-0 wave:items-center',
             SEARCH_SIZE[size].after,
           )}
         >
-          {renderSlot(contentAfter, 'span', 'shrink-0')}
+          {renderSlot(contentAfter, 'span', 'wave:shrink-0')}
         </span>
       )}
 

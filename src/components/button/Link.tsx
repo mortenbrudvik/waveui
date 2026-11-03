@@ -1,7 +1,6 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { linkClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp } from '../../lib/dev';
 import { focusRing } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import { useButtonSemantics } from './Button.semantics';
@@ -18,9 +17,6 @@ import { useButtonSemantics } from './Button.semantics';
  */
 export type LinkAppearance = 'inline' | 'standalone' | 'subtle';
 
-/** @deprecated Use {@link LinkAppearance}. */
-export type LinkVariant = LinkAppearance;
-
 /**
  * The Link's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
  * Every other prop comes from the rendered element (`as`, default `'a'`).
@@ -30,8 +26,6 @@ export interface LinkOwnProps {
    * @default 'inline'
    */
   appearance?: LinkAppearance;
-  /** @deprecated Use `appearance` (same values). */
-  variant?: LinkVariant;
   /**
    * Makes the link unavailable. An `<a>` drops its `href` (no navigation by middle-click, the
    * context menu or drag), keeps `role="link"` (`role="button"` when it had no `href`), and gets
@@ -76,11 +70,11 @@ type LinkImplProps = LinkOwnProps &
 
 const appearanceClasses: Record<LinkAppearance, string> = {
   inline:
-    'text-primary underline not-disabled:not-aria-disabled:hover:decoration-2 focus-visible:decoration-2',
+    'wave:text-primary wave:underline wave:not-disabled:not-aria-disabled:hover:decoration-2 wave:focus-visible:decoration-2',
   standalone:
-    'font-semibold text-primary no-underline not-disabled:not-aria-disabled:hover:underline focus-visible:underline',
+    'wave:font-semibold wave:text-primary wave:no-underline wave:not-disabled:not-aria-disabled:hover:underline wave:focus-visible:underline',
   subtle:
-    'text-foreground no-underline not-disabled:not-aria-disabled:hover:underline focus-visible:underline',
+    'wave:text-foreground wave:no-underline wave:not-disabled:not-aria-disabled:hover:underline wave:focus-visible:underline',
 };
 
 /**
@@ -101,7 +95,6 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
   const {
     as,
     appearance: appearanceProp,
-    variant,
     disabled = false,
     disabledFocusable = false,
     className,
@@ -113,8 +106,7 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
     ...rest
   } = props as LinkImplProps;
 
-  const appearance =
-    resolveDeprecatedProp('Link', appearanceProp, variant, 'variant', 'appearance') ?? 'inline';
+  const appearance = appearanceProp ?? 'inline';
 
   const Component: React.ElementType = as ?? 'a';
   const tag = typeof Component === 'string' ? Component : null;
@@ -140,15 +132,15 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
       {...elementProps}
       {...handlers}
       ref={ref}
-      className={cn(
+      className={wcn(
         linkClassNames.root,
-        'cursor-pointer transition-colors motion-reduce:transition-none',
+        'wave:cursor-pointer wave:transition-colors wave:motion-reduce:transition-none',
         focusRing,
         appearanceClasses[appearance],
         // Full opacity while a focusable disabled link shows its focus ring, which `opacity`
         // would dim below 3:1 (as for buttons).
         (disabled || disabledFocusable) &&
-          'cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100',
+          'wave:cursor-not-allowed wave:opacity-50 wave:aria-disabled:focus-visible:opacity-100',
         className,
       )}
       {...enforced}

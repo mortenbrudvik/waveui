@@ -8,8 +8,8 @@ A reference for designing and building features with this library: design princi
 
 | | **This library (`@mortenbrudvik/waveui`)** | **Official (`@fluentui/react-components`)** |
 |---|---|---|
-| **Styling** | Tailwind CSS utilities + `--wave-*` CSS variables (`src/styles/tokens.css`); precompiled `styles.css` for apps without Tailwind | Griffel CSS-in-JS + `makeStyles()` |
-| **Class merging** | `cn()` (clsx + tailwind-merge, extended with Wave's scales) | `mergeClasses()` |
+| **Styling** | Tailwind CSS utilities written with Wave's prefix (`wave:flex`) and shipped precompiled, on `--wave-*` CSS variables (`src/styles/tokens.css`): `./styles` for apps without Tailwind, `./tailwind` (in cascade layers) for Tailwind apps, and namespaced theme keys (`bg-wave-primary`) for an app's own classes | Griffel CSS-in-JS + `makeStyles()` |
+| **Class merging** | `cn()` (clsx + tailwind-merge, extended with Wave's scales and its `wave:` prefix) | `mergeClasses()` |
 | **Theming** | `WaveProvider` + theme classes (`wave-light`, `wave-dark`, `wave-high-contrast`) that set `--wave-*` variables; `tokens` overrides as inline custom properties that reach portals; `createBrandTokens` | `FluentProvider` with JS theme objects (`createLightTheme(brand)`, `createDarkTheme(brand)`) |
 | **Slot system** | `resolveSlot()` / `renderSlot()` (lightweight) for the leaves, with render-function children; one `slotProps` object for the structural parts (chapter 14) | `slot()` / `resolveShorthand()`; a prop per part |
 | **State hooks** | `useControllable()` | `useControllableState()` |
@@ -126,7 +126,7 @@ The `gap` prop of `Stack`, `Flex` and `Grid` takes `'none' | 'xs' | 'sm' | 'md' 
 | `strokeWidthThicker` | 3px | `border-3`, `outline-3` | No component |
 | `strokeWidthThickest` | 4px | `border-4`, `outline-4` | The status edge of MessageBar and Toast (`border-s-4`) |
 
-On the Tailwind path every class above works. The precompiled `./styles` holds only the utilities Wave's components use, so a class that no component uses (the "No component" rows, for one) is not there: write the value in your own CSS.
+These are the classes of your own Tailwind build (Wave's components write them with Wave's prefix, `wave:p-4`, `wave:rounded-md`). Without Tailwind none of them exists for you: the precompiled `./styles` holds only Wave's prefixed classes, and `./utilities` has no spacing, radius or stroke utilities, so write the values in your own CSS.
 
 ### Content Density
 
@@ -179,28 +179,28 @@ Three families, Fluent's three stacks (`fontFamilyBase`, `fontFamilyMonospace`, 
 | Numeric | `--wave-font-family-numeric` | `font-wave-numeric` | `'numeric'` | `Bahnschrift`, then the base stack |
 
 - `WaveProvider` and portaled overlays apply the base family (`font-wave`). Wave does not change Tailwind's `font-sans` or `font-mono`.
-- Use the monospace family for code, identifiers and keyboard input, and the numeric one for figures read in columns (tables, counters). Both are in the precompiled `./styles`, since `Text` uses them.
+- Use the monospace family for code, identifiers and keyboard input, and the numeric one for figures read in columns (tables, counters). The three utilities are in your Tailwind build (on `./tailwind` or `./tokens`) and in `./utilities`.
 - `Text font` sets the family, as Fluent's `Text font` does: `<Text font="monospace">npm install</Text>`. The numeric family changes the face only; where figures must line up, add `tabular-nums` (Tailwind path) or `font-variant-numeric: tabular-nums`, which neither Fluent's `Text` nor Wave's sets.
 - `cn()` treats the three as font families, never as weights: `cn('font-wave', 'font-wave-mono')` keeps the last, and `cn('font-wave-mono', 'font-medium')` keeps both. A family class in `Text`'s `className` replaces its `font`.
 - Override a stack on `:root` (`--wave-font-family-monospace: 'Cascadia Code', monospace;`) or through `WaveProvider tokens` (`fontFamilyMonospace`, chapter 10).
 
 ### Type Ramp
 
-| Style | Size / Line Height | Weight | Tailwind Class | Usage |
+| Style | Size / Line Height | Weight | Class | Usage |
 |-------|-------------------|--------|----------------|-------|
-| `caption-2` | 10px / 14px | 400 | `text-caption-2` | Timestamps, footnotes |
-| `caption-1` | 12px / 16px | 400 | `text-caption-1` | Labels, helper text |
-| `body-1` | 14px / 20px | 400 | `text-body-1` | **Default body text** |
-| `body-2` | 16px / 22px | 400 | `text-body-2` | Emphasized body text |
-| `subtitle-2` | 16px / 22px | 600 | `text-subtitle-2` | Card titles, section labels |
-| `subtitle-1` | 20px / 28px | 600 | `text-subtitle-1` | Dialog titles, panel headers |
-| `title-3` | 24px / 32px | 600 | `text-title-3` | Page section headings |
-| `title-2` | 28px / 36px | 600 | `text-title-2` | Page titles |
-| `title-1` | 32px / 40px | 600 | `text-title-1` | Hero titles |
-| `large-title` | 40px / 52px | 600 | `text-large-title` | Landing page heroes |
-| `display` | 68px / 92px | 600 | `text-display` | Marketing display text |
+| `caption-2` | 10px / 14px | 400 | `text-wave-caption-2` | Timestamps, footnotes |
+| `caption-1` | 12px / 16px | 400 | `text-wave-caption-1` | Labels, helper text |
+| `body-1` | 14px / 20px | 400 | `text-wave-body-1` | **Default body text** |
+| `body-2` | 16px / 22px | 400 | `text-wave-body-2` | Emphasized body text |
+| `subtitle-2` | 16px / 22px | 600 | `text-wave-subtitle-2` | Card titles, section labels |
+| `subtitle-1` | 20px / 28px | 600 | `text-wave-subtitle-1` | Dialog titles, panel headers |
+| `title-3` | 24px / 32px | 600 | `text-wave-title-3` | Page section headings |
+| `title-2` | 28px / 36px | 600 | `text-wave-title-2` | Page titles |
+| `title-1` | 32px / 40px | 600 | `text-wave-title-1` | Hero titles |
+| `large-title` | 40px / 52px | 600 | `text-wave-large-title` | Landing page heroes |
+| `display` | 68px / 92px | 600 | `text-wave-display` | Marketing display text |
 
-`cn()` knows these classes: `cn('text-body-1', 'text-muted-foreground')` keeps both (size and color), and `cn('text-body-1', 'text-sm')` keeps only the last size.
+The class is your Tailwind build's, and `./utilities`' (Wave's components write the step with Wave's prefix: `wave:text-body-1`). `cn()` knows the classes: `cn('text-wave-body-1', 'text-wave-muted-foreground')` keeps both (size and color), and `cn('text-wave-body-1', 'text-sm')` keeps only the last size; it knows 0.x's names (`text-body-1`) too.
 
 ### Font Weights
 
@@ -229,7 +229,7 @@ Whether `medium` looks different depends on the faces the font ships: where a fa
 </Text>
 ```
 
-`Text` sets no color of its own; it inherits the surrounding color (the provider's foreground), so it follows the theme. Add one with `className="text-muted-foreground"`.
+`Text` sets no color of its own; it inherits the surrounding color (the provider's foreground), so it follows the theme. Add one with `className="text-wave-muted-foreground"`.
 
 ---
 
@@ -238,14 +238,14 @@ Whether `medium` looks different depends on the faces the font ships: where a fa
 ### Token Architecture
 
 ```
-Ramps (theme-independent)   →  Semantic tokens (per theme)  →  Tailwind utilities
---wave-brand-80: #0f6cbd    →  --wave-primary               →  bg-primary, text-primary
---wave-grey-14: #242424         --wave-foreground              text-foreground
+Ramps (theme-independent)   →  Semantic tokens (per theme)  →  Utilities: yours (Wave's)
+--wave-brand-80: #0f6cbd    →  --wave-primary               →  bg-wave-primary (wave:bg-primary)
+--wave-grey-14: #242424         --wave-foreground              text-wave-foreground (wave:text-foreground)
 ```
 
-- **Ramps**: `--wave-brand-10` … `--wave-brand-160` and `--wave-grey-2` … `--wave-grey-98` on `:root`. They read the 0.4 names as fallbacks (`--wave-brand-80: var(--brand-80, #0f6cbd)`). Components never use them directly.
+- **Ramps**: `--wave-brand-10` … `--wave-brand-160` and `--wave-grey-2` … `--wave-grey-98` on `:root` (`--wave-brand-80: #0f6cbd`). Components never use them directly.
 - **Semantic tokens**: `--wave-background`, `--wave-primary`, `--wave-border`, … declared by each theme class. Components use only these, through the Tailwind color utilities.
-- **Tailwind mapping**: `@theme inline` maps `--color-<name>` to `var(--wave-<name>)`, so the utility name is the token name without the prefix (`bg-subtle-hover`, `border-stroke-accessible`, `text-error-tint-foreground`).
+- **Tailwind mapping**: for an app, the `@theme inline` block of `tokens.css` maps `--color-wave-<name>` to `var(--wave-<name>)`, so a utility of yours names the token after `wave-` (`bg-wave-subtle-hover`, `border-wave-stroke-accessible`, `text-wave-error-tint-foreground`); `./utilities` holds the same classes without Tailwind. Wave's components compile against an internal theme (`src/styles/theme.css`, `--color-<name>`) and write the token name with Wave's prefix (`wave:bg-subtle-hover`).
 - **JavaScript**: `waveTokens` holds every token as the value that reads it, under its camelCase name (`waveTokens.mutedForeground` is `'var(--wave-muted-foreground)'`; chapter 10).
 
 ### Semantic Tokens
@@ -379,11 +379,11 @@ The dark theme uses brand-110 with **black** text (8.66:1); 0.4 used brand-100 w
 
 | Token (`--wave-…`) | Utility | Role | Fluent | Contrast (`tokens.test.ts`, light and dark) |
 |---|---|---|---|---|
-| `palette-<hue>` | `bg-palette-<hue>` | Strong fill: an Avatar, a chart series, a solid tag | the hue itself (Fluent's light `BorderActive`) | 3:1 on `background` |
-| `palette-<hue>-foreground` | `text-palette-<hue>-foreground` | Text and icons on the fill | — | 4.5:1 on the fill |
-| `palette-<hue>-tint` | `bg-palette-<hue>-tint` | Surface: a light tint in light, a deep shade in dark | `colorPalette<Hue>Background2` | — |
-| `palette-<hue>-tint-foreground` | `text-palette-<hue>-tint-foreground` | Text and icons on the tint, and the hue as text on the page | `colorPalette<Hue>Foreground2` | 4.5:1 on the tint, `background` and `card` |
-| `palette-<hue>-border` | `border-palette-<hue>-border` | The hue's stroke | `colorPalette<Hue>BorderActive` | 3:1 on `background` and on the tint |
+| `palette-<hue>` | `bg-wave-palette-<hue>` | Strong fill: an Avatar, a chart series, a solid tag | the hue itself (Fluent's light `BorderActive`) | 3:1 on `background` |
+| `palette-<hue>-foreground` | `text-wave-palette-<hue>-foreground` | Text and icons on the fill | — | 4.5:1 on the fill |
+| `palette-<hue>-tint` | `bg-wave-palette-<hue>-tint` | Surface: a light tint in light, a deep shade in dark | `colorPalette<Hue>Background2` | — |
+| `palette-<hue>-tint-foreground` | `text-wave-palette-<hue>-tint-foreground` | Text and icons on the tint, and the hue as text on the page | `colorPalette<Hue>Foreground2` | 4.5:1 on the tint, `background` and `card` |
+| `palette-<hue>-border` | `border-wave-palette-<hue>-border` | The hue's stroke | `colorPalette<Hue>BorderActive` | 3:1 on `background` and on the tint |
 
 Values per hue (the chart slot is the hue's position in `chartPalette`):
 
@@ -405,7 +405,7 @@ Values per hue (the chart slot is the hue's position in `chartPalette`):
 - `-foreground` is `#ffffff` for every hue in light and `#000000` in dark; `-border` is declared as the fill (`var(--wave-palette-<hue>)`) in every theme.
 - **High contrast collapses the palette**, as Fluent's does: every fill, tint foreground and border is `#ffffff`, every foreground and tint `#000000`. Color then tells no two hues apart, so whatever a hue means needs a second cue there (a label, an icon, a pattern).
 - The light tints are the light fill mixed 70% toward white and the dark tints the light fill mixed 40% toward black (the depth of Fluent's `tint40` and `shade30`); each tint foreground is its theme's fill moved toward black (light) or white (dark) until it is 4.6:1 on its three surfaces.
-- Avatar, Badge and Tag keep their own looks: no component uses the tints and borders yet. On the precompiled `./styles` only the utilities the components use exist (`bg-palette-<hue>`, `text-palette-<hue>-foreground`); there, read the other three through their variables (`var(--wave-palette-blue-tint)`) or `waveTokens`.
+- Avatar, Badge and Tag keep their own looks: no component uses the tints and borders yet. Without Tailwind, `./utilities` has the utilities of all five roles, and the variables (`var(--wave-palette-blue-tint)`) and `waveTokens` read them in your own CSS and styles.
 
 ### Color Usage Rules
 
@@ -423,16 +423,16 @@ Wave uses a **dual-layer shadow** model simulating ambient light (diffuse) + key
 
 ### Shadow Levels
 
-The shadows are tokens of each theme group, `--wave-shadow-2` … `--wave-shadow-64`, and the `shadow-N` utilities read them (`@theme inline` maps `--shadow-4: var(--wave-shadow-4)`), so the same class draws the theme's shadow, in a nested theme and in a portaled overlay too. Every level is an ambient layer with no offset and a key layer offset downward:
+The shadows are tokens of each theme group, `--wave-shadow-2` … `--wave-shadow-64`, and the shadow utilities read them (yours, `shadow-wave-4`, through the `--shadow-wave-4: var(--wave-shadow-4)` key of `tokens.css`; the components' `wave:shadow-4` through the internal theme), so the same class draws the theme's shadow, in a nested theme and in a portaled overlay too. Every level is an ambient layer with no offset and a key layer offset downward:
 
-| Level | Tailwind | Token | Ambient layer | Key layer | Usage |
+| Level | Class | Token | Ambient layer | Key layer | Usage |
 |-------|----------|-------|---------------|-----------|-------|
-| **2** | `shadow-2` | `--wave-shadow-2` | `0 0 2px` | `0 1px 2px` | Subtle lift: Carousel's round navigation buttons |
-| **4** | `shadow-4` | `--wave-shadow-4` | `0 0 2px` | `0 2px 4px` | Surfaces at rest and light popups: a `filled` Card, an `elevated` Carousel, an Image with `shadow`, a Card preview's logo, toasts, the ColorPicker; menus, popovers and the listbox popups (Combobox, Dropdown, TagPicker, `ListboxSurface`) |
-| **8** | `shadow-8` | `--wave-shadow-8` | `0 0 2px` | `0 4px 8px` | A selectable `filled` Card on hover, tooltips, TeachingPopover, the TimePicker list, Avatar's `shadow` and `ring-shadow` active looks |
-| **16** | `shadow-16` | `--wave-shadow-16` | `0 0 2px` | `0 8px 16px` | The DatePicker calendar, the InfoButton note, the AvatarGroup overflow popover |
-| **28** | `shadow-28` | `--wave-shadow-28` | `0 0 8px` | `0 14px 28px` | No component |
-| **64** | `shadow-64` | `--wave-shadow-64` | `0 0 8px` | `0 32px 64px` | Dialog, and the panel of an overlay Drawer or NavDrawer |
+| **2** | `shadow-wave-2` | `--wave-shadow-2` | `0 0 2px` | `0 1px 2px` | Subtle lift: Carousel's round navigation buttons |
+| **4** | `shadow-wave-4` | `--wave-shadow-4` | `0 0 2px` | `0 2px 4px` | Surfaces at rest and light popups: a `filled` Card, an `elevated` Carousel, an Image with `shadow`, a Card preview's logo, toasts, the ColorPicker; menus, popovers and the listbox popups (Combobox, Dropdown, TagPicker, `ListboxSurface`) |
+| **8** | `shadow-wave-8` | `--wave-shadow-8` | `0 0 2px` | `0 4px 8px` | A selectable `filled` Card on hover, tooltips, TeachingPopover, the TimePicker list, Avatar's `shadow` and `ring-shadow` active looks |
+| **16** | `shadow-wave-16` | `--wave-shadow-16` | `0 0 2px` | `0 8px 16px` | The DatePicker calendar, the InfoButton note, the AvatarGroup overflow popover |
+| **28** | `shadow-wave-28` | `--wave-shadow-28` | `0 0 8px` | `0 14px 28px` | No component |
+| **64** | `shadow-wave-64` | `--wave-shadow-64` | `0 0 8px` | `0 32px 64px` | Dialog, and the panel of an overlay Drawer or NavDrawer |
 
 The themes differ in the layers' opacity (both are black):
 
@@ -444,7 +444,7 @@ The themes differ in the layers' opacity (both are black):
 
 The light values are the shadows of 0.16 and earlier, unchanged; since 0.17 the dark and high-contrast shadows are stronger, at twice the opacity (Fluent's dark values). On a dark page the border still carries most of a raised surface's separation: the 0.17 exit browser pass measured the page just below a card or menu at about 1.07:1 against the page further away in dark (1.13 to 1.15:1 in light), and in dark the default Card and a menu have the page's own fill, so their 1px border is what sets them apart. Fluent's brand-colored shadows (`shadow2Brand` …) have no Wave counterpart.
 
-`cn()` merges this scale with Tailwind's: `cn('shadow-4', 'shadow-8')` gives `shadow-8`, and a consumer `shadow-lg` replaces a component's `shadow-4`. Override a level per theme like any token (`.wave-dark { --wave-shadow-8: … }`, or `tokens={{ shadow8: … }}` on a provider); an app whose own `@theme` sets `--shadow-4` keeps that value, which replaces Wave's alias. A shadow color utility or an opacity modifier (`shadow-black`, `shadow-4/50`) does not change these levels (it did through 0.16): a level's value is a token, which Tailwind cannot take apart to recolor, so override the token instead. Tailwind's own `shadow-sm` … `shadow-2xl` still take them.
+`cn()` merges this scale with Tailwind's: `cn('shadow-wave-4', 'shadow-wave-8')` gives `shadow-wave-8`, and a consumer `shadow-lg` or `shadow-wave-8` replaces a component's `wave:shadow-4`. Override a level per theme like any token (`.wave-dark { --wave-shadow-8: … }`, or `tokens={{ shadow8: … }}` on a provider); a `--shadow-4` of your own `@theme` is yours alone, since Wave's components read `--wave-shadow-4`. A shadow color utility or an opacity modifier (`shadow-black`, `shadow-wave-4/50`) does not change these levels (it did through 0.16): a level's value is a token, which Tailwind cannot take apart to recolor, so override the token instead. Tailwind's own `shadow-sm` … `shadow-2xl` still take them.
 
 ### Elevation Guidelines
 
@@ -492,7 +492,7 @@ Fluent's motion tokens (`motionTokens` of `@fluentui/react-motion`), with Fluent
 | `easy-ease` | `--wave-curve-easy-ease` | `ease-wave-easy-ease` | `cubic-bezier(0.33, 0, 0.67, 1)` | Standard bidirectional |
 | `linear` | `--wave-curve-linear` | `ease-wave-linear` | `cubic-bezier(0, 0, 1, 1)` | Continuous motion (progress, spinners) |
 
-- The utilities come from the `@theme inline` block of `src/styles/tokens.css` (`--transition-duration-wave-*` and `--ease-wave-*`), so a Tailwind build generates the ones you use. The precompiled `./styles` holds the variables but only the utilities Wave itself uses (those of its component motion, below): without Tailwind, write `transition: opacity var(--wave-duration-normal) var(--wave-curve-decelerate-mid)`.
+- The utilities come from the `@theme inline` block of `src/styles/tokens.css` (`--transition-duration-wave-*` and `--ease-wave-*`), so a Tailwind build generates the ones you use. The precompiled `./styles` holds the variables, and the utilities only as Wave's components write them (`wave:duration-wave-normal`, below), and `./utilities` has no motion utilities: without Tailwind, write `transition: opacity var(--wave-duration-normal) var(--wave-curve-decelerate-mid)`.
 - `cn` knows the scales: `cn('duration-wave-fast', 'duration-200')` keeps `duration-200`, `cn('ease-wave-linear', 'ease-in')` keeps `ease-in`, and `cn('duration-wave-fast', 'ease-wave-linear')` keeps both.
 - The tokens are never zeroed under reduced motion: components and your own code reduce motion themselves (below).
 
@@ -565,29 +565,29 @@ Since 0.15 the overlays and disclosures in the table below ship an enter and exi
 | TabList indicator | `translate` and `scale` of the selected tab's `::after` (FLIP) | 300ms `slow`, `decelerate-max` | — |
 | ProgressBar indeterminate | the `animate-wave-indeterminate` keyframes (0.14's classes) | — | — |
 
-**The classes.** Each is the default of a motion slot unless it is marked as a structure (layout keyed on the phases, on the element whatever its slot holds):
+**The classes.** Each is the default of a motion slot unless it is marked as a structure (layout keyed on the phases, on the element whatever its slot holds). Every word carries Wave's utility prefix, as in `src/lib/motion.ts`; a replacement of yours, compiled by your own build, is written without it (below):
 
-- Popups (`Popover.Content`, `Menu.Popover`, the InfoButton note, the TeachingPopover surface): `transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[side=top]:data-[presence=entering]:starting:translate-y-1 data-[side=top]:data-[presence=exiting]:translate-y-1 data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 data-[side=bottom]:data-[presence=exiting]:-translate-y-1 data-[side=left]:data-[presence=entering]:starting:translate-x-1 data-[side=left]:data-[presence=exiting]:translate-x-1 data-[side=right]:data-[presence=entering]:starting:-translate-x-1 data-[side=right]:data-[presence=exiting]:-translate-x-1`
-- Tooltip surface: `transition-opacity duration-wave-faster ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0`
-- Dialog surface: `transition-[opacity,scale] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:scale-85 data-[presence=exiting]:opacity-0 data-[presence=exiting]:scale-85`
-- Dialog backdrop: `transition-opacity duration-wave-gentle ease-wave-easy-ease data-[presence=exiting]:duration-wave-normal motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0`
-- Overlay drawer panel, per edge, plus the size's duration (`small` `duration-wave-gentle`, `medium` `duration-wave-slow`, `large` `duration-wave-slower`, `full` `duration-wave-ultra-slow`):
-  - `start`: `transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:-translate-x-full data-[presence=exiting]:-translate-x-full wave-rtl:data-[presence=entering]:starting:translate-x-full wave-rtl:data-[presence=exiting]:translate-x-full`
-  - `end`: `transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-x-full data-[presence=exiting]:translate-x-full wave-rtl:data-[presence=entering]:starting:-translate-x-full wave-rtl:data-[presence=exiting]:-translate-x-full`
-  - `left`: `transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:-translate-x-full data-[presence=exiting]:-translate-x-full`
-  - `right`: `transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-x-full data-[presence=exiting]:translate-x-full`
-  - `bottom`: `transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-y-full data-[presence=exiting]:translate-y-full`
-- Drawer backdrop, per size: `small` `transition-opacity duration-wave-gentle ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0`; `medium`, `large` and `full` the same with `duration-wave-slow`, `duration-wave-slower` and `duration-wave-ultra-slow`.
-- Inline drawer, on its collapse element, per axis, plus the size's duration: width `transition-[grid-template-columns,opacity] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:grid-cols-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-cols-[minmax(0,0fr)] data-[presence=exiting]:opacity-0`; height (`bottom`) `transition-[grid-template-rows,opacity] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:opacity-0`.
-- Inline drawer structure, per edge: `start` `grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] justify-items-end justify-end overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none`; `end` `grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] justify-items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none`; `left` `grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [justify-items:right] [justify-content:right] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none`; `right` `grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [justify-items:left] [justify-content:left] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none`; `bottom` `grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-h-none`.
-- Collapse (Accordion, Tree, Nav): `transition-[grid-template-rows,opacity] duration-wave-normal ease-wave-easy-ease-max motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:opacity-0`; structure `grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents`.
-- Nav.Category expand icon: `transition-transform duration-wave-fast ease-wave-easy-ease motion-reduce:transition-none` (the turn itself, `rotate-180` while open, is state, not motion).
-- Nav item actions (no slot; off below `WaveProvider motion="none"`): `*:transition *:duration-wave-fast *:ease-wave-easy-ease motion-reduce:*:transition-none`.
-- Toast container, per edge of the stack: `bottom` `transition-[grid-template-rows,margin-bottom,opacity,translate] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-easy-ease data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:translate-y-2 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0`; `top` the same with `-translate-y-2`; structure `grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] not-data-[presence=entered]:overflow-hidden`.
-- MessageBarGroup bar: exit `transition-[grid-template-rows,margin-bottom,opacity] duration-wave-gentle ease-wave-linear motion-reduce:transition-none data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0`; with `animate="both"` also `data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0`; structure `grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-end content-end overflow-hidden data-[presence=entered]:contents`.
-- Carousel: slide (on the track) `transition-transform duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none`; fade (on each slide) `transition-opacity duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none`. A `motionDuration` other than 300 is an inline `transition-duration` on the element that has the transition.
-- TabList indicator (on the selected tab; it times the `::after`): `after:transition-[translate,scale] after:duration-wave-slow after:ease-wave-decelerate-max motion-reduce:after:transition-none`. The TabList writes `--wave-tab-indicator-offset` and `--wave-tab-indicator-scale` on the tab for one frame after the selection moves, without these classes, then clears them and adds the classes, so the line glides from the previous tab.
-- Indeterminate ProgressBar fill: `w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse`.
+- Popups (`Popover.Content`, `Menu.Popover`, the InfoButton note, the TeachingPopover surface): `wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1`
+- Tooltip surface: `wave:transition-opacity wave:duration-wave-faster wave:ease-wave-easy-ease wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0`
+- Dialog surface: `wave:transition-[opacity,scale] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:scale-85 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=exiting]:scale-85`
+- Dialog backdrop: `wave:transition-opacity wave:duration-wave-gentle wave:ease-wave-easy-ease wave:data-[presence=exiting]:duration-wave-normal wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0`
+- Overlay drawer panel, per edge, plus the size's duration (`small` `wave:duration-wave-gentle`, `medium` `wave:duration-wave-slow`, `large` `wave:duration-wave-slower`, `full` `wave:duration-wave-ultra-slow`):
+  - `start`: `wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:-translate-x-full wave:data-[presence=exiting]:-translate-x-full wave:wave-rtl:data-[presence=entering]:starting:translate-x-full wave:wave-rtl:data-[presence=exiting]:translate-x-full`
+  - `end`: `wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:translate-x-full wave:data-[presence=exiting]:translate-x-full wave:wave-rtl:data-[presence=entering]:starting:-translate-x-full wave:wave-rtl:data-[presence=exiting]:-translate-x-full`
+  - `left`: `wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:-translate-x-full wave:data-[presence=exiting]:-translate-x-full`
+  - `right`: `wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:translate-x-full wave:data-[presence=exiting]:translate-x-full`
+  - `bottom`: `wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:translate-y-full wave:data-[presence=exiting]:translate-y-full`
+- Drawer backdrop, per size: `small` `wave:transition-opacity wave:duration-wave-gentle wave:ease-wave-linear wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0`; `medium`, `large` and `full` the same with `wave:duration-wave-slow`, `wave:duration-wave-slower` and `wave:duration-wave-ultra-slow`.
+- Inline drawer, on its collapse element, per axis, plus the size's duration: width `wave:transition-[grid-template-columns,opacity] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-cols-[minmax(0,0fr)] wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:grid-cols-[minmax(0,0fr)] wave:data-[presence=exiting]:opacity-0`; height (`bottom`) `wave:transition-[grid-template-rows,opacity] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:opacity-0`.
+- Inline drawer structure, per edge: `start` `wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:justify-items-end wave:justify-end wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-w-none`; `end` `wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:justify-items-start wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-w-none`; `left` `wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:[justify-items:right] wave:[justify-content:right] wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-w-none`; `right` `wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:[justify-items:left] wave:[justify-content:left] wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-w-none`; `bottom` `wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-start wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-h-none`.
+- Collapse (Accordion, Tree, Nav): `wave:transition-[grid-template-rows,opacity] wave:duration-wave-normal wave:ease-wave-easy-ease-max wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:opacity-0`; structure `wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-start wave:overflow-hidden wave:data-[presence=entered]:contents`.
+- Nav.Category expand icon: `wave:transition-transform wave:duration-wave-fast wave:ease-wave-easy-ease wave:motion-reduce:transition-none` (the turn itself, `wave:rotate-180` while open, is state, not motion).
+- Nav item actions (no slot; off below `WaveProvider motion="none"`): `wave:*:transition wave:*:duration-wave-fast wave:*:ease-wave-easy-ease wave:motion-reduce:*:transition-none`.
+- Toast container, per edge of the stack: `bottom` `wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0`; `top` the same with `wave:-translate-y-2`; structure `wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:not-data-[presence=entered]:overflow-hidden`.
+- MessageBarGroup bar: exit `wave:transition-[grid-template-rows,margin-bottom,opacity] wave:duration-wave-gentle wave:ease-wave-linear wave:motion-reduce:transition-none wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0`; with `animate="both"` also `wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0`; structure `wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-end wave:content-end wave:overflow-hidden wave:data-[presence=entered]:contents`.
+- Carousel: slide (on the track) `wave:transition-transform wave:duration-wave-slow wave:ease-wave-easy-ease wave:motion-reduce:transition-none`; fade (on each slide) `wave:transition-opacity wave:duration-wave-slow wave:ease-wave-easy-ease wave:motion-reduce:transition-none`. A `motionDuration` other than 300 is an inline `transition-duration` on the element that has the transition.
+- TabList indicator (on the selected tab; it times the `::after`): `wave:after:transition-[translate,scale] wave:after:duration-wave-slow wave:after:ease-wave-decelerate-max wave:motion-reduce:after:transition-none`. The TabList writes `--wave-tab-indicator-offset` and `--wave-tab-indicator-scale` on the tab for one frame after the selection moves, without these classes, then clears them and adds the classes, so the line glides from the previous tab.
+- Indeterminate ProgressBar fill: `wave:w-2/5 wave:animate-wave-indeterminate wave:wave-rtl:animate-wave-indeterminate-rtl wave:motion-reduce:w-full wave:motion-reduce:translate-x-0 wave:motion-reduce:animate-wave-pulse wave:wave-rtl:motion-reduce:animate-wave-pulse`.
 
 **Motion slots.** Each animated part takes its motion as a prop typed `MotionSlot | null` (`MotionSlot = string | { className: string }`): `undefined` is the default above; `null` is no motion (a part with presence phases still goes through the presence core, and every phase ends in the commit that starts it; the expand icon, the indeterminate fill and the TabList line just do not move); a value **replaces** the default classes. The names are a ruling against C-NAMING's "Fluent's names first", and each prop's JSDoc names the Fluent prop it stands for:
 
@@ -605,20 +605,20 @@ Since 0.15 the overlays and disclosures in the table below ship an enter and exi
 | `indeterminateMotion` | ProgressBar | `ProgressBar indeterminateMotion` |
 | `motion`, `motionDuration` | Carousel: `CarouselMotion` (`'slide'`, `'fade'`) or `null`, and milliseconds | `motion`, `duration` (another unit) |
 
-- A part destructures its motion props, so they never reach the DOM, and composes `cn(<stable class>, <base classes>, <motion classes>, className)`: the consumer's `className` still wins a conflict of the same variant (a `transition-none` there turns a recipe's transition off), so pass motion through the slot instead.
+- A part destructures its motion props, so they never reach the DOM, and composes `wcn(<stable class>, <base classes>, <motion classes>, className)`: the consumer's `className` still wins a conflict of the same variant (a `transition-none` there turns a recipe's transition off), so pass motion through the slot instead.
 - Write a replacement as the recipes are written: the enter's start as `data-[presence=entering]:starting:…` (an ungated `starting:` also animates an element that mounts `entered`), the exit as `data-[presence=exiting]:…`, timing with `duration-wave-*` and `ease-wave-*`, and a `motion-reduce:` counterpart of the same kind on the same element (`motion-reduce:after:transition-none` for the TabList line).
 - **Positioned surfaces never transition `transform`.** floating-ui places Popover, Menu, Tooltip, the InfoButton note and a pointed TeachingPopover with an inline `transform: translate(…)`, so their recipes list `opacity`, `translate` and `scale` explicitly and never use `transition`, `transition-all` or `transition-transform` (or a list that names `transform` or `all`): a transform transition would glide the surface from its last position, or from the viewport corner, on every placement. A replacement follows the same rule.
 - **A backdrop never outlasts its surface.** The presence core waits for the surface's own motion only, and the backdrop is the surface's sibling, so the default backdrops exit over the surface's exit duration (`motion.test.ts` checks it). A replacement backdrop motion longer than the surface's is cut off when the surface unmounts.
 - **The precompiled CSS holds Wave's classes only.** The default motion works on both style paths (every recipe class is a word of a library literal, so `build-css` ships it). A consumer's replacement is not in the library's sources: on the Tailwind path the app's build generates it; with the precompiled `./styles`, pass a class of your own CSS written against `[data-presence]` (the CSS form in [Enter and Exit](#enter-and-exit-the-presence-core) above).
-- **0.14's classes in `className` (D19).** On `Menu.Popover`, `Dialog.Content`, Drawer and NavDrawer, a `className` containing `[presence=` while `motion` is `undefined` turns the default motion off (`usesLegacyMotion`), so 0.14 code keeps its own motion unmixed: tailwind-merge would otherwise mix them (the consumer's `transition-opacity` replaces the recipe's list and the recipe's slide snaps). For an inline drawer the core then waits for the `<aside>`, as in 0.14. The rule covers the part, not its backdrop, which takes its default fade.
+- **Motion in `className` is a plain class list.** `resolveMotion` never reads the part's `className`: phase classes there apply next to the recipe, and tailwind-merge resolves their conflicts as for any class (the consumer's `transition-opacity` replaces the recipe's list and the recipe's slide snaps), and the presence core waits for the element it always waits for (an inline drawer's collapse element, not its `<aside>`). Motion goes through the slot. The 0.15 rule (D19) by which such a `className` turned the default off on `Menu.Popover`, `Dialog.Content`, Drawer and NavDrawer is removed in 1.0.
 
-**The provider.** `WaveProvider motion?: MotionPreference` (`'default'` | `'none'`, inherited by nested providers like `theme`; `useWaveTheme().motion`). `'none'` makes every motion slot below it act as `null` and turns off the Nav item actions' reveal; a part's own value wins (`resolveMotion`: `null` → none; a value → its classes; the provider's `'none'` → none; the D19 rule → none; else the recipe). Under `'none'` a Carousel without its own `motion` changes its page at once, the indeterminate ProgressBar is a static full-width fill, and TabList writes no FLIP properties. It covers what this phase added: the Accordion and Tree chevrons keep their own transitions (they are no slots), while the Nav chevron's is `expandIconMotion` and turns at once; classes of yours on a `Presence` child keep running. It is Fluent's `MotionBehaviourProvider` with `'skip'`, which `@fluentui/react-components` does not export.
+**The provider.** `WaveProvider motion?: MotionPreference` (`'default'` | `'none'`, inherited by nested providers like `theme`; `useWaveTheme().motion`). `'none'` makes every motion slot below it act as `null` and turns off the Nav item actions' reveal; a part's own value wins (`resolveMotion`: `null` → none; a value → its classes; the provider's `'none'` → none; else the recipe). Under `'none'` a Carousel without its own `motion` changes its page at once, the indeterminate ProgressBar is a static full-width fill, and TabList writes no FLIP properties. It covers what this phase added: the Accordion and Tree chevrons keep their own transitions (they are no slots), while the Nav chevron's is `expandIconMotion` and turns at once; classes of yours on a `Presence` child keep running. It is Fluent's `MotionBehaviourProvider` with `'skip'`, which `@fluentui/react-components` does not export.
 
 **The collapse element and `display: contents`.** A disclosure's part (Accordion's region, a Tree group, a Nav category's `<ul>`), an inline drawer's panel and a MessageBarGroup bar are each the only child of an element that is the presence element (`wave-accordion-panel__collapse`, `wave-tree-item__collapse`, `wave-nav-category__collapse`, `wave-drawer__collapse` with `wave-nav-drawer__collapse`, `wave-message-bar-group__item`); the part keeps its `className`, `ref`, `id`, role and stable class. The internal `useCollapsePresence` builds it for Accordion, Tree and Nav.
 
 - **Entered** the element is `display: contents`: it has no box, so the part lays out in its parent exactly as before the element existed (percentage widths, margins, flex and grid parents).
 - **Entering and exiting** it is a clipping grid of one track whose minimum is zero (`grid-template-rows: minmax(0, 0fr)` ↔ `minmax(0, 1fr)`; columns for side drawers): the track can get smaller than the part, padding, border and a definite width included (a plain `0fr` stops at the padding, and on columns at a definite width). The other axis is pinned to a whole zero-minimum track too, so the part keeps the width (height) it has once entered instead of growing to its longest unbreakable line. The part sits against the edge it reads as sliding from (Accordion, Tree and Nav at the top, `items-start`; a MessageBarGroup bar at the bottom, `items-end content-end`; an inline drawer's panel against its inner edge, with the track on that side), so it is clipped, never squeezed, and no empty strip opens beside it: while the collapse is partly open at a fraction f, the grid gives its track only f of the element, f² of the part.
-- With `motion={null}` the phases end in the layout effect of the commit that starts them, so the grid state is never painted. With a motion of yours, or 0.14's classes on an inline drawer's `className`, the element is a grid for as long as the phase runs: it clips a slide of yours on the part, and an inline drawer whose width (height) is a percentage, or `full`, resolves it against the track for that time (right again once entered; give it a length, or pass `motion={null}`). A `full` inline drawer has no default motion for that reason.
+- With `motion={null}` the phases end in the layout effect of the commit that starts them, so the grid state is never painted. With a motion of yours the element is a grid for as long as the phase runs: it clips a slide of yours on the part, and an inline drawer whose width (height) is a percentage, or `full`, resolves it against the track for that time (right again once entered; give it a length, or pass `motion={null}`). A `full` inline drawer has no default motion for that reason.
 - While an inline drawer's element is not entered it also lifts the panel's own `max-w-full` (`max-h-full` at the bottom), a percentage that would follow the shrinking track.
 - The toast container takes focus, so it is a grid in every phase (`toastStructure`), around a content element (`wave-toaster__toast-content`), and clips only while it is not entered.
 - Selectors with a child combinator across the element (`[role=treeitem] > [role=group]`, `li > ul`) and tests that walk `parentElement` change; assert through the class constants.
@@ -649,7 +649,7 @@ The real-browser checks of the phase (Firefox and WebKit for `display: contents`
 Wave has **no global reduced-motion override** (0.4 had one on `*`, which also froze spinners mid-turn), and the motion tokens are never zeroed. Each component handles `prefers-reduced-motion` itself:
 
 - every transition carries a `motion-reduce:` variant (usually `motion-reduce:transition-none`);
-- `Spinner` keeps spinning, slower (`motion-reduce:animate-wave-spin-slow`), so it still reads as "busy";
+- `Spinner` keeps spinning, slower (`wave:motion-reduce:animate-wave-spin-slow`), so it still reads as "busy";
 - the indeterminate `ProgressBar` becomes a full-width pulse instead of a sliding bar (never a static partial bar that looks like real progress);
 - `Skeleton` stops pulsing;
 - `Carousel` changes its page at once (its slide and fade are off), and with `autoPlay` starts with rotation stopped;
@@ -660,7 +660,7 @@ Do the same in your own components: pair every `transition-*` or `animate-*` cla
 
 ### Animations
 
-Registered in the `@theme inline` block of `src/styles/tokens.css` (the keyframes are part of every style entry):
+Registered in the `@theme inline` block of `src/styles/tokens.css` for your classes and in the internal `src/styles/theme.css` for the components (`wave:animate-wave-spin`); the keyframes are part of every style entry (a Tailwind app's CSS holds them twice, identical):
 
 | Class | Keyframe | Duration | Usage |
 |-------|----------|----------|-------|
@@ -707,11 +707,11 @@ Registered in the `@theme inline` block of `src/styles/tokens.css` (the keyframe
 
 ### Pattern 1: ref-as-prop, displayName, composed handlers
 
-Every component accepts `ref` as a regular prop (React 19), declares it in its Props interface, and sets `displayName`. Handlers the component also uses internally are composed with the consumer's, and consumer classes are merged last:
+Every component accepts `ref` as a regular prop (React 19), declares it in its Props interface, and sets `displayName`. Handlers the component also uses internally are composed with the consumer's, and consumer classes are merged last. The samples of this chapter that import from `src/lib` are library code: every class a component writes carries Wave's utility prefix, `wave:` ([Pattern 5](#pattern-5-cn-and-wcn)), and it merges with `wcn`, the module-only twin of the public `cn`:
 
 ```tsx
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing } from '../../lib/styles';
 
@@ -730,9 +730,9 @@ export const Chip = ({ selected = false, onSelect, onClick, className, ref, ...r
     type="button"
     aria-pressed={selected}
     data-selected={selected ? '' : undefined}
-    className={cn(
-      'rounded-md border border-stroke px-3 py-1 text-body-1',
-      'not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[selected]:bg-selected',
+    className={wcn(
+      'wave:rounded-md wave:border wave:border-stroke wave:px-3 wave:py-1 wave:text-body-1',
+      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[selected]:bg-selected',
       focusRing,
       className,
     )}
@@ -749,9 +749,9 @@ Chip.displayName = 'Chip';
 - Props interfaces extend the native attributes of the rendered element and declare `ref`.
 - Defaults a consumer may override (`type="button"`, `role`) go before `{...rest}`; attributes that must win go after it.
 - `composeEventHandlers(theirs, ours)` runs the consumer's handler first; ours runs unless the consumer called `event.preventDefault()`.
-- `className` is merged with `cn()`; the consumer's classes come last and replace conflicting classes of the same variant (see [Pattern 5](#pattern-5-cn-utility) for gated and state classes).
-- State is exposed as `data-*` attributes (`data-selected`) so consumers can style it (`data-[selected]:…`).
-- Hover and pressed styles of anything that can be disabled use the gate `not-disabled:not-aria-disabled:hover:` / `…:active:`.
+- `className` is merged with `wcn()`; the consumer's classes come last and replace conflicting classes of the same variant, an unprefixed `px-6` replacing the component's `wave:px-3` (see [Pattern 5](#pattern-5-cn-and-wcn) for gated and state classes).
+- State is exposed as `data-*` attributes (`data-selected`) so consumers can style it (`data-[selected]:…` in their build, `[data-selected]` in their CSS).
+- Hover and pressed styles of anything that can be disabled use the gate `wave:not-disabled:not-aria-disabled:hover:` / `…:active:`.
 
 ### Pattern 2: Compound Components (Object.assign + flat names)
 
@@ -759,7 +759,7 @@ Complex components expose sub-components as static properties and also export ea
 
 ```tsx
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 
 export interface PanelProps extends React.HTMLAttributes<HTMLElement> {
@@ -768,7 +768,7 @@ export interface PanelProps extends React.HTMLAttributes<HTMLElement> {
 
 /** Flat name for React Server Components (`Panel.Header` in client files). */
 export const PanelHeader = ({ className, ref, ...rest }: PanelProps) => (
-  <header ref={ref} className={cn('mb-2 text-subtitle-2', className)} {...rest} />
+  <header ref={ref} className={wcn('wave:mb-2 wave:text-subtitle-2', className)} {...rest} />
 );
 PanelHeader.displayName = 'PanelHeader';
 
@@ -783,7 +783,7 @@ const PanelRoot = ({ className, children, ref, ...rest }: PanelProps) => {
     <section
       ref={ref}
       data-has-header={hasHeader ? '' : undefined}
-      className={cn('rounded-md border border-border bg-card p-4', className)}
+      className={wcn('wave:rounded-md wave:border wave:border-border wave:bg-card wave:p-4', className)}
       {...rest}
     >
       {children}
@@ -820,7 +820,7 @@ export interface StatusLabelProps extends React.HTMLAttributes<HTMLSpanElement> 
 
 export const StatusLabel = ({ icon, children, ...rest }: StatusLabelProps) => (
   <span {...rest}>
-    {renderSlot(icon, 'span', 'me-1 inline-flex size-4', { 'aria-hidden': true })}
+    {renderSlot(icon, 'span', 'wave:me-1 wave:inline-flex wave:size-4', { 'aria-hidden': true })}
     {children}
   </span>
 );
@@ -833,10 +833,10 @@ export const StatusLabel = ({ icon, children, ...rest }: StatusLabelProps) => (
 - `null`, `undefined`, `false` and `true` render nothing.
 - `Slot<T>` is `SlotObject<T> | React.ReactNode`, so any `ReactNode` (a promise included) type-checks. An attributes object typed by an interface (`React.ImgHTMLAttributes<HTMLImageElement>`) must be spread into a new object: `image={{ ...imgProps }}`.
 - `slotRendersContent(value)` (`src/lib/slot.ts`) is the one "renders anything" check: `''`, and an array, `Set`, generator or Fragment of only nullish, boolean or `''` items (`[]`, `<></>`, `<>{false}</>`, at any depth), render nothing; `0` is content. Components use it to fall back when a slot is effectively empty (a Field `error={[]}` is no error, a dismiss slot that renders nothing keeps the default icon). It reads a top-level generator once and caches its items: a value you check and then render yourself (not through `renderSlot`/`resolveSlot`) goes through `materialiseSlotContent(value)`, so React never enumerates the generator.
-- Dismiss and clear slots (Tag, MessageBar, SearchBox, and the `closeButton` of `Dialog.Content` and Drawer) share one rule, `slotWrapsDefaultContent(type, props)`: a slot object wraps the default icon only when its element is an intrinsic, non-void tag without `dangerouslySetInnerHTML` whose children render nothing (`{ className: 'text-error' }` styles the default icon). A component `as` (`{ as: CloseIcon }`), a void tag (`{ as: 'img', src, alt: '' }`) and markup of its own are the icon itself. A `<button>`/`Button` passed there, or a slot object whose `as` is one, is merged into the built-in button; its markup (`dangerouslySetInnerHTML`) renders inside that button. A merged Wave `Button` keeps its own props off the DOM (`BUTTON_OWN_PROP_KEYS` in `src/components/button/Button.slots.tsx`): its `icon` and `iconPosition` place the icon in the built-in button's content, and its `disabledFocusable` makes the built-in button unavailable but focusable.
+- Dismiss and clear slots (Tag, MessageBar, SearchBox, and the `closeButton` of `Dialog.Content` and Drawer) share one rule, `slotWrapsDefaultContent(type, props)`: a slot object wraps the default icon only when its element is an intrinsic, non-void tag without `dangerouslySetInnerHTML` whose children render nothing (`{ className: 'text-wave-error' }` styles the default icon). A component `as` (`{ as: CloseIcon }`), a void tag (`{ as: 'img', src, alt: '' }`) and markup of its own are the icon itself. A `<button>`/`Button` element passed there is merged into the built-in button; its markup (`dangerouslySetInnerHTML`) renders inside that button. A slot object whose `as` is one is merged too in the `closeButton` slots; in the dismiss and clear slots of Tag, MessageBar and SearchBox, where a slot object is always the content element (its attributes and handlers stay on it: the 0.4 button-object form went in 1.0), it is unwrapped like a glyph (below). A merged Wave `Button` keeps its own props off the DOM (`BUTTON_OWN_PROP_KEYS` in `src/components/button/Button.slots.tsx`): its `icon` and `iconPosition` place the icon in the built-in button's content, and its `disabledFocusable` makes the built-in button unavailable but focusable.
 - Glyph slots inside a built-in button (Combobox, TimePicker and TagPicker `expandIcon`, SplitButton and MenuButton `menuIcon`, `Hamburger.icon`, and the children of `InteractionTag.Secondary`, which is itself the button) never nest a button: a `<button>`/`Button`, or a slot object whose `as` is one, is unwrapped by `unwrapButtonGlyph` (the same module): its children become the glyph, its props are dropped, and a one-time development warning names the slot.
 - The last argument of `renderSlot`/`resolveSlot` holds defaults the slot's own props override; icon slots pass `{ 'aria-hidden': true }`.
-- **Render functions.** A slot object's `children` may be a `SlotRenderFunction`, `(Component, props) => ReactNode`: `resolveSlot` resolves such an object to an internal element type (hook-free, so `lib/slot` stays server-safe) that calls the function with the element type (the object's `as`, else the slot's default tag) and every prop the element receives, never `as`. So every `renderSlot` call site, and the components that render a resolved slot themselves and add props or content to it (the backdrop's press handler, the default glyph of a close button, `withPartClass`'s class), pass the function the complete props with no change of their own. `slotRendersContent` calls the function once with the object's `as` and own attributes and checks what it returns, so `{ children: () => null }` renders nothing for the glyph rules. In a wired slot, `resolveWiredSlot` gives an `as` naming a button back to the merge, so no button nests in a button.
+- **Render functions.** A slot object's `children` may be a `SlotRenderFunction`, `(Component, props) => ReactNode`: `resolveSlot` resolves such an object to an internal element type (hook-free, so `lib/slot` stays server-safe) that calls the function with the element type (the object's `as`, else the slot's default tag) and every prop the element receives, never `as`. So every `renderSlot` call site, and the components that render a resolved slot themselves and add props or content to it (the backdrop's press handler, the default glyph of a close button, `withPartClass`'s class), pass the function the complete props with no change of their own. `slotRendersContent` calls the function once with the object's `as` and own attributes and checks what it returns, so `{ children: () => null }` renders nothing for the glyph rules. In a wired slot, `resolveWiredSlot` gives an `as` naming a button back to the merge (the unwrap, in the dismiss and clear slots), so no button nests in a button.
 - **Parts are not slots.** An element the component draws itself (a track, a thumb, a list, a row) is a part: it takes consumer props through `slotProps`, merged by `mergeSlotProps` with locked attributes, and is never replaced. A leaf has one way in: a named slot is never also a `slotProps` key. Chapter 14 has the rules, the tables and how a component adds a part.
 
 ### Pattern 4: Controlled / Uncontrolled (useControllable)
@@ -860,34 +860,40 @@ export function useExpanded(expanded: boolean | undefined, defaultExpanded = fal
 - `setValue` has a stable identity. The hook returns `[value, setValue, isControlled]`.
 - Event-named callbacks that must fire on every activation (`onPageChange` on the current page) are called from the handler, not through this hook.
 
-### Pattern 5: cn() Utility
+### Pattern 5: cn() and wcn()
 
-`cn()` combines `clsx` (conditional classes) with a `tailwind-merge` that knows Wave's type ramp (`text-caption-2` … `text-display`), shadow scale (`shadow-2` … `shadow-64`), the font families (`font-wave`, `font-wave-mono`, `font-wave-numeric`), the `animate-wave-*` animations and the motion tokens (`duration-wave-*`, `ease-wave-*`):
+Every class the library writes carries Wave's utility prefix, `wave:` (`UTILITY_PREFIX` in `src/lib/cn.ts`): `wave:flex`, `wave:bg-primary`, `wave:not-disabled:not-aria-disabled:hover:bg-primary-hover`, `wave:wave-rtl:-scale-x-100`. `scripts/build-css.mjs` compiles the components' sources with Tailwind's `prefix(wave)` against the internal theme `src/styles/theme.css` (the 0.x names: `--color-primary`, `--text-body-1`, `--shadow-4`), into `dist/styles.css` and the utilities-only `dist/components.css` of `./tailwind`, so no class of the library shares a name with an app's. Apps get the tokens under namespaced theme keys instead (`bg-wave-primary`, `text-wave-body-1`, `shadow-wave-4`, from `tokens.css`).
+
+The classes merge through one function under two names: `wcn` (module-only, what components, `lib/slot`, `lib/mergeProps`, `mergeSlotProps` and the hooks call) and the public `cn`, which calls it. It is `clsx` (conditional classes) with a `tailwind-merge` that reads a class and its `wave:`-prefixed twin as one utility, so a consumer's unprefixed class replaces the component's prefixed one, and that knows Wave's type ramp and shadow scale under both their names (`text-body-1` and `text-wave-body-1`, `shadow-4` and `shadow-wave-4`), the font families (`font-wave`, `font-wave-mono`, `font-wave-numeric`), the `animate-wave-*` animations and the motion tokens (`duration-wave-*`, `ease-wave-*`):
 
 ```tsx
 import { cn } from '@mortenbrudvik/waveui';
 
 cn('px-4 py-2', true && 'px-6 py-3', 'px-8'); // 'py-3 px-8': the last conflicting class wins
-cn('text-body-1 text-foreground', 'text-primary'); // 'text-body-1 text-primary': size kept, color replaced
-cn('shadow-4', 'shadow-lg'); // 'shadow-lg'
+cn('wave:p-4', 'p-2'); // 'p-2': a class and its prefixed twin are one utility
+cn('text-wave-body-1 text-wave-foreground', 'text-wave-primary'); // size kept, color replaced
+cn('wave:text-body-1 wave:text-foreground', 'text-wave-body-2'); // 'wave:text-foreground text-wave-body-2'
+cn('wave:shadow-4', 'shadow-lg'); // 'shadow-lg'
 cn('pe-8', 'px-6'); // 'px-6': a later axis shorthand replaces the logical sides it covers
 cn('px-6', 'pe-8'); // 'px-6 pe-8': a later side stays, and wins in the CSS
 ```
 
-Components always pass the consumer's `className` last, so a user class **replaces a conflicting class of the same variant**: `bg-error` replaces a resting `bg-primary`. A class behind a different variant is not a conflict, and both stay:
+Components always pass the consumer's `className` last, so a user class **replaces a conflicting class of the same variant**: `bg-wave-error` replaces a resting `wave:bg-primary`. A class behind a different variant is not a conflict, and both stay:
 
 ```tsx
-const base = 'bg-primary not-disabled:not-aria-disabled:hover:bg-primary-hover';
+import { cn } from '@mortenbrudvik/waveui';
 
-cn(base, 'hover:bg-error'); // both hover classes stay; the gated one (0,4,0) beats `:hover` (0,2,0)
-cn(base, 'not-disabled:not-aria-disabled:hover:bg-error'); // same prefix: replaces the built-in hover
-cn(base, 'hover:bg-error!'); // both stay; `!important` wins, also while disabled
-cn('bg-card data-[selected]:bg-selected', 'bg-muted'); // the selected state still paints bg-selected
+const base = 'wave:bg-primary wave:not-disabled:not-aria-disabled:hover:bg-primary-hover';
+
+cn(base, 'hover:bg-wave-error'); // both hover classes stay
+cn(base, 'not-disabled:not-aria-disabled:hover:bg-wave-error'); // same variants: replaces the built-in hover
+cn(base, 'hover:bg-wave-error!'); // both stay; `!important` wins, also while disabled
+cn('wave:bg-card wave:data-[selected]:bg-selected', 'bg-wave-muted'); // the selected state stays
 ```
 
-So the gated hover and pressed classes (`not-disabled:not-aria-disabled:hover:` / `…:active:`) and the state classes (`data-[…]:`, `aria-disabled:`) are not replaced by a bare class of yours: they are more specific and win while their state applies. Override them with the same prefix (`not-disabled:not-aria-disabled:hover:bg-error`, `data-[selected]:bg-muted`) or the important modifier (`hover:bg-error!`).
+Which of two kept classes paints is the cascade's decision, and it depends on the consumer's setup. With `./tailwind` the consumer's utilities sit in a later layer than Wave's `components`, so a bare `hover:bg-wave-error` wins over the gated built-in hover (and paints while disabled too). With the unlayered `./styles` a rule of the consumer's own CSS competes by specificity: the gated and state classes are more specific than a one-class rule (the gate is `:not(:disabled):not([aria-disabled="true"])`). Either way the gated form (`not-disabled:not-aria-disabled:hover:…`, `data-[selected]:…`) is the one that replaces the built-in class and stays off while the control is disabled. A class with an app's own prefix (`tw:p-2` in a `prefix(tw)` build) is no twin of Wave's and replaces nothing: the layer decides there.
 
-**Words that name a utility (library sources).** Tailwind reads every word of `src/components` and `src/lib`, comments, identifiers and non-class strings included, and would ship a matching utility (`.container`, `.shadow`, `.filter`) as a global, unlayered class of `./styles`. The CSS build (`scripts/build-css.mjs`) therefore fails on a class that no library class string uses. Do not write a utility name as a bare word there (not `container`, `shadow`, `.filter(`, or a quoted `` `hover:bg-error!` `` in a comment): rephrase it, or, when the word must stay, add it to `@source not inline()` in `src/styles/styles.css` and to `EXCLUDED_WORDS` in `src/styles/__tests__/tokens.test.ts`.
+**Library sources: the prefix and the compile check.** Write every class of a component or `src/lib` recipe with the prefix (the conventions gate reads prefixed classes as it read unprefixed ones). `scripts/build-css.mjs` runs the compile check (`scripts/prefix-codemod.mjs --check`) over the string literals of `src/components`, `src/lib` and `src/hooks` before it compiles anything, in two tiers: a literal in a class context (an argument of `wcn` or `clsx`, a `className`, a recipe or `*Classes` map, `withPartClass`, `src/lib/styles.ts`, `src/lib/motion.ts`) fails on any unprefixed utility word, and on a prefixed word that compiles to nothing: the prefix comes first, before every variant and the important mark (`wave:hover:bg-primary`, never `hover:wave:bg-primary` or `!wave:p-4`), and the utility after it must exist (`wave:bg-primry` fails); any other literal (a positioning strategy, an ARIA role, an event name) may hold one only where `scripts/prefix-allowlist.json` names that word for that file. `src/hooks`, which no `@source` scans, holds no class string: a prefixed word in any of its literals fails. Tailwind still reads every word of the sources, comments included, but only a word with the prefix generates a class, so a comment that names a `wave:` class no string uses would ship a stray one: the CSS build fails on it. An unprefixed word in a comment generates nothing.
 
 **`hidden`.** Inside `.wave-root` and `.wave-portal`, `base.css` gives `[hidden]` (not `hidden="until-found"`) `display: none !important`, as Preflight does, so a component's display utility never keeps a hidden root visible. Pass `hidden` through to the element that draws the component (the root, or the visible field of a composite control); no `hidden && 'hidden'` class is needed.
 
@@ -946,12 +952,12 @@ Each component declares `XOwnProps` with its own props only (never the default e
 
 - **Non-interactive elements.** `as="div"`, `as="span"` and other elements that are not interactive by themselves get `role="button"`, `tabIndex={0}` and Enter (key down) / Space (key up) activation, like a native button; a consumer `role` or `tabIndex` wins. So does `as="a"` without `href` (and a `Link` without `href`): it keeps its `<a>` element, and any `href`, `''` included, keeps it a link. `as="a"` shows no link underline. Button and Link share this logic (`Button.semantics.ts`). A native `<button>` gets `type="button"` by default (also when a wrapper forwards `type={undefined}`); a custom `as` component gets no `type` default, so pass `type` yourself inside a form.
 - **`disabled`.** Only `button` (the default), `input`, `select` and `textarea` receive the native `disabled` attribute. Every other `as` gets `aria-disabled="true"` and `tabIndex={-1}`, placed after the rest props so a consumer value cannot re-enable it. That covers `a`, `div`, `span` and any custom component, including router links and styled or motion components that render a native `<button>`. Clicks, Enter and Space are prevented (the click does not reach ancestor `onClick` handlers), and an `<a>` drops its `href` and keeps `role="link"` (`role="button"` when it had no `href`). Every disabled Button renders `data-disabled`. Such an element has no native `:disabled` state, so its own `:disabled` styling does not apply: style it on `[aria-disabled="true"]`. It leaves the tab order but can still take focus from a mouse click.
-- **`disabledFocusable`** keeps an unavailable button in the tab order: `aria-disabled="true"`, `data-disabled` and `data-disabled-focusable` on any element (a native `<button>` gets no `disabled` attribute), a click, Enter, Space and implicit form submission blocked (the click does not reach ancestors), other keys forwarded, and it wins over `disabled`. An `<a>` drops its `href` but keeps `tabIndex={0}`. Toolbars keep it in their arrow-key order and `Menu.Trigger` never opens from it. While it shows its focus ring it is drawn at full opacity (`aria-disabled:focus-visible:opacity-100`), because the disabled look's opacity would dim the ring below 3:1.
-- **Hover and pressed colors** are gated (`not-disabled:not-aria-disabled:hover:` / `…:active:`), so they never apply while disabled or `aria-disabled` and they work for `as="a"`. A bare `className="hover:bg-error"` does not override them (see [Pattern 5](#pattern-5-cn-utility)): use `not-disabled:not-aria-disabled:hover:bg-error` or `hover:bg-error!`. CompoundButton, ToggleButton, MenuButton and SplitButton behave the same.
+- **`disabledFocusable`** keeps an unavailable button in the tab order: `aria-disabled="true"`, `data-disabled` and `data-disabled-focusable` on any element (a native `<button>` gets no `disabled` attribute), a click, Enter, Space and implicit form submission blocked (the click does not reach ancestors), other keys forwarded, and it wins over `disabled`. An `<a>` drops its `href` but keeps `tabIndex={0}`. Toolbars keep it in their arrow-key order and `Menu.Trigger` never opens from it. While it shows its focus ring it is drawn at full opacity (`wave:aria-disabled:focus-visible:opacity-100`), because the disabled look's opacity would dim the ring below 3:1.
+- **Hover and pressed colors** are gated (`wave:not-disabled:not-aria-disabled:hover:` / `…:active:`), so they never apply while disabled or `aria-disabled` and they work for `as="a"`. A consumer's `not-disabled:not-aria-disabled:hover:bg-wave-error` replaces the built-in hover color and stays off while disabled; a bare `className="hover:bg-wave-error"` stays next to it and wins or loses by the consumer's setup ([Pattern 5](#pattern-5-cn-and-wcn)). CompoundButton, ToggleButton, MenuButton and SplitButton behave the same.
 
 ### Pattern 8: Composite Controls and Field
 
-Controls whose root wraps a focusable element (Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker, TimePicker) route `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`; on Checkbox and Switch also `aria-disabled`), `tabIndex`, `autoFocus`, focus/key handlers and native input attributes to the focusable element; `className`, `style`, `data-*`, other `aria-*` attributes and `ref` stay on the root, and `controlRef` reaches the focusable element. SearchBox and SpinButton draw their field (border, background, focus and invalid look) on that root, so `className`, `style` and `hidden` reach the visible field. `Input` with `contentBefore`/`contentAfter` content is the exception: its bordered wrapper receives only `className`, `style` and `hidden`, and everything else stays on the `<input>`.
+Controls whose root wraps a focusable element (Checkbox, Switch, SearchBox, SpinButton, Combobox, Dropdown, TagPicker, DatePicker, TimePicker) route `id`, the naming and validation ARIA attributes (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`; on Checkbox and Switch also `aria-disabled`), `tabIndex`, `autoFocus`, focus/key handlers and native input attributes to the focusable element; `className`, `style`, `data-*` and other `aria-*` attributes stay on the root. Their `ref` reaches the focusable element too, and `slotProps.root.ref` the root; TagPicker's `ref` follows its trigger, `TagPicker.Input` or `TagPicker.Button`, whichever renders. ColorSlider, AlphaSlider and `ColorPicker.HexField` route the same props to their `<input>`, which their `ref` reaches as well. SearchBox and SpinButton draw their field (border, background, focus and invalid look) on that root, so `className`, `style` and `hidden` reach the visible field. `Input` with `contentBefore`/`contentAfter` content is the exception: its bordered wrapper receives only `className`, `style` and `hidden`, and everything else stays on the `<input>`.
 
 Every library control reads the surrounding `Field` through `useFieldControl`, which merges the control's own labelling props with the Field's label, validation message (in any state), hint, invalid state (error only) and required state. Your own controls can do the same:
 
@@ -975,10 +981,10 @@ export const Theme = () => (
 
 | State | Look | Control | Announced |
 |---|---|---|---|
-| `error` (the default when `validationMessage` is set) | error icon, `text-error` | `aria-invalid="true"` | yes (`role="alert"`) |
-| `warning` | warning icon, `text-warning-tint-foreground` | not invalid | yes (`role="alert"`) |
-| `success` | success icon, `text-success-tint-foreground` | not invalid | no |
-| `none` | no icon, `text-muted-foreground` | not invalid | no |
+| `error` (the default when `validationMessage` is set) | error icon, `wave:text-error` | `aria-invalid="true"` | yes (`role="alert"`) |
+| `warning` | warning icon, `wave:text-warning-tint-foreground` | not invalid | yes (`role="alert"`) |
+| `success` | success icon, `wave:text-success-tint-foreground` | not invalid | no |
+| `none` | no icon, `wave:text-muted-foreground` | not invalid | no |
 
 `error` is the shorthand for an error message (`error="…"`, or `error={true}` to mark the control invalid without one) and wins over `validationMessage` and `validationState`, with a development warning when both are set. The hint stays visible after the message, and the control is described by the message, then the hint. `validationMessageIcon` replaces the icon (`null` removes it), and `orientation="horizontal"` puts the label in a start column beside the control, its first line level with the control's first line (a Checkbox, Switch or RadioGroup as the first child gets 6px of padding above and below its 20px first row, as tall as an Input). The root carries `data-validation-state` and `data-orientation`.
 
@@ -1003,11 +1009,12 @@ The context is public through a hook and a provider, never as the context object
 - With `asChild={false}`, or when the child is text, several elements or a component that neither forwards `ref` nor spreads its props, the trigger renders a wrapper `<span>` (the automatic cases warn in development). A generic span cannot carry the state ARIA, so `aria-haspopup`, `aria-expanded` and `aria-controls` go to the first element in the tab order inside it (after mount), unless the consumer made the span the trigger (a non-generic `role` and `tabIndex={0}`: it keeps them; with only such a role it keeps them when nothing inside it is in the tab order). `tabIndex` alone leaves the span generic, so it never carries them (axe `aria-allowed-attr`). Every focus return of Menu, Popover, Dialog and Drawer goes to the element that carries them (`getTriggerFocusTarget` in `src/hooks/useTriggerElement.tsx`).
 - Overlay surfaces render through `Portal` into `document.body` (or `WaveProvider`'s `portalContainer`) inside a `wave-portal` wrapper that carries the theme, direction and font.
 - A `Portal` renders nothing on the server or during hydration, so a component whose open surface is portaled gates its open state on the client: `const isClient = useIsClient();` then `const open = openState && isClient;` (the state from `useControllable` stays as it is, so no `onOpenChange` fires). Rendered with `defaultOpen` or `open`, it is closed in the server HTML (no `aria-expanded="true"`, no `aria-controls` or `aria-activedescendant` pointing at a missing element) and opens once hydrated: Popover, Menu, Dialog, Drawer, DatePicker, TimePicker and TagPicker. Combobox and Dropdown get the same result because their options register only on the client.
+- A default that only the browser knows follows the same gate. TimePicker without `format` shows the hour cycle of the browser's language (`Intl.DateTimeFormat` with `navigator.language`, read once per picker by the internal `localeTimeFormat` of `input/dateUtils.ts`), but the server HTML and the hydration render use `'12h'`, so hydration matches, and the render after it switches; a picker mounted in the browser follows the language from its first render. A server-rendered app passes `format` when the server HTML must show the final times.
 - Escape and outside presses close only the topmost layer; presses inside overlays opened from a surface count as inside it. A surface that closes when focus leaves it (Menu, listbox popups, the AvatarGroup and InfoLabel popups) decides in a microtask after the focus change, so an `autoFocus` field of a popover, dialog or portal opened from inside it keeps it open.
 - **Context mode** (`openOnContext` on Menu and Popover): the trigger's child is a context-menu region, not a popup button. A cloned child or wrapper span receives the forwarded props and, of the trigger's own, only its id, ref and context-gesture handlers (`useTriggerElement` with `omitStateAria`); a render-prop child still receives every member, and the `aria-haspopup`, `aria-expanded` and `aria-controls` it spreads are removed from its element after each commit, with a development warning. The surface is not labelled by the region: it needs `aria-label` (Popover also `title`). The element focused at the gesture is the first focus-return target; an opening without a gesture (a controlled `open`) forgets it. A pointer gesture closes the surface on a scroll that moves the region or the element under the pointer (while that element has a box); a keyboard gesture, on one that moves the focused row (the region, when it had focus itself). A Menu in context mode ignores a focus move into the region that a right-button, Ctrl+, touch or pen press causes (the row it focuses before the `contextmenu` event moves the menu there); any other focus move into the region closes it.
 - **`target`** (`Menu.Popover`, and the `Popover` root next to `side` and `align`) takes a `PopupTarget`: an element held in state or a `VirtualElement` (`{ getBoundingClientRect, contextElement? }`, an inline object is fine). The positioning reference is the context anchor while a context gesture opened the surface, else `target`, else the trigger; a `target` element counts as inside for outside presses. `Popover`, `Menu.Popover` and TeachingPopover take the same `PopupTargetInput` (an element held in state, a `VirtualElement` or a ref object, read after each render of the popup) unifies them.
 - **Submenus.** A `<Menu>` rendered in a menu list at the list's portal depth (`PortalDepthContext`) is a submenu; a Menu inside a Popover or Dialog opened from an item (a portal in between) is a root menu. Every close of a menu first closes its open submenu, innermost first, and a submenu's open state is its own and its parent's, so a parent that closes, by any path, takes its submenus with it in the same commit.
-- **Motion.** Every overlay surface with motion (not yet the listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover: [ROADMAP §8.5](ROADMAP.md#85-follow-ups-outside-the-gap-list)) mounts through the presence core: `usePresence(open, { appear: true, unmountOnExit })` for the surfaces that report themselves closed until hydration (Dialog, overlay drawers, Menu, Popover, Tooltip, InfoButton, TeachingPopover), no `appear` for in-flow content. It renders while `isMounted`, spreads `presenceProps` on every top-level element of its portal and puts the presence ref on the element its recipe animates; everything else (layers, trap, isolation, scroll lock, `useRestoreFocus`, `usePopupPosition`, surface registration, hover intent) keys on `open`. Focus inside a positioned surface that closes moves out in the closing commit (`useFocusBeforeClose`, internal; give it and `useRestoreFocus` the same targets in the same order). Popups render `data-state` (`open`, `closed` while exiting) and `data-side`, which picks the slide direction in CSS; their recipes never transition `transform`. The classes come from `src/lib/motion.ts` through `useMotionClasses(slot, recipe, legacyClassName?)` (see [Component Motion](#component-motion)).
+- **Motion.** Every overlay surface with motion (not yet the listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover: [ROADMAP §8.5](ROADMAP.md#85-follow-ups-outside-the-gap-list)) mounts through the presence core: `usePresence(open, { appear: true, unmountOnExit })` for the surfaces that report themselves closed until hydration (Dialog, overlay drawers, Menu, Popover, Tooltip, InfoButton, TeachingPopover), no `appear` for in-flow content. It renders while `isMounted`, spreads `presenceProps` on every top-level element of its portal and puts the presence ref on the element its recipe animates; everything else (layers, trap, isolation, scroll lock, `useRestoreFocus`, `usePopupPosition`, surface registration, hover intent) keys on `open`. Focus inside a positioned surface that closes moves out in the closing commit (`useFocusBeforeClose`, internal; give it and `useRestoreFocus` the same targets in the same order). Popups render `data-state` (`open`, `closed` while exiting) and `data-side`, which picks the slide direction in CSS; their recipes never transition `transform`. The classes come from `src/lib/motion.ts` through `useMotionClasses(slot, recipe)` (see [Component Motion](#component-motion)).
 - Clicks and keys from a portal opened inside an item (a Popover in a `Menu.Item`, a popup from a List action) bubble through the React tree; the item's own handling ignores events whose target is outside it in the DOM (C-COMPOSE), while the consumer's handlers still receive them (a disabled `Menu.Item` calls no `onClick`, as a disabled button).
 
 ### Pattern 10: Stable Class Names
@@ -1026,7 +1033,7 @@ export const chipClassNames = {
 ```tsx
 // src/components/button/Chip.tsx
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { chipClassNames } from '../../lib/classNames';
 import { renderSlot } from '../../lib/slot';
 import { focusRing } from '../../lib/styles';
@@ -1041,10 +1048,17 @@ export const Chip = ({ icon, className, ref, children, ...rest }: ChipProps) => 
   <button
     type="button"
     ref={ref}
-    className={cn(chipClassNames.root, 'rounded-md border border-stroke px-3 py-1', focusRing, className)}
+    className={wcn(
+      chipClassNames.root,
+      'wave:rounded-md wave:border wave:border-stroke wave:px-3 wave:py-1',
+      focusRing,
+      className,
+    )}
     {...rest}
   >
-    {renderSlot(icon, 'span', cn(chipClassNames.icon, 'inline-flex size-4'), { 'aria-hidden': true })}
+    {renderSlot(icon, 'span', wcn(chipClassNames.icon, 'wave:inline-flex wave:size-4'), {
+      'aria-hidden': true,
+    })}
     {children}
   </button>
 );
@@ -1052,26 +1066,26 @@ Chip.displayName = 'Chip';
 ```
 
 - **Names.** The root class is `wave-` and the kebab-cased flat export name (`CardHeader` → `wave-card-header`); a part class is `<root>__<kebab part key>`; the constant is the camel-cased flat name plus `ClassNames`, with camelCase keys and `as const`. `WaveProvider` (`wave-root`) and `Portal` (`wave-portal`) keep their scope classes. A component that renders no element of its own (Dialog, Popover, Presence, the trigger and close parts that clone their child) has no constant; an alias shares its target's (`ComboboxOption` uses `optionClassNames`).
-- **Placement.** The root class goes first in the `cn()` of the element that receives `className`, so the consumer's class still comes last. A part is an element the component renders that a prop or slot fills or controls (icon, dismiss button, expand icon, checkmark, secondary text, validation message) or visible structure (track, thumb, rail, surface, header, footer); hidden inputs, visually hidden text, live regions and layout wrappers are not parts. A slot part passes its class in `renderSlot`'s base classes, so it stays when a slot object swaps the element. Never apply a stable class inside a shared style helper (`buttonClassName()`, `menuItemClasses`): elements that are not that component use those helpers too. Note the one letter between the public `buttonClassNames` and the internal `buttonClassName()`.
-- **Variants and nesting.** A variant lists the base constant first: `cn(buttonClassNames.root, toggleButtonClassNames.root, …)`. A variant that renders Button hands its icon class over with `withPartClass(icon, toggleButtonClassNames.icon)` (`Button.slots.tsx`), which wraps the slot so that Button's own icon span carries both classes; Button gains no prop. A public component rendered inside another gets the parent's part class through its `className`: `<Button {...menuButtonProps} className={cn(splitButtonClassNames.menuButton, menuButtonProps?.className)} />`.
-- **Literal member access.** Write each member you apply literally (`toggleButtonClassNames.root`, never `names[kind].root`), also when a shared renderer draws the element: the menu item kinds pass `rootClassName={cn(menuItemClassNames.root, menuItemCheckboxClassNames.root)}` to `MenuItemRow`. The gate and the registry test find the constants by that text.
+- **Placement.** The root class goes first in the `wcn()` of the element that receives `className`, so the consumer's class still comes last. A stable class carries no prefix: it is no utility, and Tailwind generates nothing for it. A part is an element the component renders that a prop or slot fills or controls (icon, dismiss button, expand icon, checkmark, secondary text, validation message) or visible structure (track, thumb, rail, surface, header, footer); hidden inputs, visually hidden text, live regions and layout wrappers are not parts. A slot part passes its class in `renderSlot`'s base classes, so it stays when a slot object swaps the element. Never apply a stable class inside a shared style helper (`buttonClassName()`, `menuItemClasses`): elements that are not that component use those helpers too. Note the one letter between the public `buttonClassNames` and the internal `buttonClassName()`.
+- **Variants and nesting.** A variant lists the base constant first: `wcn(buttonClassNames.root, toggleButtonClassNames.root, …)`. A variant that renders Button hands its icon class over with `withPartClass(icon, toggleButtonClassNames.icon)` (`Button.slots.tsx`), which wraps the slot so that Button's own icon span carries both classes; Button gains no prop. A public component rendered inside another gets the parent's part class through its `className`: `<Button {...menuButtonProps} className={wcn(splitButtonClassNames.menuButton, menuButtonProps?.className)} />`.
+- **Literal member access.** Write each member you apply literally (`toggleButtonClassNames.root`, never `names[kind].root`), also when a shared renderer draws the element: the menu item kinds pass `rootClassName={wcn(menuItemClassNames.root, menuItemCheckboxClassNames.root)}` to `MenuItemRow`. The gate and the registry test find the constants by that text.
 - **No state classes.** State stays in `data-*` attributes and ARIA (C-CLASS).
 - **Enforcement.** The conventions gate's `class-names` rule fails a module that sets a registered component's `displayName` without applying its constant's `root`; `testSystemProps` asserts the root classes where `className` lands; `src/__tests__/classNames.test.ts` checks that every public component has a constant (or is on its no-element list), that every constant follows the formula, that every key is applied somewhere in `src/components`, and that the entry exports every constant; `verify-dist` checks that the entry exports them with the same values, that a Server Component can read them, and that an import of only Button keeps `'wave-button'` and drops other components' classes.
-- **Stability.** The names are public API: no class is removed before 1.0. A renamed part, or a part that becomes a compound member of its own, keeps its old class next to the new one until 1.0; moving a class to another element is a CHANGELOG "Changed" DOM entry.
-- **Words.** The registry is under `src/lib`, which Tailwind scans: its JSDoc names elements by role ("the grid element"), never with a utility name as a bare word ([Pattern 5](#pattern-5-cn-utility)).
+- **Stability.** The names are public API under semantic versioning since 1.0: a class is removed or renamed only in a major release, and moving one to another element is a CHANGELOG "Changed" DOM entry. The `wave:` utility classes are not: which utilities a component draws may change in any release.
+- **Words.** The registry is under `src/lib`, which the CSS build scans: its JSDoc names elements by role ("the grid element"), never with a class name, prefixed or not ([Pattern 5](#pattern-5-cn-and-wcn)).
 
 ### Pattern 11: The Input Recipe (sizes and appearances)
 
 The ten text controls and pickers (Input, Textarea, Select, SearchBox, SpinButton, Combobox, Dropdown, DatePicker, TimePicker, TagPicker) share one look, built from class maps in `src/lib/styles.ts` over the markup each control already had. A control draws its field either on its own element (Input without slots, Textarea, Select, the Dropdown button) or on a wrapper around the native element (Input with slots, SearchBox, SpinButton, the pickers, TagPicker); the maps serve both forms, so no control gains or loses an element.
 
-- **The maps**, keyed by `CoreSize` (`small`, `medium`, `large`: 24, 32 and 40px) or `InputAppearance` (`outline`, `underline`, `filled-darker`, `filled-lighter`): `inputHeightClasses`, `inputTextClasses` (`text-caption-1`, `text-body-1`, `text-body-2`), `inputPaddingClasses` (8, 12 and 16px, for the element form) and `inputAppearanceClasses` (fill, strokes and corners; the appearances without a full visible stroke add `forced-colors:border-[ButtonText]`, so every appearance keeps a boundary in Windows High Contrast). `hitAreaLayer` grows a small button's target to 24px without growing its box; the picker buttons per size live in `pickerStyles.ts` (`pickerIconButtonClasses`, `pickerButtonOffset`, `pickerEndPadding`, `pickerGlyphSize`).
+- **The maps**, keyed by `CoreSize` (`small`, `medium`, `large`: 24, 32 and 40px) or `InputAppearance` (`outline`, `underline`, `filled-darker`, `filled-lighter`): `inputHeightClasses`, `inputTextClasses` (`wave:text-caption-1`, `wave:text-body-1`, `wave:text-body-2`), `inputPaddingClasses` (8, 12 and 16px, for the element form) and `inputAppearanceClasses` (fill, strokes and corners; the appearances without a full visible stroke add `wave:forced-colors:border-[ButtonText]`, so every appearance keeps a boundary in Windows High Contrast). `hitAreaLayer` grows a small button's target to 24px without growing its box; the picker buttons per size live in `pickerStyles.ts` (`pickerIconButtonClasses`, `pickerButtonOffset`, `pickerEndPadding`, `pickerGlyphSize`).
 - **Compose the state recipes after the appearance.** `inputFocus` and `inputFocusWithin` color the focused bottom border (`primary`, 2px), and `inputInvalid` and `inputInvalidWithin` color every border the appearance draws (`destructive`). A focused invalid field therefore shows the focus indicator below and the error on the other sides.
 - **Resolve with `useInputLook(size, appearance, { sizes?, defaultSize? })`** (internal): the control's own prop, then the surrounding Field's `size`, then `WaveProvider inputDefaults`, then `medium` and `outline`. A size outside `sizes` is skipped (TagPicker has no `small`). The choice controls (Checkbox, Switch, Slider) have their own unions and read neither the Field nor the provider.
 - **State attributes.** The element that receives `className` renders `data-size` and `data-appearance` with the resolved values, always, before `{...rest}`, so `[data-appearance=underline]` and a consumer's `className` meet on the same element.
 
 ```tsx
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   inputAppearanceClasses,
   inputFocus,
@@ -1098,8 +1112,8 @@ export const Masked = ({ size, appearance, invalid, className, ref, ...rest }: M
       ref={ref}
       data-size={look.size}
       data-appearance={look.appearance}
-      className={cn(
-        'w-full text-foreground placeholder:text-muted-foreground',
+      className={wcn(
+        'wave:w-full wave:text-foreground wave:placeholder:text-muted-foreground',
         inputHeightClasses[look.size],
         inputTextClasses[look.size],
         inputPaddingClasses[look.size],
@@ -1115,7 +1129,7 @@ export const Masked = ({ size, appearance, invalid, className, ref, ...rest }: M
 Masked.displayName = 'Masked';
 ```
 
-- **A numeric HTML `size`.** Input and Select inherited the native `size`; they omit it and declare `size?: CoreSize | number` plus `htmlSize?: number`. A number keeps its meaning and is a deprecated alias of `htmlSize` (`resolveDeprecatedProp`), and the design size then resolves as if `size` were unset. Slider ignores the native attribute, so its number is only reported once, from an effect.
+- **The native `size`.** Input and Select inherit a native `size` that has an effect; they omit it and declare `size?: CoreSize` (the design size) plus `htmlSize?: number` (the native attribute). Slider omits the native `size` and declares `size?: SliderSize`, since a range input ignores the attribute.
 - **Fields.** `Field size` sets the label's type ramp and, in the horizontal layout, its top padding; it reaches the controls inside through `FieldContextValue.size`, which is absent when the prop is unset so that the provider's default still applies. A `Label` or `InfoLabel` element passed as `label` is recognised by the marker in `fieldLabel.ts` (not by an import, so a Field-only bundle carries no InfoButton code) and rendered in place of Field's own `<label>`.
 - **Guidance for consumers.** The filled appearances have no visible stroke, so a filled field needs a visible label (a placeholder is not one); use `filled-darker` on the page background and `filled-lighter` on a surface other than the page background.
 
@@ -1165,7 +1179,7 @@ function ColorOptionImpl({ value, color, disabled, children }: ColorOptionProps)
   return (
     <li
       {...optionProps}
-      className="flex items-center gap-2 rounded px-3 py-1.5 data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[disabled]:text-muted-foreground"
+      className="flex items-center gap-2 rounded px-3 py-1.5 data-[active]:bg-wave-subtle-hover data-[active]:outline-2 data-[active]:outline-wave-ring data-[disabled]:text-wave-muted-foreground"
     >
       <span aria-hidden="true" className="size-3 rounded-full" style={{ background: color }} />
       {children}
@@ -1208,7 +1222,7 @@ export function AccentList() {
       // The active option shows focus; with none active, the list draws its own ring.
       className={`m-0 flex list-none flex-col p-1 ${
         listbox.activeValue === null
-          ? 'focus-visible:outline-2 focus-visible:outline-ring'
+          ? 'focus-visible:outline-2 focus-visible:outline-wave-ring'
           : 'focus:outline-hidden'
       }`}
     >
@@ -1308,7 +1322,7 @@ export function CommandPalette({
             data-active={command.id === active.activeValue ? '' : undefined}
             onPointerMove={() => active.highlight(command.id)}
             onClick={() => onRun(command)}
-            className="px-3 py-1.5 data-[active]:bg-subtle-hover"
+            className="px-3 py-1.5 data-[active]:bg-wave-subtle-hover"
           >
             {command.label}
           </li>
@@ -1377,9 +1391,9 @@ A part that draws something sized by its host reads a context from the host inst
 
 ### Pattern 18: Reveals on Named Groups
 
-Controls drawn only while their row is hovered or holds focus (Tree row actions, Nav item actions, DataGrid's subtle selection, `Table.CellActions`) use a Tailwind group variant on the row (`group-hover/<name>:`, `group-focus-within/<name>:`), and every family names its own group: Tree's rows are `group/row`, Nav's `group/nav-row`, Table and DataGrid rows `group/table-row`, and a DataGrid with `subtleSelection` is `group/grid` for its select-all. A shared name would make a component nested in a cell react to the outer row (a Tree with actions inside a DataGrid cell would show its actions while the grid row is hovered), so a new reveal picks a name of its own. A grid nested in a grid still shares `group/table-row`, a limit of CSS groups.
+Controls drawn only while their row is hovered or holds focus (Tree row actions, Nav item actions, DataGrid's subtle selection, `Table.CellActions`) use a Tailwind group variant on the row (`wave:group-hover/<name>:`, `wave:group-focus-within/<name>:`), and every family names its own group: Tree's rows are `wave:group/row`, Nav's `wave:group/nav-row`, Table and DataGrid rows `wave:group/table-row`, and a DataGrid with `subtleSelection` is `wave:group/grid` for its select-all. A shared name would make a component nested in a cell react to the outer row (a Tree with actions inside a DataGrid cell would show its actions while the grid row is hovered), so a new reveal picks a name of its own. A grid nested in a grid still shares `wave:group/table-row`, a limit of CSS groups. The markers carry the prefix like every class, so an app's own `group-hover/table-row:` matches none of them: an app reveals against a group of its own on the row (`<Table.Row className="group/my-row">`, then `group-hover/my-row:`), or selects the row's stable class and state in its CSS.
 
-- **Always drawn where hover is missing or colors are forced:** `pointer-coarse:` (DataGrid, Table) or `[@media(hover:none)]:` (Tree, Nav) and `forced-colors:` variants override the hidden state, and a `focus-within:` of the control's own keeps keyboard focus visible outside a group.
+- **Always drawn where hover is missing or colors are forced:** `wave:pointer-coarse:` (DataGrid, Table) or `wave:[@media(hover:none)]:` (Tree, Nav) and `wave:forced-colors:` variants override the hidden state, and a `focus-within:` of the control's own keeps keyboard focus visible outside a group.
 - **Keep the room.** Hide with opacity or visibility, never `display: none`, so the row does not shift when the controls show; with opacity they also stay focusable and named (DataGrid's subtle controls, `Table.CellActions`, Nav's actions), and a fade carries `motion-reduce:` (C-MOTION).
 - **An opaque reveal over a row's fill** maps the library's row fills (`Table.CellActions`: the canvas, the row hover, a striped row, a DataGrid's selected rows) by selectors on the table's own attributes (`data-striped`, `data-selection-appearance`, `data-selected`); a consumer's own row background needs the same class on the revealed element.
 
@@ -1404,7 +1418,7 @@ A component that takes a `virtualWindow` (DataGrid, List, Listbox, Combobox, Dro
 - Name value callbacks after the state (`onValueChange`, `onCheckedChange`, `onOpenChange`); `onChange` is only the native change event
 - Declare `ref` in the interface; export the props type with the component (`CardHeaderProps`, `DataGridRowProps`)
 - Use shared types from `src/lib/types.ts`: `Size`, `CoreSize`, `InputAppearance`, `Appearance`, `Status`, `Orientation`, `SelectionMode`, `TextWeight`, `Shape`, `PopupSide`, `PopupAlign`, `BadgeColor`, `IconPosition`, `ValidationState`, `LabelPosition` (take a subset with `Extract<LabelPosition, …>`), `ModalType`, `OpenChangeDetails<R>`, `CheckedValues`, `CheckedValuesChangeHandler`, `PopupTarget`, `VirtualElement`, `DayOfWeek`, `FirstWeekOfYear`, `HeadingLevel`, `FocusMode`, `TagSize`, `TagAppearance`, `TagShape`, `SurfaceSize`, `BackdropAppearance`
-- Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`); open state stays `open`/`defaultOpen`/`onOpenChange`, a state callback is named after its state (`checkedValues` → `onCheckedValuesChange`, not Fluent's `onCheckedValueChange`), and extra callback data goes in a second, optional `details` argument (`onOpenChange(open, details?)`, `onCheckedValuesChange(checkedValues, details?)`)
+- Prefer Fluent's prop name when it fits the conventions (`disabledFocusable`, `iconPosition`, `validationState`, `modalType`, `selectTabOnFocus`, `persistOnItemClick`, `openOnHover`, `openOnContext`, `isAccessible`); open state stays `open`/`defaultOpen`/`onOpenChange`, a state callback is named after its state (`checkedValues` → `onCheckedValuesChange`, not Fluent's `onCheckedValueChange`), and extra callback data goes in a second `details` argument, which WaveUI always passes and which is required in the callback's type (`onOpenChange(open, details)`, `onCheckedValuesChange(checkedValues, details)`); where no DOM event is behind a change (a hook action called without one), the details carry an untrusted event of their own (`sort`, `select`, `check`, `resize`)
 - One delay vocabulary: `openDelay` and `closeDelay` in milliseconds (Menu 250/250, Popover 250/500, Tooltip 200/100). Menu's and Popover's apply to mouse hover only, Tooltip's `openDelay` also to keyboard focus
 
 ---
@@ -1850,7 +1864,7 @@ Live regions must exist before their content changes. `Toaster` keeps two perman
 
 ### Focus Management
 
-1. **Focus rings**: focusable controls use `focusRing` (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`. A focusable control with the disabled look (`disabledFocusable`, a self-disabling boundary button) goes back to full opacity while its ring shows, so the ring keeps its contrast.
+1. **Focus rings**: focusable controls use `focusRing` (`wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring`), cells and rows `focusRingInset`; text inputs show a primary bottom border (`inputFocus`) with `wave:focus:outline-hidden`, which keeps an outline in forced-colors mode. Never use `focus:outline-none`. The recipes are public: `cn(focusRing, 'focus-visible:outline-offset-0')` on a control of yours replaces the recipe's offset. A focusable control with the disabled look (`disabledFocusable`, a self-disabling boundary button) goes back to full opacity while its ring shows, so the ring keeps its contrast.
 2. **Moving focus into overlays**: Dialog and Drawer focus their first focusable element (or keep an `autoFocus` element, also when stacked over or nested in another dialog, and in a popover opened from one), Menu focuses its first item, the DatePicker calendar its focused day. Build custom overlays on these components, or on the public hooks of Pattern 16, rather than re-implementing traps.
 3. **Focus restoration**: when an overlay closes, focus returns to where it came from. Dialog and Drawer use `finalFocusRef` when given, else the element that was focused when they opened (the trigger, for a trigger click; a trigger's wrapper span resolves to the element inside it), or a trigger when nothing had focus. When that element is gone, focus goes to a mounted trigger, then to the element next to where the opener was (the next row's action after a delete), then to the overlay below. A non-modal Dialog or Drawer, and an inline Drawer, move focus on close only when focus was inside them (`useRestoreFocus` with `requireFocusInside`; focus in a popup opened from them counts as inside). Popovers and menus return focus to their trigger (TeachingPopover: to where focus was, or to its `TeachingPopover.Trigger`) when focus was inside them (or lost to `<body>`) at close. A close by hover moves no focus, and neither does the close of a surface opened from inside one that closes by hover (a submenu, a hover card in a hover card). When a focused element disappears (a SearchBox clear button, a dismissed toast, a boundary button), the component moves focus somewhere sensible instead of dropping it to `<body>`; TimePicker and DatePicker settle erased text on Tab before focus moves, so Tab never lands on the clear button that the commit removes.
 4. **Focus trapping**: modal and alert Dialogs and Drawers trap Tab (non-modal and inline ones do not), including the Toaster region and overlays opened from them. Tab inside a plain `<Portal>` rendered in a dialog is native and wraps to the dialog's first or last element at the portal's edges. Focus that lands outside the trap is returned in a microtask after the `focusin`.
@@ -1862,7 +1876,7 @@ Background colors are replaced and box shadows removed in forced-colors mode, so
 
 - `src/lib/styles.ts` `forcedColors` recipes: `selectedLeaf` (`Highlight`/`HighlightText` with `forced-color-adjust: none`, for leaf indicators only: the Switch thumb, check glyphs, the ProgressBar fill, the selected day), `selectedContainer` (a `Highlight` outline for selected options, rows and cards), `control` (`ButtonText` borders), `border` (`CanvasText`), `fill` (a `Highlight` background with `forced-color-adjust: none`, for leaf indicators drawn with their own background: step and pager dots, connectors), `rangeInput` (a native range input: rail `CanvasText`, thumb `Highlight`, `GrayText` while disabled, a `Highlight` focus outline), `ringArc` (a border-drawn ring: the arc `Highlight` on a `Canvas` track) and `disabled` (`GrayText`).
 - Components with forced-colors styling include Switch, Checkbox, RadioGroup, SwatchPicker, Slider, ProgressBar, Spinner, Skeleton (`GrayText` placeholders), DatePicker, TimePicker, Select, listbox options, List, Tree, Card, DataGrid, Pagination, Stepper (completed connectors `Highlight`, the others `CanvasText`), Carousel, TeachingPopover (step dots), PresenceBadge, ColorArea, ColorSlider and AlphaSlider (the field, the rails and the thumbs' fill keep their colors with `forced-color-adjust: none`; the thumbs draw their ring and focus indicator in `CanvasText`, `Canvas` and `Highlight`), the Tree checkbox and radio indicators (Checkbox's recipe) and the Button family (every Button appearance draws a 1px border, so it keeps an edge). Dialog and Drawer draw a 1px border, so their edge stays visible where the shadow disappears.
-- Text inputs use `focus:outline-hidden`, which Tailwind turns into a visible outline in forced colors.
+- Text inputs use `wave:focus:outline-hidden`, which Tailwind turns into a visible outline in forced colors.
 
 **System color keywords**: `Canvas`, `CanvasText`, `LinkText`, `Highlight`, `HighlightText`, `ButtonFace`, `ButtonText`, `GrayText`.
 
@@ -1871,7 +1885,7 @@ The **high-contrast theme** (`WaveProvider theme="high-contrast"`) is a separate
 ### Screen Reader Best Practices
 
 - Use semantic HTML elements (`<button>`, `<nav>`, `<main>`, `<table>`) over `div` + `role`
-- Every image needs `alt` text (`alt=""` for decorative images); `Image` warns in development without `alt`, and `StrictImageProps` requires it at compile time
+- Every image needs `alt` text (`alt=""` for decorative images); `ImageProps.alt` is required (`StrictImageProps` is the same type), and `Image` warns in development when JavaScript code leaves it out
 - Form controls need a label: wrap them in `Field`, or pass `aria-label`/`aria-labelledby`
 - Group related controls with `<fieldset>` + `<legend>` (or `role="group"` + `aria-label`)
 - Validation errors: `Field`'s `error`, or `error="…"` on Input/Select/Textarea, render a `role="alert"` message linked with `aria-describedby`; a Field `validationState="warning"` message is announced too, without marking the control invalid
@@ -1897,7 +1911,7 @@ export const Root = ({ children }: { children: React.ReactNode }) => (
 );
 ```
 
-- It renders `<div class="wave-root wave-<theme>">` that paints `bg-background text-foreground font-wave text-body-1` (a `className` you pass wins) and sets `dir` and `data-wave-theme`.
+- It renders `<div class="wave-root wave-<theme>">` that paints `wave:bg-background wave:text-foreground wave:font-wave wave:text-body-1` (a `className` you pass wins) and sets `dir` and `data-wave-theme`.
 - Providers nest in any order; every theme class re-declares all the tokens a theme sets (the semantic colors, the palette and the shadows), so a light panel inside a dark app is fully light. The ramps, font families, stacking layers and motion tokens are theme-independent constants on `:root`. A nested provider inherits every prop it omits (`theme`, `dir`, `portalContainer`, `motion`, `applyStylesToPortals`; `inputDefaults` and `tokens` merge key by key) from the enclosing one, so a theme-only panel in an RTL app stays RTL and keeps its overlays in the app's container; `portalContainer={null}` sends a nested subtree's overlays to `document.body`.
 - Portaled overlays receive the provider's theme classes and direction, and its token overrides ([`tokens`](#token-overrides-tokens)); `portalContainer` sets where they render.
 - `inputDefaults` (`{ size?: CoreSize; appearance?: InputAppearance }`) sets the default size and appearance of the text controls and pickers below it. A nested provider merges its defined keys over the enclosing provider's and inherits the rest.
@@ -1907,18 +1921,18 @@ export const Root = ({ children }: { children: React.ReactNode }) => (
 Theme classes select the tokens:
 
 - `:root` and `.wave-light` → light
-- `.wave-dark` → dark (the deprecated `.dark` still works)
-- `.wave-high-contrast` → high contrast (the deprecated `.high-contrast` still works)
+- `.wave-dark` → dark
+- `.wave-high-contrast` → high contrast
 
-`getThemeClassName(theme)` returns the classes WaveProvider uses (`'wave-dark dark'` for dark). `color-scheme` is set on the `wave-*` theme classes only.
+`getThemeClassName(theme)` returns the class WaveProvider uses (`'wave-dark'` for dark). `color-scheme` is set on the `wave-*` theme classes only.
 
 ### Theme Tokens (tokens.css)
 
 ```css
 :root {
-  /* Theme-independent: ramps (0.4 names as fallbacks), fonts, stacking, motion */
-  --wave-brand-80: var(--brand-80, #0f6cbd);
-  --wave-grey-14: var(--grey-14, #242424);
+  /* Theme-independent: ramps, fonts, stacking, motion */
+  --wave-brand-80: #0f6cbd;
+  --wave-grey-14: #242424;
   --wave-font-family: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont,
     Roboto, 'Helvetica Neue', sans-serif;
   --wave-font-family-monospace: Consolas, 'Courier New', Courier, monospace;
@@ -1937,8 +1951,7 @@ Theme classes select the tokens:
   /* … every semantic token (see the table in section 4), the palette and the shadows */
 }
 
-.wave-dark,
-.dark {
+.wave-dark {
   --wave-background: #292929;
   --wave-primary: var(--wave-brand-110);
   --wave-primary-foreground: #000000;
@@ -1949,23 +1962,26 @@ Theme classes select the tokens:
 
 ### Tailwind ↔ Token Mapping
 
-`@theme inline` in `src/styles/tokens.css` maps the tokens to Tailwind theme values:
+Two `@theme inline` blocks map the tokens to Tailwind theme values. The one at the end of `src/styles/tokens.css` is for apps (`./tailwind` and `./tokens` bring it into the app's build, and `./utilities` compiles every color, type, shadow, font and animation utility of it for apps without Tailwind):
 
 ```
-bg-background        → --color-background: var(--wave-background)
-text-foreground      → --color-foreground: var(--wave-foreground)
-bg-primary           → --color-primary: var(--wave-primary)
-border-border        → --color-border: var(--wave-border)
-bg-brand-80          → --color-brand-80: var(--wave-brand-80)
-bg-palette-blue-tint → --color-palette-blue-tint: var(--wave-palette-blue-tint)
-font-wave            → --font-wave: var(--wave-font-family)
-font-wave-mono       → --font-wave-mono: var(--wave-font-family-monospace)
-text-body-1          → 14px / 20px
-shadow-4             → --shadow-4: var(--wave-shadow-4)
-animate-wave-spin    → wave-spin 0.8s linear infinite
+bg-wave-background     → --color-wave-background: var(--wave-background)
+text-wave-foreground   → --color-wave-foreground: var(--wave-foreground)
+bg-wave-primary        → --color-wave-primary: var(--wave-primary)
+border-wave-border     → --color-wave-border: var(--wave-border)
+bg-wave-brand-80       → --color-wave-brand-80: var(--wave-brand-80)
+bg-wave-palette-blue-tint → --color-wave-palette-blue-tint: var(--wave-palette-blue-tint)
+font-wave              → --font-wave: var(--wave-font-family)
+font-wave-mono         → --font-wave-mono: var(--wave-font-family-monospace)
+text-wave-body-1       → 14px / 20px
+shadow-wave-4          → --shadow-wave-4: var(--wave-shadow-4)
+duration-wave-normal   → --transition-duration-wave-normal: var(--wave-duration-normal)
+animate-wave-spin      → wave-spin 0.8s linear infinite
 ```
 
-Override the `--wave-*` variables, never the `--color-*` ones: the utilities are compiled against `var(--wave-*)`.
+The other, `src/styles/theme.css`, is internal: an `@theme inline reference` block with the same values under 0.x's names (`--color-primary`, `--text-body-1`, `--shadow-4`), against which the build compiles the components' prefixed classes (`wave:bg-primary`, `wave:text-body-1`, `wave:shadow-4`). `reference` keeps its keys out of the CSS, so Wave's sheets declare no theme variable of their own, and an app's theme that uses the same names (shadcn/ui's `--color-primary`) is never Wave's.
+
+Override the `--wave-*` variables, never the `--color-wave-*` ones: the utilities are compiled against `var(--wave-*)`.
 
 ### Token Overrides: `tokens`
 
@@ -2052,7 +2068,7 @@ export const App = ({ children }: { children: React.ReactNode }) => (
 - **The stops the themes read.** Light: 80 (primary, focus ring), 70 (hover), 40 (pressed), 160, 150 and 140 (the selection fill and its hover and pressed states) and 60 (selected text). Dark: 110 (primary, selected text), 120 (hover), 90 (pressed), 100 (focus ring), and 20, 40 and 10 (the selection fill and its hover and pressed states). No theme reads 30, 50 or 130. The `info` status color is fixed in every theme and does not follow the brand.
 - **High contrast ignores the brand.** The high-contrast theme reads no stop: its colors are fixed (`primary` `#1aebff`, the focus ring `#ffff00`) and the same for every app, as Fluent's high-contrast theme takes no brand. A brand ramp leaves it unchanged; a semantic override such as `primary` still applies there, like everywhere it is set.
 
-The ramp can also be set in CSS, on `:root` (the 0.4 names `--brand-10` … `--brand-160` still work, read as fallbacks); a hand-made ramp there is not checked, so check it against the stops above, or have it checked by passing it to `createBrandTokens` in development:
+The ramp can also be set in CSS, on `:root`; a hand-made ramp there is not checked, so check it against the stops above, or have it checked by passing it to `createBrandTokens` in development:
 
 ```css
 :root {
@@ -2131,8 +2147,7 @@ With the precompiled stylesheet, load your overrides after Wave's (same specific
 
 ### 0.4 Variable Names
 
-- Overrides of the 0.4 ramp names (`--brand-*`, `--grey-*`) keep working: they are read as fallbacks. Reads do not: 0.5 never defines the 0.4 ramp names, so custom CSS such as `var(--brand-80)` or `var(--grey-14)` resolves to nothing. Use `var(--wave-brand-80)`, `var(--wave-grey-14)`.
-- The 0.4 semantic names (`--primary`, `--background`, `--border`, `--ring`, …) are neither read nor defined. Rename overrides **and reads** (`outline: 2px solid var(--ring)` becomes `var(--wave-ring)`) to `--wave-*`, or load the deprecated `@mortenbrudvik/waveui/legacy-tokens.css` after the Wave styles, which defines the 0.4 names again. Never load it in an app that defines shadcn/ui-style variables.
+Only the `--wave-*` names are read and defined. The 0.4 ramp names (`--brand-*`, `--grey-*`) and semantic names (`--primary`, `--background`, `--border`, `--ring`, …) are neither: an override of one has no effect and a read of one (`var(--brand-80)`, `outline: 2px solid var(--ring)`) resolves to nothing. Use `--wave-brand-80`, `--wave-ring` and the other `--wave-*` names.
 
 Spacing, radius and stroke widths are Tailwind's scales, not tokens: chapter 2 maps Fluent's names to them.
 
@@ -2919,9 +2934,9 @@ Named slots are not repeated in `slotProps`: a leaf has one way in. Where both r
 A part's props (`SlotPart<'<element>'>`) are its element's attributes, handlers and `ref` and any `data-*` attribute (a string, a number or a boolean). A value typed by an interface (`React.ButtonHTMLAttributes<HTMLButtonElement>`, one of yours) or returned by `getNativeElementProps` fits a part as an object literal does; a part whose ref takes another element than its own is typed `SlotPartWithRef<'<element>', <ref element>>` (List item's `content` and `action`, Input's `root`, Breadcrumb's `list`, InteractionTag.Secondary's `dismissIcon`). They combine with the component's by the rules a component applies to the props of its root (C-COMPOSE), through `mergeSlotProps`:
 
 1. **Order.** The component's default attributes, then yours, then its locked attributes: yours replace a default, a locked attribute always wins, also when its value is `undefined` (an `aria-controls` that exists only while a popup is open stays absent while it is closed).
-2. **Classes.** The component's classes, its stable class first, then yours, through `cn()`, so yours replace a conflicting class of the same variant ([Pattern 5](#pattern-5-cn-utility)); a gated state class (`data-[selected]:…`, `not-disabled:not-aria-disabled:hover:…`) stays next to a bare class of yours and wins by specificity, as it does on a root.
+2. **Classes.** The component's classes, its stable class first, then yours, through `cn()`, so yours replace a conflicting class of the same variant, a `wave:`-prefixed one included ([Pattern 5](#pattern-5-cn-and-wcn)); a gated state class (`wave:data-[selected]:…`, `wave:not-disabled:not-aria-disabled:hover:…`) stays next to a bare class of yours, and the cascade of your setup decides between the two, as on a root.
 3. **Style.** Your keys over the component's. A component that must control a key writes it after yours: a positioned popup's position, size limits and visibility (`lockPositionStyle`, also the beaks' offsets), a carousel track's translation and duration, a slide's width, a progress bar's value width.
-4. **Handlers.** Yours run first (several layers in order), then the component's, unless one of yours called `preventDefault()`: that skips the component's handling of the event, the component's own `on…` prop included. Work that only mirrors the DOM into state (the roving tab stop following focus, the end of a drag, a held key forgotten, the pointer over a control or a note) runs after yours, also when they prevent the default; each part's documentation says where. While a control is disabled, your `onClick` on its parts is not called, as the control's own is not: on the control's own element and on the parts inside it or that pass their click to it (a Switch's thumb and label, a Checkbox's or radio's label, a CompoundButton's text, an Input's bordered wrapper, a Dropdown's value, an Option's content and check square). Two exceptions: a disabled `Option`'s own `onClick` prop still runs, as in 0.17 (its parts' do not), and the drawings of ColorArea, ColorSlider and AlphaSlider (`field`, `rail`, `thumb`) take your `onClick` in every state, as their roots do: each root is a `<div>` that takes your `onClick` while disabled too, and only the range inputs inside it are natively disabled. A part beside a control that passes no click to it (a TimePicker's or DatePicker's error message) takes your `onClick` in every state, and so do the parts of ColorPicker and `ColorPicker.HexField`, since a ColorPicker has no disabled state: while its value is not a hex color only the color parts bound to it are disabled, and its hex field stays editable. A consumer `aria-disabled` alone blocks nothing.
+4. **Handlers.** Yours run first (several layers in order), then the component's, unless one of yours called `preventDefault()`: that skips the component's handling of the event, the component's own `on…` prop included. Work that only mirrors the DOM into state (the roving tab stop following focus, the end of a drag, a held key forgotten, the pointer over a control or a note) runs after yours, also when they prevent the default; each part's documentation says where. While a control is disabled, your `onClick` on its parts is not called, as the control's own is not: on the control's own element and on the parts inside it or that pass their click to it (a Switch's thumb, label and root, a Checkbox's or radio's label and root, a CompoundButton's text, an Input's bordered wrapper, a Dropdown's value, an Option's content and check square). Two exceptions: a disabled `Option`'s own `onClick` prop still runs, as in 0.17 (its parts' do not), and the drawings of ColorArea, ColorSlider and AlphaSlider (`field`, `rail`, `thumb`, and the `root` of the two sliders) take your `onClick` in every state, as their roots' own `onClick` runs: each root is a `<div>` that takes your `onClick` while disabled too, and only the range inputs inside it are natively disabled. A part beside or around a control that passes no click to it (a TimePicker's or DatePicker's error message, the `root` of SearchBox, SpinButton, Combobox, Dropdown, TimePicker, DatePicker and TagPicker) takes your `onClick` in every state, and so do the parts of ColorPicker and `ColorPicker.HexField`, since a ColorPicker has no disabled state: while its value is not a hex color only the color parts bound to it are disabled, and its hex field stays editable. A consumer `aria-disabled` alone blocks nothing.
 5. **Id lists.** `aria-labelledby` and `aria-describedby` are joined, the component's ids first: a part can add a name or a description, never remove the component's ids. Adding still changes a name in two cases: an `aria-labelledby` of yours wins over a part's locked `aria-label` in the name (a Pagination, Carousel or Breadcrumb overflow button, the Dismiss buttons of MessageBar and Toast, SpinButton's step buttons, a resize handle), and on a part whose text names its control (a menu item's or a Nav item's label, an InteractionTag Primary's text) it renames that control. Every other id reference (`aria-controls`, `aria-owns`, `aria-errormessage`, `aria-details`, `aria-activedescendant`) is no list: it follows rule 1, replacing a default, and is locked wherever the component wires it.
 6. **Refs.** Yours is attached beside the component's ref, which keeps working through inline refs that change on every render.
 7. **Nothing removes.** `null` and `undefined` are skipped, at the top level and in `style`, and only a function counts as a handler (`onClick: cond && fn` never removes the component's); `children`, `as`, `key` and `dangerouslySetInnerHTML` are type errors and are dropped.
@@ -2957,16 +2972,20 @@ Every `slotProps` key, by group, with its element and what it locks; the JSDoc o
 
 | Component | Part | Element | Locked |
 |---|---|---|---|
-| Switch | `track` | `<button role="switch">` | Field wiring, `type`, `role`, `aria-checked`, `disabled`, `tabIndex`, `autoFocus`, `aria-disabled` and the other `disabledFocusable` attributes, `hidden`, `inert`, `aria-hidden`, and unset `required` and `form` (the hidden input submits); its click (not under `disabledFocusable`) |
+| Switch | `root` | `<label>`, the element `className` reaches (the Switch's `ref` reaches `track`) | every prop of the Switch that reaches the root, `data-label-position`, `data-size`, `hidden`, `inert` and `aria-hidden` (the Switch's own), and unset `htmlFor`, `role`, `tabIndex` and the roving markers (`data-roving-container`, `data-roving-disabled`, `data-roving-value`, `aria-disabled`: in a toolbar the root is never a control of its own); your handlers run before its own; your click is not called while the switch is disabled (a click on the label text reaches yours, then the switch's click it passes on) |
+| | `track` | `<button role="switch">` | Field wiring, `type`, `role`, `aria-checked`, `disabled`, `tabIndex`, `autoFocus`, `aria-disabled` and the other `disabledFocusable` attributes, `hidden`, `inert`, `aria-hidden`, and unset `required` and `form` (the hidden input submits); its click (not under `disabledFocusable`) |
 | | `thumb` | `<span>` | `aria-hidden`, unset `tabIndex`; your click is not called while the switch is disabled |
 | | `label` | `<span>` | `id` (it names the switch), unset `aria-label`; your click is not called while the switch is disabled |
-| Checkbox | `indicator` | `<button role="checkbox">` | as Switch's `track` |
+| Checkbox | `root` | `<label>`, the element `className` reaches (the Checkbox's `ref` reaches `indicator`) | as Switch's `root`, and `data-shape` |
+| | `indicator` | `<button role="checkbox">` | as Switch's `track` |
 | | `label` | `<span>` | as Switch's `label` |
-| RadioGroup.Item | `indicator` | `<button role="radio">` | every prop of the item, `id`, `type`, `role`, `aria-checked`, `disabled`, the roving `tabIndex` and value, unset `data-roving-container` and `data-roving-disabled`, `aria-label`, `hidden`, `inert`, `aria-hidden`; its click |
-| | `label` | `<span>` | `id`, unset `aria-label`; your click is not called while the radio is disabled; its classes come after the label's own and `labelClassName` |
-| Input | `root` | the bordered `<span>` with `contentBefore` or `contentAfter`, else the `<input>` (with `input` applied after it) | `hidden` (the Input's own); on the `<span>` `data-size`, `data-appearance` and unset `inert` and `aria-hidden`, and your click is not called while the Input is disabled; on the `<input>`, what `input` locks |
+| RadioGroup.Item | `root` | `<label>`, the element `className` reaches (the item's `ref` reaches `indicator`) | unset `htmlFor`, `hidden`, `inert`, `aria-hidden`, `role`, `tabIndex` and the roving markers (`data-roving-container`, `data-roving-disabled`, `data-roving-value`, `aria-disabled`); your click is not called while the radio is disabled (a click on the label text reaches yours, then the radio's click it passes on) |
+| | `indicator` | `<button role="radio">` | every prop of the item, `id`, `type`, `role`, `aria-checked`, `disabled`, the roving `tabIndex` and value, unset `data-roving-container` and `data-roving-disabled`, `aria-label`, `hidden`, `inert`, `aria-hidden`; its click |
+| | `label` | `<span>` | `id`, unset `aria-label`, `role`, `tabIndex` and the roving markers (as `root`); your click is not called while the radio is disabled; its classes come after the label's own and `labelClassName` |
+| Input | `root` | the bordered `<span>` with `contentBefore` or `contentAfter`, else the `<input>` (with `input` applied after it) | `hidden` (the Input's own); in both shapes the part sets no `role`, `tabIndex` or roving marker (as Switch's `root`); on the `<span>` `data-size`, `data-appearance` and unset `inert` and `aria-hidden`, and your click is not called while the Input is disabled; on the `<input>`, what `input` locks |
 | | `input` | `<input>` | every prop of the Input, `value` and `defaultValue` (its own or unset), `id`, `aria-label`, `aria-invalid`, `aria-required`, `aria-errormessage`, `disabled`, `readOnly`, `required`, `hidden`, `inert`, `aria-hidden`, the native `size`; its `onChange` (an uncontrolled Input's text still changes) |
-| SpinButton | `decrementButton`, `incrementButton` | `<button>` | `type`, `tabIndex`, `disabled`, `aria-label`; its click and press (the end of a hold always runs) |
+| SpinButton | `root` | `<div>`, the element `className` reaches (the SpinButton's `ref` reaches `input`) | every prop of the SpinButton that reaches the root, `data-size`, `data-appearance`, `hidden`, `inert` and `aria-hidden` (the SpinButton's own), and unset `role`, `tabIndex` and the roving markers (as Switch's `root`); your handlers run before its own; your click is called in every state (the root passes none to the input) |
+| | `decrementButton`, `incrementButton` | `<button>` | `type`, `tabIndex`, `disabled`, `aria-label`; its click and press (the end of a hold always runs) |
 | | `input` | `<input role="spinbutton">` | `type`, `role`, `value` (`defaultValue` unset), `disabled`, `readOnly`, `form`, the `aria-value*` attributes, Field wiring and every routed input prop, `name` unset (the hidden input submits), `hidden`, `inert`, `aria-hidden`; its handlers (its focus and blur work always runs) |
 | RatingDisplay | `star` | `<span>`, the one star of `compact` | nothing (a full display's stars are `RatingDisplay.Item`s, which take their own props) |
 | | `value`, `count` | `<span>` | nothing |
@@ -2980,20 +2999,23 @@ Every `slotProps` key, by group, with its element and what it locks; the JSDoc o
 
 | Component | Part | Element | Locked |
 |---|---|---|---|
-| Combobox | `input` | `<input role="combobox">` | `type`, `role`, `value` (`defaultValue` unset), Field wiring, `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `disabled`, `readOnly`, `placeholder`, every routed input prop, `name`, `form` and `required` unset (the hidden input submits), `hidden`, `inert`, `aria-hidden`; its handlers (typed text is dropped on blur, also when yours prevent the default) |
+| Combobox | `root` | `<div>`, the element `className` reaches (the Combobox's `ref` reaches `input`) | every prop of the Combobox that reaches the root, `data-size`, `data-appearance`, `hidden`, `inert` and `aria-hidden` (the Combobox's own), and unset `role`, `tabIndex` and the roving markers (as Switch's `root`); your handlers run before its own; your click is called in every state (the root passes none to the input); your ref joins the root's own, which keeps a press inside the root from dismissing the open list |
+| | `input` | `<input role="combobox">` | `type`, `role`, `value` (`defaultValue` unset), Field wiring, `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `disabled`, `readOnly`, `placeholder`, every routed input prop, `name`, `form` and `required` unset (the hidden input submits), `hidden`, `inert`, `aria-hidden`; its handlers (typed text is dropped on blur, also when yours prevent the default) |
 | | `clearButton` | `<button>` | `type`, `aria-label`, `disabled`, `tabIndex`, `aria-disabled`, the hidden state; its click |
 | | `expandButton` | `<button>` | `type`, `tabIndex` (never a tab stop), `aria-label`, `aria-expanded`, `aria-controls`, `disabled`, `aria-disabled`; its click |
 | | `listbox` | `<ul role="listbox">` | `id`, `role`, `tabIndex`, `aria-multiselectable`, `aria-activedescendant`, `aria-label`, the hidden state |
 | | `surface` | `<div>`, the popup | popup |
 | | `emptyMessage` | `<div>` | `aria-hidden` (a status region announces the text), unset `tabIndex` |
-| Dropdown | `button` | `<button role="combobox">` | `type`, `role`, Field wiring, the listbox wiring of Combobox's `input`, `disabled`, `tabIndex`, `autoFocus`, the hidden state, and unset `name`, `form` and `required`; its handlers |
+| Dropdown | `root` | `<div>`, the element `className` reaches (the Dropdown's `ref` reaches `button`) | as Combobox's `root` |
+| | `button` | `<button role="combobox">` | `type`, `role`, Field wiring, the listbox wiring of Combobox's `input`, `disabled`, `tabIndex`, `autoFocus`, the hidden state, and unset `name`, `form` and `required`; its handlers |
 | | `value` | `<span>` | nothing; your click is not called while the Dropdown is disabled |
 | | `clearButton`, `listbox`, `surface` | `<button>`, `<ul role="listbox">`, `<div>` | as Combobox's |
 | Option | `indicator` | `<span>`, the checkbox square of a multi-select list | `aria-hidden`, its marker, unset `tabIndex`; your click is not called while the option is disabled |
 | | `content` | `<span>`, the text that names the option | unset `role` and `aria-label`, the hidden state; your click is not called while the option is disabled (the Option's own `onClick` still is) |
 | OptionGroup | `label` | `<div>` | `id` (it names the list), `role` |
 | | `list` | `<ul role="group">` | `role`, `aria-label`, the hidden state |
-| TagPicker | `tag` | a default tag's `<span>`: the props of the `Tag` TagPicker renders | `value`, `media`, `role`, `hidden`; otherwise the Tag's own rules |
+| TagPicker | `root` | `<div>`, the element `className` reaches (the TagPicker's `ref` reaches its trigger, `TagPicker.Input` or `TagPicker.Button`) | as Combobox's `root`, and `data-overflow` and `data-collapsed`; the focus tracking of the single-line layout runs after your `onFocus` and `onBlur`, also when they prevent the default; your ref joins the root's own, which a form reset reads too |
+| | `tag` | a default tag's `<span>`: the props of the `Tag` TagPicker renders | `value`, `media`, `role`, `hidden`; otherwise the Tag's own rules |
 | | `removeButton` | a default tag's Dismiss `<button>` | `type`, `aria-label`, `disabled`, `tabIndex`, the hidden state, the attributes of a button held focusable while disabled; its click (not while unavailable) |
 | | `expandButton` | `<button>` | as Combobox's |
 | | `clearButton` | `<button>` | as `removeButton` (its focus tracking always runs) |
@@ -3002,16 +3024,19 @@ Every `slotProps` key, by group, with its element and what it locks; the JSDoc o
 | | `overflowCount` | `<span>`, the "+N" chip | `aria-hidden` (the trigger's description lists the tags), unset `tabIndex`; its press |
 | | `surface` | `<div>`, the popup | popup |
 | | `emptyMessage` | `<div>` | as Combobox's |
-| SearchBox | `input` | `<input type="search">` | `type`, `value` (`defaultValue` unset), Field wiring, `required`, `disabled`, `placeholder`, every routed input prop (`name`, `form`, `readOnly`, …), the hidden state; its handlers |
+| SearchBox | `root` | `<div>`, the element `className` reaches (the SearchBox's `ref` reaches `input`) | as SpinButton's `root`; your `onMouseDown` runs before its own and the press that focuses the input, and a prevented one skips both |
+| | `input` | `<input type="search">` | `type`, `value` (`defaultValue` unset), Field wiring, `required`, `disabled`, `placeholder`, every routed input prop (`name`, `form`, `readOnly`, …), the hidden state; its handlers |
 | | `dismissButton` | the clear `<button>` | `type`, `disabled`, `tabIndex`, the hidden state, the name, a merged `disabledFocusable` Button's attributes; its click. A `<button>` or `Button` passed as `dismiss` gives the defaults this part replaces |
-| TimePicker | `input` | `<input role="combobox">` | as Combobox's `input` |
+| TimePicker | `root` | `<div>`, the element `className` reaches (the TimePicker's `ref` reaches `input`) | as Combobox's `root` |
+| | `input` | `<input role="combobox">` | as Combobox's `input` |
 | | `clearButton`, `expandButton`, `listbox` | `<button>`, `<button>`, `<ul role="listbox">` | as Combobox's |
 | | `errorMessage` | `<p role="alert">` | `id`, `role` |
 | | `option` | `<li role="option">` | `id`, `role`, `aria-selected`, option state; its click |
 | | `checkIcon` | `<span>` | nothing |
 | | `surface` | `<div>`, the popup | popup, `data-state`, unset `data-presence` |
 | | `emptyMessage` | `<div>` | as Combobox's |
-| DatePicker | `input` | `<input>` | `type`, `value` (`defaultValue` unset), Field wiring, `disabled`, `readOnly`, `placeholder`, every routed input prop, the hidden state, and unset `name`, `form` and `required`; its handlers |
+| DatePicker | `root` | `<div>`, the element `className` reaches (the DatePicker's `ref` reaches `input`) | as SpinButton's `root` |
+| | `input` | `<input>` | `type`, `value` (`defaultValue` unset), Field wiring, `disabled`, `readOnly`, `placeholder`, every routed input prop, the hidden state, and unset `name`, `form` and `required`; its handlers |
 | | `clearButton` | `<button>` | `aria-label`, button state, the hidden state; its click and press |
 | | `openCalendarButton` | `<button>` | `aria-label`, `aria-haspopup`, `aria-expanded`, `aria-controls`, button state, the hidden state; its click |
 | | `errorMessage` | `<p role="alert">` | `id`, `role` |
@@ -3035,17 +3060,19 @@ Every `slotProps` key, by group, with its element and what it locks; the JSDoc o
 | Component | Part | Element | Locked |
 |---|---|---|---|
 | ColorPicker | `opacityLabel`, `opacityValue` | `<span>` (the default layout with `showOpacity`) | nothing |
-| ColorPicker.HexField | `label` | `<span>` | nothing (a click focuses the input unless yours prevents it) |
+| ColorPicker.HexField | `root` | `<label>`, the element `className` reaches (the field's `ref` reaches `input`) | every prop of the field that reaches the root, `hidden`, `inert` and `aria-hidden` (the field's own), and unset `htmlFor`, `role`, `tabIndex` and the roving markers (as Switch's `root`); your handlers run before its own; a click on the caption or the error reaches yours, then the input's click the label passes on |
+| | `label` | `<span>` | nothing (a click focuses the input unless yours prevents it) |
 | | `input` | `<input>` | `type`, `value` (`defaultValue` unset), `id`, `maxLength`, `autoComplete`, the naming and validation attributes, `autoFocus`, `tabIndex`, the routed text-entry attributes, the hidden state, and unset `name`, `form` and `required` (the picker submits the color); its handlers |
 | | `errorMessage` | `<span>` | `id` |
 | ColorArea | `field` | `<div>`, the gradient | `aria-hidden`, unset `tabIndex`; a prevented `onPointerDown` cancels the press |
 | | `thumb` | `<span>` | `aria-hidden`, unset `tabIndex` (it takes no pointer events) |
-| ColorSlider, AlphaSlider | `rail` | `<div>` | `aria-hidden`, unset `tabIndex` |
+| ColorSlider, AlphaSlider | `root` | `<div>`, the element `className` reaches (the slider's `ref` reaches its range input) | every prop of the slider that reaches the root, `data-orientation`, `data-disabled` (ColorSlider also `data-channel`), the custom properties that draw the value (after your style), `hidden`, `inert` and `aria-hidden` (the slider's own), and unset `role`, `tabIndex` and the roving markers (as Switch's `root`); your handlers run before its own; your click is called in every state |
+| | `rail` | `<div>` | `aria-hidden`, unset `tabIndex` |
 | | `thumb` | `<span>` | nothing (the range input over it takes the pointer) |
 | CompoundButton | `contentContainer` | `<span>` | its marker `data-wave-compound-content` |
 | | `primaryText`, `secondaryText` | `<span>`, the text that names the button | unset `aria-label`, the hidden state |
 
-The sliders of ColorArea, ColorSlider and AlphaSlider are their range inputs, which take the component's own props and `controlRef`. CompoundButton's button and `icon` are Button's. A disabled CompoundButton calls no `onClick` of its parts.
+The sliders of ColorArea, ColorSlider and AlphaSlider are their range inputs, which take the component's own props: the `ref` of ColorSlider and AlphaSlider reaches theirs, ColorArea's `controlRef` its saturation input. CompoundButton's button and `icon` are Button's. A disabled CompoundButton calls no `onClick` of its parts.
 
 #### Overlays and menus
 
@@ -3238,9 +3265,9 @@ export function PlanCard({ value, title, description, disabled: disabledProp }: 
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
       className={cn(
-        'flex w-72 items-start gap-3 rounded-md border-2 bg-background p-3',
+        'flex w-72 items-start gap-3 rounded-md border-2 bg-wave-background p-3',
         focusRing,
-        checked ? 'border-primary' : 'border-stroke-accessible',
+        checked ? 'border-wave-primary' : 'border-wave-stroke-accessible',
         disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
       )}
     >
@@ -3248,16 +3275,16 @@ export function PlanCard({ value, title, description, disabled: disabledProp }: 
         aria-hidden="true"
         className={cn(
           'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border',
-          checked ? 'border-primary' : 'border-stroke-accessible',
+          checked ? 'border-wave-primary' : 'border-wave-stroke-accessible',
         )}
       >
-        {checked && <span className="size-2 rounded-full bg-primary" />}
+        {checked && <span className="size-2 rounded-full bg-wave-primary" />}
       </span>
       <span className="flex flex-col gap-0.5">
-        <span id={`${id}-title`} className="text-body-1 font-semibold text-foreground">
+        <span id={`${id}-title`} className="text-wave-body-1 font-semibold text-wave-foreground">
           {title}
         </span>
-        <span id={`${id}-description`} className="text-caption-1 text-muted-foreground">
+        <span id={`${id}-description`} className="text-wave-caption-1 text-wave-muted-foreground">
           {description}
         </span>
       </span>
@@ -3268,7 +3295,7 @@ export function PlanCard({ value, title, description, disabled: disabledProp }: 
 function PlanSummary() {
   const { value } = useRadioGroupContext();
   return (
-    <div className="text-body-1 text-foreground">
+    <div className="text-wave-body-1 text-wave-foreground">
       {value === undefined ? 'No plan chosen' : `Chosen plan: ${value}`}
     </div>
   );
@@ -3335,7 +3362,7 @@ export function TemplateItem({ title, description, disabled, onSelect }: Templat
       className={cn(
         'flex cursor-pointer select-none items-start gap-2 px-3 py-1.5',
         // Gated as the built-in items' colors are, so a disabled item takes no hover or focus color.
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed not-disabled:not-aria-disabled:focus:bg-subtle-hover',
+        'not-disabled:not-aria-disabled:hover:bg-wave-subtle-hover not-disabled:not-aria-disabled:active:bg-wave-subtle-pressed not-disabled:not-aria-disabled:focus:bg-wave-subtle-hover',
         'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100',
         focusRingInset,
       )}
@@ -3343,10 +3370,10 @@ export function TemplateItem({ title, description, disabled, onSelect }: Templat
       {hasCheckmarks && <span aria-hidden="true" className="w-4 shrink-0" />}
       {hasIcons && <span aria-hidden="true" className="h-5 w-5 shrink-0" />}
       <span className="flex flex-col">
-        <span id={`${id}-title`} className="text-body-1">
+        <span id={`${id}-title`} className="text-wave-body-1">
           {title}
         </span>
-        <span id={`${id}-description`} className="text-caption-1 text-muted-foreground">
+        <span id={`${id}-description`} className="text-wave-caption-1 text-wave-muted-foreground">
           {description}
         </span>
       </span>
@@ -3473,8 +3500,8 @@ function SummaryRow({ columnCount }: { columnCount: number }) {
   const { selectedItems } = useDataGridSelection();
   return (
     <tr>
-      <td colSpan={columnCount} className="border-t border-border px-3 py-2">
-        <span className="flex flex-wrap items-center gap-3 text-body-1 text-foreground">
+      <td colSpan={columnCount} className="border-t border-wave-border px-3 py-2">
+        <span className="flex flex-wrap items-center gap-3 text-wave-body-1 text-wave-foreground">
           <span>{selectedItems.length} selected</span>
           <span>{sort ? `Sorted by ${sort.columnId}, ${sort.direction}` : 'Not sorted'}</span>
           {sort && (
@@ -3576,7 +3603,7 @@ export function FavoriteToggle({
       <button
         type="button"
         {...mergeSlotProps(slotProps?.button, {
-          className: cn('rounded-md border border-stroke-accessible px-2', focusRing),
+          className: cn('rounded-md border border-wave-stroke-accessible px-2', focusRing),
           // The wiring a part must not change; a part's `onClick` runs first and its
           // preventDefault() skips the toggle, and its `aria-labelledby` ids join the label's.
           locked: {
@@ -3602,7 +3629,7 @@ export function FavoriteToggle({
 How the library's components add a part, for contributors; the [Phase 13 spec](superpowers/specs/2026-10-30-fluent-parity-phase-13-design.md)'s implementation notes hold the rulings behind it.
 
 - **The key and the gate.** A part is a key of the component's constant in `src/lib/classNames.ts`. The component declares it in `slotProps?: { <key>?: SlotPart<'<element>'> }` (in `XOwnProps` for a polymorphic component), with JSDoc that names the element, the stable class, the locked attributes and the handler rule; the key moves to `SLOT_PROPS_KEYS` in `src/lib/slotParts.ts`, and the declaring props type joins `SlotPropsOwners` in `src/__tests__/slotParts.test.ts`, whose type test requires the two to agree both ways.
-- **The merge.** Spread `mergeSlotProps(slotProps?.<key>, { className: cn(<stable class>, …), style, ref, locked })` on the element, with a literal `type="button"` before it on a `<button>` (C-BUTTON-TYPE). `locked` is the element's attribute object as it was written, the component's handlers composed with its own props (`composeEventHandlers(onClick, toggle)`). An attribute a hook or helper adds only while it is set (`aria-activedescendant`, `data-selected`, `inert` from the presence core) is locked as `undefined` before the spread that adds it, so a part cannot set it while the component does not.
+- **The merge.** Spread `mergeSlotProps(slotProps?.<key>, { className: wcn(<stable class>, …), style, ref, locked })` on the element, with a literal `type="button"` before it on a `<button>` (C-BUTTON-TYPE). `locked` is the element's attribute object as it was written, the component's handlers composed with its own props (`composeEventHandlers(onClick, toggle)`). An attribute a hook or helper adds only while it is set (`aria-activedescendant`, `data-selected`, `inert` from the presence core) is locked as `undefined` before the spread that adds it, so a part cannot set it while the component does not.
 - **Refs.** A part whose element holds a ref of the component sets `ref={useMergedRefs(localRef, slotProps?.<key>?.ref)}` after the spread, so an inline consumer ref never detaches the component's; another passes the consumer's ref through the helper. The `react-hooks/refs` lint rejects a ref object, or the `ref` prop itself, passed to a function during render: a handler that reads a ref and goes through the merge becomes a `useEventCallback`.
 - **Must-run work.** A handler that only mirrors the DOM into state (focus, the pointer, the end of a drag) is not locked: it is composed after the spread, after the part's handler, without the prevented check (`composeAfterPart` in `lib/slotProps`, module-only).
 - **Disabled.** A part of a control that does not activate while disabled passes `blockHandlers: ['onClick']` (a module-level constant, so nothing is allocated per item) while the component's own `disabled` holds.
@@ -3667,75 +3694,81 @@ How the library's components add a part, for contributors; the [Phase 13 spec](s
 **Windowing** (hook)
 `useVirtualWindow`, the `virtualWindow` of DataGrid, List, Listbox, Combobox, Dropdown and FlatTree (chapter 12)
 
-### Most-Used Tailwind Classes
+### Most-Used Classes
+
+The classes of an app's own markup, as its Tailwind build names them on `./tailwind` or `./tokens` (the token classes also come from `./utilities` without Tailwind). Wave's components write the same utilities with the prefix and 0.x's token names (`wave:text-body-1`, `wave:bg-primary`), which are internal.
 
 ```
 /* Typography */
-text-body-1              /* 14px default body text */
-text-caption-1           /* 12px labels */
-text-subtitle-1          /* 20px semibold headings */
-font-semibold            /* 600 weight */
-font-wave                /* Wave font stack */
-font-wave-mono           /* Wave monospace stack (Text font="monospace") */
+text-wave-body-1              /* 14px default body text */
+text-wave-caption-1           /* 12px labels */
+text-wave-subtitle-1          /* 20px semibold headings */
+font-semibold                 /* 600 weight */
+font-wave                     /* Wave font stack */
+font-wave-mono                /* Wave monospace stack (Text font="monospace") */
 
 /* Colors */
-bg-background            /* Page background */
-text-foreground          /* Default text */
-bg-primary               /* Brand buttons */
-text-primary-foreground  /* Text on brand fills */
-text-muted-foreground    /* Secondary text */
-bg-subtle-hover          /* Hover on transparent controls */
-bg-selected              /* Brand-tinted selection */
-border-border            /* Standard borders */
-border-stroke            /* Control borders */
-border-stroke-accessible /* Edges that need 3:1 */
+bg-wave-background            /* Page background */
+text-wave-foreground          /* Default text */
+bg-wave-primary               /* Brand buttons */
+text-wave-primary-foreground  /* Text on brand fills */
+text-wave-muted-foreground    /* Secondary text */
+bg-wave-subtle-hover          /* Hover on transparent controls */
+bg-wave-selected              /* Brand-tinted selection */
+border-wave-border            /* Standard borders */
+border-wave-stroke            /* Control borders */
+border-wave-stroke-accessible /* Edges that need 3:1 */
 
-/* Spacing */
-p-4                      /* 16px padding (standard) */
-gap-2                    /* 8px gap */
-gap-4                    /* 16px gap */
+/* Spacing (Tailwind only) */
+p-4                           /* 16px padding (standard) */
+gap-2                         /* 8px gap */
+gap-4                         /* 16px gap */
 
-/* Borders */
-rounded                  /* 4px (controls) */
-rounded-md               /* 6px (cards, menus, popovers) */
-rounded-full             /* Circular */
-border                   /* 1px solid */
+/* Borders (Tailwind only) */
+rounded                       /* 4px (controls) */
+rounded-md                    /* 6px (cards, menus, popovers) */
+rounded-full                  /* Circular */
+border                        /* 1px solid */
 
 /* Shadows */
-shadow-4                 /* Cards at rest, menus, popovers, listboxes */
-shadow-8                 /* Card hover, tooltips */
-shadow-16                /* Larger popups (DatePicker calendar) */
-shadow-64                /* Dialogs, overlay drawers */
+shadow-wave-4                 /* Cards at rest, menus, popovers, listboxes */
+shadow-wave-8                 /* Card hover, tooltips */
+shadow-wave-16                /* Larger popups (DatePicker calendar) */
+shadow-wave-64                /* Dialogs, overlay drawers */
 
-/* Layout (logical) */
-flex items-center        /* Horizontal centering */
-ms-2 pe-4 start-0        /* RTL-safe margins, padding, positions */
-wave-rtl:-scale-x-100    /* mirror a directional glyph in RTL */
+/* Layout (logical, Tailwind only) */
+flex items-center             /* Horizontal centering */
+ms-2 pe-4 start-0             /* RTL-safe margins, padding, positions */
+wave-rtl:-scale-x-100         /* mirror a directional glyph in RTL (./tailwind or ./variants) */
 
-/* Focus */
-focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring  /* focusRing */
-focus:outline-hidden focus:border-b-2 focus:border-b-primary                       /* inputFocus */
+/* Focus: the public recipes, composed with cn() */
+focusRing                     /* wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring */
+inputFocus                    /* the primary bottom border of a focused text input */
+focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wave-ring  /* the same ring in your build */
 
-/* Motion (Tailwind path) */
+/* Motion (Tailwind only) */
 transition-opacity duration-wave-fast ease-wave-easy-ease motion-reduce:transition-none
 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0   /* enter and exit with Presence */
 
-/* Disabled-aware states */
-not-disabled:not-aria-disabled:hover:bg-subtle-hover
-not-disabled:not-aria-disabled:active:bg-subtle-pressed
+/* Disabled-aware states (Tailwind only) */
+not-disabled:not-aria-disabled:hover:bg-wave-subtle-hover
+not-disabled:not-aria-disabled:active:bg-wave-subtle-pressed
 ```
 
 ### Key File Paths
 
 | File | Purpose |
 |------|---------|
-| `src/styles/tokens.css` | `--wave-*` tokens per theme and the `@theme inline` Tailwind mapping |
+| `src/styles/tokens.css` | `--wave-*` tokens per theme and the namespaced `@theme inline` keys apps get (`bg-wave-primary`) |
+| `src/styles/theme.css` | The internal `@theme inline reference` theme the components' prefixed classes compile against (`wave:bg-primary`); only `styles.css` imports it |
 | `src/styles/base.css` | Base styles and native-element reset scoped to `.wave-root` / `.wave-portal` |
-| `src/styles/styles.css` | Build input of the precompiled `dist/styles.css` (`./styles`) |
-| `src/styles/tailwind.css` | Tailwind consumer entry (`./tailwind`) |
+| `src/styles/styles.css` | Build input of the precompiled `dist/styles.css` (`./styles`, built with `prefix(wave)`) and of `dist/components.css`, the same utilities without the tokens and base styles |
+| `src/styles/tailwind.css` | Tailwind consumer entry (`./tailwind`): the layer order, the tokens in `theme`, the base styles in `base`, `dist/components.css` in `components` |
+| `src/styles/utilities.css` | Build input of `dist/utilities.css` (`./utilities`): the namespaced token utilities for apps without Tailwind, unlayered |
 | `src/styles/variants.css` | The `wave-rtl:` direction variant |
-| `src/styles/legacy-tokens.css` | Deprecated 0.4 variable names (`./legacy-tokens.css`) |
-| `src/lib/cn.ts` | Class name merge utility |
+| `src/lib/cn.ts` | The class merge: `cn` (public) and `wcn` (module-only), one prefix-aware tailwind-merge, and `UTILITY_PREFIX` (`'wave'`) |
+| `scripts/prefix-codemod.mjs`, `scripts/prefix-allowlist.json` | The compile check `build-css` runs over the string literals of `src/components` and `src/lib` (Pattern 5), and its file-to-word allowlist |
+| `codemod/migrate-1.0.mjs` | The shipped migration codemod: an app's 0.x token classes to the namespaced ones (`bg-primary` → `bg-wave-primary`) |
 | `src/lib/types.ts` | Shared types (`Size`, `Appearance`, `Status`, `Orientation`, …) |
 | `src/lib/slot.ts` | Slot system for customizable sub-elements (`slotRendersContent`, `materialiseSlotContent`, `slotWrapsDefaultContent`, render-function children) |
 | `src/lib/slotProps.ts`, `src/lib/nativeProps.ts` | `mergeSlotProps`, `SlotPart` and `SlotPartWithRef`, the merge of every part (public, server-safe; the shared lock constants are internal), and `getNativeElementProps` (public, server-safe) |
@@ -3817,41 +3850,7 @@ not-disabled:not-aria-disabled:active:bg-subtle-pressed
 
 ## 16. Deprecated APIs
 
-Deprecated names still work through 0.x, warn once in development and will be removed in 1.0. The CHANGELOG has the full table with callback semantics.
-
-| Deprecated | Use instead |
-|---|---|
-| `onChange(checked)` on Checkbox, Switch | `onCheckedChange` |
-| `onChange(value)` on RadioGroup, Rating, SearchBox, SpinButton, ColorPicker, SwatchPicker, TagPicker, TimePicker, DatePicker | `onValueChange` |
-| `onOptionSelect` on Combobox, Dropdown | `onValueChange` (fires on change only; `onOptionSelect` fired on every activation) |
-| TabList `selectedValue`, `defaultSelectedValue`, `onTabSelect`, `vertical` | `value`, `defaultValue`, `onValueChange`, `orientation` |
-| Nav `selectedValue`, `defaultSelectedValue`, `onNavItemSelect` | `value`, `defaultValue`, `onValueChange` |
-| Nav.Category label from the first string child | `label` |
-| TeachingPopover `currentStep`, `defaultCurrentStep` | `activeStep`, `defaultActiveStep` |
-| List `selectionMode="multi"` | `selectionMode="multiple"` |
-| DataGrid `selectedKeys`, `defaultSelectedKeys`, `onSelectionChange` | `selectedItems`, `defaultSelectedItems`, `onSelectedItemsChange` |
-| DataGrid `sortColumn`, `sortDirection`, `defaultSortColumn`, `defaultSortDirection` | `sort`, `defaultSort` (a grid with `items` ignores the deprecated props) |
-| `DataGridColumn` `id` | `columnId` |
-| `Table.Head`, `Table.HeadCell` (and the flat `TableHead`, `TableHeadCell`, deprecated from their introduction in 0.5) | `Table.Header`, `Table.HeaderCell` (`TableHeader`, `TableHeaderCell`) |
-| Stack `direction` | `orientation` |
-| Skeleton `variant` | `shape` |
-| Text `weight={400 \| 600 \| 700}` | `weight="regular" \| "semibold" \| "bold"` |
-| Link `variant` | `appearance` |
-| Tooltip `variant="dark" \| "light"` | `appearance="inverted" \| "normal"` |
-| Accordion (single mode) `openItems`, `defaultOpenItems`, `onOpenItemsChange` | `openItem`, `defaultOpenItem`, `onOpenItemChange` |
-| Theme classes `dark`, `high-contrast` | `wave-dark`, `wave-high-contrast` |
-| `@mortenbrudvik/waveui/legacy-tokens.css` (0.4 variable names) | `--wave-*` variables |
-| Button objects in `MessageBar.dismiss`, `SearchBox.dismiss`, `Tag.dismissIcon` | Icon content, plus `onDismiss` / `onClear` |
-| Tooltip `delay` | `openDelay` |
-
-**Announced for 1.0 (no warning yet):**
-
-- Badge and CounterBadge `color="important"` renders the orange severe colors through 0.x and becomes Fluent's neutral high-emphasis color (near black in the light theme) in 1.0: use `color="severe"` to keep the orange look.
-- The `details` parameter of Dialog and Drawer `onOpenChange` becomes required: read it as `details?.reason`.
-- The `details` parameter of Menu and Toolbar `onCheckedValuesChange` becomes required: read it as `details?.name`.
-- The `details` parameter of Tree `onCheckedItemsChange` becomes required: read it as `details?.value`.
-- The `details` parameters of Overflow `onOverflowChange`, DataGrid `onSortChange` and `onSelectedItemsChange`, and `Table.SelectionCell` `onCheckedChange` become required: read them as `details?.event` (or `details?.groupVisibility`).
-- TeachingPopover's Done stops calling `onDismiss`: put the work of a finished tour in `onFinish`.
+None: 1.0 removed every API that 0.x deprecated. [Upgrading to 1.0](UPGRADING-TO-1.0.md) lists each removal with its replacement.
 
 ---
 

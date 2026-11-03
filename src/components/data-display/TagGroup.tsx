@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { tagGroupClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
@@ -98,9 +98,9 @@ export interface TagGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>
 
 /** The gap between the tags per size: 8, 6 or 4px. */
 const tagGroupGapClasses: Readonly<Record<TagSize, string>> = {
-  medium: 'gap-2',
-  small: 'gap-1.5',
-  'extra-small': 'gap-1',
+  medium: 'wave:gap-2',
+  small: 'wave:gap-1.5',
+  'extra-small': 'wave:gap-1',
 };
 
 const DEFAULT_SIZE: TagSize = 'medium';
@@ -434,11 +434,11 @@ export const TagGroup = ({
                 })
               : onFocus
           }
-          className={cn(
+          className={wcn(
             tagGroupClassNames.root,
-            'relative inline-flex flex-wrap items-center',
+            'wave:relative wave:inline-flex wave:flex-wrap wave:items-center',
             tagGroupGapClasses[size],
-            orientation === 'vertical' && 'flex-col items-start',
+            orientation === 'vertical' && 'wave:flex-col wave:items-start',
             className,
           )}
         >

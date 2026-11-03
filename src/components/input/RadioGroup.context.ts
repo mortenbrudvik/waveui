@@ -18,8 +18,7 @@ export interface RadioGroupItemsContextValue {
   /**
    * Selects a value when an item is activated (click, Space, Enter). Arrow keys select through
    * the roving hook's `onFocusMove` instead. Both paths use the same `setValue`, so
-   * `onValueChange` and the deprecated `onChange` alias fire only when the value changes
-   * (C-NAMING).
+   * `onValueChange` fires only when the value changes (C-NAMING).
    */
   select: (value: string) => void;
   /** Roving tab index of an item. */

@@ -44,19 +44,26 @@ afterEach(() => {
 
 /** The sizes with their width (side positions) and height (`bottom`) classes. */
 const SIZES = [
-  ['small', 'w-80', 'h-80'],
-  ['medium', 'w-148', 'h-148'],
-  ['large', 'w-235', 'h-235'],
-  ['full', 'w-full', 'h-full'],
+  ['small', 'wave:w-80', 'wave:h-80'],
+  ['medium', 'wave:w-148', 'wave:h-148'],
+  ['large', 'wave:w-235', 'wave:h-235'],
+  ['full', 'wave:w-full', 'wave:h-full'],
 ] as const satisfies ReadonlyArray<readonly [DrawerSize, string, string]>;
 
 const SIDES = ['start', 'end', 'left', 'right'] as const satisfies readonly DrawerPosition[];
 
 const WIDTHS = SIZES.map(([, width]) => width);
 const HEIGHTS = SIZES.map(([, , height]) => height);
-const EDGES = ['border-s', 'border-e', 'border-l', 'border-r', 'border-t', 'border-b'];
-const INSET_TOP = 'pt-[env(safe-area-inset-top)]';
-const INSET_BOTTOM = 'pb-[env(safe-area-inset-bottom)]';
+const EDGES = [
+  'wave:border-s',
+  'wave:border-e',
+  'wave:border-l',
+  'wave:border-r',
+  'wave:border-t',
+  'wave:border-b',
+];
+const INSET_TOP = 'wave:pt-[env(safe-area-inset-top)]';
+const INSET_BOTTOM = 'wave:pb-[env(safe-area-inset-bottom)]';
 
 /** Opens a Drawer named "Filters" and returns its panel. */
 function renderPanel(props: Partial<DrawerProps> = {}, options: { dir?: 'rtl' } = {}) {
@@ -80,19 +87,32 @@ describe('Drawer size and position (P6-05 D78, D79)', () => {
     'a %s panel of size %s is %s wide and spans the window height',
     (position, size, width) => {
       const panel = renderPanel({ position, size });
-      expect(panel).toHaveClass(drawerClassNames.root, width, 'top-0', 'h-full', 'max-w-full');
+      expect(panel).toHaveClass(
+        drawerClassNames.root,
+        width,
+        'wave:top-0',
+        'wave:h-full',
+        'wave:max-w-full',
+      );
       expect(panel).toHaveAttribute('data-size', size);
       expectNoneOf(
         panel,
         WIDTHS.filter((other) => other !== width),
       );
-      expectNoneOf(panel, ['inset-x-0', 'bottom-0', 'max-h-full', 'h-80', 'h-148', 'h-235']);
+      expectNoneOf(panel, [
+        'wave:inset-x-0',
+        'wave:bottom-0',
+        'wave:max-h-full',
+        'wave:h-80',
+        'wave:h-148',
+        'wave:h-235',
+      ]);
     },
   );
 
   it('defaults to the small size', () => {
     const panel = renderPanel();
-    expect(panel).toHaveClass('w-80');
+    expect(panel).toHaveClass('wave:w-80');
     expect(panel).toHaveAttribute('data-size', 'small');
   });
 
@@ -102,15 +122,23 @@ describe('Drawer size and position (P6-05 D78, D79)', () => {
       const panel = renderPanel({ position: 'bottom', size });
       expect(panel).toHaveClass(
         height,
-        'w-full',
-        'inset-x-0',
-        'bottom-0',
-        'max-h-full',
-        'border-t',
+        'wave:w-full',
+        'wave:inset-x-0',
+        'wave:bottom-0',
+        'wave:max-h-full',
+        'wave:border-t',
       );
       expect(panel).toHaveAttribute('data-position', 'bottom');
       expect(panel).toHaveAttribute('data-size', size);
-      expectNoneOf(panel, ['top-0', 'max-w-full', 'end-0', 'start-0', 'w-80', 'w-148', 'w-235']);
+      expectNoneOf(panel, [
+        'wave:top-0',
+        'wave:max-w-full',
+        'wave:end-0',
+        'wave:start-0',
+        'wave:w-80',
+        'wave:w-148',
+        'wave:w-235',
+      ]);
       expectNoneOf(
         panel,
         HEIGHTS.filter((other) => other !== height),
@@ -132,45 +160,58 @@ describe('Drawer size and position (P6-05 D78, D79)', () => {
 
   it('lets a width class in className replace the size', () => {
     const panel = renderPanel({ size: 'medium', className: 'w-[480px]' });
-    expect(panel).toHaveClass('w-[480px]', 'max-w-full');
-    expect(panel).not.toHaveClass('w-148');
+    expect(panel).toHaveClass('w-[480px]', 'wave:max-w-full');
+    expect(panel).not.toHaveClass('wave:w-148');
     expect(panel).toHaveAttribute('data-size', 'medium');
   });
 
   it('lets a height class in className replace the size of a bottom panel', () => {
     const panel = renderPanel({ position: 'bottom', size: 'large', className: 'h-[50vh]' });
-    expect(panel).toHaveClass('h-[50vh]', 'max-h-full', 'w-full');
-    expect(panel).not.toHaveClass('h-235');
+    expect(panel).toHaveClass('h-[50vh]', 'wave:max-h-full', 'wave:w-full');
+    expect(panel).not.toHaveClass('wave:h-235');
   });
 
   it('keeps the logical classes of a side panel and the classes of a bottom one under RTL', () => {
     const start = renderPanel({ position: 'start', size: 'medium' }, { dir: 'rtl' });
     expect(start.closest('[data-wave-portal]')).toHaveAttribute('dir', 'rtl');
-    expect(start).toHaveClass('start-0', 'border-e', 'w-148');
-    expectNoneOf(start, ['left-0', 'right-0', 'border-l', 'border-r']);
+    expect(start).toHaveClass('wave:start-0', 'wave:border-e', 'wave:w-148');
+    expectNoneOf(start, ['wave:left-0', 'wave:right-0', 'wave:border-l', 'wave:border-r']);
     cleanup();
 
     const bottom = renderPanel({ position: 'bottom' }, { dir: 'rtl' });
-    expect(bottom).toHaveClass('inset-x-0', 'bottom-0', 'w-full', 'h-80', 'border-t');
-    expectNoneOf(bottom, ['left-0', 'right-0', 'start-0', 'end-0', 'border-s', 'border-e']);
+    expect(bottom).toHaveClass(
+      'wave:inset-x-0',
+      'wave:bottom-0',
+      'wave:w-full',
+      'wave:h-80',
+      'wave:border-t',
+    );
+    expectNoneOf(bottom, [
+      'wave:left-0',
+      'wave:right-0',
+      'wave:start-0',
+      'wave:end-0',
+      'wave:border-s',
+      'wave:border-e',
+    ]);
   });
 });
 
 describe('Drawer forced colours, class level (P6-05 D79)', () => {
   it.each([
-    ['start', 'border-e'],
-    ['end', 'border-s'],
-    ['left', 'border-r'],
-    ['right', 'border-l'],
-    ['bottom', 'border-t'],
+    ['start', 'wave:border-e'],
+    ['end', 'wave:border-s'],
+    ['left', 'wave:border-r'],
+    ['right', 'wave:border-l'],
+    ['bottom', 'wave:border-t'],
   ] as const)('a %s panel draws its inner edge only, %s', (position, edge) => {
     const panel = renderPanel({ position });
-    expect(panel).toHaveClass(edge, 'border-border');
+    expect(panel).toHaveClass(edge, 'wave:border-border');
     expectNoneOf(
       panel,
       EDGES.filter((other) => other !== edge),
     );
-    expect(panel).not.toHaveClass('border');
+    expect(panel).not.toHaveClass('wave:border');
   });
 });
 
@@ -757,7 +798,12 @@ describe('Drawer.HeaderTitle (P6-05 D75, D83)', () => {
     const heading = screen.getByRole('heading', { name: 'Settings' });
     const row = heading.parentElement as HTMLElement;
     expect(row.closest('[data-wave-portal]')).toHaveAttribute('dir', 'rtl');
-    expect(row).toHaveClass(drawerHeaderTitleClassNames.root, 'flex', 'items-start', 'gap-2');
+    expect(row).toHaveClass(
+      drawerHeaderTitleClassNames.root,
+      'wave:flex',
+      'wave:items-start',
+      'wave:gap-2',
+    );
     expect(Array.from(row.children).map((child) => child.textContent)).toEqual([
       'Settings',
       'Pin',
@@ -1039,9 +1085,9 @@ describe('Drawer.HeaderTitle — slotProps', () => {
   it('renders the heading of 234b990, overlay and inline, server and client (attributes sorted)', () => {
     // Captured from 234b990: the merged props may put the class before the locked attributes.
     const h2 =
-      '<h2 class="wave-drawer-header-title__heading min-w-0 flex-1 text-subtitle-1 font-semibold text-foreground" id="wave-modal-title-_id0_">';
+      '<h2 class="wave-drawer-header-title__heading wave:min-w-0 wave:flex-1 wave:text-subtitle-1 wave:font-semibold wave:text-foreground" id="wave-modal-title-_id0_">';
     const h3 =
-      '<h3 class="wave-drawer-header-title__heading min-w-0 flex-1 text-subtitle-1 font-semibold text-foreground" id="wave-modal-title-_id0_">';
+      '<h3 class="wave-drawer-header-title__heading wave:min-w-0 wave:flex-1 wave:text-subtitle-1 wave:font-semibold wave:text-foreground" id="wave-modal-title-_id0_">';
     const inline = <Titled headingLevel={3} drawerProps={{ type: 'inline' }} />;
     const template = document.createElement('template');
     template.innerHTML = renderToString(inline);
@@ -1074,7 +1120,7 @@ describe('Drawer.HeaderTitle — slotProps', () => {
       />,
     );
     const heading = screen.getByRole('heading', { name: 'Settings' });
-    expect(heading).toHaveClass(drawerHeaderTitleClassNames.heading, 'flex-1', 'my-heading');
+    expect(heading).toHaveClass(drawerHeaderTitleClassNames.heading, 'wave:flex-1', 'my-heading');
     expect(heading.classList[0]).toBe(drawerHeaderTitleClassNames.heading);
     expect(heading.classList[heading.classList.length - 1]).toBe('my-heading');
     expect(heading).toHaveAttribute('data-part', 'heading');
@@ -1085,7 +1131,7 @@ describe('Drawer.HeaderTitle — slotProps', () => {
     render(<Titled slotProps={{ heading: { className: 'font-bold' } }} />);
     const heading = screen.getByRole('heading', { name: 'Settings' });
     expect(heading).toHaveClass('font-bold');
-    expect(heading).not.toHaveClass('font-semibold');
+    expect(heading).not.toHaveClass('wave:font-semibold');
   });
 
   it('locks the heading’s id, which names the drawer; the component’s own id sets it', () => {

@@ -4,8 +4,9 @@ import { getGlobalRegistry } from './globalRegistry';
  * The shared stack of open dismissable layers (dialogs, drawers, popovers, menus, listboxes,
  * tooltips) and the document listeners that route Escape, outside presses and focus changes to
  * them. `useDismiss` registers layers; focus traps, modal isolation and focus restore read the
- * stack. It lives in `getGlobalRegistry('layers')`, so an app that loads both the ESM and the CJS
- * build still has one stack and one set of listeners.
+ * stack. It lives in `getGlobalRegistry('layers')`, so an app that loads two copies of the package
+ * (duplicate installs, bundler duplicates, hot reload) still has one stack and one set of
+ * listeners.
  */
 
 /**

@@ -3,7 +3,7 @@
  * Component-private: not exported from the package.
  */
 
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hitAreaLayer } from '../../lib/styles';
 import type { CoreSize, InputAppearance } from '../../lib/types';
 
@@ -14,13 +14,13 @@ import type { CoreSize, InputAppearance } from '../../lib/types';
  * and fill it) and gates its hover colors on the enabled state.
  */
 export const PICKER_ICON_BUTTON_CLASSES =
-  'absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground';
+  'wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground';
 
 /** The button box of each size: 20px with a 24px hit layer, 24px (the 0.7 box) or 32px. */
 const BUTTON_BOX: Readonly<Record<CoreSize, string>> = {
-  small: cn('size-5', hitAreaLayer),
+  small: wcn('wave:size-5', hitAreaLayer),
   medium: '',
-  large: 'size-8',
+  large: 'wave:size-8',
 };
 
 /**
@@ -31,17 +31,17 @@ export function pickerIconButtonClasses(
   size: CoreSize = 'medium',
   appearance: InputAppearance = 'outline',
 ): string {
-  return cn(
+  return wcn(
     PICKER_ICON_BUTTON_CLASSES,
     BUTTON_BOX[size],
-    appearance === 'filled-darker' && 'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+    appearance === 'filled-darker' && 'wave:not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
   );
 }
 
 const BUTTON_OFFSETS: Readonly<Record<CoreSize, readonly [string, string]>> = {
-  small: ['end-1', 'end-7'],
-  medium: ['end-1', 'end-7'],
-  large: ['end-1', 'end-9'],
+  small: ['wave:end-1', 'wave:end-7'],
+  medium: ['wave:end-1', 'wave:end-7'],
+  large: ['wave:end-1', 'wave:end-9'],
 };
 
 /** The inline-end offset of a picker's first or second icon button (the second sits before it). */
@@ -50,9 +50,9 @@ export function pickerButtonOffset(size: CoreSize, position: 1 | 2): string {
 }
 
 const END_PADDINGS: Readonly<Record<CoreSize, readonly [string, string]>> = {
-  small: ['pe-7', 'pe-13'],
-  medium: ['pe-8', 'pe-14'],
-  large: ['pe-10', 'pe-18'],
+  small: ['wave:pe-7', 'wave:pe-13'],
+  medium: ['wave:pe-8', 'wave:pe-14'],
+  large: ['wave:pe-10', 'wave:pe-18'],
 };
 
 /** The glyph sizes of each size: the chevron, and the other icons (clear, calendar). */

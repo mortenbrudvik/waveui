@@ -63,7 +63,7 @@ export const Invalid: Story = {
   render: (args) => (
     <div className="flex flex-col gap-1">
       <SpinButton {...args} />
-      <span id="spin-button-invalid-error" className="text-caption-1 text-error">
+      <span id="spin-button-invalid-error" className="text-wave-caption-1 text-wave-error">
         You can book at most 10 tickets.
       </span>
     </div>
@@ -91,7 +91,7 @@ export const Controlled: Story = {
             args.onValueChange?.(next);
           }}
         />
-        <p className="text-body-1 text-foreground">Value: {value}</p>
+        <p className="text-wave-body-1 text-wave-foreground">Value: {value}</p>
       </div>
     );
   },

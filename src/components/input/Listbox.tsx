@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { listboxClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { isOwnEvent } from '../../lib/events';
@@ -305,7 +305,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       setValue(updated);
       // A toggle the user made (D41): a controlled change and a form reset never reach this
       // callback. `details` carries the registered option (or the item), whose label is its text.
-      announceToggle(labels, details?.item.label ?? next, added, updated.length);
+      announceToggle(labels, details.item.label ?? next, added, updated.length);
     },
     onActiveValueChange: onActiveOptionChange,
     idPrefix: 'listbox',
@@ -418,22 +418,22 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       // Bookkeeping that mirrors the DOM: it runs even when a consumer handler prevents the event.
       onFocus={composeEventHandlers(onFocus, handleFocus, { checkDefaultPrevented: false })}
       onBlur={composeEventHandlers(onBlur, handleBlur, { checkDefaultPrevented: false })}
-      className={cn(
+      className={wcn(
         listboxClassNames.root,
         // The list's own margin, padding and markers are set here, not left to the native reset
         // (C-NATIVE).
-        'relative m-0 flex list-none flex-col overflow-y-auto px-0 py-1 text-foreground',
+        'wave:relative wave:m-0 wave:flex wave:list-none wave:flex-col wave:overflow-y-auto wave:px-0 wave:py-1 wave:text-foreground',
         // The active option's outline shows focus; while no option can be active (an empty list,
         // every option hidden, or every option disabled without disabledOptionsFocusable), or the
         // active one is scrolled out of view, the list's own ring does (WCAG 2.4.7). The outline
         // is hidden only while focused, so forced colors still draw one (C-FOCUS).
-        listbox.activeValue === null || activeOutOfView ? focusRing : 'focus:outline-hidden',
+        listbox.activeValue === null || activeOutOfView ? focusRing : 'wave:focus:outline-hidden',
         // Disabled: the options take no pointer input (inherited by the options of a group), so
         // none hovers and the list's own not-allowed cursor shows over them.
-        disabled && 'cursor-not-allowed opacity-50 *:pointer-events-none',
+        disabled && 'wave:cursor-not-allowed wave:opacity-50 wave:*:pointer-events-none',
         // Windowed: the options start at the top of the scroller, where the window counts them,
         // and the window lays them out (the browser's scroll anchoring only fights it).
-        activeWindow && 'py-0 [overflow-anchor:none]',
+        activeWindow && 'wave:py-0 wave:[overflow-anchor:none]',
         className,
       )}
     >

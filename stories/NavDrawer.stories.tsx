@@ -104,7 +104,7 @@ type Story = StoryObj<typeof meta>;
 
 /** The frame the examples sit in: a bordered row with the page content beside the drawer. */
 const Frame = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex h-120 overflow-hidden rounded-md border border-border bg-background text-foreground">
+  <div className="flex h-120 overflow-hidden rounded-md border border-wave-border bg-wave-background text-wave-foreground">
     {children}
   </div>
 );
@@ -126,7 +126,7 @@ export const Default: Story = {
       <Frame>
         <NavDrawer {...args}>
           <NavDrawer.Header>
-            <span className="ps-1.5 text-subtitle-2 font-semibold">Contoso HR</span>
+            <span className="ps-1.5 text-wave-subtitle-2 font-semibold">Contoso HR</span>
           </NavDrawer.Header>
           <NavDrawer.Body>{bodyItems}</NavDrawer.Body>
           {footer}
@@ -189,11 +189,11 @@ export const Overlay: Story = {
           aria-haspopup="dialog"
           onClick={() => setOpen(!open)}
         />
-        <span className="text-subtitle-2 font-semibold">Contoso HR</span>
+        <span className="text-wave-subtitle-2 font-semibold">Contoso HR</span>
         <NavDrawer {...args} {...drawerProps}>
           <NavDrawer.Header>
             <Hamburger />
-            <span className="text-subtitle-2 font-semibold">Contoso HR</span>
+            <span className="text-wave-subtitle-2 font-semibold">Contoso HR</span>
           </NavDrawer.Header>
           <NavDrawer.Body>{bodyItems}</NavDrawer.Body>
           {footer}
@@ -233,7 +233,7 @@ export const ArrowKeys: Story = {
       <Frame>
         <NavDrawer {...args}>
           <NavDrawer.Header>
-            <span className="ps-1.5 text-subtitle-2 font-semibold">Contoso HR</span>
+            <span className="ps-1.5 text-wave-subtitle-2 font-semibold">Contoso HR</span>
           </NavDrawer.Header>
           <NavDrawer.Body focusMode="arrow">
             <Nav.Item value="home" icon={<HomeGlyph />} actions={<ItemActions name="Home" />}>
@@ -286,15 +286,15 @@ export const KeepMounted: Story = {
     const [open, setOpen] = React.useState(true);
     const outerRef = React.useRef<HTMLButtonElement>(null);
     return (
-      <div className="flex h-120 flex-col overflow-hidden rounded-md border border-border bg-background text-foreground">
-        <div className="flex items-center gap-2 border-b border-border p-2">
+      <div className="flex h-120 flex-col overflow-hidden rounded-md border border-wave-border bg-wave-background text-wave-foreground">
+        <div className="flex items-center gap-2 border-b border-wave-border p-2">
           <Hamburger
             ref={outerRef}
             aria-expanded={open}
             aria-controls="kept-nav"
             onClick={() => setOpen(!open)}
           />
-          <span className="text-subtitle-2 font-semibold">Contoso HR</span>
+          <span className="text-wave-subtitle-2 font-semibold">Contoso HR</span>
         </div>
         <div className="flex min-h-0 flex-1">
           <NavDrawer
@@ -343,13 +343,13 @@ export const NonModal: Story = {
             aria-haspopup="dialog"
             onClick={() => setOpen(!open)}
           />
-          <span className="text-subtitle-2 font-semibold">Contoso HR</span>
+          <span className="text-wave-subtitle-2 font-semibold">Contoso HR</span>
         </div>
         <p className="mt-4">The page stays usable while the navigation is open.</p>
         <NavDrawer {...args} {...drawerProps}>
           <NavDrawer.Header>
             <Hamburger />
-            <span className="text-subtitle-2 font-semibold">Contoso HR</span>
+            <span className="text-wave-subtitle-2 font-semibold">Contoso HR</span>
           </NavDrawer.Header>
           <NavDrawer.Body>{bodyItems}</NavDrawer.Body>
           {footer}
@@ -386,8 +386,8 @@ function MotionPane({
   const [open, setOpen] = React.useState(!overlay);
   const outerRef = React.useRef<HTMLButtonElement>(null);
   return (
-    <div className="flex h-80 flex-col overflow-hidden rounded-md border border-border bg-background text-foreground">
-      <div className="flex items-center gap-2 border-b border-border p-2">
+    <div className="flex h-80 flex-col overflow-hidden rounded-md border border-wave-border bg-wave-background text-wave-foreground">
+      <div className="flex items-center gap-2 border-b border-wave-border p-2">
         <Hamburger
           ref={outerRef}
           aria-expanded={open}
@@ -395,7 +395,7 @@ function MotionPane({
           aria-haspopup={overlay ? 'dialog' : undefined}
           onClick={() => setOpen(!open)}
         />
-        <span className="text-subtitle-2 font-semibold">{label}</span>
+        <span className="text-wave-subtitle-2 font-semibold">{label}</span>
       </div>
       <div className="flex min-h-0 flex-1">
         {/* The pane owns the controlled pair; every other arg is forwarded. */}
@@ -421,7 +421,7 @@ function MotionPane({
           {overlay && (
             <NavDrawer.Header>
               <Hamburger />
-              <span className="text-subtitle-2 font-semibold">{label}</span>
+              <span className="text-wave-subtitle-2 font-semibold">{label}</span>
             </NavDrawer.Header>
           )}
           <NavDrawer.Body>{bodyItems}</NavDrawer.Body>
@@ -519,8 +519,8 @@ export const AppShell: Story = {
     const detailsId = 'app-shell-details';
 
     return (
-      <div className="flex h-150 flex-col overflow-hidden rounded-md border border-border bg-background text-foreground">
-        <Toolbar aria-label="App" className="border-b border-border px-2 py-1">
+      <div className="flex h-150 flex-col overflow-hidden rounded-md border border-wave-border bg-wave-background text-wave-foreground">
+        <Toolbar aria-label="App" className="border-b border-wave-border px-2 py-1">
           <Hamburger
             ref={outerRef}
             aria-expanded={navOpen}
@@ -528,7 +528,7 @@ export const AppShell: Story = {
             aria-haspopup={narrow ? 'dialog' : undefined}
             onClick={() => setNavOpen(!navOpen)}
           />
-          <span className="text-subtitle-2 font-semibold">Contoso HR</span>
+          <span className="text-wave-subtitle-2 font-semibold">Contoso HR</span>
           <Toolbar.Button
             className="ms-auto"
             aria-expanded={detailsOpen}
@@ -563,14 +563,14 @@ export const AppShell: Story = {
             {narrow && (
               <NavDrawer.Header>
                 <Hamburger />
-                <span className="text-subtitle-2 font-semibold">Contoso HR</span>
+                <span className="text-wave-subtitle-2 font-semibold">Contoso HR</span>
               </NavDrawer.Header>
             )}
             <NavDrawer.Body>{bodyItems}</NavDrawer.Body>
             {footer}
           </NavDrawer>
           <div className="min-w-0 flex-1 overflow-auto p-6">
-            <h2 className="text-title-3 font-semibold">{PAGE_TITLES[page] ?? page}</h2>
+            <h2 className="text-wave-title-3 font-semibold">{PAGE_TITLES[page] ?? page}</h2>
             <p className="mt-2">
               The content of the page. Choose a page in the navigation, or open the details.
             </p>

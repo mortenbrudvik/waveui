@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useCollapsePresence } from '../useCollapsePresence';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { collapseMotion, collapseStructure } from '../../lib/motion';
 import type { MotionSlot } from '../../lib/types';
 import {
@@ -66,7 +66,7 @@ function Disclosure({ open, motion, autoFocus = false }: DisclosureProps) {
           {...presenceProps}
           data-testid="wrapper"
           data-phase={phase}
-          className={cn('test-stable', className)}
+          className={wcn('test-stable', className)}
         >
           <div ref={partRef} data-testid="part">
             <input aria-label="Inside" autoFocus={autoFocus} />
@@ -100,7 +100,7 @@ describe('className (the structure plus the resolved motion)', () => {
     render(<Disclosure open />);
     const el = wrapper();
     expect(el).toHaveClass(...motionClasses(collapseStructure), ...motionClasses(collapseMotion));
-    expect(el?.className).toBe(cn('test-stable', collapseStructure, collapseMotion));
+    expect(el?.className).toBe(wcn('test-stable', collapseStructure, collapseMotion));
   });
 
   it('null keeps the structure and drops the motion', () => {

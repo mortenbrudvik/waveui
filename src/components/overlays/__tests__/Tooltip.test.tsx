@@ -319,62 +319,37 @@ describe('Tooltip', () => {
       await waitFor(() => expect(surface()).not.toBeNull());
     });
 
-    it('the deprecated delay still sets the show delay and warns once', async () => {
+    it('has no delay alias of openDelay (removed in 1.0): the default 200 ms applies', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const user = setupTimers();
-      let enteredAt = 0;
-      const { rerender } = render(
-        <Tooltip content="Tooltip text" delay={300} onMouseEnter={() => (enteredAt = Date.now())}>
-          <button type="button">Target</button>
-        </Tooltip>,
-      );
-      await user.hover(screen.getByRole('button', { name: 'Target' }));
-      advanceTo(enteredAt + 299);
-      expect(surface()).toBeNull();
-      advance(1);
-      await waitFor(() => expect(surface()).not.toBeNull());
-      rerender(
-        <Tooltip content="Tooltip text" delay={300} onMouseEnter={() => (enteredAt = Date.now())}>
-          <button type="button">Target</button>
-        </Tooltip>,
-      );
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
-        ],
-      ]);
-    });
-
-    it('openDelay wins over the deprecated delay', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const user = setupTimers();
       let enteredAt = 0;
       render(
         <Tooltip
           content="Tooltip text"
-          openDelay={100}
+          // @ts-expect-error -- `delay` is removed in 1.0: use `openDelay`
           delay={500}
           onMouseEnter={() => (enteredAt = Date.now())}
         >
           <button type="button">Target</button>
         </Tooltip>,
       );
-      await user.hover(screen.getByRole('button', { name: 'Target' }));
-      advanceTo(enteredAt + 99);
+      const target = screen.getByRole('button', { name: 'Target' });
+      // An unknown prop of the wrapper `<span>`: rendered as a plain attribute, read by nothing.
+      expect(target.parentElement).toHaveAttribute('delay', '500');
+      await user.hover(target);
+      advanceTo(enteredAt + 199);
       expect(surface()).toBeNull();
       advance(1);
       await waitFor(() => expect(surface()).not.toBeNull());
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
-        ],
-      ]);
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
 
-    it('types the delays: openDelay and closeDelay in milliseconds, delay still accepted', () => {
+    it('types the delays: openDelay and closeDelay in milliseconds, no delay', () => {
       expectTypeOf<TooltipProps['openDelay']>().toEqualTypeOf<number | undefined>();
       expectTypeOf<TooltipProps['closeDelay']>().toEqualTypeOf<number | undefined>();
-      expectTypeOf<TooltipProps['delay']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<TooltipProps>().not.toHaveProperty('delay');
     });
   });
 
@@ -471,24 +446,24 @@ describe('Tooltip', () => {
       await user.hover(screen.getByRole('button', { name: 'Target' }));
       await waitFor(() => expect(surface()).not.toBeNull());
       const el = surface()!;
-      expect(el).toHaveClass('before:absolute');
+      expect(el).toHaveClass('wave:before:absolute');
       // Above the trigger: a strip below the surface; below it: a strip above; and so on.
       expect(el).toHaveClass(
-        'data-[side=top]:before:inset-x-0',
-        'data-[side=top]:before:top-full',
-        'data-[side=top]:before:h-2',
-        'data-[side=bottom]:before:inset-x-0',
-        'data-[side=bottom]:before:bottom-full',
-        'data-[side=bottom]:before:h-2',
-        'data-[side=left]:before:inset-y-0',
-        'data-[side=left]:before:left-full',
-        'data-[side=left]:before:w-2',
-        'data-[side=right]:before:inset-y-0',
-        'data-[side=right]:before:right-full',
-        'data-[side=right]:before:w-2',
+        'wave:data-[side=top]:before:inset-x-0',
+        'wave:data-[side=top]:before:top-full',
+        'wave:data-[side=top]:before:h-2',
+        'wave:data-[side=bottom]:before:inset-x-0',
+        'wave:data-[side=bottom]:before:bottom-full',
+        'wave:data-[side=bottom]:before:h-2',
+        'wave:data-[side=left]:before:inset-y-0',
+        'wave:data-[side=left]:before:left-full',
+        'wave:data-[side=left]:before:w-2',
+        'wave:data-[side=right]:before:inset-y-0',
+        'wave:data-[side=right]:before:right-full',
+        'wave:data-[side=right]:before:w-2',
       );
       // No bridge on the sides away from the trigger (it would catch neighbouring controls).
-      expect(el.className).not.toMatch(/(^|\s)before:-?inset-/);
+      expect(el.className).not.toMatch(/(^|\s)wave:before:-?inset-/);
     });
 
     it('Escape hides a visible tooltip', async () => {
@@ -550,13 +525,13 @@ describe('Tooltip', () => {
       await user.hover(screen.getByRole('button', { name: 'Target' }));
       await waitFor(() => expect(surface()).not.toBeNull());
       expect(surface()).toHaveClass(
-        'max-w-60',
-        'whitespace-normal',
-        'normal-case',
-        'tracking-normal',
-        'font-normal',
-        'text-start',
-        'text-caption-1',
+        'wave:max-w-60',
+        'wave:whitespace-normal',
+        'wave:normal-case',
+        'wave:tracking-normal',
+        'wave:font-normal',
+        'wave:text-start',
+        'wave:text-caption-1',
       );
     });
 
@@ -646,7 +621,11 @@ describe('Tooltip', () => {
           <button type="button">Target</button>
         </Tooltip>,
       );
-      expect(el).toHaveClass('bg-inverted', 'text-inverted-foreground', 'border-inverted-border');
+      expect(el).toHaveClass(
+        'wave:bg-inverted',
+        'wave:text-inverted-foreground',
+        'wave:border-inverted-border',
+      );
     });
 
     it('appearance="normal" uses the background token colors', async () => {
@@ -655,44 +634,33 @@ describe('Tooltip', () => {
           <button type="button">Target</button>
         </Tooltip>,
       );
-      expect(el).toHaveClass('bg-background', 'text-foreground', 'border-border');
-      expect(el).not.toHaveClass('bg-inverted');
+      expect(el).toHaveClass('wave:bg-background', 'wave:text-foreground', 'wave:border-border');
+      expect(el).not.toHaveClass('wave:bg-inverted');
     });
 
-    it.each([
-      ['light', 'bg-background'],
-      ['dark', 'bg-inverted'],
-    ] as const)(
-      'the deprecated variant="%s" still works and warns once',
-      async (variant, expected) => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const el = await showSurface(
-          <Tooltip content="Tip" variant={variant} openDelay={0}>
-            <button type="button">Target</button>
-          </Tooltip>,
-        );
-        expect(el).toHaveClass(expected);
-        expect(warn.mock.calls).toEqual([
-          [
-            '[WaveUI] Tooltip: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
-          ],
-        ]);
-      },
-    );
-
-    it('appearance wins over the deprecated variant', async () => {
+    // Untyped code that still passes it: an unknown attribute of the wrapper `<span>`, which React
+    // renders as it is, and the tooltip keeps the default look.
+    it('has no variant alias of appearance (removed in 1.0): variant="light" stays inverted', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       const el = await showSurface(
-        <Tooltip content="Tip" appearance="inverted" variant="light" openDelay={0}>
+        <Tooltip
+          content="Tip"
+          // @ts-expect-error -- `variant` is removed in 1.0: use `appearance` ("normal", "inverted")
+          variant="light"
+          openDelay={0}
+        >
           <button type="button">Target</button>
         </Tooltip>,
       );
-      expect(el).toHaveClass('bg-inverted');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Tooltip: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
-        ],
-      ]);
+      expect(el).toHaveClass('wave:bg-inverted');
+      expect(el).not.toHaveClass('wave:bg-background');
+      expect(screen.getByRole('button', { name: 'Target' }).parentElement).toHaveAttribute(
+        'variant',
+        'light',
+      );
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
   });
 
@@ -1390,7 +1358,7 @@ describe('Tooltip — slotProps', () => {
     expect(normaliseIds(sortAttributes(document.body))).toBe(
       [
         '<div>',
-        '<span class="wave-tooltip inline-block">',
+        '<span class="wave-tooltip wave:inline-block">',
         '<button aria-describedby="tooltip-_id0_" type="button">Save',
         '</button>',
         '<span hidden="" id="tooltip-_id0_" role="tooltip">Saves the file',
@@ -1398,7 +1366,7 @@ describe('Tooltip — slotProps', () => {
         '</span>',
         '</div>',
         '<div class="wave-portal" data-layer="tooltip" data-wave-portal="" dir="ltr" style="position: relative; z-index: calc(var(--wave-z-tooltip, 1200) + 0);">',
-        '<span aria-hidden="true" class="wave-tooltip__content max-w-60 whitespace-normal break-words rounded px-3 py-1.5 text-caption-1 font-normal normal-case tracking-normal text-start shadow-8 before:absolute data-[side=top]:before:inset-x-0 data-[side=top]:before:top-full data-[side=top]:before:h-2 data-[side=bottom]:before:inset-x-0 data-[side=bottom]:before:bottom-full data-[side=bottom]:before:h-2 data-[side=left]:before:inset-y-0 data-[side=left]:before:left-full data-[side=left]:before:w-2 data-[side=right]:before:inset-y-0 data-[side=right]:before:right-full data-[side=right]:before:w-2 border border-inverted-border bg-inverted text-inverted-foreground transition-opacity duration-wave-faster ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-tooltip-surface="" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">Saves the file',
+        '<span aria-hidden="true" class="wave-tooltip__content wave:max-w-60 wave:whitespace-normal wave:break-words wave:rounded wave:px-3 wave:py-1.5 wave:text-caption-1 wave:font-normal wave:normal-case wave:tracking-normal wave:text-start wave:shadow-8 wave:before:absolute wave:data-[side=top]:before:inset-x-0 wave:data-[side=top]:before:top-full wave:data-[side=top]:before:h-2 wave:data-[side=bottom]:before:inset-x-0 wave:data-[side=bottom]:before:bottom-full wave:data-[side=bottom]:before:h-2 wave:data-[side=left]:before:inset-y-0 wave:data-[side=left]:before:left-full wave:data-[side=left]:before:w-2 wave:data-[side=right]:before:inset-y-0 wave:data-[side=right]:before:right-full wave:data-[side=right]:before:w-2 wave:border wave:border-inverted-border wave:bg-inverted wave:text-inverted-foreground wave:transition-opacity wave:duration-wave-faster wave:ease-wave-easy-ease wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-tooltip-surface="" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">Saves the file',
         '</span>',
         '</div>',
       ].join(''),
@@ -1426,7 +1394,7 @@ describe('Tooltip — slotProps', () => {
       />,
     );
     expect(content().classList[0]).toBe(tooltipClassNames.content);
-    expect(content()).toHaveClass('max-w-60', 'bg-inverted', 'my-surface');
+    expect(content()).toHaveClass('wave:max-w-60', 'wave:bg-inverted', 'my-surface');
     expect(content().classList[content().classList.length - 1]).toBe('my-surface');
     expect(content()).toHaveAttribute('data-part', 'content');
     expect(content()).toHaveStyle({ opacity: '0.5' });
@@ -1440,8 +1408,8 @@ describe('Tooltip — slotProps', () => {
   it('lets your class replace a conflicting class of the surface', () => {
     render(<Open slotProps={{ content: { className: 'px-4 shadow-16' } }} />);
     expect(content()).toHaveClass('px-4', 'shadow-16');
-    expect(content()).not.toHaveClass('px-3');
-    expect(content()).not.toHaveClass('shadow-8');
+    expect(content()).not.toHaveClass('wave:px-3');
+    expect(content()).not.toHaveClass('wave:shadow-8');
   });
 
   it('locks the hidden state, the marker, the phase, the placement, the role, the id and the tab stop', () => {

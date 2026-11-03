@@ -132,7 +132,7 @@ export const WithPanelsContainer: Story = {
     <TabList {...args}>
       <TabList.Tab value="tab1">Summary</TabList.Tab>
       <TabList.Tab value="tab2">Activity</TabList.Tab>
-      <TabList.Panels className="bg-card">
+      <TabList.Panels className="bg-wave-card">
         <TabList.Panel value="tab1">Summary content.</TabList.Panel>
         <TabList.Panel value="tab2">Activity content.</TabList.Panel>
       </TabList.Panels>

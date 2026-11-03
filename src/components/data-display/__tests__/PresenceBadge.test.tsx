@@ -4,6 +4,8 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { presenceBadgeClassNames } from '../../../lib/classNames';
+import { Avatar } from '../Avatar';
+import { Persona } from '../Persona';
 import { PresenceBadge } from '../PresenceBadge';
 import type { PresenceBadgeProps } from '../PresenceBadge';
 import {
@@ -13,7 +15,8 @@ import {
   renderWithProviders,
   testSystemProps,
 } from '../../../test-utils';
-import type { DeprecatedPresenceStatus, PresenceStatus, Size } from '../../../lib/types';
+import type { PresenceStatus, Size } from '../../../lib/types';
+import type * as Wave from '../../../index';
 
 const STATUSES: PresenceStatus[] = [
   'available',
@@ -67,7 +70,7 @@ describe('PresenceBadge', () => {
     const icon = status === 'do-not-disturb' ? 'dnd' : status === 'out-of-office' ? 'oof' : status;
     expect(svg).toHaveAttribute('data-wave-icon', `presence-${icon}`);
     expect(svg).toHaveAttribute('aria-hidden', 'true');
-    expect(svg).toHaveClass('size-full');
+    expect(svg).toHaveClass('wave:size-full');
     expect(badge.querySelectorAll('svg')).toHaveLength(1);
   });
 
@@ -77,7 +80,7 @@ describe('PresenceBadge', () => {
   it('draws the busy dot with currentColor so it stays solid in forced-colors mode', () => {
     render(<PresenceBadge status="busy" />);
     const badge = screen.getByRole('img', { name: 'Busy' });
-    expect(badge).toHaveClass('text-presence-busy');
+    expect(badge).toHaveClass('wave:text-presence-busy');
     const svg = badge.querySelector('svg');
     expect(svg).toHaveAttribute('data-wave-icon', 'presence-busy');
     expect(svg).toHaveAttribute('fill', 'currentColor');
@@ -97,26 +100,26 @@ describe('PresenceBadge', () => {
 
   // data-display#15 / input-basic#8: presence tokens and a background-colored ring.
   it.each([
-    ['available', ['bg-presence-available', 'text-presence-glyph']],
-    ['busy', ['bg-presence-busy', 'text-presence-busy']],
-    ['away', ['bg-presence-away', 'text-presence-glyph']],
-    ['offline', ['bg-background', 'text-presence-offline']],
-    ['do-not-disturb', ['bg-presence-busy', 'text-presence-glyph']],
-    ['out-of-office', ['bg-presence-oof', 'text-presence-glyph']],
+    ['available', ['wave:bg-presence-available', 'wave:text-presence-glyph']],
+    ['busy', ['wave:bg-presence-busy', 'wave:text-presence-busy']],
+    ['away', ['wave:bg-presence-away', 'wave:text-presence-glyph']],
+    ['offline', ['wave:bg-background', 'wave:text-presence-offline']],
+    ['do-not-disturb', ['wave:bg-presence-busy', 'wave:text-presence-glyph']],
+    ['out-of-office', ['wave:bg-presence-oof', 'wave:text-presence-glyph']],
   ] as Array<[PresenceStatus, string[]]>)('status "%s" uses %j', (status, classes) => {
     render(<PresenceBadge status={status} />);
     const badge = screen.getByRole('img');
-    expect(badge).toHaveClass(...classes, 'ring-2', 'ring-background');
+    expect(badge).toHaveClass(...classes, 'wave:ring-2', 'wave:ring-background');
     expect(badge.className).not.toMatch(/white|#|grey|var\(/);
   });
 
   // data-display#16
   it.each([
-    ['extra-small', 'size-2'],
-    ['small', 'size-2.5'],
-    ['medium', 'size-3'],
-    ['large', 'size-4'],
-    ['extra-large', 'size-5'],
+    ['extra-small', 'wave:size-2'],
+    ['small', 'wave:size-2.5'],
+    ['medium', 'wave:size-3'],
+    ['large', 'wave:size-4'],
+    ['extra-large', 'wave:size-5'],
   ] as Array<[Size, string]>)('size %s renders %s', (size, sizeClass) => {
     render(<PresenceBadge status="available" size={size} />);
     expect(screen.getByRole('img')).toHaveClass(sizeClass);
@@ -138,8 +141,8 @@ describe('PresenceBadge', () => {
       { dir: 'rtl' },
     );
     const svg = screen.getByRole('img', { name: 'Out of office' }).querySelector('svg')!;
-    expect(svg).toHaveClass('wave-rtl:-scale-x-100');
-    expect(svg).not.toHaveClass('rtl:-scale-x-100');
+    expect(svg).toHaveClass('wave:wave-rtl:-scale-x-100');
+    expect(svg).not.toHaveClass('wave:rtl:-scale-x-100');
   });
 
   it('mirrors no other status glyph', () => {
@@ -160,36 +163,131 @@ describe('PresenceBadge', () => {
   });
 
   describe('Fluent status names (0.13)', () => {
-    it.each([
-      ['do-not-disturb', 'dnd'],
-      ['out-of-office', 'oof'],
-    ] as const)(
-      '%s and the deprecated %s render the same glyph, class and name',
-      (status, alias) => {
+    // Ruling BR: the 0.x names are no members of the type in 1.0, but server data and untyped code
+    // still send them. The badge draws the new name (its look, `data-status` and name) and warns
+    // once per old name in development; a bridge that may go in 2.0.
+    const OLD_NAMES = [
+      ['dnd', 'do-not-disturb', 'Do not disturb', 'bar'],
+      ['oof', 'out-of-office', 'Out of office', 'arrow'],
+    ] as const;
+    const message = (old: string, current: string) =>
+      `[WaveUI] PresenceBadge: status '${old}' was removed in 1.0; the badge draws '${current}' ` +
+      `for it. Use '${current}': this fallback for server data and untyped code may be removed in 2.0.`;
+    /** A status as untyped code passes it. */
+    const untyped = (status: string) => status as PresenceStatus;
+
+    it.each(OLD_NAMES)(
+      "draws '%s' as '%s' (look, data-status and name) and warns once in development (StrictMode)",
+      (old, current, label, glyph) => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const { container: current } = render(<PresenceBadge status={status} />);
-        const { container: legacy } = render(<PresenceBadge status={alias} />);
-        const a = current.firstElementChild as HTMLElement;
-        const b = legacy.firstElementChild as HTMLElement;
-        expect(b.className).toBe(a.className);
-        expect(b).toHaveAttribute('data-glyph', a.getAttribute('data-glyph'));
-        expect(b).toHaveAttribute('aria-label', a.getAttribute('aria-label'));
-        expect(b).toHaveAttribute('data-status', status);
-        expect(a).toHaveAttribute('data-status', status);
-        warn.mockRestore();
+        const error = vi.spyOn(console, 'error');
+        try {
+          const { rerender } = render(
+            <React.StrictMode>
+              <PresenceBadge status={untyped(old)} />
+            </React.StrictMode>,
+          );
+          rerender(
+            <React.StrictMode>
+              <PresenceBadge status={untyped(old)} size="large" />
+            </React.StrictMode>,
+          );
+          const badge = screen.getByRole('img', { name: label });
+          expect(badge).toHaveAttribute('data-status', current);
+          expect(badge).toHaveAttribute('data-glyph', glyph);
+          render(<PresenceBadge status={current} />);
+          const expected = screen.getAllByRole('img', { name: label })[1];
+          expect(badge.innerHTML).toBe(expected.innerHTML);
+          expect(warn.mock.calls).toEqual([[message(old, current)]]);
+          expect(error).not.toHaveBeenCalled();
+        } finally {
+          warn.mockRestore();
+          error.mockRestore();
+        }
       },
     );
 
-    it.each([
-      ['dnd', 'do-not-disturb'],
-      ['oof', 'out-of-office'],
-    ] as const)('the %s alias warns once and names %s', (alias, status) => {
+    it('warns once for each old name, and never for the new names', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const { rerender } = render(<PresenceBadge status={alias} />);
-      rerender(<PresenceBadge status={alias} />);
-      expect(warn.mock.calls).toEqual([[expect.stringContaining(`status '${alias}'`)]]);
-      expect(warn.mock.calls[0][0]).toContain(`'${status}'`);
-      warn.mockRestore();
+      try {
+        render(
+          <>
+            <PresenceBadge status={untyped('dnd')} />
+            <PresenceBadge status={untyped('oof')} />
+            <PresenceBadge status={untyped('dnd')} />
+            <PresenceBadge status="do-not-disturb" />
+            <PresenceBadge status="out-of-office" />
+          </>,
+        );
+        expect(warn.mock.calls).toEqual([
+          [message('dnd', 'do-not-disturb')],
+          [message('oof', 'out-of-office')],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('draws the new name in production without a warning', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(<PresenceBadge status={untyped('oof')} />);
+        expect(screen.getByRole('img', { name: 'Out of office' })).toHaveAttribute(
+          'data-status',
+          'out-of-office',
+        );
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it('renders an old name on the server as its new name, without throwing', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const html = renderToString(<PresenceBadge status={untyped('dnd')} />);
+        expect(html).toBe(renderToString(<PresenceBadge status="do-not-disturb" />));
+        expect(html).toContain('data-status="do-not-disturb"');
+        // Effects do not run on the server: the warning comes from the client.
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('reaches the badge through Persona and the badge slot of Avatar', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(
+          <>
+            <Persona name="Jane Doe" status={untyped('dnd')} />
+            <Avatar name="John Doe" badge={<PresenceBadge status={untyped('oof')} />} />
+          </>,
+        );
+        expect(screen.getByRole('img', { name: 'Do not disturb' })).toHaveAttribute(
+          'data-status',
+          'do-not-disturb',
+        );
+        expect(screen.getByRole('img', { name: 'Out of office' })).toHaveAttribute(
+          'data-status',
+          'out-of-office',
+        );
+        expect(warn.mock.calls).toEqual([
+          [message('dnd', 'do-not-disturb')],
+          [message('oof', 'out-of-office')],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('keeps the old names out of the type', () => {
+      // @ts-expect-error -- `'dnd'` is removed in 1.0: use `'do-not-disturb'`
+      void (<PresenceBadge status="dnd" />);
+      // @ts-expect-error -- `'oof'` is removed in 1.0: use `'out-of-office'`
+      void (<Persona name="Jane Doe" status="oof" />);
     });
 
     it('status is optional and defaults to available', () => {
@@ -200,12 +298,15 @@ describe('PresenceBadge', () => {
       );
     });
 
-    it('types the new names, the aliases and the optional status', () => {
+    it('types the Fluent names and the optional status; no aliases (removed in 1.0)', () => {
       expectTypeOf<PresenceBadgeProps['status']>().toEqualTypeOf<PresenceStatus | undefined>();
-      expectTypeOf<'do-not-disturb'>().toExtend<PresenceStatus>();
-      expectTypeOf<'out-of-office'>().toExtend<PresenceStatus>();
-      expectTypeOf<DeprecatedPresenceStatus>().toEqualTypeOf<'dnd' | 'oof'>();
-      expectTypeOf<DeprecatedPresenceStatus>().toExtend<PresenceStatus>();
+      expectTypeOf<PresenceStatus>().toEqualTypeOf<
+        'available' | 'busy' | 'away' | 'offline' | 'do-not-disturb' | 'out-of-office'
+      >();
+      expectTypeOf<'dnd'>().not.toExtend<PresenceStatus>();
+      expectTypeOf<'oof'>().not.toExtend<PresenceStatus>();
+      // @ts-expect-error -- `DeprecatedPresenceStatus` is removed in 1.0 (no member of the entry)
+      expectTypeOf<Wave.DeprecatedPresenceStatus>().toBeAny();
     });
   });
 });
@@ -219,8 +320,8 @@ describe('PresenceBadge — slotProps', () => {
   const GLYPH =
     'fill="none" focusable="false" height="100%" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 16 16" width="100%" xmlns="http://www.w3.org/2000/svg"';
   const BASE_PINS = [
-    `<svg aria-hidden="true" class="wave-presence-badge__icon size-full wave-rtl:-scale-x-100" data-wave-icon="presence-oof" ${GLYPH}>`,
-    `<svg aria-hidden="true" class="wave-presence-badge__icon size-full" data-wave-icon="presence-available" ${GLYPH}>`,
+    `<svg aria-hidden="true" class="wave-presence-badge__icon wave:size-full wave:wave-rtl:-scale-x-100" data-wave-icon="presence-oof" ${GLYPH}>`,
+    `<svg aria-hidden="true" class="wave-presence-badge__icon wave:size-full" data-wave-icon="presence-available" ${GLYPH}>`,
   ].join('\n');
   const Badges = ({ parts }: { parts?: BadgeSlotProps }) => (
     <>
@@ -260,7 +361,7 @@ describe('PresenceBadge — slotProps', () => {
     expect(icon.classList[0]).toBe(presenceBadgeClassNames.icon);
     expect(icon).toHaveClass('my-icon', 'size-2');
     // Your class replaces a conflicting one of the part.
-    expect(icon).not.toHaveClass('size-full');
+    expect(icon).not.toHaveClass('wave:size-full');
     expect(icon).toHaveAttribute('data-part', 'icon');
     expect(icon).toHaveStyle({ opacity: '0.5' });
     expect(ref.current).toBe(icon);
@@ -292,7 +393,7 @@ describe('PresenceBadge — slotProps', () => {
     );
     expect(icons()[0]).toHaveClass(
       presenceBadgeClassNames.icon,
-      'wave-rtl:-scale-x-100',
+      'wave:wave-rtl:-scale-x-100',
       'my-icon',
     );
   });

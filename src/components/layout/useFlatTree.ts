@@ -35,10 +35,11 @@ export interface UseFlatTreeOptions {
    */
   defaultCheckedItems?: readonly string[];
   /**
-   * Called with every checked item (in tree order) when a check changes. `details` is passed when
-   * `setChecked` got an `event`; it is typed optional until 1.0.
+   * Called with every checked item (in tree order) when a check changes, then `details`: the item,
+   * its new state and the event `setChecked` got (without one, an untrusted `check` event with no
+   * target). WaveUI always passes `details`.
    */
-  onCheckedItemsChange?: (checkedItems: string[], details?: TreeCheckedItemsChangeDetails) => void;
+  onCheckedItemsChange?: (checkedItems: string[], details: TreeCheckedItemsChangeDetails) => void;
   /**
    * How items are selected, as `Tree`. With `'multiple'` every visible row carries its `checked`
    * state; the model's `getTreeProps()` hands the mode on to `FlatTree`.
@@ -74,8 +75,9 @@ export interface FlatTreeModel {
    * nested in it, then its ancestors from their children. Nothing is called when the item is
    * already in that state; a mixed item is set to `checked` as requested. A value that matches no
    * item is added to, or removed from, the checked list. `event` becomes `details.event` of
-   * `onCheckedItemsChange`; without it the callback gets no `details`. It works in any
-   * `selectionMode` (the rows carry `checked` only with `'multiple'`), and on a disabled item too.
+   * `onCheckedItemsChange`; without it `details.event` is an untrusted `check` event with no
+   * target. It works in any `selectionMode` (the rows carry `checked` only with `'multiple'`), and
+   * on a disabled item too.
    */
   setChecked(value: string, checked: boolean, event?: Event): void;
   /** The props `FlatTree` takes from the model, for `<FlatTree model={model} {...model.getTreeProps()} />`. */
@@ -198,7 +200,10 @@ export function useFlatTree(
   const [checkedList, setCheckedList] = useControllable<readonly string[]>(
     checkedItems,
     initialChecked,
-    (next) => onCheckedItemsChange?.([...next], pendingDetails.current),
+    (next) => {
+      const details = pendingDetails.current;
+      if (details) onCheckedItemsChange?.([...next], details);
+    },
   );
 
   const isMultiple = selectionMode === 'multiple';
@@ -221,7 +226,12 @@ export function useFlatTree(
       let next = toggleCheck(nodes, previous, value);
       // A mixed item turns checked on a toggle; asked to be unchecked it needs a second one.
       if (next.includes(value) !== checked) next = toggleCheck(nodes, next, value);
-      pendingDetails.current = event ? { value, checked: next.includes(value), event } : undefined;
+      // Without an event, an untrusted `check` event of its own.
+      pendingDetails.current = {
+        value,
+        checked: next.includes(value),
+        event: event ?? new Event('check'),
+      };
       return next;
     });
     pendingDetails.current = undefined;

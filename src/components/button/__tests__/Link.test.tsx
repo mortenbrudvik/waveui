@@ -3,7 +3,8 @@ import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link } from '../Link';
-import type { LinkAppearance, LinkOwnProps, LinkProps, LinkVariant } from '../Link';
+import type { LinkOwnProps, LinkProps } from '../Link';
+import type * as Wave from '../../../index';
 import { testSystemProps, testFocusEvents, testNoImplicitSubmit } from '../../../test-utils';
 
 const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
@@ -154,8 +155,8 @@ describe('Link', () => {
     it('inline (default) is always underlined and thickens the underline on hover and focus', () => {
       render(<Link href="/docs">Documentation</Link>);
       const link = screen.getByRole('link', { name: 'Documentation' });
-      expect(link).toHaveClass('text-primary', 'underline');
-      expect(link).toHaveClass(`${HOVER_GATE}decoration-2`, 'focus-visible:decoration-2');
+      expect(link).toHaveClass('wave:text-primary', 'wave:underline');
+      expect(link).toHaveClass(`wave:${HOVER_GATE}decoration-2`, 'wave:focus-visible:decoration-2');
     });
 
     it('standalone is semibold and underlines on hover only', () => {
@@ -165,8 +166,12 @@ describe('Link', () => {
         </Link>,
       );
       const link = screen.getByRole('link', { name: 'Documentation' });
-      expect(link).toHaveClass('font-semibold', 'text-primary', `${HOVER_GATE}underline`);
-      expect(link).not.toHaveClass('underline');
+      expect(link).toHaveClass(
+        'wave:font-semibold',
+        'wave:text-primary',
+        `wave:${HOVER_GATE}underline`,
+      );
+      expect(link).not.toHaveClass('wave:underline');
     });
 
     it('subtle uses the foreground color and underlines on hover only', () => {
@@ -176,8 +181,8 @@ describe('Link', () => {
         </Link>,
       );
       const link = screen.getByRole('link', { name: 'Documentation' });
-      expect(link).toHaveClass('text-foreground', `${HOVER_GATE}underline`);
-      expect(link).not.toHaveClass('underline');
+      expect(link).toHaveClass('wave:text-foreground', `wave:${HOVER_GATE}underline`);
+      expect(link).not.toHaveClass('wave:underline');
     });
 
     it('gates hover styles, never uses enabled: and reduces motion', () => {
@@ -186,50 +191,35 @@ describe('Link', () => {
       expect(classes.filter((c) => c.includes('enabled:'))).toEqual([]);
       expect(
         classes.filter(
-          (c) => c.includes('hover:') && !c.startsWith('not-disabled:not-aria-disabled:'),
+          (c) => c.includes('hover:') && !c.startsWith('wave:not-disabled:not-aria-disabled:'),
         ),
       ).toEqual([]);
-      expect(classes).toContain('motion-reduce:transition-none');
+      expect(classes).toContain('wave:motion-reduce:transition-none');
     });
 
-    it('the deprecated variant prop still works and warns once', () => {
+    // Untyped code that still passes it: an unknown attribute of the anchor, which React renders
+    // as it is, and the link keeps the inline appearance.
+    it('has no variant alias of appearance (removed in 1.0): variant="subtle" stays inline', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       render(
-        <>
-          <Link href="/a" variant="standalone">
-            First
-          </Link>
-          <Link href="/b" variant="subtle">
-            Second
-          </Link>
-        </>,
-      );
-      expect(screen.getByRole('link', { name: 'First' })).toHaveClass('font-semibold');
-      expect(screen.getByRole('link', { name: 'Second' })).toHaveClass('text-foreground');
-      const messages = warn.mock.calls.map((call) => String(call[0]));
-      expect(messages).toEqual([
-        '[WaveUI] Link: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
-      ]);
-    });
-
-    it('appearance wins over the deprecated variant', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      render(
-        <Link href="/docs" appearance="subtle" variant="standalone">
+        <Link
+          href="/docs"
+          // @ts-expect-error -- `variant` is removed in 1.0: use `appearance` (same values)
+          variant="subtle"
+        >
           Documentation
         </Link>,
       );
       const link = screen.getByRole('link', { name: 'Documentation' });
-      expect(link).toHaveClass('text-foreground');
-      expect(link).not.toHaveClass('font-semibold');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Link: `variant` is deprecated and will be removed in 1.0. Use `appearance` instead.',
-        ],
-      ]);
+      expect(link).toHaveClass('wave:text-primary', 'wave:underline');
+      expect(link).not.toHaveClass('wave:text-foreground');
+      expect(link).toHaveAttribute('variant', 'subtle');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
     });
 
-    it('does not warn without the deprecated prop', () => {
+    it('does not warn for appearance', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <Link href="/docs" appearance="standalone">
@@ -252,7 +242,7 @@ describe('Link', () => {
       expect(link).toHaveAttribute('role', 'link');
       expect(link).toHaveAttribute('aria-disabled', 'true');
       expect(link).toHaveAttribute('tabindex', '-1');
-      expect(link).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(link).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
     });
 
     it('prevents the default action of a click and does not call onClick', () => {
@@ -384,8 +374,8 @@ describe('Link', () => {
       );
       // CSS opacity dims the element's own outline too, which would put the ring below 3:1.
       expect(screen.getByRole('link', { name: 'Documentation' })).toHaveClass(
-        'opacity-50',
-        'aria-disabled:focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:aria-disabled:focus-visible:opacity-100',
       );
     });
 
@@ -406,7 +396,7 @@ describe('Link', () => {
       expect(link).toHaveAttribute('aria-disabled', 'true');
       expect(link).toHaveAttribute('data-disabled', '');
       expect(link).toHaveAttribute('data-disabled-focusable', '');
-      expect(link).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(link).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
 
       await user.tab();
       expect(link).toHaveFocus();
@@ -491,10 +481,11 @@ describe('Link', () => {
     it('LinkProps (0.4 name) is the default-tag props type with ref (C-REF)', () => {
       expectTypeOf<LinkProps>().toEqualTypeOf<LinkProps<'a'>>();
       expectTypeOf<LinkProps['ref']>().toEqualTypeOf<React.Ref<HTMLAnchorElement> | undefined>();
-      expectTypeOf<LinkVariant>().toEqualTypeOf<LinkAppearance>();
       expectTypeOf<keyof LinkOwnProps>().toEqualTypeOf<
-        'appearance' | 'variant' | 'disabled' | 'disabledFocusable'
+        'appearance' | 'disabled' | 'disabledFocusable'
       >();
+      // @ts-expect-error -- `LinkVariant` is removed in 1.0: use `LinkAppearance`
+      expectTypeOf<Wave.LinkVariant>().toBeAny();
       expectTypeOf<LinkProps<'button'>['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
       interface MyLinkProps extends LinkProps {
         tracking?: string;

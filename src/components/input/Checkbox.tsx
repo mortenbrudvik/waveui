@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { focusableDisabledProps, joinIds } from '../../lib/aria';
 import { checkboxClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { CheckIcon, SubtractIcon } from '../../lib/icons';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { LabelPosition, Shape, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -21,9 +21,18 @@ import { HiddenInput } from '../internal/HiddenInput';
  * focus outline and border; only the glyph (the leaf indicator) opts out of forced colors. A
  * disabled box draws a GrayText glyph and border on Canvas, without the Highlight fill.
  */
-const checkedBox = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight]';
-const disabledCheckedBox = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
-const disabledGlyph = 'forced-colors:text-[GrayText] forced-colors:forced-color-adjust-none';
+const checkedBox = 'wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]';
+const disabledCheckedBox = 'wave:forced-colors:border-[GrayText] wave:forced-colors:bg-[Canvas]';
+const disabledGlyph =
+  'wave:forced-colors:text-[GrayText] wave:forced-colors:forced-color-adjust-none';
+
+/**
+ * The glyphs take no pointer events, so a click on one targets the box. A glyph is drawn only while
+ * the box is checked or mixed: a click on it would toggle the box, which then draws the other glyph
+ * or none, and Firefox and WebKit, finding the click's target gone from the box, have the label
+ * pass the same click to the box again, which toggles it back.
+ */
+const glyphBase = 'wave:pointer-events-none';
 
 /** The handlers a part drops while the checkbox is unavailable: it does not activate then. */
 const BLOCK_CLICK = ['onClick'] as const;
@@ -44,14 +53,14 @@ export type CheckboxShape = Extract<Shape, 'square' | 'circular'>;
 const CHECKBOX_SIZE: Readonly<
   Record<CheckboxSize, { box: string; glyph: number; offset: string }>
 > = {
-  medium: { box: 'h-[18px] w-[18px]', glyph: 12, offset: 'mt-px' },
-  large: { box: 'h-[22px] w-[22px]', glyph: 16, offset: '-mt-px' },
+  medium: { box: 'wave:h-[18px] wave:w-[18px]', glyph: 12, offset: 'wave:mt-px' },
+  large: { box: 'wave:h-[22px] wave:w-[22px]', glyph: 16, offset: 'wave:-mt-px' },
 };
 
 /** Per-shape corner classes. */
 const CHECKBOX_SHAPE: Readonly<Record<CheckboxShape, string>> = {
-  square: 'rounded-xs',
-  circular: 'rounded-full',
+  square: 'wave:rounded-xs',
+  circular: 'wave:rounded-full',
 };
 
 /** Properties for the Checkbox component. */
@@ -75,11 +84,6 @@ export interface CheckboxProps extends Omit<
   indeterminate?: boolean;
   /** Called with the new checked state when it changes (not for no-op updates). */
   onCheckedChange?: (checked: boolean) => void;
-  /**
-   * Called with the new checked state when it changes.
-   * @deprecated Use `onCheckedChange`.
-   */
-  onChange?: (checked: boolean) => void;
   /** Whether the checkbox is disabled and non-interactive. */
   disabled?: boolean;
   /**
@@ -142,24 +146,46 @@ export interface CheckboxProps extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   /** Keyup handler of the checkbox control. */
   onKeyUp?: React.KeyboardEventHandler<HTMLButtonElement>;
-  /** Ref to the focusable `role="checkbox"` button. */
-  controlRef?: React.Ref<HTMLButtonElement>;
-  /** Ref to the root `<label>` element. */
-  ref?: React.Ref<HTMLLabelElement>;
   /**
-   * Props for the elements the Checkbox draws inside its root, by part, merged into each part's
-   * own (Fluent UI's `indicator` and `label` slot props): your classes after the part's (yours
-   * win a conflict), your styles over its styles, your handlers before its handlers
-   * (`preventDefault()` in yours skips the Checkbox's handling of the event, its own `on…` prop
-   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
-   * `aria-describedby`. Every attribute the Checkbox sets on a part is locked and keeps the
-   * Checkbox's value (set it through the Checkbox's own props); you add the attributes it does
-   * not set. A part takes no `children`.
+   * Ref to the focusable `role="checkbox"` button (Fluent UI's `ref`, on its primary element).
+   * The root `<label>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLButtonElement>;
+  /**
+   * Props for the elements the Checkbox draws, by part, merged into each part's own (Fluent UI's
+   * `root`, `indicator` and `label` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers before its handlers (`preventDefault()`
+   * in yours skips the Checkbox's handling of the event, its own `on…` prop included), your ref
+   * beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every
+   * attribute the Checkbox sets on a part is locked and keeps the Checkbox's value (set it
+   * through the Checkbox's own props); you add the attributes it does not set. A part takes no
+   * `children`.
    */
   slotProps?: {
     /**
+     * The root `<label>` around the box and the label text (stable class `wave-checkbox`), which
+     * the Checkbox's `className`, `style`, `data-*` and other root props reach as well; its
+     * `ref` is the way to the label, since the Checkbox's `ref` reaches the box. Your classes
+     * come after the Checkbox's `className`, your style over its `style`. Locked: every prop you
+     * give the Checkbox itself that reaches the root, `data-label-position`, `data-size`,
+     * `data-shape`, `htmlFor` (unset: the label labels the box it holds, and a `for` would send
+     * its clicks to another element), `hidden`, `inert` and `aria-hidden` (the Checkbox's own:
+     * the root holds the box), and `role`, `tabIndex` and the roving markers
+     * (`data-roving-container`, `data-roving-disabled`, `data-roving-value`, `aria-disabled`),
+     * unset (in a toolbar or another roving container the root is no composite that hides the
+     * box, no item and no second tab stop). Your handlers run before the Checkbox's own root
+     * handlers (`preventDefault()` in yours skips them). Your `onClick` sees every click inside
+     * the root as it bubbles: a click on the box after the box has toggled, and a click on the
+     * label text first, before the `<label>` passes it on to the box, so the text's click reaches
+     * your `onClick` twice (the text's own, then the box's), as on any `<label>`;
+     * `preventDefault()` on the text's click keeps the label from passing it on (no toggle). It is
+     * not called while the checkbox is `disabled` or `disabledFocusable`, as the checkbox does not
+     * toggle then.
+     */
+    root?: SlotPart<'label'>;
+    /**
      * The `role="checkbox"` `<button>` that draws the box, the focusable control (stable class
-     * `wave-checkbox__indicator`; `controlRef` reaches it as well). Locked: `id`, `type`,
+     * `wave-checkbox__indicator`; the Checkbox's `ref` reaches it as well). Locked: `id`, `type`,
      * `role`, `aria-checked`, `disabled`, `tabIndex`, `autoFocus`, the attributes of
      * `disabledFocusable`, the naming and Field attributes routed to it (`aria-label`,
      * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `aria-disabled`),
@@ -185,11 +211,12 @@ export interface CheckboxProps extends Omit<
  * A checkbox for a boolean (or mixed) choice, drawn as a `role="checkbox"` button inside a
  * `<label>`.
  *
- * - The root `<label>` receives `ref`, `className`, `style` and `data-*`; the control receives
- *   `id`, `aria-label`/`-labelledby`/`-describedby`/`-invalid`/`-required`/`-errormessage`/
- *   `-details`/`-disabled`, `tabIndex`, `autoFocus` and the click, focus and key handlers
- *   (`controlRef` exposes it). A consumer `onClick` runs once per activation, before the toggle;
- *   `preventDefault()` in it cancels the toggle.
+ * - `ref` reaches the control; the root `<label>` receives `className`, `style` and `data-*`
+ *   (`slotProps.root.ref` reaches it); the control receives `id`,
+ *   `aria-label`/`-labelledby`/`-describedby`/`-invalid`/`-required`/`-errormessage`/
+ *   `-details`/`-disabled`, `tabIndex`, `autoFocus` and the click, focus and key handlers. A
+ *   consumer `onClick` runs once per activation, before the toggle; `preventDefault()` in it
+ *   cancels the toggle.
  * - Inside a `Field` it is named by the Field label (followed by its own `label` text) and described
  *   by the Field message and hint.
  * - With `name` (or `required`) it takes part in native forms like `<input type="checkbox">`, and
@@ -207,7 +234,6 @@ export const Checkbox = ({
   defaultChecked = false,
   indeterminate = false,
   onCheckedChange,
-  onChange,
   disabled = false,
   disabledFocusable = false,
   label,
@@ -234,14 +260,13 @@ export const Checkbox = ({
   onBlur,
   onKeyDown,
   onKeyUp,
-  controlRef,
   className,
+  style,
   children,
   ref,
   slotProps,
   ...rest
 }: CheckboxProps) => {
-  if (onChange !== undefined) warnDeprecated('Checkbox', 'onChange', 'onCheckedChange');
   const hasChildren = slotRendersContent(children);
   React.useEffect(() => {
     if (hasChildren) {
@@ -251,10 +276,7 @@ export const Checkbox = ({
       );
     }
   }, [hasChildren]);
-  const [checked, setChecked] = useControllable(checkedProp, defaultChecked, (next: boolean) => {
-    onCheckedChange?.(next);
-    onChange?.(next);
-  });
+  const [checked, setChecked] = useControllable(checkedProp, defaultChecked, onCheckedChange);
 
   const generatedId = useId('checkbox');
   const labelTextId = useId('checkbox-label');
@@ -288,7 +310,7 @@ export const Checkbox = ({
       : fieldProps['aria-labelledby'];
 
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const mergedControlRef = useMergedRefs(buttonRef, controlRef, slotProps?.indicator?.ref);
+  const mergedControlRef = useMergedRefs(buttonRef, ref, slotProps?.indicator?.ref);
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
   const on = checked || indeterminate;
@@ -301,9 +323,9 @@ export const Checkbox = ({
   // Focusable-disabled wins over `disabled`: the box stays focusable but looks and acts disabled.
   const unavailable = disabled || disabledFocusable;
   // The glyph is the forced-colors leaf; the box stays on system colors (see `checkedBox`).
-  const glyphClassName = unavailable ? disabledGlyph : forcedColors.selectedLeaf;
+  const glyphClassName = wcn(glyphBase, unavailable ? disabledGlyph : forcedColors.selectedLeaf);
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: cn(checkboxClassNames.label, 'text-body-1 text-foreground'),
+    className: wcn(checkboxClassNames.label, 'wave:text-body-1 wave:text-foreground'),
     // The text names the control through aria-labelledby: an aria-label would replace it.
     locked: { id: labelTextId, 'aria-label': undefined },
     // The label does not activate while the checkbox is unavailable, as the checkbox does not.
@@ -311,12 +333,12 @@ export const Checkbox = ({
   });
   const labelText = hasLabel ? <span {...labelProps}>{materialiseSlotContent(label)}</span> : null;
   const indicatorProps = mergeSlotProps(slotProps?.indicator, {
-    className: cn(
+    className: wcn(
       checkboxClassNames.indicator,
       // p-0 and the unchecked bg-transparent are set here, not left to the native reset, which
       // any app button style overrides (C-NATIVE).
-      cn(
-        'flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none',
+      wcn(
+        'wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:border wave:p-0 wave:transition-colors wave:motion-reduce:transition-none',
         sizeMetrics.box,
         shapeClass,
       ),
@@ -324,12 +346,12 @@ export const Checkbox = ({
       hasLabel && sizeMetrics.offset,
       focusRing,
       on
-        ? cn(
-            'border-primary bg-primary text-primary-foreground',
+        ? wcn(
+            'wave:border-primary wave:bg-primary wave:text-primary-foreground',
             unavailable ? disabledCheckedBox : checkedBox,
           )
-        : cn(
-            'border-stroke-accessible bg-transparent',
+        : wcn(
+            'wave:border-stroke-accessible wave:bg-transparent',
             unavailable ? forcedColors.disabled : forcedColors.control,
           ),
     ),
@@ -372,27 +394,44 @@ export const Checkbox = ({
     // is not.
     blockHandlers: disabledFocusable ? BLOCK_CLICK : undefined,
   });
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      checkboxClassNames.root,
+      // items-start: the box lines up with the first line of a label that wraps or has a second
+      // line, not with its middle.
+      'wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none',
+      // The dimmed look lifts while a focus ring shows inside the root (the control's, under
+      // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
+      unavailable
+        ? 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100'
+        : 'wave:cursor-pointer',
+      className,
+    ),
+    style,
+    locked: {
+      'data-label-position': labelPosition,
+      'data-size': resolvedSize,
+      'data-shape': resolvedShape,
+      // The label labels the box it holds: a part's `for` would send the text's clicks to
+      // another element (the Checkbox's own, from untyped code, still wins below).
+      htmlFor: undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the box, no item and no second tab stop (a
+      // toolbar takes any element with a `tabindex` for a control).
+      ...ROVING_PART_LOCKS,
+      // The Checkbox's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the box, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+    // The label passes a click to the box, which does not toggle while unavailable.
+    blockHandlers: unavailable ? BLOCK_CLICK : undefined,
+  });
 
   return (
-    <label
-      ref={ref}
-      data-label-position={labelPosition}
-      data-size={resolvedSize}
-      data-shape={resolvedShape}
-      className={cn(
-        checkboxClassNames.root,
-        // items-start: the box lines up with the first line of a label that wraps or has a second
-        // line, not with its middle.
-        'relative inline-flex items-start gap-2 select-none',
-        // The dimmed look lifts while a focus ring shows inside the root (the control's, under
-        // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
-        unavailable
-          ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
-          : 'cursor-pointer',
-        className,
-      )}
-      {...rest}
-    >
+    <label {...rootProps}>
       {labelPosition === 'before' && labelText}
       <button
         // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).

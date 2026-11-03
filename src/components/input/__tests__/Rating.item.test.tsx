@@ -133,7 +133,7 @@ describe('icon pairs: an item pair, display items and empty outlines (Phase 4 D2
       const outline = star(2).querySelector('svg');
       expect(outline).toHaveAttribute('data-wave-icon', 'star');
       expect(outline).toHaveAttribute('fill', 'none');
-      expect(star(2)).toHaveClass('text-stroke-accessible');
+      expect(star(2)).toHaveClass('wave:text-stroke-accessible');
       expect(warn.mock.calls).toEqual([
         ['[WaveUI] Rating: `iconOutline` renders nothing, so the default star is used.'],
       ]);
@@ -154,16 +154,16 @@ describe('half stars (Phase 4 D22, D23)', () => {
     const half = screen.getByRole('radio', { name: '2.5 stars' });
     const full = screen.getByRole('radio', { name: '3 stars' });
     expect(half).toHaveClass(
-      'absolute',
-      'inset-y-0',
-      'start-0',
-      'w-1/2',
-      'opacity-0',
-      'pointer-events-none',
+      'wave:absolute',
+      'wave:inset-y-0',
+      'wave:start-0',
+      'wave:w-1/2',
+      'wave:opacity-0',
+      'wave:pointer-events-none',
     );
-    expect(full).toHaveClass('end-0');
+    expect(full).toHaveClass('wave:end-0');
     expect(half.parentElement).toBe(full.parentElement);
-    expect(star3()).toHaveClass('has-focus-visible:outline-2');
+    expect(star3()).toHaveClass('wave:has-focus-visible:outline-2');
   });
 
   it('a pointer click chooses by position and focuses the chosen radio', () => {
@@ -267,7 +267,7 @@ describe('half stars (Phase 4 D22, D23)', () => {
 
   it('keeps each star one 24×24px target (the 0.7 padding)', () => {
     render(<Rating aria-label="Service" step={0.5} />);
-    expect(star3()).toHaveClass('p-0.5');
+    expect(star3()).toHaveClass('wave:p-0.5');
   });
 
   it('disabled: every radio is disabled and a pointer click chooses nothing', () => {
@@ -375,12 +375,12 @@ describe('half stars (Phase 4 D22, D23)', () => {
   it('an off-grid controlled value checks no radio and is drawn rounded down to the step (2.7: star 3 half filled)', () => {
     render(<Rating aria-label="Service" step={0.5} value={2.7} />);
     expect(screen.queryAllByRole('radio', { checked: true })).toHaveLength(0);
-    expect(starOf('2 stars').firstElementChild).toHaveClass('text-rating');
+    expect(starOf('2 stars').firstElementChild).toHaveClass('wave:text-rating');
     const partial = starOf('3 stars').firstElementChild as HTMLElement;
-    expect(partial).toHaveClass('relative', 'text-stroke-accessible');
+    expect(partial).toHaveClass('wave:relative', 'wave:text-stroke-accessible');
     expect(partial.lastElementChild).toHaveStyle({ width: '50%' });
-    expect(partial.lastElementChild).toHaveClass('start-0', 'text-rating');
-    expect(starOf('4 stars').firstElementChild).toHaveClass('text-stroke-accessible');
+    expect(partial.lastElementChild).toHaveClass('wave:start-0', 'wave:text-rating');
+    expect(starOf('4 stars').firstElementChild).toHaveClass('wave:text-stroke-accessible');
     expect(starOf('4 stars').querySelector('[style*="width"]')).toBeNull();
   });
 
@@ -411,33 +411,33 @@ describe('half stars (Phase 4 D22, D23)', () => {
   it('the star is one box that draws the focus ring of either radio; every size keeps a 24px target', () => {
     const { rerender } = render(<Rating aria-label="Service" step={0.5} />);
     expect(star3()).toHaveClass(
-      'relative',
-      'inline-flex',
-      'rounded',
-      'has-focus-visible:outline-2',
-      'has-focus-visible:outline-offset-2',
-      'has-focus-visible:outline-ring',
+      'wave:relative',
+      'wave:inline-flex',
+      'wave:rounded',
+      'wave:has-focus-visible:outline-2',
+      'wave:has-focus-visible:outline-offset-2',
+      'wave:has-focus-visible:outline-ring',
     );
     rerender(<Rating aria-label="Service" step={0.5} size="extra-small" />);
     // 12px icon + 2 × 6px padding
-    expect(star3()).toHaveClass('p-1.5');
-    expect(star3().querySelector('svg')).toHaveClass('h-3', 'w-3');
+    expect(star3()).toHaveClass('wave:p-1.5');
+    expect(star3().querySelector('svg')).toHaveClass('wave:h-3', 'wave:w-3');
     rerender(<Rating aria-label="Service" step={0.5} size="small" />);
     // 16px icon + 2 × 4px padding
-    expect(star3()).toHaveClass('p-1');
+    expect(star3()).toHaveClass('wave:p-1');
   });
 
   it('previews the full value past the middle; touch and pen moves preview nothing', () => {
     render(<Rating aria-label="Service" step={0.5} />);
     mockRect(star3(), { left: 100, right: 124, top: 0, bottom: 24, width: 24, height: 24 });
     fireEvent.pointerMove(star3(), { clientX: 118, pointerType: 'mouse' });
-    expect(star3().firstElementChild).toHaveClass('text-rating');
+    expect(star3().firstElementChild).toHaveClass('wave:text-rating');
     expect(star3().querySelector('[style*="width"]')).toBeNull();
     fireEvent.mouseLeave(screen.getByRole('radiogroup'));
-    expect(star3().firstElementChild).toHaveClass('text-stroke-accessible');
+    expect(star3().firstElementChild).toHaveClass('wave:text-stroke-accessible');
     fireEvent.pointerMove(star3(), { clientX: 104, pointerType: 'touch' });
     fireEvent.pointerMove(star3(), { clientX: 104, pointerType: 'pen' });
-    expect(star3().firstElementChild).toHaveClass('text-stroke-accessible');
+    expect(star3().firstElementChild).toHaveClass('wave:text-stroke-accessible');
     expect(star3().querySelector('[style*="width"]')).toBeNull();
   });
 
@@ -445,7 +445,7 @@ describe('half stars (Phase 4 D22, D23)', () => {
     render(<Rating aria-label="Service" step={0.5} disabled />);
     mockRect(star3(), { left: 100, right: 124, top: 0, bottom: 24, width: 24, height: 24 });
     fireEvent.pointerMove(star3(), { clientX: 104, pointerType: 'mouse' });
-    expect(star3().firstElementChild).toHaveClass('text-stroke-accessible');
+    expect(star3().firstElementChild).toHaveClass('wave:text-stroke-accessible');
     expect(star3().querySelector('[style*="width"]')).toBeNull();
   });
 
@@ -468,7 +468,7 @@ describe('half stars (Phase 4 D22, D23)', () => {
     const box = radio('1 star').parentElement as HTMLElement;
     fireEvent.pointerMove(portaled, { clientX: 104, pointerType: 'mouse' });
     // No preview: the star stays unfilled, whole or partly.
-    expect(box.firstElementChild).toHaveClass('inline-flex', 'text-stroke-accessible');
+    expect(box.firstElementChild).toHaveClass('wave:inline-flex', 'wave:text-stroke-accessible');
     expect(box.querySelector('[style*="width"]')).toBeNull();
     fireEvent.click(portaled, { clientX: 104, clientY: 12, detail: 1 });
     expect(onValueChange).not.toHaveBeenCalled();
@@ -492,7 +492,7 @@ describe('half stars (Phase 4 D22, D23)', () => {
     fireEvent.mouseEnter(portaled);
     fireEvent.mouseOver(portaled);
     // No preview: the star stays unfilled.
-    expect(radio('1 star')).toHaveClass('text-stroke-accessible');
+    expect(radio('1 star')).toHaveClass('wave:text-stroke-accessible');
     fireEvent.click(portaled);
     expect(onValueChange).not.toHaveBeenCalled();
     expect(radio('1 star')).toHaveAttribute('aria-checked', 'false');
@@ -650,7 +650,7 @@ describe('Rating.Item at step 0.5: the star element (Phase 4 D22, D26)', () => {
     expect(box).toBe(star2());
     expect(box.tagName).toBe('SPAN');
     expect(ref.current).toBe(box);
-    expect(box).toHaveClass('custom-star', 'relative', 'inline-flex', 'p-0.5');
+    expect(box).toHaveClass('custom-star', 'wave:relative', 'wave:inline-flex', 'wave:p-0.5');
     expect(box).toHaveStyle({ opacity: '0.5' });
     expect(box).toHaveAttribute('title', 'Two');
     await user.hover(box);

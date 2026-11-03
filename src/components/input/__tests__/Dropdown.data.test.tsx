@@ -375,11 +375,11 @@ describe('Dropdown windowed options (virtualWindow)', () => {
     const user = userEvent.setup();
     const { unmount } = render(<WindowedDropdown />);
     await user.click(combobox());
-    expect(list()).toHaveClass('[overflow-anchor:none]');
+    expect(list()).toHaveClass('wave:[overflow-anchor:none]');
     unmount();
     render(<Dropdown aria-label="Item" items={ITEMS} />);
     await user.click(combobox());
-    expect(list()).not.toHaveClass('[overflow-anchor:none]');
+    expect(list()).not.toHaveClass('wave:[overflow-anchor:none]');
   });
 
   it('makes no window request for a pointer highlight', async () => {

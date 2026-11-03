@@ -44,9 +44,10 @@ import { join } from 'node:path';
 import { __unstable__loadDesignSystem } from '@tailwindcss/node';
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as motion from '../motion';
-import { resolveMotion, usesLegacyMotion } from '../motion';
+import { resolveMotion } from '../motion';
 
-const LEGACY = 'p-4 data-[presence=exiting]:opacity-0';
+/** A `className` with a presence variant: 0.14's motion, a plain class list in 1.0. */
+const PRESENCE_CLASS_NAME = 'p-4 data-[presence=exiting]:opacity-0';
 
 describe('resolveMotion', () => {
   it('null is no motion', () => {
@@ -74,27 +75,12 @@ describe('resolveMotion', () => {
 
   it('undefined keeps the recipe by default', () => {
     expect(resolveMotion(undefined, 'r', 'default')).toBe('r');
-    expect(resolveMotion(undefined, 'r', 'default', 'p-4')).toBe('r');
   });
 
-  it('a legacy className with a presence variant turns the default off', () => {
-    expect(resolveMotion(undefined, 'r', 'default', LEGACY)).toBe('');
-  });
-
-  it('a value wins over a legacy className', () => {
-    expect(resolveMotion('x', 'r', 'default', 'data-[presence=exiting]:opacity-0')).toBe('x');
-  });
-});
-
-describe('usesLegacyMotion', () => {
-  it('is true only without a slot and with a presence variant in the className', () => {
-    expect(usesLegacyMotion(undefined, LEGACY)).toBe(true);
-    expect(usesLegacyMotion(undefined, 'p-4')).toBe(false);
-    expect(usesLegacyMotion(undefined)).toBe(false);
-    expect(usesLegacyMotion(null, LEGACY)).toBe(false);
-    expect(usesLegacyMotion('x', LEGACY)).toBe(false);
-    expect(usesLegacyMotion({ className: 'x' }, LEGACY)).toBe(false);
-    expect(usesLegacyMotion('', LEGACY)).toBe(false);
+  it('has no className rule (removed in 1.0): a presence variant there keeps the recipe', () => {
+    // @ts-expect-error -- the fourth argument (the part's `className`) is removed in 1.0
+    expect(resolveMotion(undefined, 'r', 'default', PRESENCE_CLASS_NAME)).toBe('r');
+    expect(Object.keys(motion)).not.toContain('usesLegacyMotion');
   });
 });
 
@@ -117,9 +103,12 @@ const COMPOSED_DURATIONS: Record<string, string> = {
   inlineDrawerMotion: 'drawerDurations',
 };
 
-/** The stylesheet the compile check builds against: the precompiled CSS's sources (build-css). */
+/**
+ * The stylesheet the compile check builds against: the precompiled CSS's sources (build-css's
+ * src/styles/styles.css), with Wave's utility prefix and the internal theme its classes use.
+ */
 const COMPILE_CSS =
-  "@import 'tailwindcss/theme.css' theme(inline); @import './src/styles/tokens.css'; @import './src/styles/variants.css'; @import 'tailwindcss/utilities.css';";
+  "@import 'tailwindcss/theme.css' theme(inline) prefix(wave); @import './src/styles/theme.css'; @import './src/styles/tokens.css'; @import './src/styles/variants.css'; @import 'tailwindcss/utilities.css';";
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 
 /** A plain object whose values are all strings (a recipe per edge, per size, …). */
@@ -172,8 +161,16 @@ function words(value: string): string[] {
   return value.split(/\s+/).filter(Boolean);
 }
 
-/** A class word split at its top-level colons: the variants, then the utility. */
-function parseWord(word: string): { variants: string[]; utility: string } {
+/** Wave's utility prefix (`UTILITY_PREFIX` of src/lib/cn.ts), with its colon. */
+const PREFIX = 'wave:';
+
+/**
+ * A class word split at its top-level colons: the variants, then the utility. Wave's utility
+ * prefix is no variant: it is dropped first (check 1 compiles every word with it, so a recipe word
+ * without it fails there), and a fixture of a pure check may be written with it or without.
+ */
+function parseWord(prefixed: string): { variants: string[]; utility: string } {
+  const word = prefixed.startsWith(PREFIX) ? prefixed.slice(PREFIX.length) : prefixed;
   const parts: string[] = [];
   let depth = 0;
   let current = '';
@@ -284,7 +281,9 @@ function sizedBackdropMismatches(
   durations: Readonly<Record<string, string>>,
   backdrops: Readonly<Record<string, string>>,
 ): string[] {
-  return Object.entries(durations).flatMap(([size, duration]) => {
+  return Object.entries(durations).flatMap(([size, word]) => {
+    // The utility of the size's duration word, as durationUnder reads a recipe's.
+    const duration = parseWord(word).utility;
     const backdrop = Object.hasOwn(backdrops, size) ? backdrops[size] : undefined;
     if (backdrop === undefined) return [`${size}: no backdrop recipe`];
     const sizeFindings = [
@@ -671,7 +670,6 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
       expect(nonRecipeExports(motion)).toEqual([]);
       const names = recipeEntries().map(([name]) => name);
       expect(names).not.toContain('resolveMotion');
-      expect(names).not.toContain('usesLegacyMotion');
     });
   });
 
@@ -679,16 +677,22 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
     it('reports a word that yields no rule', () => {
       expect(
         uncompiledWords(
-          'transition-opacity duration-wave-gentel data-[presence=entering]:starting:opacity-0',
+          'wave:transition-opacity wave:duration-wave-gentel wave:data-[presence=entering]:starting:opacity-0',
           designSystem,
         ),
-      ).toEqual(['duration-wave-gentel']);
+      ).toEqual(['wave:duration-wave-gentel']);
+    });
+
+    it('reports a word without the utility prefix: the sheet is built with it', () => {
+      expect(uncompiledWords('transition-opacity wave:transition-opacity', designSystem)).toEqual([
+        'transition-opacity',
+      ]);
     });
 
     it("compiles Wave's tokens and variants", () => {
       expect(
         uncompiledWords(
-          'duration-wave-gentle ease-wave-easy-ease motion-reduce:transition-none wave-rtl:-translate-x-2 data-[presence=entered]:contents data-[side=left]:data-[presence=entering]:starting:-translate-x-2',
+          'wave:duration-wave-gentle wave:ease-wave-easy-ease wave:motion-reduce:transition-none wave:wave-rtl:-translate-x-2 wave:data-[presence=entered]:contents wave:data-[side=left]:data-[presence=entering]:starting:-translate-x-2',
           designSystem,
         ),
       ).toEqual([]);
@@ -1098,7 +1102,7 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
         ['max-w-none', 'max-width: none'],
         ['max-h-none', 'max-height: none'],
       ] as const) {
-        const [css] = designSystem.candidatesToCss([`${NOT_ENTERED_CHILD}:${lift}`]);
+        const [css] = designSystem.candidatesToCss([`${PREFIX}${NOT_ENTERED_CHILD}:${lift}`]);
         expect(css).toContain(':not([data-presence="entered"]) > *');
         expect(css).toContain(property);
       }
@@ -1325,7 +1329,7 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
     /** The values of `lib/motion` with a plain grid display, as `{ name, label, value }`. */
     const gridValues = () =>
       recipeStrings(recipeEntries()).filter(({ value }) =>
-        words(value).some((word) => word === 'grid'),
+        words(value).some((word) => word === `${PREFIX}grid`),
       );
 
     it('lists every grid structure of the module, each value of which is a grid', () => {
@@ -1337,7 +1341,7 @@ describe('lib/motion recipe checks (spec §2.9)', () => {
         const value = exports[name];
         const values = typeof value === 'string' ? [value] : Object.values(value as object);
         expect(values.length, name).toBeGreaterThan(0);
-        for (const item of values) expect(words(String(item)), name).toContain('grid');
+        for (const item of values) expect(words(String(item)), name).toContain(`${PREFIX}grid`);
       }
     });
 

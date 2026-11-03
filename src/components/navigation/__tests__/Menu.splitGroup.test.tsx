@@ -94,7 +94,7 @@ describe('Menu.SplitGroup', () => {
         </Menu>,
       ],
     },
-    conflictingClass: { className: 'items-center', overrides: 'items-stretch' },
+    conflictingClass: { className: 'items-center', overrides: 'wave:items-stretch' },
     wrapper: createOverlayTestWrapper(Menu, { 'aria-label': 'File' }),
   });
 

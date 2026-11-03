@@ -29,10 +29,6 @@ function spyWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => {});
 }
 
-const DEPRECATED_ON_CHANGE =
-  '[WaveUI] ColorPicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
-  '`onValueChange` instead.';
-
 /** The development warning for a `value`/`defaultValue` that is not a hex color. */
 function invalidValueWarning(value: string) {
   return (
@@ -142,16 +138,27 @@ describe('ColorPicker', () => {
     expect(onValueChange).toHaveBeenLastCalledWith('#123456');
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = spyWarn();
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      const { rerender } = render(<ColorPicker presets={['#ff0000']} onChange={onChange} />);
-      rerender(<ColorPicker presets={['#ff0000']} onChange={onChange} />);
+      const onValueChange = vi.fn();
+      render(
+        <ColorPicker
+          presets={['#ff0000']}
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
+      );
       await user.click(preset('#ff0000'));
-      expect(onChange).toHaveBeenCalledWith('#ff0000');
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
+      await user.tripleClick(hexInput());
+      await user.keyboard('#123456');
+      expect(onValueChange.mock.calls).toEqual([['#ff0000'], ['#123456']]);
+      // Untyped code that still passes it gets no value: it is never called with a color.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(String));
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -387,9 +394,13 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
 
   it('draws the hex field boundary like Input: border-input plus the accessible bottom stroke', () => {
     render(<ColorPicker />);
-    expect(hexInput()).toHaveClass('border', 'border-input', 'border-b-stroke-accessible');
-    expect(hexInput()).not.toHaveClass('border-border');
-    expect(hexInput()).not.toHaveClass('border-destructive');
+    expect(hexInput()).toHaveClass(
+      'wave:border',
+      'wave:border-input',
+      'wave:border-b-stroke-accessible',
+    );
+    expect(hexInput()).not.toHaveClass('wave:border-border');
+    expect(hexInput()).not.toHaveClass('wave:border-destructive');
   });
 
   it('shows the shared invalid look while the hex text is flagged or the picker is invalid', async () => {
@@ -401,15 +412,15 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
       </>,
     );
     const [typed, consumer] = screen.getAllByRole('textbox', { name: 'Hex color value' });
-    expect(typed).not.toHaveClass('border-destructive');
+    expect(typed).not.toHaveClass('wave:border-destructive');
     expect(consumer).toHaveClass(...inputInvalid.split(' '));
     await user.tripleClick(typed);
     await user.keyboard('#zzz');
     expect(typed).toHaveClass(...inputInvalid.split(' '));
     // Keeps the destructive border and shows the focus color on the focused bottom border
     // (Phase 4 D4).
-    expect(typed).toHaveClass('focus:border-b-primary');
-    for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
+    expect(typed).toHaveClass('wave:focus:border-b-primary');
+    for (const replaced of ['wave:border-input', 'wave:border-b-stroke-accessible']) {
       expect(typed).not.toHaveClass(replaced);
     }
     for (const input of [typed, consumer]) {
@@ -427,15 +438,15 @@ describe('ColorPicker — hex input (input-basic#41, input-pickers#24, #25)', ()
     (token) => {
       render(<ColorPicker aria-label="Accent" aria-invalid={token} />);
       expect(hexInput()).toHaveAttribute('aria-invalid', token);
-      expect(hexInput()).not.toHaveClass('border-destructive');
-      expect(hexInput()).toHaveClass('border-input');
+      expect(hexInput()).not.toHaveClass('wave:border-destructive');
+      expect(hexInput()).toHaveClass('wave:border-input');
     },
   );
 
   it('uses the shared input focus indicator (focus:outline-hidden, never outline-none)', () => {
     render(<ColorPicker />);
-    expect(hexInput()).toHaveClass('focus:outline-hidden', 'focus:border-b-primary');
-    expect(hexInput()).not.toHaveClass('focus:outline-none');
+    expect(hexInput()).toHaveClass('wave:focus:outline-hidden', 'wave:focus:border-b-primary');
+    expect(hexInput()).not.toHaveClass('wave:focus:outline-none');
   });
 });
 
@@ -444,12 +455,12 @@ describe('ColorPicker — opacity (input-pickers#15, input-basic#30)', () => {
     render(<ColorPicker showOpacity />);
     const root = opacitySlider().closest(`.${alphaSliderClassNames.root}`) as HTMLElement;
     expect(root.querySelector(`.${alphaSliderClassNames.thumb}`)).toHaveClass(
-      'group-has-[:focus-visible]/alpha-slider:outline-2',
-      'group-has-[:focus-visible]/alpha-slider:outline-offset-2',
-      'group-has-[:focus-visible]/alpha-slider:outline-ring',
-      'group-has-[:focus-visible]/alpha-slider:ring-background',
+      'wave:group-has-[:focus-visible]/alpha-slider:outline-2',
+      'wave:group-has-[:focus-visible]/alpha-slider:outline-offset-2',
+      'wave:group-has-[:focus-visible]/alpha-slider:outline-ring',
+      'wave:group-has-[:focus-visible]/alpha-slider:ring-background',
     );
-    expect(opacitySlider()).not.toHaveClass('focus:outline-none');
+    expect(opacitySlider()).not.toHaveClass('wave:focus:outline-none');
   });
 
   it('renders the opacity slider only with showOpacity', () => {
@@ -562,7 +573,7 @@ describe('ColorPicker — presets (input-pickers#16, #17, #23)', () => {
   it('shows the selected preset with an offset ring and a check glyph', () => {
     render(<ColorPicker presets={['#0f6cbd', '#d13438']} defaultValue="#0f6cbd" />);
     const selected = preset('#0f6cbd');
-    expect(selected).toHaveClass('ring-2', 'ring-offset-2', 'ring-foreground');
+    expect(selected).toHaveClass('wave:ring-2', 'wave:ring-offset-2', 'wave:ring-foreground');
     expect(selected.querySelector('[data-wave-icon="check"]')).not.toBeNull();
     expect(preset('#d13438').querySelector('[data-wave-icon="check"]')).toBeNull();
   });
@@ -928,36 +939,6 @@ describe('ColorPicker — native forms (C-FORMS)', () => {
     expect(within(changed).getByRole('slider', { name: 'Opacity' })).toHaveValue('50');
   });
 
-  it('deprecated onChange alias: a form reset reports only the default color, like onValueChange (C-NAMING, input-basic#12)', async () => {
-    const warn = spyWarn();
-    try {
-      const user = userEvent.setup();
-      const onChange = vi.fn();
-      const untouched = vi.fn();
-      render(
-        <form aria-label="Form">
-          <ColorPicker
-            aria-label="Changed"
-            showOpacity
-            defaultValue="#0f6cbd80"
-            onChange={onChange}
-          />
-          <ColorPicker aria-label="Untouched" onChange={untouched} />
-        </form>,
-      );
-      const changed = screen.getByRole('group', { name: 'Changed' });
-      await user.click(within(changed).getByRole('radio', { name: 'Red' }));
-      expect(onChange.mock.calls).toEqual([['#d1343880']]);
-
-      act(() => getForm().reset());
-      expect(onChange.mock.calls).toEqual([['#d1343880'], ['#0f6cbd80']]);
-      expect(untouched).not.toHaveBeenCalled();
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
   it('controlled: form reset reports only the default color (input-basic#12)', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
@@ -1285,7 +1266,7 @@ describe('ColorPicker — the color parts bind to it (D21)', () => {
         </ColorPicker>
       </form>,
     );
-    expect(screen.getByRole('group', { name: 'Fläche' })).toHaveClass('rounded-none');
+    expect(screen.getByRole('group', { name: 'Fläche' })).toHaveClass('wave:rounded-none');
     expect(screen.getByRole('slider', { name: 'Farbton' })).toBeInTheDocument();
     const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
     expect(Array.from(new FormData(form).keys())).toEqual(['accent']);
@@ -1335,8 +1316,8 @@ describe('ColorPicker — slotProps', () => {
   it('renders the parts of 1f67a85 on the server and in the client (attributes sorted)', () => {
     // Captured from the dist of 1f67a85.
     const pin = [
-      '<span class="wave-color-picker__opacity-label w-14 text-caption-1 text-muted-foreground">',
-      '<span class="wave-color-picker__opacity-value w-10 text-end text-caption-1 text-muted-foreground">',
+      '<span class="wave-color-picker__opacity-label wave:w-14 wave:text-caption-1 wave:text-muted-foreground">',
+      '<span class="wave-color-picker__opacity-value wave:w-10 wave:text-end wave:text-caption-1 wave:text-muted-foreground">',
     ].join('\n');
     const ui = <ColorPicker aria-label="Accent" showOpacity defaultValue="#0f6cbd80" />;
     const template = document.createElement('template');
@@ -1402,10 +1383,10 @@ describe('ColorPicker — slotProps', () => {
     expect(labelRef.current).toBe(label);
     expect(valueRef.current).toBe(value);
     for (const [element, stable, own, mine, part] of [
-      [label, colorPickerClassNames.opacityLabel, 'w-14', 'my-label', 'label'],
-      [value, colorPickerClassNames.opacityValue, 'text-end', 'my-value', 'value'],
+      [label, colorPickerClassNames.opacityLabel, 'wave:w-14', 'my-label', 'label'],
+      [value, colorPickerClassNames.opacityValue, 'wave:text-end', 'my-value', 'value'],
     ] as const) {
-      expect(element).toHaveClass(stable, own, 'text-caption-1', mine);
+      expect(element).toHaveClass(stable, own, 'wave:text-caption-1', mine);
       expect(element.classList[0]).toBe(stable);
       expect(element.classList[element.classList.length - 1]).toBe(mine);
       expect(element).toHaveAttribute('data-part', part);
@@ -1461,7 +1442,7 @@ describe('ColorPicker — slotProps', () => {
     );
     const label = screen.getByText('Opacity');
     expect(label).toHaveClass('w-20');
-    expect(label).not.toHaveClass('w-14');
+    expect(label).not.toHaveClass('wave:w-14');
   });
 
   it('ignores the parts without showOpacity and with children, and never forwards them', () => {

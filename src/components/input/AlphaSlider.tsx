@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { alphaSliderClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getDirection } from '../../lib/direction';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import type { HsvColor } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -63,15 +63,31 @@ export interface AlphaSliderProps extends Omit<
   /** Texts of the slider; bound to a ColorPicker, the picker's `labels` fill the keys you leave out. */
   labels?: AlphaSliderLabels;
   /**
-   * Props for the elements the slider draws inside its root, by part, merged into each part's
-   * own (Fluent UI's `rail` and `thumb` slot props): your classes after the part's (yours win a
+   * Props for the elements the slider draws, by part, merged into each part's own (Fluent UI's
+   * `root`, `rail` and `thumb` slot props): your classes after the part's (yours win a
    * conflict), your styles over its styles, your handlers and attributes added, your ref
    * attached. Every attribute the slider sets on a part is locked. A part takes no `children`.
-   * Both parts are drawn only: the slider itself is the invisible range input over them, which
-   * takes the pointer and the keys and is reached through the slider's own props and
-   * `controlRef`, so a part receives no press of its own.
+   * The rail and the thumb are drawn only: the slider itself is the invisible range input over
+   * them, which takes the pointer and the keys and is reached through the slider's own props and
+   * `ref`, so a part receives no press of its own.
    */
   slotProps?: {
+    /**
+     * The root `<div>` around the rail, the range input and the thumb (stable class
+     * `wave-alpha-slider`), which the slider's `className`, `style`, `data-*` and other root props
+     * reach as well; its `ref` is the way to the root, since the slider's `ref` reaches the range
+     * input. Your classes come after the slider's `className`, your style over its `style`; the
+     * custom properties that draw the value (the gradient, the thumb's position and color) stay the
+     * slider's. Locked: every prop you give the slider itself that reaches the root,
+     * `data-orientation`, `data-disabled`, and `hidden`, `inert` and `aria-hidden` (the slider's
+     * own: the root holds the input). Also locked, unset: `role`, `tabIndex` and the roving markers
+     * (`data-roving-container`, `data-roving-disabled`, `data-roving-value`, `aria-disabled`), so
+     * in a toolbar or another roving container the root is never a control of its own and never
+     * hides the control from the arrow order. Your handlers run before the slider's own root
+     * handlers (`preventDefault()` in yours skips them), and your `onClick` is called in every
+     * state, as the slider's own `onClick` is: only the range input inside is natively disabled.
+     */
+    root?: SlotPart<'div'>;
     /**
      * The `<div>` that draws the rail: the checkerboard, with the color's gradient in a `<span>`
      * inside it (stable class `wave-alpha-slider__rail`). Locked: `aria-hidden`, which keeps the
@@ -95,8 +111,10 @@ const DEFAULT_LABELS = { opacity: 'Opacity', transparency: 'Transparency' } as c
  * layouts) or vertical (bottom to top); `transparency` shows transparency instead. The arrow keys
  * move by 1 %, Shift with an arrow and Page Up or Page Down by 10, Home and End to the ends. It is
  * named by `aria-label`, else the surrounding Field's label, else "Opacity" ("Transparency").
- * Inside a ColorPicker, leave `value` and `defaultValue` out and it binds to the picker. Fluent's
- * `AlphaSlider`, with `value`/`onValueChange` for its `color`/`onChange`.
+ * Inside a ColorPicker, leave `value` and `defaultValue` out and it binds to the picker. `ref`
+ * reaches the range input, as the naming, validation and focus props do; `className`, `style` and
+ * `data-*` stay on the root (`slotProps.root.ref` reaches it). Fluent's `AlphaSlider`, with
+ * `value`/`onValueChange` for its `color`/`onChange`.
  *
  * @example
  * <AlphaSlider value={color} onValueChange={setColor} />
@@ -113,7 +131,6 @@ export const AlphaSlider = ({
   name,
   form,
   required,
-  controlRef,
   className,
   style,
   id,
@@ -174,7 +191,7 @@ export const AlphaSlider = ({
     required ?? (ariaRequired === true || ariaRequired === 'true' || (field?.required ?? false));
 
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedControlRef = useMergedRefs(inputRef, controlRef);
+  const mergedControlRef = useMergedRefs(inputRef, ref);
   useFormReset(inputRef, part.reset, form);
 
   /** Applies a value of the input's range: the opacity in percent, or the transparency. */
@@ -205,39 +222,50 @@ export const AlphaSlider = ({
     apply(Math.min(100, Math.max(0, Math.round(Number(event.currentTarget.value)))));
   };
 
-  const sliderStyle = {
-    ...style,
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      alphaSliderClassNames.root,
+      'wave:group/alpha-slider wave:relative wave:flex wave:touch-none wave:select-none wave:data-[disabled]:cursor-not-allowed wave:data-[disabled]:opacity-50',
+      vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
+      className,
+    ),
+    style,
+    locked: {
+      'data-orientation': orientation,
+      'data-disabled': part.disabled ? '' : undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
+      // The slider's own root props, after the data attributes as in 0.18, and over the part's;
+      // the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+  // The value's drawing (the gradient, the thumb's position and color) after every other style.
+  const rootStyle = {
+    ...(rootProps.style as React.CSSProperties | undefined),
     '--wave-color-slider-gradient': alphaSliderGradient(shown, transparency, orientation),
     '--wave-color-slider-position': toPosition(current / 100),
     '--wave-color-thumb': hsvToHex(shown),
   } as React.CSSProperties;
 
   return (
-    <div
-      data-orientation={orientation}
-      data-disabled={part.disabled ? '' : undefined}
-      className={cn(
-        alphaSliderClassNames.root,
-        'group/alpha-slider relative flex touch-none select-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-        vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
-        className,
-      )}
-      style={sliderStyle}
-      {...rest}
-      ref={ref}
-    >
+    <div {...rootProps} style={rootStyle}>
       <div
         {...mergeSlotProps(slotProps?.rail, {
-          className: cn(
+          className: wcn(
             alphaSliderClassNames.rail,
-            'relative overflow-hidden rounded-full bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none',
+            'wave:relative wave:overflow-hidden wave:rounded-full wave:bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] wave:bg-size-[8px_8px] wave:forced-colors:forced-color-adjust-none',
             vertical ? RAIL_TRACK_VERTICAL : RAIL_TRACK_HORIZONTAL,
-            resolvedShape === 'square' && 'rounded-none',
+            resolvedShape === 'square' && 'wave:rounded-none',
           ),
           locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
       >
-        <span className={cn('absolute inset-0', RAIL_GRADIENT)} />
+        <span className={wcn('wave:absolute wave:inset-0', RAIL_GRADIENT)} />
       </div>
       <input
         type="range"
@@ -260,16 +288,16 @@ export const AlphaSlider = ({
         onKeyDown={handleKeyDown}
         onKeyUp={onKeyUp}
         onChange={handleChange}
-        className={cn(RAIL_INPUT_CLASSES, vertical ? RAIL_INPUT_VERTICAL : RAIL_INPUT_HORIZONTAL)}
+        className={wcn(RAIL_INPUT_CLASSES, vertical ? RAIL_INPUT_VERTICAL : RAIL_INPUT_HORIZONTAL)}
       />
       <span aria-hidden="true" className={vertical ? THUMB_TRACK_VERTICAL : THUMB_TRACK_HORIZONTAL}>
         <span
           {...mergeSlotProps(slotProps?.thumb, {
-            className: cn(
+            className: wcn(
               alphaSliderClassNames.thumb,
               COLOR_THUMB_CLASSES,
               vertical ? THUMB_POSITION_VERTICAL : THUMB_POSITION_HORIZONTAL,
-              'group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]',
+              'wave:group-has-[:focus-visible]/alpha-slider:ring-2 wave:group-has-[:focus-visible]/alpha-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] wave:group-has-[:focus-visible]/alpha-slider:outline-2 wave:group-has-[:focus-visible]/alpha-slider:outline-offset-2 wave:group-has-[:focus-visible]/alpha-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]',
             ),
           })}
         />

@@ -1,13 +1,18 @@
 import * as React from 'react';
 import { flushSync } from 'react-dom';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { timePickerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
-import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  lockPositionStyle,
+  mergeSlotProps,
+  ROVING_PART_LOCKS,
+  type SlotPart,
+} from '../../lib/slotProps';
 import {
   disabledStyles,
   focusRing,
@@ -43,10 +48,12 @@ import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import {
   DEFAULT_TIME_STEP,
   generateTimeOptions,
+  localeTimeFormat,
   minutesToTime,
   minutesToValue,
   normalizeTimeStep,
   timeToMinutes,
+  type TimeFormat,
 } from './dateUtils';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
@@ -63,11 +70,11 @@ import type { RoutedHandlers } from './routedHandlers';
 /* ------------------------------------------------------------------ */
 
 const OPTION_CLASSES =
-  'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body-1 text-foreground hover:bg-subtle-hover data-[active]:bg-subtle-hover data-[active]:outline-2 data-[active]:outline-ring data-[active]:-outline-offset-2 data-[selected]:bg-subtle-selected data-[selected]:font-semibold';
+  'wave:flex wave:cursor-pointer wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:hover:bg-subtle-hover wave:data-[active]:bg-subtle-hover wave:data-[active]:outline-2 wave:data-[active]:outline-ring wave:data-[active]:-outline-offset-2 wave:data-[selected]:bg-subtle-selected wave:data-[selected]:font-semibold';
 
-const CHECK_ICON_CLASSES = cn(
+const CHECK_ICON_CLASSES = wcn(
   timePickerClassNames.checkIcon,
-  'flex h-4 w-4 shrink-0 items-center justify-center',
+  'wave:flex wave:h-4 wave:w-4 wave:shrink-0 wave:items-center wave:justify-center',
 );
 
 interface TimePickerOptionProps {
@@ -92,7 +99,7 @@ const TimePickerOption = React.memo(function TimePickerOption({
 }: TimePickerOptionProps) {
   const { selected, optionProps } = useListboxOption<HTMLLIElement>({ value, label }, part?.ref);
   const { ref: optionRef, style: optionStyle, ...optionAttributes } = optionProps;
-  const className = cn(
+  const className = wcn(
     timePickerClassNames.option,
     OPTION_CLASSES,
     selected && forcedColors.selectedContainer,
@@ -194,12 +201,14 @@ export interface TimePickerProps extends Omit<
   /** Called with the new `HH:mm` value (`''` when cleared) whenever the selected time changes. */
   onValueChange?: (value: string) => void;
   /**
-   * @deprecated Use `onValueChange`. Still called with the new value (warns once in development).
-   */
-  onChange?: (value: string) => void;
-  /**
-   * Time display format of the input and the options.
-   * @default '12h'
+   * Time display format of the input and the options: `'12h'` (`1:30 PM`) or `'24h'` (`13:30`).
+   * Without it, the times follow the hour cycle of the browser's language (`navigator.language`:
+   * 12-hour in `en-US`, 24-hour in `en-GB` and many other locales). The server HTML and the
+   * hydration render show 12-hour times, so hydration matches, and the picker switches to the
+   * language's cycle right after; a picker mounted in the browser follows it from its first
+   * render. Pass `format` for the same output on the server and in the browser (Fluent's
+   * `hourCycle`).
+   * @default the hour cycle of the browser's language (`'12h'` on the server and while hydrating)
    */
   format?: '12h' | '24h';
   /**
@@ -319,14 +328,15 @@ export interface TimePickerProps extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Key handler of the text input. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
-  /** Ref to the text input (the `role="combobox"` element); `ref` stays on the root. */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the root element. */
-  ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Ref to the text input, the `role="combobox"` element and the focusable control (Fluent UI's
+   * `ref`, on its primary element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
   /**
    * Props for the elements the TimePicker draws, by part, merged into each part's own (Fluent UI's
-   * `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the part's
-   * (yours win a conflict), your styles over its styles, your handlers before its handlers
+   * `root`, `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers before its handlers
    * (`preventDefault()` in yours skips the TimePicker's handling of the event, its own `on…` prop
    * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
    * `aria-describedby`. Every attribute the TimePicker sets on a part is locked and keeps the
@@ -335,17 +345,35 @@ export interface TimePickerProps extends Omit<
    */
   slotProps?: {
     /**
+     * The root `<div>` around the input and its buttons, the error message and the list while
+     * closed (stable class `wave-time-picker`), which the TimePicker's `className`, `style`,
+     * `data-*` and other root props reach as well; its `ref` is the way to the root, since the
+     * TimePicker's `ref` reaches the input. Your classes come after the TimePicker's `className`,
+     * your style over its `style`. Locked: every prop you give the TimePicker itself that reaches
+     * the root, `data-size`, `data-appearance`, and `hidden`, `inert` and `aria-hidden` (the
+     * TimePicker's own: the root holds the input). Also locked, unset: `role`, `tabIndex` and the
+     * roving markers (`data-roving-container`, `data-roving-disabled`, `data-roving-value`,
+     * `aria-disabled`), so in a toolbar or another roving container the root is never a control of
+     * its own and never hides the control from the arrow order. Your handlers run before the
+     * TimePicker's own root handlers (`preventDefault()` in yours skips them). The root passes no
+     * click to the input, so your `onClick` is called in every state, as the TimePicker's own
+     * `onClick` is. Your ref joins the TimePicker's own, which keeps a press inside the root from
+     * dismissing the open list.
+     */
+    root?: SlotPart<'div'>;
+    /**
      * The `<input role="combobox">`, the focusable control (stable class
-     * `wave-time-picker__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
-     * `value` (and, unset, `defaultValue`: the TimePicker controls the text), `id`, the naming,
-     * Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`,
-     * `aria-controls`, `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`,
-     * `aria-errormessage`, `aria-details`), `disabled`, `readOnly`, `placeholder`, every text
-     * input prop routed to it (`autoComplete`, `maxLength`, `tabIndex`, …), `name`, `form` and
-     * `required` (the value is submitted by the TimePicker's hidden input), `hidden`, `inert`
-     * and `aria-hidden` (a focusable control is never hidden). Your handlers run before the
-     * TimePicker's: `preventDefault()` in your `onChange` ignores the typed text, in your
-     * `onKeyDown` skips the picker's keys, in your `onBlur` keeps the typed text uncommitted.
+     * `wave-time-picker__input`; the TimePicker's `ref` reaches it as well). Locked: `type`,
+     * `role`, `value` (and, unset, `defaultValue`: the TimePicker controls the text), `id`, the
+     * naming, Field and listbox wiring (`aria-label`, `aria-invalid`, `aria-required`,
+     * `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-haspopup`,
+     * `aria-autocomplete`, `aria-errormessage`, `aria-details`), `disabled`, `readOnly`,
+     * `placeholder`, every text input prop routed to it (`autoComplete`, `maxLength`,
+     * `tabIndex`, …), `name`, `form` and `required` (the value is submitted by the TimePicker's
+     * hidden input), `hidden`, `inert` and `aria-hidden` (a focusable control is never hidden).
+     * Your handlers run before the TimePicker's: `preventDefault()` in your `onChange` ignores
+     * the typed text, in your `onKeyDown` skips the picker's keys, in your `onBlur` keeps the
+     * typed text uncommitted.
      */
     input?: SlotPart<'input'>;
     /**
@@ -408,7 +436,12 @@ export interface TimePickerProps extends Omit<
   };
 }
 
-function displayTime(value: string, format: '12h' | '24h'): string {
+/** The browser's language; `undefined` where there is no `navigator` (the runtime default). */
+function browserLanguage(): string | undefined {
+  return typeof navigator === 'undefined' ? undefined : navigator.language;
+}
+
+function displayTime(value: string, format: TimeFormat): string {
   const minutes = timeToMinutes(value);
   return Number.isNaN(minutes) ? value : minutesToTime(minutes, format);
 }
@@ -452,17 +485,20 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   after the input. Tab from erased text clears the value first, so focus moves on past the
  *   picker instead of to the clear button that disappears.
  * - The value is `HH:mm` (24-hour) whatever the display `format`; values off the `step` grid or
- *   outside the bounds are still displayed in `format`.
+ *   outside the bounds are still displayed in `format`. Without `format` the times follow the
+ *   hour cycle of the browser's language; the server HTML and the hydration render show 12-hour
+ *   times, so a server-rendered app passes `format` for the same output on the server.
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
  *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
  *   `data-size` and `data-appearance` on the root `<div>`. The time list keeps its size.
- * - The input (`controlRef`) receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * - The input receives `ref`, `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  *   `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`,
  *   `autoFocus`, `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes
  *   `autoComplete`, `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and
- *   `enterKeyHint`. `ref`, `className`, `style`, other `aria-*` attributes and the remaining props
- *   stay on the root `<div>`. Inside a `Field`, the input is labelled and described by it.
+ *   `enterKeyHint`. `className`, `style`, other `aria-*` attributes and the remaining props stay
+ *   on the root `<div>` (`slotProps.root.ref` reaches it). Inside a `Field`, the input is
+ *   labelled and described by it.
  * - `name`/`required` add a hidden input for native forms (`HH:mm`); the value resets with its form.
  * - The built-in names, status texts and error messages are English; `labels` localizes them.
  * - The open list renders only in the browser: an open list (`defaultOpen`, `open`) is closed in
@@ -473,8 +509,7 @@ export const TimePicker = (props: TimePickerProps) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    onChange,
-    format = '12h',
+    format: formatProp,
     step = DEFAULT_TIME_STEP,
     minTime = '00:00',
     maxTime = '23:59',
@@ -515,24 +550,31 @@ export const TimePicker = (props: TimePickerProps) => {
     onBlur,
     onKeyDown,
     onKeyUp,
-    controlRef,
     className,
+    style,
     ref,
     slotProps,
     ...rest
   } = props;
 
-  if (onChange !== undefined) warnDeprecated('TimePicker', 'onChange', 'onValueChange');
-
   const { size, appearance } = useInputLook(sizeProp, appearanceProp);
+
+  // `false` on the server and while hydrating, `true` in every other client render.
+  const isClient = useIsClient();
+  // Without `format` the times follow the browser language's hour cycle (1.0). The server HTML
+  // and the hydration render show 12-hour times, so hydration matches; the render after it
+  // switches (derived during render, C-HOOKS). Read once per picker, not on every keystroke.
+  const followsLocale = formatProp === undefined && isClient;
+  const localeFormat = React.useMemo<TimeFormat>(
+    () => (followsLocale ? localeTimeFormat(browserLanguage()) : '12h'),
+    [followsLocale],
+  );
+  const format = formatProp ?? localeFormat;
 
   const [selectedValue, setSelectedValue] = useControllable<string>(
     valueProp,
     defaultValue ?? '',
-    (next) => {
-      onValueChange?.(next);
-      onChange?.(next);
-    },
+    onValueChange,
   );
 
   /* ---- options, step and bounds ---------------------------------- */
@@ -581,7 +623,6 @@ export const TimePicker = (props: TimePickerProps) => {
   // The open list lives in a portal, which renders only in the browser: until then (the server
   // HTML, hydration) the picker shows the closed inline list and reports it closed, so
   // aria-controls and aria-activedescendant never name a missing element.
-  const isClient = useIsClient();
   const open = openState && interactive && isClient;
   // A list hidden because the picker became disabled or read-only is closed for good
   // (uncontrolled), so enabling the picker again does not bring it back; onOpenChange(false)
@@ -750,8 +791,10 @@ export const TimePicker = (props: TimePickerProps) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
-  const rootRefs = useMergedRefs<HTMLDivElement>(ref, rootRef);
-  const inputRefs = useMergedRefs<HTMLInputElement>(controlRef, inputRef, slotProps?.input?.ref);
+  // The root part's ref joins the root's own (the dismissal reads it) through a merged ref set
+  // after the part's props, so an inline part ref never detaches the root's own.
+  const rootRefs = useMergedRefs<HTMLDivElement>(rootRef, slotProps?.root?.ref);
+  const inputRefs = useMergedRefs<HTMLInputElement>(ref, inputRef, slotProps?.input?.ref);
 
   const { layerId } = useDismiss({
     open,
@@ -903,9 +946,9 @@ export const TimePicker = (props: TimePickerProps) => {
   const renderListbox = (hidden: boolean) => (
     <ul
       {...mergeSlotProps(slotProps?.listbox, {
-        className: cn(
+        className: wcn(
           timePickerClassNames.listbox,
-          'max-h-60 min-h-0 overflow-auto py-1 focus:outline-hidden',
+          'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden',
         ),
         locked: {
           inert: undefined,
@@ -952,9 +995,9 @@ export const TimePicker = (props: TimePickerProps) => {
 
   const { style: positionStyle, ...placement } = floatingProps;
   const surfaceProps = mergeSlotProps(slotProps?.surface, {
-    className: cn(
+    className: wcn(
       timePickerClassNames.surface,
-      'flex flex-col overflow-hidden rounded border border-border bg-background shadow-8',
+      'wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8',
     ),
     locked: {
       ...placement,
@@ -972,26 +1015,42 @@ export const TimePicker = (props: TimePickerProps) => {
   // sets win.
   const surfaceStyle = lockPositionStyle(surfaceProps.style, positionStyle);
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      timePickerClassNames.root,
+      'wave:relative wave:inline-flex wave:flex-col',
+      className,
+    ),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
+      // The TimePicker's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
     <ListboxContext.Provider value={lb.context}>
-      <div
-        data-size={size}
-        data-appearance={appearance}
-        {...rest}
-        ref={rootRefs}
-        className={cn(timePickerClassNames.root, 'relative inline-flex flex-col', className)}
-      >
-        <div ref={setReference} className="relative flex items-center">
+      <div {...rootProps} ref={rootRefs}>
+        <div ref={setReference} className="wave:relative wave:flex wave:items-center">
           <input
             {...mergeSlotProps(slotProps?.input, {
-              className: cn(
+              className: wcn(
                 timePickerClassNames.input,
                 inputHeightClasses[size],
-                'w-full',
+                'wave:w-full',
                 inputPaddingClasses[size],
                 inputTextClasses[size],
                 inputAppearanceClasses[appearance],
-                'text-foreground placeholder:text-muted-foreground',
+                'wave:text-foreground wave:placeholder:text-muted-foreground',
                 inputFocus,
                 disabledStyles,
                 invalidLook && inputInvalid,
@@ -1049,7 +1108,7 @@ export const TimePicker = (props: TimePickerProps) => {
               // change it).
               type="button"
               {...mergeSlotProps(slotProps?.clearButton, {
-                className: cn(
+                className: wcn(
                   timePickerClassNames.clearButton,
                   pickerIconButtonClasses(size, appearance),
                   pickerButtonOffset(size, showExpand ? 2 : 1),
@@ -1096,7 +1155,10 @@ export const TimePicker = (props: TimePickerProps) => {
         {showOwnError && (
           <p
             {...mergeSlotProps(slotProps?.errorMessage, {
-              className: cn(timePickerClassNames.errorMessage, 'mt-1 text-caption-1 text-error'),
+              className: wcn(
+                timePickerClassNames.errorMessage,
+                'wave:mt-1 wave:text-caption-1 wave:text-error',
+              ),
               locked: { id: errorId, role: 'alert' },
             })}
           >
@@ -1104,7 +1166,7 @@ export const TimePicker = (props: TimePickerProps) => {
           </p>
         )}
         {!open && allOptions.length > 0 && renderListbox(true)}
-        <span role="status" className="sr-only">
+        <span role="status" className="wave:sr-only">
           {statusMessage}
         </span>
         <HiddenInput
@@ -1124,9 +1186,9 @@ export const TimePicker = (props: TimePickerProps) => {
               ) : (
                 <div
                   {...mergeSlotProps(slotProps?.emptyMessage, {
-                    className: cn(
+                    className: wcn(
                       timePickerClassNames.emptyMessage,
-                      'px-3 py-1.5 text-body-1 text-muted-foreground',
+                      'wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground',
                     ),
                     locked: { 'aria-hidden': 'true', tabIndex: undefined },
                   })}

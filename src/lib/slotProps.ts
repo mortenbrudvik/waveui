@@ -1,6 +1,6 @@
 import type * as React from 'react';
 import { joinIds } from './aria';
-import { cn } from './cn';
+import { wcn } from './cn';
 import { composeEventHandlers } from './composeEventHandlers';
 import { ID_LIST_KEYS } from './mergeProps';
 import { mergeRefs } from './mergeRefs';
@@ -156,6 +156,26 @@ export const HIDDEN_PART_LOCKS = {
 } as const;
 
 /**
+ * What a part that holds a control of a roving container, a toolbar or a grid locks unset
+ * (module-only): the role and the tab stop, and the markers the roving hook reads on every
+ * candidate (`data-roving-container`, `data-roving-disabled`, `data-roving-value`,
+ * `aria-disabled`), so a part can make the element neither a nested composite that hides the
+ * control from the arrow order, nor an item or a second tab stop of its own: the label part of
+ * RadioGroup.Item, and the root part of every component whose `ref` reaches a control inside its
+ * root (Checkbox, Switch, `RadioGroup.Item`, Input, the pickers, the sliders), which a toolbar's
+ * `[tabindex]` selector would otherwise take for a control. Spread it into the part's `locked`
+ * object, before the component's own attributes.
+ */
+export const ROVING_PART_LOCKS = {
+  role: undefined,
+  tabIndex: undefined,
+  'data-roving-container': undefined,
+  'data-roving-disabled': undefined,
+  'data-roving-value': undefined,
+  'aria-disabled': undefined,
+} as const;
+
+/**
  * What a button part locks before the button's own attributes (module-only): a button `type`, and
  * unset the tab stop, the native and the focusable disabled state and the keys of
  * {@link HIDDEN_PART_LOCKS}, so a part can change neither whether the button works nor whether it
@@ -225,8 +245,8 @@ export function composeAfterPart<E extends { defaultPrevented: boolean }>(
  *   its value is `undefined`: an `aria-controls` that only exists while open stays absent).
  * - **`null` and `undefined`** from the consumer are skipped: they never erase a default, a
  *   style value or a handler (`{ id: undefined }` keeps the component's id).
- * - **`className`** is the component's classes, then the consumer's, through `cn` (the
- *   consumer wins a conflict). Without a consumer class the component's string is passed
+ * - **`className`** is the component's classes, then the consumer's, merged as `cn` merges them
+ *   (the consumer wins a conflict). Without a consumer class the component's string is passed
  *   through untouched, so the markup cannot change.
  * - **`style`** is the component's object with the consumer's keys over it; omitted when
  *   neither side has a value.
@@ -281,9 +301,11 @@ export function composeAfterPart<E extends { defaultPrevented: boolean }>(
  *
  * @example
  * const trackRef = useMergedRefs(localTrackRef);
+ * // trackClassName: the part's stable class and its own classes, merged as the components
+ * // merge them.
  * <span
  *   {...mergeSlotProps(slotProps?.track, {
- *     className: cn(switchClassNames.track, trackClasses),
+ *     className: trackClassName,
  *     ref: trackRef,
  *     locked: { 'aria-hidden': true },
  *   })}
@@ -336,7 +358,7 @@ export function mergeSlotProps<E extends keyof React.JSX.IntrinsicElements = 'sp
     }
   }
 
-  const className = classes.length ? cn(own.className, classes) : own.className;
+  const className = classes.length ? wcn(own.className, classes) : own.className;
   if (className !== undefined) result.className = className;
   if (own.style || (style && Object.keys(style).length)) result.style = style;
   if (ref) result.ref = ref;

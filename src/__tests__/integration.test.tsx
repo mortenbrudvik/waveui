@@ -250,12 +250,11 @@ import * as flatTreeContext from '../components/layout/FlatTree.context';
 import * as tokensCore from '../lib/tokens';
 import * as waveTokensModule from '../lib/waveTokens';
 import * as brandModule from '../lib/brand';
-// The 0.18 modules: their public values reach the barrel, their seams do not, and the two modules
-// that only the tests read reach nothing.
+// The 0.18 modules: their public values reach the barrel, their seams do not, and the module
+// that only the tests read reaches nothing.
 import * as slotPropsModule from '../lib/slotProps';
 import * as nativePropsModule from '../lib/nativeProps';
 import * as slotPartsModule from '../lib/slotParts';
-import * as deprecationsModule from '../lib/deprecations';
 import * as radioGroupContextModule from '../components/input/RadioGroup.context';
 import * as menuHooksModule from '../components/navigation/Menu.hooks';
 import * as messageBarContextModule from '../components/feedback/MessageBar.context';
@@ -602,7 +601,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       expect.arrayContaining([
         'dialogMotion',
         'resolveMotion',
-        'usesLegacyMotion',
         'useMotionClasses',
         'useMotionPreference',
         'useCollapsePresence',
@@ -742,7 +740,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       ...Object.keys(slotPropsModule),
       ...Object.keys(nativePropsModule),
       ...Object.keys(slotPartsModule),
-      ...Object.keys(deprecationsModule),
       ...Object.keys(radioGroupContextModule),
       ...Object.keys(menuHooksModule),
       ...Object.keys(messageBarContextModule),
@@ -750,7 +747,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     ].filter((name) => !publicNames.includes(name));
     expect(internal.sort()).toEqual([
       'BUTTON_PART_LOCKS',
-      'DEPRECATIONS',
       'HIDDEN_PART_LOCKS',
       'MessageBarContext',
       'NAMED_SLOT_PARTS',
@@ -759,6 +755,8 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'NATIVE_NO_CAPTURE_EVENTS',
       'NATIVE_TAG_PROPS',
       'PENDING_SLOT_PARTS',
+      // 1.0 (ruling BO): the roving markers a part that holds a control locks unset.
+      'ROVING_PART_LOCKS',
       'RadioGroupContext',
       'SLOT_PART_EXCLUSIONS',
       'SLOT_PROPS_KEYS',
@@ -785,8 +783,6 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'hasRenderFunction',
       'preventMouseDown',
       'resolveWiredSlot',
-      'useLegacyMotionWarning',
-      'warnImportantColor',
       'withoutRenderFunction',
     ];
     expect([...internal, ...seams].filter((name) => name in barrel)).toEqual([]);
@@ -1154,32 +1150,6 @@ describe('Tooltip > Dialog.Trigger > Button (overlays#5)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(button('Settings')).toHaveFocus();
   });
-
-  it('the deprecated delay prop still sets the open delay, and warns once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    render(
-      <Dialog>
-        <Tooltip content="Opens the settings" delay={0}>
-          <Dialog.Trigger>
-            <Button>Settings</Button>
-          </Dialog.Trigger>
-        </Tooltip>
-        <Dialog.Content title="Settings">
-          <p>Body</p>
-        </Dialog.Content>
-      </Dialog>,
-    );
-    await user.hover(button('Settings'));
-    expect(tooltipSurface()).toHaveTextContent('Opens the settings');
-    await user.click(button('Settings'));
-    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
-    expect(warn.mock.calls).toEqual([
-      [
-        '[WaveUI] Tooltip: `delay` is deprecated and will be removed in 1.0. Use `openDelay` instead.',
-      ],
-    ]);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1213,7 +1183,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
       </Card>,
     );
     const card = screen.getByTestId('card');
-    expect(card).toHaveClass('overflow-hidden');
+    expect(card).toHaveClass('wave:overflow-hidden');
     const trigger = button('Open');
     expect(trigger).toHaveAccessibleDescription('Opens the project');
     await showTooltip(trigger, card);
@@ -1340,7 +1310,7 @@ describe('Tooltip inside clipping containers (overlays#36)', () => {
       </Overflow>,
     );
     const row = screen.getByTestId('row');
-    expect(row).toHaveClass('overflow-hidden');
+    expect(row).toHaveClass('wave:overflow-hidden');
     const trigger = button('Bold');
     expect(trigger).toHaveAccessibleDescription('Bold (Ctrl+B)');
     await showTooltip(trigger, row);
@@ -3146,7 +3116,7 @@ describe('a Field validation state around a ProgressBar', () => {
       const bar = screen.getByRole('progressbar', { name: 'Upload' });
       expect(bar).toHaveAccessibleDescription('The file is large Up to 10 MB');
       expect(bar).toHaveAttribute('data-color', state);
-      expect(bar.querySelector(`.${fill}`)).not.toBeNull();
+      expect(bar.querySelector(`.wave\\:${fill}`)).not.toBeNull();
       expect(bar).not.toHaveAttribute('aria-invalid');
       expect(bar).not.toHaveAttribute('aria-required');
       expect(bar).toHaveAttribute('aria-valuenow', '40');
@@ -3281,9 +3251,9 @@ describe('a Dialog with a long form of Fields and a Dialog.Footer', () => {
     const form = screen.getByRole('form', { name: 'Profile' });
     const footer = screen.getByTestId('footer');
     const body = form.parentElement!;
-    expect(body).toHaveClass('overflow-y-auto', `scroll-pb-(${FOOTER_HEIGHT})`);
+    expect(body).toHaveClass('wave:overflow-y-auto', `wave:scroll-pb-(${FOOTER_HEIGHT})`);
     expect(form.lastElementChild).toBe(footer);
-    expect(footer).toHaveClass('sticky', '-bottom-1', 'bg-background');
+    expect(footer).toHaveClass('wave:sticky', 'wave:-bottom-1', 'wave:bg-background');
 
     mockRect(footer, { height: 64 });
     resizeObserver.trigger(footer);
@@ -3371,7 +3341,7 @@ describe('a SpinButton in a Dialog or Drawer: a backdrop press commits its typed
             surface={surface}
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason !== 'outside-press') setOpen(next);
+              if (details.reason !== 'outside-press') setOpen(next);
             }}
             onValueChange={onValueChange}
           />
@@ -4291,7 +4261,7 @@ describe('menus and commands across components', () => {
       expect(bold).toHaveAttribute('aria-pressed', 'true');
       expect(bold).toHaveAttribute('data-pressed', '');
       expect(bold).not.toHaveAttribute('aria-checked');
-      expect(bold).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(bold).toHaveClass('wave:bg-primary', 'wave:text-primary-foreground');
 
       await user.tab();
       await user.tab();
@@ -4304,7 +4274,7 @@ describe('menus and commands across components', () => {
       await user.keyboard(' ');
       expect(bold).toHaveAttribute('aria-pressed', 'false');
       expect(bold).not.toHaveAttribute('data-pressed');
-      expect(bold).not.toHaveClass('bg-primary');
+      expect(bold).not.toHaveClass('wave:bg-primary');
       await expectNoA11yViolations(document.body);
     });
   });
@@ -4687,8 +4657,8 @@ describe('Phase 4 (form controls)', () => {
 
   it('case 1: a Field size reaches every text control and picker (TagPicker: small gives medium), and sizes the label and its horizontal padding; an own size wins', () => {
     // The Field label's type ramp and its top padding beside the control, per size (D8).
-    const LABEL_RAMP = { small: 'text-caption-1', large: 'text-body-2' } as const;
-    const LABEL_TOP = { small: 'pt-1', large: 'pt-2.25' } as const;
+    const LABEL_RAMP = { small: 'wave:text-caption-1', large: 'wave:text-body-2' } as const;
+    const LABEL_TOP = { small: 'wave:pt-1', large: 'wave:pt-2.25' } as const;
     for (const { name, role, render: control } of SIZED_CONTROLS) {
       for (const size of ['small', 'large'] as const) {
         for (const orientation of ['vertical', 'horizontal'] as const) {
@@ -4715,10 +4685,10 @@ describe('Phase 4 (form controls)', () => {
           expect(within(container).getByRole(role, { name }), where).toBeInTheDocument();
           const label = within(field).getByText(name, { selector: 'label' });
           expect(label, where).toHaveClass(LABEL_RAMP[size]);
-          expect(label, where).not.toHaveClass('text-body-1');
+          expect(label, where).not.toHaveClass('wave:text-body-1');
           if (orientation === 'horizontal') {
             expect(label, where).toHaveClass(LABEL_TOP[size]);
-            expect(label, where).not.toHaveClass('pt-1.5');
+            expect(label, where).not.toHaveClass('wave:pt-1.5');
           } else {
             expect(label, where).not.toHaveClass(LABEL_TOP[size]);
           }
@@ -4889,8 +4859,8 @@ describe('Phase 4 (form controls)', () => {
     expect(group).toHaveAttribute('aria-labelledby', label.id);
     expect(container.querySelector('label label')).toBeNull();
     // Field's own label is semibold; the element's own weight wins (D32).
-    expect(label).not.toHaveClass('font-semibold');
-    expect(label).not.toHaveClass('font-bold');
+    expect(label).not.toHaveClass('wave:font-semibold');
+    expect(label).not.toHaveClass('wave:font-bold');
     await expectNoA11yViolations(document.body);
   });
 
@@ -5129,8 +5099,8 @@ describe('Phase 4 (form controls)', () => {
     expect(email).toHaveAttribute('aria-invalid', 'true');
     expect(email).toHaveAccessibleDescription('Enter an email address');
     expect(email).toHaveAttribute('aria-errormessage', alert.id);
-    expect(email).toHaveClass('border-destructive');
-    expect(email).not.toHaveClass('border-input-filled-stroke');
+    expect(email).toHaveClass('wave:border-destructive');
+    expect(email).not.toHaveClass('wave:border-input-filled-stroke');
 
     // A Combobox with a name resets with its form at large.
     const fruit = screen.getByRole('combobox', { name: 'Fruit' });
@@ -7630,6 +7600,130 @@ describe('compounds composed in a React Server Component', () => {
         );
       },
     }),
+    // 1.0 (Phase 14, R5): the `root` part of a component whose `ref` reaches its control, given
+    // as data by the Server Component (a ref cannot cross the boundary; a client component of
+    // yours passes one): the wrapper keeps the part's class and attributes on the server,
+    // through hydration and after the interaction, and its locks hold on the server too.
+    ssrCase({
+      name: 'Checkbox (slotProps: the root <label> around the control)',
+      parts: { Box: Checkbox },
+      tree: ({ Box }) => (
+        <Box
+          label="Accept the terms"
+          slotProps={{
+            root: { className: 'mine-root', 'data-part': 'root', htmlFor: 'elsewhere' },
+          }}
+        />
+      ),
+      serverText: 'data-part="root"',
+      serverHtml: (html) => {
+        const root = partInServerHtml(html, 'root');
+        expect(root.tagName).toBe('LABEL');
+        expect(root).toHaveClass(Wave.checkboxClassNames.root, 'mine-root');
+        // Locked: the label labels the box it holds.
+        expect(root).not.toHaveAttribute('for');
+        expect(root.querySelector('[role="checkbox"]')).not.toBeNull();
+      },
+      interact: async (user) => {
+        const box = screen.getByRole('checkbox', { name: 'Accept the terms' });
+        expect(renderedPart('root')).toContainElement(box);
+        await user.click(screen.getByText('Accept the terms'));
+        expect(box).toBeChecked();
+        expect(renderedPart('root')).toHaveClass('mine-root');
+      },
+    }),
+    ssrCase({
+      name: 'Combobox (slotProps: the root <div>, beside the root ref of its own)',
+      parts: { Picker: Combobox, Option: ComboboxOption },
+      tree: ({ Picker, Option }) => (
+        <Picker
+          aria-label="Country"
+          defaultValue="no"
+          slotProps={{ root: { className: 'mine-root', 'data-part': 'root' } }}
+        >
+          <Option value="se">Sweden</Option>
+          <Option value="no">Norway</Option>
+        </Picker>
+      ),
+      serverText: 'data-part="root"',
+      serverHtml: (html) => {
+        const root = partInServerHtml(html, 'root');
+        expect(root).toHaveClass(Wave.comboboxClassNames.root, 'mine-root');
+        expect(root.querySelector('input[role="combobox"]')).toHaveAttribute('value', 'Norway');
+      },
+      interact: async (user) => {
+        const combobox = screen.getByRole('combobox', { name: 'Country' });
+        await user.click(combobox);
+        expect(combobox).toHaveAttribute('aria-expanded', 'true');
+        // A press on the root is inside the popup's tree: the list stays open.
+        fireEvent.pointerDown(renderedPart('root'));
+        await act(async () => {});
+        expect(combobox).toHaveAttribute('aria-expanded', 'true');
+        await user.click(screen.getByRole('option', { name: 'Sweden' }));
+        expect(combobox).toHaveValue('Sweden');
+      },
+    }),
+    ssrCase({
+      name: 'ColorPicker.HexField (slotProps: the root <label> around the hex input)',
+      parts: { HexField: ColorPickerHexField },
+      tree: ({ HexField }) => (
+        <ColorPicker aria-label="Accent" defaultValue="#0f6cbd">
+          <HexField slotProps={{ root: { className: 'mine-root', 'data-part': 'root' } }} />
+        </ColorPicker>
+      ),
+      serverText: 'data-part="root"',
+      serverHtml: (html) => {
+        const root = partInServerHtml(html, 'root');
+        expect(root.tagName).toBe('LABEL');
+        expect(root).toHaveClass(Wave.colorPickerHexFieldClassNames.root, 'mine-root');
+      },
+      interact: async (user) => {
+        const hex = screen.getByRole('textbox', { name: 'Hex color value' });
+        expect(renderedPart('root')).toContainElement(hex);
+        await user.click(screen.getByText('Hex'));
+        expect(hex).toHaveFocus();
+        expect(hex).toHaveValue('#0f6cbd');
+      },
+    }),
+    ssrCase({
+      name: 'TagPicker (parts; slotProps: the root <div> around the trigger)',
+      parts: {
+        Picker: TagPicker,
+        Control: TagPickerControl,
+        Group: TagPickerGroup,
+        Input: TagPickerInput,
+      },
+      tree: ({ Picker, Control, Group, Input }) => (
+        <Picker
+          aria-label="Fruits"
+          options={[
+            { value: 'apple', label: 'Apple' },
+            { value: 'banana', label: 'Banana' },
+          ]}
+          slotProps={{ root: { className: 'mine-root', 'data-part': 'root' } }}
+        >
+          <Control>
+            <Group />
+            <Input />
+          </Control>
+        </Picker>
+      ),
+      serverText: 'data-part="root"',
+      serverHtml: (html) => {
+        expect(partInServerHtml(html, 'root')).toHaveClass(
+          Wave.tagPickerClassNames.root,
+          'mine-root',
+        );
+      },
+      interact: async (user) => {
+        const input = screen.getByRole('combobox', { name: 'Fruits' });
+        expect(renderedPart('root')).toContainElement(input);
+        await user.click(input);
+        await user.click(screen.getByRole('option', { name: 'Banana' }));
+        expect(pickedTags()).toEqual(['Banana']);
+        expect(renderedPart('root')).toHaveClass('mine-root');
+      },
+    }),
   ];
 
   const hydrated: Array<{ root: Root; container: HTMLElement }> = [];
@@ -9504,14 +9598,14 @@ describe('TagGroup and InteractionTag across components (0.11 spec §4.6 #3)', (
         <Tag media={<Avatar name="Own size" size="large" />}>Own</Tag>
       </>,
     );
-    expect(screen.getByRole('img', { name: 'Medium tag' })).toHaveClass('w-6', 'h-6');
-    expect(screen.getByRole('img', { name: 'Small tag' })).toHaveClass('w-5', 'h-5');
-    expect(screen.getByRole('img', { name: 'Group tag' })).toHaveClass('w-4', 'h-4');
+    expect(screen.getByRole('img', { name: 'Medium tag' })).toHaveClass('wave:w-6', 'wave:h-6');
+    expect(screen.getByRole('img', { name: 'Small tag' })).toHaveClass('wave:w-5', 'wave:h-5');
+    expect(screen.getByRole('img', { name: 'Group tag' })).toHaveClass('wave:w-4', 'wave:h-4');
     // Inside the Primary button the Avatar is presentational: find it by its element.
     expect(
       button(/^Interaction/).querySelector('[role="img"][aria-label="Interaction tag"]'),
-    ).toHaveClass('w-5', 'h-5');
-    expect(screen.getByRole('img', { name: 'Own size' })).toHaveClass('w-12', 'h-12');
+    ).toHaveClass('wave:w-5', 'wave:h-5');
+    expect(screen.getByRole('img', { name: 'Own size' })).toHaveClass('wave:w-12', 'wave:h-12');
   });
 });
 
@@ -11753,7 +11847,7 @@ describe('Phase 11 data at scale across components (0.16)', () => {
                 <Table.SelectionCell
                   aria-label="Select all members"
                   checked={selectAll}
-                  onCheckedChange={(_checked, details) => selection.toggleAllRows(details?.event)}
+                  onCheckedChange={(_checked, details) => selection.toggleAllRows(details.event)}
                 />
                 {MEMBER_COLUMNS.map((column) => (
                   <Table.HeaderCell
@@ -11776,7 +11870,7 @@ describe('Phase 11 data at scale across components (0.16)', () => {
                     aria-label={`Select ${item.name}`}
                     checked={selection.isRowSelected(rowId)}
                     onCheckedChange={(_checked, details) =>
-                      selection.toggleRow(rowId, details?.event)
+                      selection.toggleRow(rowId, details.event)
                     }
                   />
                   <Table.Cell>{item.name}</Table.Cell>
@@ -12077,9 +12171,670 @@ describe('Phase 12 theming across components (0.17)', () => {
     );
     expect(html).toMatch(
       new RegExp(
-        `<span class="${textClassNames.root}( [^"]*)? font-wave-mono( [^"]*)?">npm install</span>`,
+        `<span class="${textClassNames.root}( [^"]*)? wave:font-wave-mono( [^"]*)?">npm install</span>`,
       ),
     );
     expect(findDanglingIdRefsInHtml(html)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.0 (Phase 14, R5): `ref` reaches the control of a composite control
+// ---------------------------------------------------------------------------
+
+/**
+ * The twelve components whose `ref` reaches their focusable control since 1.0 (spec R5), less
+ * `ColorPicker.HexField` (below), with the role and tag of that control. Each renders with a
+ * callback `ref` typed for any element, so one table holds them all; the color sliders render
+ * standalone, and TagPicker in both forms (its `ref` follows the trigger that renders).
+ */
+interface RefMoverCase {
+  name: string;
+  role: string;
+  tag: 'BUTTON' | 'INPUT';
+  control: (ref: React.RefCallback<HTMLElement>) => React.ReactElement;
+}
+
+const REF_MOVERS: RefMoverCase[] = [
+  { name: 'Checkbox', role: 'checkbox', tag: 'BUTTON', control: (ref) => <Checkbox ref={ref} /> },
+  { name: 'Switch', role: 'switch', tag: 'BUTTON', control: (ref) => <Switch ref={ref} /> },
+  {
+    name: 'SearchBox',
+    role: 'searchbox',
+    tag: 'INPUT',
+    control: (ref) => <SearchBox ref={ref} />,
+  },
+  {
+    name: 'SpinButton',
+    role: 'spinbutton',
+    tag: 'INPUT',
+    control: (ref) => <SpinButton ref={ref} />,
+  },
+  {
+    name: 'Combobox',
+    role: 'combobox',
+    tag: 'INPUT',
+    control: (ref) => <Combobox ref={ref}>{fruitOptions}</Combobox>,
+  },
+  {
+    name: 'Dropdown',
+    role: 'combobox',
+    tag: 'BUTTON',
+    control: (ref) => <Dropdown ref={ref}>{fruitOptions}</Dropdown>,
+  },
+  {
+    name: 'TimePicker',
+    role: 'combobox',
+    tag: 'INPUT',
+    control: (ref) => <TimePicker ref={ref} />,
+  },
+  {
+    name: 'DatePicker',
+    role: 'textbox',
+    tag: 'INPUT',
+    control: (ref) => <DatePicker locale="en-US" ref={ref} />,
+  },
+  {
+    name: 'TagPicker',
+    role: 'combobox',
+    tag: 'INPUT',
+    control: (ref) => <TagPicker options={P6_FRUITS} ref={ref} />,
+  },
+  {
+    name: 'TagPicker (parts, TagPicker.Button)',
+    role: 'combobox',
+    tag: 'BUTTON',
+    control: (ref) => <PartsPicker trigger="button" ref={ref} />,
+  },
+  {
+    name: 'ColorSlider',
+    role: 'slider',
+    tag: 'INPUT',
+    control: (ref) => <ColorSlider ref={ref} />,
+  },
+  {
+    name: 'AlphaSlider',
+    role: 'slider',
+    tag: 'INPUT',
+    control: (ref) => <AlphaSlider ref={ref} />,
+  },
+];
+
+/** A callback ref that keeps the element it was last given. */
+function heldRef(): { el: HTMLElement | null; ref: React.RefCallback<HTMLElement> } {
+  const held = {
+    el: null as HTMLElement | null,
+    ref: (el: HTMLElement | null) => {
+      held.el = el;
+    },
+  };
+  return held;
+}
+
+describe('1.0: ref reaches the control of a composite control (R5)', () => {
+  const html = document.documentElement;
+  beforeEach(() => {
+    // A 1024×768 viewport (jsdom has no layout), so a surface fits where it is placed.
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(html, 'clientWidth');
+    Reflect.deleteProperty(html, 'clientHeight');
+  });
+
+  /** The surface's `translate(x, y)` position (floating-ui's transform styles). */
+  function translateOf(el: HTMLElement): { x: number; y: number } {
+    const match = /translate\(\s*(-?[\d.]+)px,\s*(-?[\d.]+)px/.exec(el.style.transform);
+    return match ? { x: Number(match[1]), y: Number(match[2]) } : { x: NaN, y: NaN };
+  }
+
+  describe('a real Field around each of them', () => {
+    it.each(REF_MOVERS)(
+      '$name: ref reaches the control the Field label points at',
+      ({ role, tag, control }) => {
+        const held = heldRef();
+        render(
+          <Field label="Preference" hint="Pick one">
+            {control(held.ref)}
+          </Field>,
+        );
+        const label = screen.getByText('Preference').closest('label') as HTMLLabelElement;
+        const named = screen.getByRole(role, { name: 'Preference' });
+        expect(held.el).toBe(named);
+        expect(held.el?.tagName).toBe(tag);
+        expect(held.el?.id).toBe(label.htmlFor);
+        expect(named).toHaveAccessibleDescription(/Pick one/);
+        expect(duplicateIds()).toEqual([]);
+      },
+    );
+
+    // The twelfth, by design without a Field label: a ColorPicker's parts render in a `null`
+    // Field context, since a Field names the picker's group, not one of its parts.
+    it('ColorPicker.HexField: ref reaches the hex input, which no Field label points at', () => {
+      const held = heldRef();
+      render(
+        <Field label="Accent">
+          <ColorPicker defaultValue="#0f6cbd">
+            <ColorPickerHexField ref={held.ref} />
+          </ColorPicker>
+        </Field>,
+      );
+      const label = screen.getByText('Accent').closest('label') as HTMLLabelElement;
+      expect(screen.getByRole('group', { name: 'Accent' })).toBeInTheDocument();
+      expect(held.el).toBe(screen.getByRole('textbox', { name: 'Hex color value' }));
+      expect(held.el?.id).not.toBe(label.htmlFor);
+    });
+  });
+
+  describe('Overflow.Item asChild around one: the item measures the element ref reaches', () => {
+    let resize: ReturnType<typeof installResizeObserverMock> | null = null;
+    afterEach(() => {
+      resize?.restore();
+      resize = null;
+    });
+
+    /**
+     * Widths by `data-testid`, as a browser lays them out: an element in a hidden item (an
+     * inline `display: none` on the element that carries `data-overflow-hidden` or around it)
+     * measures 0, and the overflow button's wrapper measures `button`.
+     */
+    function stubLayout(widths: Record<string, number>): Record<string, number> {
+      const width = (el: Element) => {
+        if (el.closest('[data-overflow-hidden]')) return 0;
+        if (el.hasAttribute('data-overflow-button')) return widths.button ?? 0;
+        const id = el.getAttribute('data-testid');
+        return id !== null && id in widths ? widths[id] : 0;
+      };
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return width(this);
+      });
+      vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (
+        this: Element,
+      ) {
+        return width(this);
+      });
+      vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (
+        this: Element,
+      ) {
+        return width(this);
+      });
+      return widths;
+    }
+
+    // The component's own `data-testid` reaches its root; its control part's reaches the control.
+    const CONTROLS = [
+      {
+        name: 'SearchBox',
+        control: () => (
+          <SearchBox
+            aria-label="Search"
+            data-testid="root"
+            slotProps={{ input: { 'data-testid': 'control' } }}
+          />
+        ),
+      },
+      {
+        name: 'Checkbox',
+        control: () => (
+          <Checkbox
+            label="Archived"
+            data-testid="root"
+            slotProps={{ indicator: { 'data-testid': 'control' } }}
+          />
+        ),
+      },
+    ];
+
+    function Row({ asChild = true, children }: { asChild?: boolean; children: React.ReactNode }) {
+      return (
+        <Overflow data-testid="row" overflowButton={(count) => <Button>{`+${count}`}</Button>}>
+          <OverflowItem itemId="first" data-testid="first">
+            <Button>First</Button>
+          </OverflowItem>
+          <OverflowItem itemId="control" asChild={asChild} data-testid="item">
+            {children}
+          </OverflowItem>
+        </Overflow>
+      );
+    }
+
+    // The root is 200 wide and its control 150: next to a 100 item, only the control fits in 260.
+    it.each(CONTROLS)(
+      '$name: measures and observes the control, while the item props reach the root',
+      ({ control }) => {
+        resize = installResizeObserverMock();
+        const observe = vi.spyOn(ResizeObserver.prototype, 'observe');
+        stubLayout({ row: 260, first: 100, root: 200, control: 150, button: 40 });
+        render(<Row>{control()}</Row>);
+        const root = screen.getByTestId('root');
+        expect(root).not.toHaveAttribute('data-overflow-hidden');
+        expect(screen.queryByRole('button', { name: '+1' })).not.toBeInTheDocument();
+        const observed = observe.mock.calls.map(([el]) => el);
+        expect(observed).toContain(screen.getByTestId('control'));
+        expect(observed).not.toContain(root);
+        // The item's class and its other props go to the component, which puts them on its root.
+        expect(root).toHaveClass(Wave.overflowItemClassNames.root);
+        expect(screen.getByTestId('control')).not.toHaveClass(Wave.overflowItemClassNames.root);
+      },
+    );
+
+    it.each(CONTROLS)(
+      '$name: hides it through its root and keeps the size its control had while hidden',
+      ({ control }) => {
+        resize = installResizeObserverMock();
+        const widths = stubLayout({ row: 200, first: 100, root: 200, control: 150, button: 40 });
+        render(<Row>{control()}</Row>);
+        const root = screen.getByTestId('root');
+        const inner = screen.getByTestId('control');
+        const expectHidden = () => {
+          expect(root).toHaveAttribute('data-overflow-hidden');
+          expect(root).toHaveAttribute('aria-hidden', 'true');
+          expect(root).toHaveAttribute('inert');
+          expect(root.style.display).toBe('none');
+          expect(screen.getByRole('button', { name: '+1' })).toBeInTheDocument();
+        };
+        expectHidden();
+        // The marker is on the root, around the measured control, which never carries it.
+        expect(inner).not.toHaveAttribute('data-overflow-hidden');
+        // A browser reports the hidden control's new size (0); the store keeps its last one,
+        // so the item stays hidden instead of being shown again by a 0 width.
+        resize.trigger(inner);
+        resize.trigger();
+        expectHidden();
+        widths.row = 300;
+        resize.trigger(screen.getByTestId('row'));
+        expect(root).not.toHaveAttribute('data-overflow-hidden');
+        expect(root.style.display).toBe('');
+        expect(screen.queryByRole('button', { name: '+1' })).not.toBeInTheDocument();
+      },
+    );
+
+    // The way to measure the whole component: the item's own wrapper, which holds it.
+    it.each(CONTROLS)(
+      '$name: without asChild the item measures its wrapper, around the whole component',
+      ({ control }) => {
+        resize = installResizeObserverMock();
+        stubLayout({ row: 260, first: 100, item: 200, root: 200, control: 150, button: 40 });
+        render(<Row asChild={false}>{control()}</Row>);
+        expect(screen.getByTestId('item')).toHaveAttribute('data-overflow-hidden');
+        expect(screen.getByTestId('item')).toContainElement(screen.getByTestId('root'));
+        expect(screen.getByRole('button', { name: '+1' })).toBeInTheDocument();
+      },
+    );
+  });
+
+  describe('Presence around one: its attributes reach the root, its phases read the control', () => {
+    const CASES = [
+      {
+        name: 'Checkbox',
+        role: 'checkbox',
+        rootClass: Wave.checkboxClassNames.root,
+        child: <Checkbox label="Notify me" />,
+      },
+      {
+        name: 'Combobox',
+        role: 'combobox',
+        rootClass: Wave.comboboxClassNames.root,
+        child: <Combobox aria-label="Notify me">{fruitOptions}</Combobox>,
+      },
+    ];
+    const controlOf = (role: string) => screen.getByRole(role, { name: 'Notify me', hidden: true });
+
+    it.each(CASES)(
+      '$name: data-presence and the exit inert land on the root; the exit waits for the control',
+      async ({ role, rootClass, child }) => {
+        const motion = mockAnimations({ animated: (el) => el.getAttribute('role') === role });
+        const { rerender } = render(<Wave.Presence visible>{child}</Wave.Presence>);
+        const control = controlOf(role);
+        const root = control.closest(`.${rootClass}`) as HTMLElement;
+        expect(root).toHaveAttribute('data-presence', 'entered');
+        expect(control).not.toHaveAttribute('data-presence');
+
+        rerender(<Wave.Presence visible={false}>{child}</Wave.Presence>);
+        expect(root).toHaveAttribute('data-presence', 'exiting');
+        expect(root).toHaveAttribute('inert');
+        expect(control).toBeInTheDocument();
+        await act(async () => {
+          await motion.finishAll();
+        });
+        expect(screen.queryByRole(role, { hidden: true })).not.toBeInTheDocument();
+      },
+    );
+
+    it.each(CASES)(
+      '$name: an exit motion on the root alone is not waited for, since ref reaches the control',
+      ({ role, rootClass, child }) => {
+        mockAnimations({ animated: (el) => el.classList.contains(rootClass) });
+        const { rerender } = render(<Wave.Presence visible>{child}</Wave.Presence>);
+        expect(controlOf(role)).toBeInTheDocument();
+        rerender(<Wave.Presence visible={false}>{child}</Wave.Presence>);
+        expect(screen.queryByRole(role, { hidden: true })).not.toBeInTheDocument();
+      },
+    );
+
+    // The form for motion drawn on the root: the presence ref goes to `slotProps.root.ref`.
+    it('the render function with slotProps.root.ref: the exit waits for the root (Checkbox)', async () => {
+      const motion = mockAnimations({
+        animated: (el) => el.classList.contains(Wave.checkboxClassNames.root),
+      });
+      const ui = (visible: boolean) => (
+        <Wave.Presence visible={visible}>
+          {({ ref, presenceProps }) => (
+            <Checkbox label="Notify me" {...presenceProps} slotProps={{ root: { ref } }} />
+          )}
+        </Wave.Presence>
+      );
+      const { rerender } = render(ui(true));
+      const root = controlOf('checkbox').closest('label') as HTMLElement;
+      expect(root).toHaveAttribute('data-presence', 'entered');
+      rerender(ui(false));
+      expect(root).toHaveAttribute('data-presence', 'exiting');
+      expect(root).toHaveAttribute('inert');
+      await act(async () => {
+        await motion.finishAll();
+      });
+      expect(screen.queryByRole('checkbox', { hidden: true })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Tooltip, Popover and Menu triggers around one', () => {
+    const TOOLTIP_CASES: {
+      name: string;
+      role: string;
+      child: (ref: React.RefCallback<HTMLElement>) => React.ReactElement;
+    }[] = [
+      {
+        name: 'Checkbox',
+        role: 'checkbox',
+        child: (ref) => <Checkbox label="Notify me" ref={ref} />,
+      },
+      { name: 'Switch', role: 'switch', child: (ref) => <Switch label="Notify me" ref={ref} /> },
+      {
+        name: 'Combobox',
+        role: 'combobox',
+        child: (ref) => (
+          <Combobox aria-label="Notify me" ref={ref}>
+            {fruitOptions}
+          </Combobox>
+        ),
+      },
+      {
+        name: 'TagPicker',
+        role: 'combobox',
+        child: (ref) => <TagPicker aria-label="Notify me" options={P6_FRUITS} ref={ref} />,
+      },
+    ];
+
+    // Tooltip places its surface against its own wrapper <span> around the child (unchanged by
+    // 1.0) and gives the child its description, which the component routes to the control.
+    it.each(TOOLTIP_CASES)(
+      'a Tooltip around a $name: describes the control, keeps the child ref on it and places the surface against its own wrapper',
+      async ({ role, child }) => {
+        const user = userEvent.setup();
+        const held = heldRef();
+        render(
+          <Tooltip content="Mails you once a day" openDelay={0}>
+            {child(held.ref)}
+          </Tooltip>,
+        );
+        const control = screen.getByRole(role, { name: 'Notify me' });
+        expect(held.el).toBe(control);
+        expect(control).toHaveAccessibleDescription('Mails you once a day');
+        const wrapper = control.closest(`.${Wave.tooltipClassNames.root}`) as HTMLElement;
+        mockRect(wrapper, { x: 100, y: 300, width: 200, height: 40 });
+        mockRect(control, { x: 110, y: 310, width: 40, height: 20 });
+        await user.hover(control);
+        const surface = tooltipSurface();
+        expect(surface).not.toBeNull();
+        // Centred above the wrapper (100 + 200 / 2), 8 pixels off its top.
+        await waitFor(() => expect(translateOf(surface!)).toEqual({ x: 200, y: 292 }));
+        await expectNoA11yViolations(document.body);
+      },
+    );
+
+    // A click trigger's ref (the positioning reference, the focus return and the dismiss
+    // reference) reaches the control. Its state ARIA (aria-expanded, aria-haspopup,
+    // aria-controls) is one of the other aria-* attributes a composite control keeps on its
+    // root, as in 0.18: no valid place for it (a <label> or a <div>), so a composite control
+    // is no click trigger child; a context region (below) carries none.
+    it('a Popover.Trigger around a Switch: placed against the switch, focus returns to it; its state ARIA stays on the root', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const held = heldRef();
+      render(
+        <Popover onOpenChange={onOpenChange}>
+          <Popover.Trigger>
+            <Switch label="Alerts" ref={held.ref} />
+          </Popover.Trigger>
+          <Popover.Content title="Alert settings">
+            <button type="button">Mute</button>
+          </Popover.Content>
+        </Popover>,
+      );
+      const control = screen.getByRole('switch', { name: 'Alerts' });
+      const root = control.closest('label') as HTMLElement;
+      expect(held.el).toBe(control);
+      mockRect(root, { x: 100, y: 300, width: 200, height: 40 });
+      mockRect(control, { x: 110, y: 310, width: 40, height: 20 });
+      await user.click(control);
+      const surface = screen.getByRole('dialog', { name: 'Alert settings' });
+      // At the switch's start, 8 pixels below its bottom (310 + 20): not at the root's.
+      await waitFor(() => expect(translateOf(surface)).toEqual({ x: 110, y: 338 }));
+      expect(root).toHaveAttribute('aria-expanded', 'true');
+      expect(control).not.toHaveAttribute('aria-expanded');
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(control).toHaveFocus();
+
+      // A press on the label text is outside the trigger element since 1.0 (in 0.18 the root
+      // was): it closes the popover, then the click the <label> passes to the switch opens it.
+      await user.click(control);
+      onOpenChange.mockClear();
+      await user.click(screen.getByText('Alerts'));
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([false, true]);
+      expect(screen.getByRole('dialog', { name: 'Alert settings' })).toBeInTheDocument();
+    });
+
+    it('a Menu.Trigger around a SearchBox: placed against the input, focus returns to it; its state ARIA stays on the root', async () => {
+      const user = userEvent.setup();
+      render(
+        <Menu>
+          <Menu.Trigger>
+            <SearchBox aria-label="Find" />
+          </Menu.Trigger>
+          <Menu.Popover>
+            <Menu.Item>Recent searches</Menu.Item>
+          </Menu.Popover>
+        </Menu>,
+      );
+      const control = screen.getByRole('searchbox', { name: 'Find' });
+      const root = control.closest(`.${Wave.searchBoxClassNames.root}`) as HTMLElement;
+      mockRect(root, { x: 100, y: 300, width: 200, height: 40 });
+      mockRect(control, { x: 130, y: 306, width: 150, height: 28 });
+      await user.click(control);
+      const menu = screen.getByRole('menu');
+      // At the input's start, 4 pixels below its bottom (306 + 28): not at the root's.
+      await waitFor(() => expect(translateOf(menu)).toEqual({ x: 130, y: 338 }));
+      expect(root).toHaveAttribute('aria-expanded', 'true');
+      expect(control).not.toHaveAttribute('aria-expanded');
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(control).toHaveFocus();
+    });
+
+    it('a context Menu (openOnContext) around a Switch: Shift+F10 opens it at the switch, Escape returns focus to it', async () => {
+      const user = userEvent.setup();
+      render(
+        <Menu openOnContext>
+          <Menu.Trigger>
+            <Switch label="Alerts" />
+          </Menu.Trigger>
+          <Menu.Popover aria-label="Alert actions">
+            <Menu.Item>Reset to default</Menu.Item>
+          </Menu.Popover>
+        </Menu>,
+      );
+      const control = screen.getByRole('switch', { name: 'Alerts' });
+      const root = control.closest('label') as HTMLElement;
+      mockRect(root, { x: 100, y: 300, width: 200, height: 40 });
+      mockRect(control, { x: 110, y: 310, width: 40, height: 20 });
+      act(() => control.focus());
+      await user.keyboard('{Shift>}{F10}{/Shift}');
+      const menu = screen.getByRole('menu', { name: 'Alert actions' });
+      expect(menuitem('Reset to default')).toHaveFocus();
+      // At the switch's start, 4 pixels below its bottom (310 + 20).
+      await waitFor(() => expect(translateOf(menu)).toEqual({ x: 110, y: 334 }));
+      for (const el of [root, control]) {
+        for (const name of ['aria-haspopup', 'aria-expanded', 'aria-controls']) {
+          expect(el).not.toHaveAttribute(name);
+        }
+      }
+      await expectNoA11yViolations(document.body);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(control).toHaveFocus();
+    });
+  });
+});
+
+// Ruling BO: the root of a composite control holds the control, and a toolbar's roving hook takes
+// any element with a tabindex for a control and reads roles and markers on each. The root part of
+// every owner tries all of them at once, and stays no control of its own: the control is the next
+// stop after the toolbar's first button, with exactly one tab stop before and after.
+describe('1.0: a root part in a Toolbar sets no role, tab stop or roving marker (ruling BO)', () => {
+  const ATTEMPT = {
+    role: 'radiogroup',
+    tabIndex: 0,
+    'data-roving-container': '',
+    'data-roving-disabled': '',
+    'data-roving-value': 'z',
+    'aria-disabled': true,
+  };
+  const ATTRIBUTES = [
+    'role',
+    'tabindex',
+    'data-roving-container',
+    'data-roving-disabled',
+    'data-roving-value',
+    'aria-disabled',
+  ];
+  const root = { root: ATTEMPT };
+  const options = [
+    <Dropdown.Option key="a" value="apple">
+      Apple
+    </Dropdown.Option>,
+  ];
+  const red = { h: 0, s: 1, v: 1 };
+  const cases: [string, () => React.ReactNode, () => HTMLElement, (() => HTMLElement)?][] = [
+    ['Checkbox', () => <Checkbox label="X" slotProps={root} />, () => screen.getByRole('checkbox')],
+    ['Switch', () => <Switch label="X" slotProps={root} />, () => screen.getByRole('switch')],
+    [
+      'Input with content',
+      () => <Input aria-label="X" contentBefore="$" slotProps={root} />,
+      () => screen.getByRole('textbox', { name: 'X' }),
+    ],
+    [
+      'Input',
+      () => <Input aria-label="X" slotProps={root} />,
+      () => screen.getByRole('textbox', { name: 'X' }),
+    ],
+    [
+      'SearchBox',
+      () => <SearchBox aria-label="X" slotProps={root} />,
+      () => screen.getByRole('searchbox', { name: 'X' }),
+    ],
+    [
+      'SpinButton',
+      () => <SpinButton aria-label="X" slotProps={root} />,
+      () => screen.getByRole('spinbutton', { name: 'X' }),
+    ],
+    [
+      'Combobox',
+      () => (
+        <Combobox aria-label="X" slotProps={root}>
+          {options}
+        </Combobox>
+      ),
+      () => screen.getByRole('combobox', { name: 'X' }),
+    ],
+    [
+      'Dropdown',
+      () => (
+        <Dropdown aria-label="X" slotProps={root}>
+          {options}
+        </Dropdown>
+      ),
+      () => screen.getByRole('combobox', { name: 'X' }),
+    ],
+    [
+      'DatePicker',
+      () => <DatePicker aria-label="X" locale="en-US" slotProps={root} />,
+      () => screen.getByRole('textbox', { name: 'X' }),
+    ],
+    [
+      'TimePicker',
+      () => <TimePicker aria-label="X" slotProps={root} />,
+      () => screen.getByRole('combobox', { name: 'X' }),
+    ],
+    [
+      'TagPicker',
+      () => <TagPicker aria-label="X" options={[{ value: 'a', label: 'A' }]} slotProps={root} />,
+      () => screen.getByRole('combobox', { name: 'X' }),
+    ],
+    [
+      'ColorSlider',
+      () => <ColorSlider aria-label="X" defaultValue={red} slotProps={root} />,
+      () => screen.getByRole('slider', { name: 'X' }),
+    ],
+    [
+      'AlphaSlider',
+      () => <AlphaSlider aria-label="X" defaultValue={red} slotProps={root} />,
+      () => screen.getByRole('slider', { name: 'X' }),
+    ],
+    [
+      'ColorPicker.HexField',
+      () => (
+        <ColorPicker aria-label="Accent">
+          <ColorPicker.HexField slotProps={root} />
+        </ColorPicker>
+      ),
+      () => screen.getByRole('textbox'),
+      () => screen.getByRole('textbox').closest('label') as HTMLElement,
+    ],
+  ];
+
+  it.each(cases)('%s', async (_, ui, control, rootOf) => {
+    const user = userEvent.setup();
+    render(
+      <Toolbar aria-label="Tools">
+        <Button>Bold</Button>
+        {ui()}
+        <Button>Italic</Button>
+      </Toolbar>,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Tools' });
+    const marked = toolbar.querySelectorAll('[data-roving-value="z"], [data-roving-disabled]');
+    expect(marked).toHaveLength(0);
+    // The root: the element between the two buttons, but HexField's, inside the picker.
+    const rootElement =
+      rootOf?.() ?? screen.getByRole('button', { name: 'Bold' }).nextElementSibling;
+    expect(rootElement?.contains(control())).toBe(true);
+    for (const attribute of ATTRIBUTES) {
+      // An Input without content is its own root, which the toolbar stamps as its item (a tab
+      // index and a roving value of its own; the part's value is the one checked above).
+      if (rootElement === control() && ['tabindex', 'data-roving-value'].includes(attribute)) {
+        continue;
+      }
+      expect(rootElement, attribute).not.toHaveAttribute(attribute);
+    }
+    expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Bold' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(control()).toHaveFocus();
+    expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
   });
 });

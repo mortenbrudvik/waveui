@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { focusableDisabledProps, joinIds } from '../../lib/aria';
 import { switchClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { LabelPosition, Size } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -20,8 +20,8 @@ import { HiddenInput } from '../internal/HiddenInput';
  * focus outline; only the thumb (the leaf indicator) opts out of forced colors. A disabled switch
  * draws a GrayText thumb and border on Canvas, without the Highlight fill.
  */
-const onTrack = 'forced-colors:border-[Highlight] forced-colors:bg-[Highlight]';
-const disabledOnTrack = 'forced-colors:border-[GrayText] forced-colors:bg-[Canvas]';
+const onTrack = 'wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]';
+const disabledOnTrack = 'wave:forced-colors:border-[GrayText] wave:forced-colors:bg-[Canvas]';
 
 /** The handlers a part drops while the switch is unavailable: it does not activate then. */
 const BLOCK_CLICK = ['onClick'] as const;
@@ -41,17 +41,18 @@ const SWITCH_SIZE: Readonly<
 > = {
   small: {
     // The target layer is placed against the padding box inside the 1px border: 14 + 2 × 5 = 24px.
-    track: 'h-[16px] w-[32px] before:absolute before:inset-x-0 before:-inset-y-[5px]',
-    thumb: 'h-[10px] w-[10px]',
-    on: 'translate-x-[18px] wave-rtl:-translate-x-[18px]',
-    off: 'translate-x-[2px] wave-rtl:-translate-x-[2px]',
-    offset: 'mt-0.5',
+    track:
+      'wave:h-[16px] wave:w-[32px] wave:before:absolute wave:before:inset-x-0 wave:before:-inset-y-[5px]',
+    thumb: 'wave:h-[10px] wave:w-[10px]',
+    on: 'wave:translate-x-[18px] wave:wave-rtl:-translate-x-[18px]',
+    off: 'wave:translate-x-[2px] wave:wave-rtl:-translate-x-[2px]',
+    offset: 'wave:mt-0.5',
   },
   medium: {
-    track: 'h-[20px] w-[40px]',
-    thumb: 'h-[14px] w-[14px]',
-    on: 'translate-x-[22px] wave-rtl:-translate-x-[22px]',
-    off: 'translate-x-[2px] wave-rtl:-translate-x-[2px]',
+    track: 'wave:h-[20px] wave:w-[40px]',
+    thumb: 'wave:h-[14px] wave:w-[14px]',
+    on: 'wave:translate-x-[22px] wave:wave-rtl:-translate-x-[22px]',
+    off: 'wave:translate-x-[2px] wave:wave-rtl:-translate-x-[2px]',
     offset: '',
   },
 };
@@ -69,11 +70,6 @@ export interface SwitchProps extends Omit<
   defaultChecked?: boolean;
   /** Called with the new checked state when the switch is toggled (not for no-op updates). */
   onCheckedChange?: (checked: boolean) => void;
-  /**
-   * Called with the new checked state when the switch is toggled.
-   * @deprecated Use `onCheckedChange`.
-   */
-  onChange?: (checked: boolean) => void;
   /** Whether the switch is disabled and non-interactive. */
   disabled?: boolean;
   /**
@@ -132,24 +128,44 @@ export interface SwitchProps extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   /** Keyup handler of the switch control. */
   onKeyUp?: React.KeyboardEventHandler<HTMLButtonElement>;
-  /** Ref to the focusable `role="switch"` button. */
-  controlRef?: React.Ref<HTMLButtonElement>;
-  /** Ref to the root `<label>` element. */
-  ref?: React.Ref<HTMLLabelElement>;
   /**
-   * Props for the elements the Switch draws inside its root, by part, merged into each part's
-   * own (Fluent UI's `indicator` and `label` slot props): your classes after the part's (yours
-   * win a conflict), your styles over its styles, your handlers before its handlers
-   * (`preventDefault()` in yours skips the Switch's handling of the event, its own `on…` prop
-   * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
-   * `aria-describedby`. Every attribute the Switch sets on a part is locked and keeps the
-   * Switch's value (set it through the Switch's own props); you add the attributes it does not
-   * set. A part takes no `children`.
+   * Ref to the focusable `role="switch"` button (Fluent UI's `ref`, on its primary element). The
+   * root `<label>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLButtonElement>;
+  /**
+   * Props for the elements the Switch draws, by part, merged into each part's own (Fluent UI's
+   * `root`, `indicator` and `label` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers before its handlers (`preventDefault()`
+   * in yours skips the Switch's handling of the event, its own `on…` prop included), your ref
+   * beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every
+   * attribute the Switch sets on a part is locked and keeps the Switch's value (set it through
+   * the Switch's own props); you add the attributes it does not set. A part takes no `children`.
    */
   slotProps?: {
     /**
+     * The root `<label>` around the switch and the label text (stable class `wave-switch`), which
+     * the Switch's `className`, `style`, `data-*` and other root props reach as well; its `ref`
+     * is the way to the label, since the Switch's `ref` reaches the switch. Your classes come
+     * after the Switch's `className`, your style over its `style`. Locked: every prop you give
+     * the Switch itself that reaches the root, `data-label-position`, `data-size`, `htmlFor`
+     * (unset: the label labels the switch it holds, and a `for` would send its clicks to another
+     * element), `hidden`, `inert` and `aria-hidden` (the Switch's own: the root holds the
+     * switch), and `role`, `tabIndex` and the roving markers (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`), unset (in a toolbar or
+     * another roving container the root is no composite that hides the switch, no item and no
+     * second tab stop). Your handlers run before the Switch's own root handlers (`preventDefault()` in
+     * yours skips them). Your `onClick` sees every click inside the root as it bubbles: a click
+     * on the switch after the switch has toggled, and a click on the label text first, before
+     * the `<label>` passes it on to the switch, so the text's click reaches your `onClick` twice
+     * (the text's own, then the switch's), as on any `<label>`; `preventDefault()` on the text's
+     * click keeps the label from passing it on (no toggle). It is not called while the switch
+     * is `disabled` or `disabledFocusable`, as the switch does not toggle then.
+     */
+    root?: SlotPart<'label'>;
+    /**
      * The `role="switch"` `<button>`, the focusable control (stable class `wave-switch__track`;
-     * `controlRef` reaches it as well). Locked: `id`, `type`, `role`, `aria-checked`,
+     * the Switch's `ref` reaches it as well). Locked: `id`, `type`, `role`, `aria-checked`,
      * `disabled`, `tabIndex`, `autoFocus`, the attributes of `disabledFocusable`, the naming and
      * Field attributes routed to it (`aria-label`, `aria-invalid`, `aria-required`,
      * `aria-errormessage`, `aria-details`, `aria-disabled`), `required` (unset: the hidden input
@@ -181,11 +197,12 @@ export interface SwitchProps extends Omit<
 /**
  * An on/off toggle drawn as a `role="switch"` button inside a `<label>`.
  *
- * - The root `<label>` receives `ref`, `className`, `style` and `data-*`; the control receives
- *   `id`, `aria-label`/`-labelledby`/`-describedby`/`-invalid`/`-required`/`-errormessage`/
- *   `-details`/`-disabled`, `tabIndex`, `autoFocus` and the click, focus and key handlers
- *   (`controlRef` exposes it). A consumer `onClick` runs once per activation, before the toggle;
- *   `preventDefault()` in it cancels the toggle.
+ * - `ref` reaches the control; the root `<label>` receives `className`, `style` and `data-*`
+ *   (`slotProps.root.ref` reaches it); the control receives `id`,
+ *   `aria-label`/`-labelledby`/`-describedby`/`-invalid`/`-required`/`-errormessage`/
+ *   `-details`/`-disabled`, `tabIndex`, `autoFocus` and the click, focus and key handlers. A
+ *   consumer `onClick` runs once per activation, before the toggle; `preventDefault()` in it
+ *   cancels the toggle.
  * - Inside a `Field` it is named by the Field label (followed by its own `label` text) and described
  *   by the Field message and hint.
  * - With `name` (or `required`) it takes part in native forms like `<input type="checkbox">`, and
@@ -203,7 +220,6 @@ export const Switch = ({
   checked: checkedProp,
   defaultChecked = false,
   onCheckedChange,
-  onChange,
   disabled = false,
   disabledFocusable = false,
   label,
@@ -229,24 +245,20 @@ export const Switch = ({
   onBlur,
   onKeyDown,
   onKeyUp,
-  controlRef,
   className,
+  style,
   children,
   ref,
   slotProps,
   ...rest
 }: SwitchProps) => {
-  if (onChange !== undefined) warnDeprecated('Switch', 'onChange', 'onCheckedChange');
   const hasChildren = slotRendersContent(children);
   React.useEffect(() => {
     if (hasChildren) {
       warnOnce('Switch:children', 'Switch: children are not rendered. Pass the label in `label`.');
     }
   }, [hasChildren]);
-  const [checked, setChecked] = useControllable(checkedProp, defaultChecked, (next: boolean) => {
-    onCheckedChange?.(next);
-    onChange?.(next);
-  });
+  const [checked, setChecked] = useControllable(checkedProp, defaultChecked, onCheckedChange);
 
   const generatedId = useId('switch');
   const labelTextId = useId('switch-label');
@@ -280,7 +292,7 @@ export const Switch = ({
       : fieldProps['aria-labelledby'];
 
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const mergedControlRef = useMergedRefs(buttonRef, controlRef, slotProps?.track?.ref);
+  const mergedControlRef = useMergedRefs(buttonRef, ref, slotProps?.track?.ref);
   useFormReset(buttonRef, () => setChecked(defaultChecked), form);
 
   // A size outside the union (from untyped code) renders, and is reported in the data attribute,
@@ -292,7 +304,7 @@ export const Switch = ({
   // The parts inside the switch do not activate while it is unavailable, as the switch does not.
   const partBlock = unavailable ? BLOCK_CLICK : undefined;
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: cn(switchClassNames.label, 'text-body-1 text-foreground'),
+    className: wcn(switchClassNames.label, 'wave:text-body-1 wave:text-foreground'),
     // The text names the control through aria-labelledby: an aria-label would replace it.
     locked: { id: labelTextId, 'aria-label': undefined },
     blockHandlers: partBlock,
@@ -300,7 +312,7 @@ export const Switch = ({
   const labelText = hasLabel ? <span {...labelProps}>{materialiseSlotContent(label)}</span> : null;
   const labelFirst = labelPosition === 'before' || labelPosition === 'above';
   const trackProps = mergeSlotProps(slotProps?.track, {
-    className: cn(
+    className: wcn(
       switchClassNames.track,
       // The whole control is sized in px, like the Checkbox box and the radio circle: the
       // thumb and its offsets are px, so a track in rem would stop fitting them at any root
@@ -309,16 +321,16 @@ export const Switch = ({
       // 2px gap, and a transparent strip behind the track that grows the pointer target to
       // 24px tall. No padding is assumed here, unlike the native reset that any app button
       // style overrides (C-NATIVE): the thumb offsets rely on it staying at zero.
-      'relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none',
+      'wave:relative wave:inline-flex wave:shrink-0 wave:items-center wave:rounded-full wave:border wave:p-0 wave:transition-colors wave:duration-200 wave:motion-reduce:transition-none',
       sizeMetrics.track,
       // The offset centres the track on the label line beside it; above the label, the
       // column gap alone separates them.
       hasLabel && labelPosition !== 'above' && sizeMetrics.offset,
       focusRing,
       checked
-        ? cn('border-primary bg-primary', unavailable ? disabledOnTrack : onTrack)
-        : cn(
-            'border-stroke-accessible bg-transparent',
+        ? wcn('wave:border-primary wave:bg-primary', unavailable ? disabledOnTrack : onTrack)
+        : wcn(
+            'wave:border-stroke-accessible wave:bg-transparent',
             unavailable ? forcedColors.disabled : forcedColors.control,
           ),
     ),
@@ -361,45 +373,62 @@ export const Switch = ({
     blockHandlers: disabledFocusable ? BLOCK_CLICK : undefined,
   });
   const thumbProps = mergeSlotProps(slotProps?.thumb, {
-    className: cn(
+    className: wcn(
       switchClassNames.thumb,
-      'block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none',
+      'wave:block wave:rounded-full wave:transition-transform wave:duration-200 wave:motion-reduce:transition-none wave:forced-colors:forced-color-adjust-none',
       sizeMetrics.thumb,
       checked
-        ? cn(sizeMetrics.on, 'bg-primary-foreground')
-        : cn(sizeMetrics.off, 'bg-stroke-accessible'),
+        ? wcn(sizeMetrics.on, 'wave:bg-primary-foreground')
+        : wcn(sizeMetrics.off, 'wave:bg-stroke-accessible'),
       unavailable
-        ? 'forced-colors:bg-[GrayText]'
+        ? 'wave:forced-colors:bg-[GrayText]'
         : checked
-          ? 'forced-colors:bg-[HighlightText]'
-          : 'forced-colors:bg-[ButtonText]',
+          ? 'wave:forced-colors:bg-[HighlightText]'
+          : 'wave:forced-colors:bg-[ButtonText]',
     ),
     locked: { 'aria-hidden': 'true', tabIndex: undefined },
     // The thumb sits in the track, which `disabledFocusable` leaves natively enabled.
     blockHandlers: partBlock,
   });
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      switchClassNames.root,
+      // items-start: the track lines up with the top of the label's first line, not its
+      // middle, when the label wraps or has a second line; medium's 20px track matches that
+      // 20px line exactly, small's 16px track gets an offset below to stay centred on it.
+      'wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none',
+      labelPosition === 'above' && 'wave:flex-col wave:gap-1',
+      // The dimmed look lifts while a focus ring shows inside the root (the control's, under
+      // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
+      unavailable
+        ? 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100'
+        : 'wave:cursor-pointer',
+      className,
+    ),
+    style,
+    locked: {
+      'data-label-position': labelPosition,
+      'data-size': resolvedSize,
+      // The label labels the switch it holds: a part's `for` would send the text's clicks to
+      // another element (the Switch's own, from untyped code, still wins below).
+      htmlFor: undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the switch, no item and no second tab stop (a
+      // toolbar takes any element with a `tabindex` for a control).
+      ...ROVING_PART_LOCKS,
+      // The Switch's own root props, after the data attributes as in 0.18, and over the part's;
+      // the root holds the switch, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+    // The label passes a click to the switch, which does not toggle while unavailable.
+    blockHandlers: partBlock,
+  });
 
   return (
-    <label
-      ref={ref}
-      data-label-position={labelPosition}
-      data-size={resolvedSize}
-      className={cn(
-        switchClassNames.root,
-        // items-start: the track lines up with the top of the label's first line, not its
-        // middle, when the label wraps or has a second line; medium's 20px track matches that
-        // 20px line exactly, small's 16px track gets an offset below to stay centred on it.
-        'relative inline-flex items-start gap-2 select-none',
-        labelPosition === 'above' && 'flex-col gap-1',
-        // The dimmed look lifts while a focus ring shows inside the root (the control's, under
-        // disabledFocusable, or a link's in the label): opacity would dim the ring below 3:1.
-        unavailable
-          ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
-          : 'cursor-pointer',
-        className,
-      )}
-      {...rest}
-    >
+    <label {...rootProps}>
       {labelFirst && labelText}
       <button
         // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).

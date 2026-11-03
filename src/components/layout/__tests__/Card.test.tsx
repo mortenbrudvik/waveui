@@ -80,7 +80,7 @@ describe('Card', () => {
     displayName: 'Card',
     polymorphic: true,
     defaultProps: { children: <CardHeader title="Starter plan" /> },
-    conflictingClass: { className: 'rounded-xl', overrides: 'rounded-md' },
+    conflictingClass: { className: 'rounded-xl', overrides: 'wave:rounded-md' },
     a11yVariants: [
       { name: 'selectable, selected', props: { onSelect: () => {}, selected: true } },
       { name: 'selectable, not selected', props: { onSelect: () => {}, selected: false } },
@@ -121,10 +121,16 @@ describe('Card', () => {
   it('uses theme tokens and the Tailwind default radius (repo-level#7, button-provider#3)', () => {
     render(<Card data-testid="card">Content</Card>);
     const card = screen.getByTestId('card');
-    expect(card).toHaveClass('rounded-md', 'border', 'border-border', 'bg-card', 'shadow-4');
-    expect(card).not.toHaveClass('rounded-lg');
+    expect(card).toHaveClass(
+      'wave:rounded-md',
+      'wave:border',
+      'wave:border-border',
+      'wave:bg-card',
+      'wave:shadow-4',
+    );
+    expect(card).not.toHaveClass('wave:rounded-lg');
     // A plain card keeps its 0.4 positioning; selectable/selected cards position their cue.
-    expect(card).not.toHaveClass('relative');
+    expect(card).not.toHaveClass('wave:relative');
   });
 
   it('positions the selection cue relative to a selectable card', () => {
@@ -133,7 +139,7 @@ describe('Card', () => {
         Content
       </Card>,
     );
-    expect(screen.getByTestId('card')).toHaveClass('relative');
+    expect(screen.getByTestId('card')).toHaveClass('wave:relative');
   });
 
   it('applies selected styling with tokens and a non-color cue (layout#35)', () => {
@@ -143,9 +149,13 @@ describe('Card', () => {
       </Card>,
     );
     const card = screen.getByTestId('card');
-    expect(card).toHaveClass('border-primary', 'bg-selected', 'text-selected-foreground');
+    expect(card).toHaveClass(
+      'wave:border-primary',
+      'wave:bg-selected',
+      'wave:text-selected-foreground',
+    );
     // A 1px border plus an inset 1px ring: a 2px border that does not rely on color alone.
-    expect(card).toHaveClass('ring-1', 'ring-inset', 'ring-primary');
+    expect(card).toHaveClass('wave:ring-1', 'wave:ring-inset', 'wave:ring-primary');
     expect(card).toHaveAttribute('data-selected', '');
     expect(card.className).not.toMatch(/\[#/);
     const glyph = card.querySelector('[data-wave-icon="check"]');
@@ -161,7 +171,7 @@ describe('Card', () => {
     );
     const card = screen.getByTestId('card');
     expect(card.querySelector('[data-wave-icon="check"]')).toBeNull();
-    expect(card).not.toHaveClass('bg-selected');
+    expect(card).not.toHaveClass('wave:bg-selected');
     expect(card).not.toHaveAttribute('data-selected');
   });
 
@@ -183,7 +193,7 @@ describe('Card', () => {
         Content
       </Card>,
     );
-    expect(screen.getByTestId('card')).toHaveClass('cursor-pointer');
+    expect(screen.getByTestId('card')).toHaveClass('wave:cursor-pointer');
   });
 
   describe('selectionControl="card" (default, layout#35)', () => {
@@ -196,9 +206,9 @@ describe('Card', () => {
       const card = screen.getByRole('button', { name: 'Pro plan' });
       expect(card).toHaveAttribute('tabindex', '0');
       expect(card).toHaveClass(
-        'focus-visible:outline-2',
-        'focus-visible:outline-offset-2',
-        'focus-visible:outline-ring',
+        'wave:focus-visible:outline-2',
+        'wave:focus-visible:outline-offset-2',
+        'wave:focus-visible:outline-ring',
       );
     });
 
@@ -212,7 +222,7 @@ describe('Card', () => {
       const card = screen.getByTestId('card');
       expect(card).not.toHaveAttribute('tabindex');
       expect(card).not.toHaveAttribute('role');
-      expect(card).not.toHaveClass('cursor-pointer');
+      expect(card).not.toHaveClass('wave:cursor-pointer');
     });
 
     it('exposes selected as aria-pressed only when selected is defined', () => {
@@ -654,7 +664,10 @@ describe('Card', () => {
       const checkbox = screen.getByRole('checkbox', { name: 'Pro plan' });
       expect(checkbox.tagName).toBe('INPUT');
       expect(checkbox).toBeChecked();
-      expect(checkbox).toHaveClass('focus-visible:outline-2', 'focus-visible:outline-ring');
+      expect(checkbox).toHaveClass(
+        'wave:focus-visible:outline-2',
+        'wave:focus-visible:outline-ring',
+      );
       // The checkbox itself is the selected cue: no extra glyph.
       expect(card.querySelector('[data-wave-icon="check"]')).toBeNull();
     });
@@ -793,7 +806,7 @@ describe('Card', () => {
       );
       const checkbox = screen.getByRole('checkbox', { name: '0' });
       const title = document.getElementById(checkbox.getAttribute('aria-labelledby')!);
-      expect(title).toHaveClass('text-subtitle-1');
+      expect(title).toHaveClass('wave:text-subtitle-1');
       expect(screen.getByTestId('header').children).toHaveLength(2);
       expect(warn).not.toHaveBeenCalled();
     });
@@ -931,7 +944,10 @@ describe('Card.Header', () => {
 
   it('renders subtitle', () => {
     render(<Card.Header title="Title" subtitle="Subtitle" />);
-    expect(screen.getByText('Subtitle')).toHaveClass('text-caption-1', 'text-muted-foreground');
+    expect(screen.getByText('Subtitle')).toHaveClass(
+      'wave:text-caption-1',
+      'wave:text-muted-foreground',
+    );
   });
 
   it('renders children', () => {
@@ -946,7 +962,7 @@ describe('Card.Body', () => {
     displayName: 'CardBody',
     polymorphic: true,
     defaultProps: { children: 'Body content' },
-    conflictingClass: { className: 'p-8', overrides: 'p-[var(--wave-card-padding,1rem)]' },
+    conflictingClass: { className: 'p-8', overrides: 'wave:p-[var(--wave-card-padding,1rem)]' },
   });
 
   it('renders children', () => {
@@ -961,7 +977,7 @@ describe('Card.Footer', () => {
     displayName: 'CardFooter',
     polymorphic: true,
     defaultProps: { children: 'Footer content' },
-    conflictingClass: { className: 'justify-start', overrides: 'justify-end' },
+    conflictingClass: { className: 'justify-start', overrides: 'wave:justify-end' },
   });
 
   it('renders children', () => {
@@ -1002,20 +1018,24 @@ describe('Card composition', () => {
     it('the default look is the 0.12 look', () => {
       render(<Card data-testid="card">x</Card>);
       expect(card()).toHaveClass(
-        'overflow-hidden',
-        'rounded-md',
-        'border',
-        'border-border',
-        'bg-card',
-        'shadow-4',
+        'wave:overflow-hidden',
+        'wave:rounded-md',
+        'wave:border',
+        'wave:border-border',
+        'wave:bg-card',
+        'wave:shadow-4',
       );
-      expect(card().className).not.toMatch(/(^| )flex( |$)/);
+      expect(card().className).not.toMatch(/(^| )wave:flex( |$)/);
     });
 
     it.each([
-      ['filled-alternative', ['bg-muted'], ['shadow-4', 'bg-card']],
-      ['outline', ['border-border', 'bg-transparent'], ['shadow-4', 'bg-card']],
-      ['subtle', ['border-transparent', 'bg-transparent'], ['shadow-4', 'border-border']],
+      ['filled-alternative', ['wave:bg-muted'], ['wave:shadow-4', 'wave:bg-card']],
+      ['outline', ['wave:border-border', 'wave:bg-transparent'], ['wave:shadow-4', 'wave:bg-card']],
+      [
+        'subtle',
+        ['wave:border-transparent', 'wave:bg-transparent'],
+        ['wave:shadow-4', 'wave:border-border'],
+      ],
     ] as const)('the %s appearance', (appearance, has, hasNot) => {
       render(
         <Card data-testid="card" appearance={appearance}>
@@ -1035,16 +1055,21 @@ describe('Card composition', () => {
             x
           </Card>,
         );
-        expect(card()).toHaveClass('border-primary', 'bg-selected', 'ring-1', 'ring-primary');
-        expect(card()).toHaveClass('forced-colors:outline-[Highlight]');
+        expect(card()).toHaveClass(
+          'wave:border-primary',
+          'wave:bg-selected',
+          'wave:ring-1',
+          'wave:ring-primary',
+        );
+        expect(card()).toHaveClass('wave:forced-colors:outline-[Highlight]');
       },
     );
 
     it.each([
-      ['filled', 'not-disabled:not-aria-disabled:hover:shadow-8'],
-      ['filled-alternative', 'not-disabled:not-aria-disabled:hover:bg-muted-hover'],
-      ['outline', 'not-disabled:not-aria-disabled:hover:bg-subtle-hover'],
-      ['subtle', 'not-disabled:not-aria-disabled:hover:bg-subtle-hover'],
+      ['filled', 'wave:not-disabled:not-aria-disabled:hover:shadow-8'],
+      ['filled-alternative', 'wave:not-disabled:not-aria-disabled:hover:bg-muted-hover'],
+      ['outline', 'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover'],
+      ['subtle', 'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover'],
     ] as const)('a selectable %s card gets the gated hover look %s', (appearance, hover) => {
       render(
         <Card data-testid="card" appearance={appearance} onSelect={() => {}}>
@@ -1060,13 +1085,13 @@ describe('Card composition', () => {
           x
         </Card>,
       );
-      expect(card()).toHaveClass('not-disabled:not-aria-disabled:active:bg-muted-pressed');
+      expect(card()).toHaveClass('wave:not-disabled:not-aria-disabled:active:bg-muted-pressed');
       rerender(
         <Card data-testid="card" appearance="subtle" onSelect={() => {}}>
           x
         </Card>,
       );
-      expect(card()).toHaveClass('not-disabled:not-aria-disabled:active:bg-subtle-pressed');
+      expect(card()).toHaveClass('wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed');
     });
 
     it('a card that is not selectable, or is selected, has no hover look', () => {
@@ -1081,9 +1106,9 @@ describe('Card composition', () => {
     });
 
     it.each([
-      ['small', '[--wave-card-padding:0.75rem]'],
-      ['medium', '[--wave-card-padding:1rem]'],
-      ['large', '[--wave-card-padding:1.25rem]'],
+      ['small', 'wave:[--wave-card-padding:0.75rem]'],
+      ['medium', 'wave:[--wave-card-padding:1rem]'],
+      ['large', 'wave:[--wave-card-padding:1.25rem]'],
     ] as const)('the %s size sets the padding variable', (size, variable) => {
       render(
         <Card data-testid="card" size={size}>
@@ -1102,9 +1127,15 @@ describe('Card composition', () => {
           <Card.Footer data-testid="footer">f</Card.Footer>
         </>,
       );
-      expect(screen.getByTestId('header')).toHaveClass('p-[var(--wave-card-padding,1rem)]');
-      expect(screen.getByTestId('body')).toHaveClass('p-[var(--wave-card-padding,1rem)]', 'pt-0');
-      expect(screen.getByTestId('footer')).toHaveClass('p-[var(--wave-card-padding,1rem)]', 'pt-0');
+      expect(screen.getByTestId('header')).toHaveClass('wave:p-[var(--wave-card-padding,1rem)]');
+      expect(screen.getByTestId('body')).toHaveClass(
+        'wave:p-[var(--wave-card-padding,1rem)]',
+        'wave:pt-0',
+      );
+      expect(screen.getByTestId('footer')).toHaveClass(
+        'wave:p-[var(--wave-card-padding,1rem)]',
+        'wave:pt-0',
+      );
     });
 
     it('horizontal lays the parts out in a row', () => {
@@ -1114,7 +1145,7 @@ describe('Card composition', () => {
         </Card>,
       );
       expect(card()).toHaveAttribute('data-orientation', 'horizontal');
-      expect(card()).toHaveClass('flex', 'flex-row');
+      expect(card()).toHaveClass('wave:flex', 'wave:flex-row');
     });
 
     it('is axe clean in every appearance, size and orientation', async () => {
@@ -1170,8 +1201,8 @@ describe('Card composition', () => {
         </Card>,
       );
       const preview = screen.getByTestId('preview');
-      expect(preview).toHaveClass('wave-card-preview', 'overflow-hidden');
-      expect(preview.className).not.toMatch(/(^| )p[xytblrse]?-/);
+      expect(preview).toHaveClass('wave-card-preview', 'wave:overflow-hidden');
+      expect(preview.className).not.toMatch(/(^| )wave:p[xytblrse]?-/);
     });
 
     it('Preview fills the width of a vertical card and the height of a horizontal one', () => {
@@ -1180,13 +1211,13 @@ describe('Card composition', () => {
           <Card.Preview data-testid="preview">media</Card.Preview>
         </Card>,
       );
-      expect(screen.getByTestId('preview')).toHaveClass('w-full');
+      expect(screen.getByTestId('preview')).toHaveClass('wave:w-full');
       rerender(
         <Card orientation="horizontal">
           <Card.Preview data-testid="preview">media</Card.Preview>
         </Card>,
       );
-      expect(screen.getByTestId('preview')).toHaveClass('shrink-0', 'self-stretch');
+      expect(screen.getByTestId('preview')).toHaveClass('wave:shrink-0', 'wave:self-stretch');
     });
 
     it.each([
@@ -1203,7 +1234,7 @@ describe('Card composition', () => {
       );
       const node = screen.getByTestId('preview').querySelector('.wave-card-preview__logo');
       expect(node).toHaveTextContent('Logo');
-      expect(node).toHaveClass('absolute', 'start-3', 'bottom-3');
+      expect(node).toHaveClass('wave:absolute', 'wave:start-3', 'wave:bottom-3');
     });
 
     it('Preview renders no logo element for an empty slot', () => {
@@ -1231,7 +1262,7 @@ describe('Card composition', () => {
     it('Header without image or action renders as in 0.12: no grid and no wrapper', () => {
       render(<Card.Header data-testid="header" title="T" subtitle="S" />);
       const header = screen.getByTestId('header');
-      expect(header.className).not.toContain('grid');
+      expect(header.className).not.toContain('wave:grid');
       expect(header.firstElementChild).toHaveClass('wave-card-header__title');
     });
 
@@ -1246,7 +1277,7 @@ describe('Card composition', () => {
         />,
       );
       const header = screen.getByTestId('header');
-      expect(header).toHaveClass('grid');
+      expect(header).toHaveClass('wave:grid');
       expect(header.querySelector('.wave-card-header__image')).toContainElement(
         screen.getByTestId('image'),
       );
@@ -1258,7 +1289,7 @@ describe('Card composition', () => {
 
     it('Header slots that render nothing leave the 0.12 layout', () => {
       render(<Card.Header data-testid="header" title="T" image={[]} action="" />);
-      expect(screen.getByTestId('header').className).not.toContain('grid');
+      expect(screen.getByTestId('header').className).not.toContain('wave:grid');
     });
 
     it('a checkbox card with image and action still names the checkbox by the title', () => {
@@ -1371,8 +1402,8 @@ describe('Card composition', () => {
         </Card>,
       );
       const slot = card().querySelector('.wave-card__floating-action');
-      expect(slot).toHaveClass('absolute', 'end-3', 'top-3');
-      expect(card()).toHaveClass('relative');
+      expect(slot).toHaveClass('wave:absolute', 'wave:end-3', 'wave:top-3');
+      expect(card()).toHaveClass('wave:relative');
       expect(slot).toContainElement(screen.getByRole('button', { name: 'More' }));
     });
 
@@ -1383,7 +1414,7 @@ describe('Card composition', () => {
         </Card>,
       );
       expect(card().querySelector('.wave-card__floating-action')).toBeNull();
-      expect(card().className).not.toMatch(/(^| )relative( |$)/);
+      expect(card().className).not.toMatch(/(^| )wave:relative( |$)/);
     });
 
     it('with a floating action the checkbox moves to the top start corner and the header pads for it', () => {
@@ -1398,9 +1429,9 @@ describe('Card composition', () => {
         </Card>,
       );
       const box = screen.getByRole('checkbox', { name: 'T' });
-      expect(box).toHaveClass('start-3', 'top-3');
-      expect(box.className).not.toContain('end-3');
-      expect(screen.getByTestId('header')).toHaveClass('ps-10', 'pe-10');
+      expect(box).toHaveClass('wave:start-3', 'wave:top-3');
+      expect(box.className).not.toContain('wave:end-3');
+      expect(screen.getByTestId('header')).toHaveClass('wave:ps-10', 'wave:pe-10');
     });
 
     it('without a floating action the checkbox keeps the top end corner', () => {
@@ -1409,7 +1440,7 @@ describe('Card composition', () => {
           <Card.Header title="T" />
         </Card>,
       );
-      expect(screen.getByRole('checkbox', { name: 'T' })).toHaveClass('end-3', 'top-3');
+      expect(screen.getByRole('checkbox', { name: 'T' })).toHaveClass('wave:end-3', 'wave:top-3');
     });
 
     it('is axe clean with the new parts and slots', async () => {
@@ -1485,12 +1516,12 @@ describe('Card and Card.Header — slotProps', () => {
 
   // Captured from 112d7f8's dist (client and server agree).
   const BASE_PINS = [
-    '<svg aria-hidden="true" class="wave-card__checkmark absolute end-2 top-2 text-primary" data-wave-icon="check" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+    '<svg aria-hidden="true" class="wave-card__checkmark wave:absolute wave:end-2 wave:top-2 wave:text-primary" data-wave-icon="check" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
     '<div class="wave-card-header__text">',
-    '<div class="wave-card-header__title text-subtitle-1">',
-    '<div class="wave-card-header__title text-subtitle-1" id="card-title-_id0_">',
-    '<div class="wave-card-header__subtitle text-caption-1 text-muted-foreground">',
-    '<div class="wave-card-header__subtitle text-caption-1 text-muted-foreground">',
+    '<div class="wave-card-header__title wave:text-subtitle-1">',
+    '<div class="wave-card-header__title wave:text-subtitle-1" id="card-title-_id0_">',
+    '<div class="wave-card-header__subtitle wave:text-caption-1 wave:text-muted-foreground">',
+    '<div class="wave-card-header__subtitle wave:text-caption-1 wave:text-muted-foreground">',
   ].join('\n');
 
   it('renders the parts of 112d7f8 (attributes sorted), on the client and the server', () => {
@@ -1553,10 +1584,10 @@ describe('Card and Card.Header — slotProps', () => {
       />,
     );
     for (const [cls, name, conflict, count] of [
-      [cardClassNames.checkmark, 'checkmark', 'top-2', 1],
+      [cardClassNames.checkmark, 'checkmark', 'wave:top-2', 1],
       [cardHeaderClassNames.text, 'text', undefined, 1],
-      [cardHeaderClassNames.title, 'title', 'text-subtitle-1', 2],
-      [cardHeaderClassNames.subtitle, 'subtitle', 'text-muted-foreground', 2],
+      [cardHeaderClassNames.title, 'title', 'wave:text-subtitle-1', 2],
+      [cardHeaderClassNames.subtitle, 'subtitle', 'wave:text-muted-foreground', 2],
     ] as const) {
       const elements = all<Element>(document, cls);
       expect(elements).toHaveLength(count);

@@ -133,7 +133,7 @@ export const ResponsiveTrail: Story = {
     children: trail(),
   },
   render: (args) => (
-    <div className="w-[360px] max-w-full min-w-40 resize-x overflow-hidden rounded border border-border">
+    <div className="w-[360px] max-w-full min-w-40 resize-x overflow-hidden rounded border border-wave-border">
       <Breadcrumb {...args} />
     </div>
   ),

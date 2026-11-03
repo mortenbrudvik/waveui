@@ -40,6 +40,11 @@ export interface TagPickerTriggerProps {
   'aria-details'?: string;
   tabIndex?: number;
   autoFocus?: boolean;
+  /**
+   * TagPicker's `ref`: the part merges it beside its own ref, so it follows the trigger that
+   * renders (the Input's `<input>` or the Button's `<button>`).
+   */
+  ref?: React.Ref<HTMLInputElement | HTMLButtonElement>;
 }
 
 /** The root's props that reach `TagPicker.Input` only (its `<input>`). */
@@ -55,7 +60,6 @@ export interface TagPickerInputOnlyProps {
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
-  controlRef?: React.Ref<HTMLInputElement>;
 }
 
 /** What TagPicker gives its parts. */
@@ -114,8 +118,11 @@ export interface TagPickerContextValue {
   triggerRef: React.RefObject<HTMLElement | null>;
   /** Places the popup against the Control (as wide as the field): merged into its ref. */
   setReference: (element: HTMLElement | null) => void;
-  /** The control element, the tag list and the "+N" chip (the single-line layout measures them). */
-  controlRef: React.RefObject<HTMLDivElement | null>;
+  /**
+   * The `TagPicker.Control` element (the field, not the focusable trigger), the tag list and the
+   * "+N" chip (the single-line layout measures them).
+   */
+  controlElementRef: React.RefObject<HTMLDivElement | null>;
   groupRef: React.RefObject<HTMLDivElement | null>;
   chipRef: React.RefObject<HTMLSpanElement | null>;
   /** Registers a trigger part from its layout effect; returns the remover. */

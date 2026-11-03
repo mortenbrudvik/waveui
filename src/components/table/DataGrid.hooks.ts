@@ -22,9 +22,9 @@ export interface UseDataGridSortResult {
   sort: DataGridSort | null;
   /**
    * Sorts the grid by the column and direction of `sort`, as activating a sortable header does:
-   * `onSortChange(sort, details?)` is called once with a new object of those two values (the
-   * deprecated positional form with the column and the direction), `details.event` is `event`,
-   * else an untrusted `sort` event with no target, and an uncontrolled grid sorts. A controlled
+   * `onSortChange(sort, details)` is called once with a new object of those two values, with
+   * `details.event` the given `event`, else an untrusted `sort` event with no target, and an
+   * uncontrolled grid sorts. A controlled
    * grid changes when its parent passes the new `sort`. Any column can be named, sortable or not,
    * as a controlled `sort` can; the sort the grid already has changes nothing and calls nothing.
    * The grid's callback never receives `null`, so no request clears the sort: a parent that
@@ -54,7 +54,7 @@ export interface UseDataGridSelectionResult {
   /**
    * Toggles the row `id`, as its selection control does: in multiple mode it adds or removes the
    * id and keeps the others; in single mode it selects the row alone, or clears the selection when
-   * it is the selected row. `onSelectedItemsChange(selectedItems, details?)` is called once with
+   * it is the selected row. `onSelectedItemsChange(selectedItems, details)` is called once with
    * the new ids and `details.event`, which is `event`, else an untrusted `select` event with no
    * target; an uncontrolled grid changes, a controlled one when its parent passes the new
    * `selectedItems`. It does nothing in a grid without selection, for a row whose selection is

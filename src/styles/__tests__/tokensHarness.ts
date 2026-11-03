@@ -199,15 +199,15 @@ export const THEMES: ThemeName[] = ['light', 'dark', 'high-contrast'];
 /** Selector list of each theme group in tokens.css (§2.1.2). */
 export const THEME_GROUPS: Record<ThemeName, string[]> = {
   light: [':root', '.wave-light'],
-  dark: ['.wave-dark', '.dark'],
-  'high-contrast': ['.wave-high-contrast', '.high-contrast'],
+  dark: ['.wave-dark'],
+  'high-contrast': ['.wave-high-contrast'],
 };
 
 /** Classes a WaveProvider root / portal wrapper carries per theme (F3 `getThemeClassName`). */
 export const PROVIDER_SELECTORS: Record<ThemeName, string[]> = {
   light: ['.wave-light'],
-  dark: ['.wave-dark', '.dark'],
-  'high-contrast': ['.wave-high-contrast', '.high-contrast'],
+  dark: ['.wave-dark'],
+  'high-contrast': ['.wave-high-contrast'],
 };
 
 // Shared lookups
@@ -234,7 +234,7 @@ export function rootConstants(): Decls {
   return declarations(rule.children ?? []);
 }
 
-/** Resolved `--wave-<token>` of a theme in the default entries (no legacy file). */
+/** Resolved `--wave-<token>` of a theme in the default entries. */
 export function resolved(theme: ThemeName, token: string): string {
   return resolveToken(`--wave-${token}`, [themeDecls(theme), rootConstants()]);
 }

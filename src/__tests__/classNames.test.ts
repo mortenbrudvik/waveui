@@ -7,7 +7,7 @@
  */
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
-import { cn } from '../lib/cn';
+import { cn, createWcn, wcn } from '../lib/cn';
 import { getStableClassNames } from '../test-utils';
 
 type ClassNameConstant = Readonly<Record<string, string>>;
@@ -128,6 +128,18 @@ describe('class-name registry: tailwind-merge (spec D3)', () => {
     );
     expect(dropped).toEqual([]);
   });
+
+  it.each([
+    ['wcn, the merge of the components', wcn, ''],
+    ["the components' merge with the prefix (spec R6)", createWcn('wave'), 'wave:'],
+  ])('%s keeps every stable class next to the utilities and the consumer class', (_, merge, p) => {
+    const utilities = `${p}inline-flex ${p}px-3 ${p}text-body-1 ${p}shadow-4 ${p}font-wave`;
+    expect(merge(...all).split(' ')).toEqual(all);
+    const dropped = all.filter(
+      (cls) => !merge(cls, utilities, 'px-4 wave-test-custom-class').split(' ').includes(cls),
+    );
+    expect(dropped).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -202,7 +214,7 @@ function publicComponents(): Map<string, object> {
 
 /**
  * The constant of a public component: by its flat name, else by its displayName (the alias table
- * of `getStableClassNames`: `RadioItem`, `TableHead`, and `ComboboxOption`, whose value is Option).
+ * of `getStableClassNames`: `RadioItem`, and `ComboboxOption`, whose value is Option).
  */
 function constantOf(flatName: string, value: object): string | undefined {
   const byName = `${flatName[0].toLowerCase()}${flatName.slice(1)}ClassNames`;

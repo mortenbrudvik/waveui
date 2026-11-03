@@ -100,7 +100,7 @@ describe('InfoButton (Phase 4 D28, D30)', () => {
 
   it('sizes the glyph and keeps a 24px box', () => {
     render(<InfoButton info="x" size="large" />);
-    expect(button()).toHaveClass('size-6', '-my-px');
+    expect(button()).toHaveClass('wave:size-6', 'wave:-my-px');
     expect(button()).toHaveAttribute('data-size', 'large');
     expect(button().querySelector('svg')).toHaveAttribute('width', '20');
   });
@@ -193,8 +193,8 @@ describe('InfoButton (Phase 4 D28, D30)', () => {
     const user = userEvent.setup();
     render(<InfoButton info="Some info" openOnHover={false} />);
     await user.click(button());
-    expect(note()).toHaveClass('w-max', 'max-w-[min(20rem,calc(100vw-1rem))]');
-    expect(note()).not.toHaveClass('max-w-xs');
+    expect(note()).toHaveClass('wave:w-max', 'wave:max-w-[min(20rem,calc(100vw-1rem))]');
+    expect(note()).not.toHaveClass('wave:max-w-xs');
   });
 
   it('labels the note like the button: its aria-labelledby ids, else its aria-label', async () => {
@@ -242,11 +242,11 @@ describe('InfoButton (Phase 4 D28, D30)', () => {
   });
 
   it.each([
-    ['small', '-my-1', '12'],
-    ['medium', '-my-0.5', '16'],
+    ['small', 'wave:-my-1', '12'],
+    ['medium', 'wave:-my-0.5', '16'],
   ] as const)('size %s: the glyph in the 24px box', (size, margin, glyph) => {
     render(<InfoButton info="x" size={size} />);
-    expect(button()).toHaveClass('size-6', margin);
+    expect(button()).toHaveClass('wave:size-6', margin);
     expect(button()).toHaveAttribute('data-size', size);
     expect(button().querySelector('svg')).toHaveAttribute('width', glyph);
   });
@@ -254,11 +254,11 @@ describe('InfoButton (Phase 4 D28, D30)', () => {
   it('renders and reports medium without a size, and for a size from untyped code', () => {
     const { rerender } = render(<InfoButton info="x" />);
     expect(button()).toHaveAttribute('data-size', 'medium');
-    expect(button()).toHaveClass('-my-0.5');
+    expect(button()).toHaveClass('wave:-my-0.5');
     // @ts-expect-error InfoButton has no extra-large size
     rerender(<InfoButton info="x" size="extra-large" />);
     expect(button()).toHaveAttribute('data-size', 'medium');
-    expect(button()).toHaveClass('size-6', '-my-0.5');
+    expect(button()).toHaveClass('wave:size-6', 'wave:-my-0.5');
     expect(button().querySelector('svg')).toHaveAttribute('width', '16');
   });
 
@@ -998,7 +998,7 @@ describe('InfoButton — slotProps', () => {
     expect(normaliseIds(sortAttributes(document.body))).toBe(
       [
         '<div>',
-        '<button aria-controls="info-note-_id0_" aria-describedby="info-_id1_" aria-expanded="true" aria-label="Information" class="wave-info-button inline-flex size-6 shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground -my-0.5 not-disabled:not-aria-disabled:hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-size="medium" id="info-button-_id2_" type="button">',
+        '<button aria-controls="info-note-_id0_" aria-describedby="info-_id1_" aria-expanded="true" aria-label="Information" class="wave-info-button wave:inline-flex wave:size-6 wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border-0 wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:-my-0.5 wave:not-disabled:not-aria-disabled:hover:text-foreground wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" data-size="medium" id="info-button-_id2_" type="button">',
         '<svg aria-hidden="true" data-wave-icon="info" fill="currentColor" focusable="false" height="16" viewBox="0 0 20 20" width="16" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm.5 5v1h-1V7h1Zm0 3v4h-1v-4h1Z" fill-rule="evenodd">',
         '</path>',
@@ -1008,8 +1008,8 @@ describe('InfoButton — slotProps', () => {
         '</span>',
         '</div>',
         '<div class="wave-portal" data-layer="overlay" data-wave-portal="" dir="ltr" style="position: relative; z-index: calc(var(--wave-z-overlay, 1000) + 0);">',
-        '<div aria-labelledby="info-button-_id2_" class="wave-info-button__info w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-md border border-border bg-background px-3 py-2 text-caption-1 text-foreground shadow-16 transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[side=top]:data-[presence=entering]:starting:translate-y-1 data-[side=top]:data-[presence=exiting]:translate-y-1 data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 data-[side=bottom]:data-[presence=exiting]:-translate-y-1 data-[side=left]:data-[presence=entering]:starting:translate-x-1 data-[side=left]:data-[presence=exiting]:translate-x-1 data-[side=right]:data-[presence=entering]:starting:-translate-x-1 data-[side=right]:data-[presence=exiting]:-translate-x-1" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-infolabel-surface="" id="info-note-_id0_" role="note" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">',
-        '<div aria-hidden="true" class="size-2 rotate-45 border-inherit bg-inherit border-b border-r wave-info-button__beak" data-wave-popover-arrow="" style="position: absolute; bottom: calc(var(--wave-popup-arrow-size, 8px) / -2); left: -1px;">',
+        '<div aria-labelledby="info-button-_id2_" class="wave-info-button__info wave:w-max wave:max-w-[min(20rem,calc(100vw-1rem))] wave:rounded-md wave:border wave:border-border wave:bg-background wave:px-3 wave:py-2 wave:text-caption-1 wave:text-foreground wave:shadow-16 wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1" data-align="center" data-presence="entered" data-side="top" data-state="open" data-wave-infolabel-surface="" id="info-note-_id0_" role="note" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, -8px);">',
+        '<div aria-hidden="true" class="wave:size-2 wave:rotate-45 wave:border-inherit wave:bg-inherit wave:border-b wave:border-r wave-info-button__beak" data-wave-popover-arrow="" style="position: absolute; bottom: calc(var(--wave-popup-arrow-size, 8px) / -2); left: -1px;">',
         '</div>',
         '<div id="info-_id1_">Some info',
         '</div>',
@@ -1052,8 +1052,8 @@ describe('InfoButton — slotProps', () => {
     );
     await open();
     for (const [element, stable, own, mine, data, opacity] of [
-      [info(), infoButtonClassNames.info, 'shadow-16', 'my-note', 'info', '0.5'],
-      [beak(), infoButtonClassNames.beak, 'rotate-45', 'my-beak', 'beak', '0.25'],
+      [info(), infoButtonClassNames.info, 'wave:shadow-16', 'my-note', 'info', '0.5'],
+      [beak(), infoButtonClassNames.beak, 'wave:rotate-45', 'my-beak', 'beak', '0.25'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[element.classList.length - 1]).toBe(mine);
@@ -1075,9 +1075,9 @@ describe('InfoButton — slotProps', () => {
     );
     await open();
     expect(info()).toHaveClass('px-4');
-    expect(info()).not.toHaveClass('px-3');
+    expect(info()).not.toHaveClass('wave:px-3');
     expect(beak()).toHaveClass('size-3');
-    expect(beak()).not.toHaveClass('size-2');
+    expect(beak()).not.toHaveClass('wave:size-2');
   });
 
   it('locks the note’s id, role, name, marker, phase and placement, and keeps it shown', async () => {

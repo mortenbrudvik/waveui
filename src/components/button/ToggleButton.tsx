@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { toggleButtonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -71,7 +71,7 @@ export interface ToggleButtonProps extends Omit<
  * The classes `buttonClassName({ pressed: true, accessible })` adds on top of the unpressed button,
  * per appearance, disabled state and `isAccessible`. Derived from the shared maps (never re-typed),
  * so ToggleButton's pressed look is exactly the button family's: `Button` merges them after its own
- * classes with `cn()`, which replaces the conflicting unpressed colors. Size classes are not
+ * classes with `wcn()`, which replaces the conflicting unpressed colors. Size classes are not
  * involved.
  */
 const pressedLayerCache = new Map<string, string>();
@@ -184,7 +184,7 @@ export const ToggleButton = ({
       })}
       data-pressed={isPressed ? '' : undefined}
       onClick={handleClick}
-      className={cn(
+      className={wcn(
         toggleButtonClassNames.root,
         isPressed && getPressedLayer(appearance, disabledLook, isAccessible),
         className,

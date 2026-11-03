@@ -104,7 +104,7 @@ describe('Listbox', () => {
     expectedTag: 'ul',
     displayName: 'Listbox',
     defaultProps: { 'aria-label': 'Fruits', children: OPTIONS },
-    conflictingClass: { className: 'py-2', overrides: 'py-1' },
+    conflictingClass: { className: 'py-2', overrides: 'wave:py-1' },
     a11yVariants: [
       { name: 'with a value', props: { defaultValue: 'banana' } },
       {
@@ -193,12 +193,12 @@ describe('Listbox', () => {
 
     it('has no built-in height', () => {
       renderList();
-      expect(list().className).not.toMatch(/(^|\s)(max-)?h-/);
+      expect(list().className).not.toMatch(/(^|\s)wave:(max-)?h-/);
     });
 
     it('sets its own margin, padding and list style, so no native list style shows (C-NATIVE)', () => {
       renderList();
-      expect(list()).toHaveClass('m-0', 'list-none', 'px-0', 'py-1');
+      expect(list()).toHaveClass('wave:m-0', 'wave:list-none', 'wave:px-0', 'wave:py-1');
     });
   });
 
@@ -384,7 +384,7 @@ describe('Listbox', () => {
         expect(list()).toHaveFocus();
         expect(list()).not.toHaveAttribute('aria-activedescendant');
         expect(list()).toHaveClass(...FOCUS_RING_CLASSES);
-        expect(list()).not.toHaveClass('focus:outline-hidden');
+        expect(list()).not.toHaveClass('wave:focus:outline-hidden');
       },
     );
 
@@ -393,10 +393,10 @@ describe('Listbox', () => {
       renderList();
       await user.tab();
       expect(active()).toHaveTextContent('Apple');
-      expect(list()).toHaveClass('focus:outline-hidden');
+      expect(list()).toHaveClass('wave:focus:outline-hidden');
       for (const cls of FOCUS_RING_CLASSES) expect(list()).not.toHaveClass(cls);
       // C-FOCUS: never a bare outline-hidden, which would hide the forced-colors outline too.
-      expect(list()).not.toHaveClass('outline-hidden');
+      expect(list()).not.toHaveClass('wave:outline-hidden');
     });
 
     describe('an active option scrolled out of view (WCAG 2.4.7)', () => {
@@ -453,16 +453,16 @@ describe('Listbox', () => {
         // The wheel scrolls the active option away: the list itself shows focus.
         first.report(false);
         expect(list()).toHaveClass(...FOCUS_RING_CLASSES);
-        expect(list()).not.toHaveClass('focus:outline-hidden');
+        expect(list()).not.toHaveClass('wave:focus:outline-hidden');
         first.report(true);
-        expect(list()).toHaveClass('focus:outline-hidden');
+        expect(list()).toHaveClass('wave:focus:outline-hidden');
         first.report(false);
         // The keys bring the next active option into view: it is observed afresh, and until the
         // browser reports otherwise its outline shows focus.
         await user.keyboard('{ArrowDown}');
         expect(first.disconnected).toBe(true);
         expect(observer().observed).toEqual([option('Banana')]);
-        expect(list()).toHaveClass('focus:outline-hidden');
+        expect(list()).toHaveClass('wave:focus:outline-hidden');
         // Without an active option nothing is observed.
         await user.tab();
         expect(IntersectionObserverStub.instances.every((o) => o.disconnected)).toBe(true);
@@ -480,7 +480,7 @@ describe('Listbox', () => {
       );
       await user.tab();
       expect(active()).toHaveTextContent('Apple');
-      expect(list()).toHaveClass('focus:outline-hidden');
+      expect(list()).toHaveClass('wave:focus:outline-hidden');
     });
   });
 
@@ -904,14 +904,18 @@ describe('Listbox', () => {
 
     it('takes pointer input off its options while disabled, so none hovers and the list cursor shows', () => {
       const { rerender } = renderList();
-      expect(list()).not.toHaveClass('*:pointer-events-none');
+      expect(list()).not.toHaveClass('wave:*:pointer-events-none');
       rerender(
         <Listbox aria-label="Fruits" disabled>
           {OPTIONS}
         </Listbox>,
       );
       // pointer-events is inherited: the options inside a group follow their group's item.
-      expect(list()).toHaveClass('cursor-not-allowed', 'opacity-50', '*:pointer-events-none');
+      expect(list()).toHaveClass(
+        'wave:cursor-not-allowed',
+        'wave:opacity-50',
+        'wave:*:pointer-events-none',
+      );
     });
 
     it('passes a consumer aria-disabled through on an enabled list, which stays interactive (C-DISABLED)', async () => {

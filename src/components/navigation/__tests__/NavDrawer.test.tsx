@@ -23,6 +23,7 @@ import {
   navDrawerFooterClassNames,
 } from '../../../lib/classNames';
 import { getTopmostLayer } from '../../../lib/layers';
+import type { DrawerOpenChangeDetails } from '../../overlays/Drawer';
 import type { ModalType } from '../../../lib/types';
 import {
   asClientReference,
@@ -142,7 +143,7 @@ describe('NavDrawer', () => {
           </NavDrawer.Body>
         ),
       },
-      conflictingClass: { className: 'w-96', overrides: 'w-80' },
+      conflictingClass: { className: 'w-96', overrides: 'wave:w-80' },
       control: { role: 'navigation' },
       wrapper: NoDomWrapper,
       a11yVariants: [
@@ -210,7 +211,7 @@ describe('NavDrawer', () => {
         expectedTag: 'div',
         displayName: 'NavDrawerHeader',
         defaultProps: { children: 'Contoso HR' },
-        conflictingClass: { className: 'ps-4', overrides: 'ps-2.5' },
+        conflictingClass: { className: 'ps-4', overrides: 'wave:ps-2.5' },
         wrapper: OpenDrawer,
         a11y: false,
       });
@@ -221,7 +222,7 @@ describe('NavDrawer', () => {
         expectedTag: 'div',
         displayName: 'NavDrawerBody',
         defaultProps: { children: <Nav.Item value="home">Home</Nav.Item> },
-        conflictingClass: { className: 'py-4', overrides: 'py-2' },
+        conflictingClass: { className: 'py-4', overrides: 'wave:py-2' },
         wrapper: OpenDrawer,
         a11y: false,
       });
@@ -232,7 +233,7 @@ describe('NavDrawer', () => {
         expectedTag: 'div',
         displayName: 'NavDrawerFooter',
         defaultProps: { children: <Nav.Item value="help">Help</Nav.Item> },
-        conflictingClass: { className: 'py-4', overrides: 'py-2' },
+        conflictingClass: { className: 'py-4', overrides: 'wave:py-2' },
         wrapper: OpenDrawer,
         a11y: false,
       });
@@ -569,8 +570,8 @@ describe('NavDrawer', () => {
       }
     });
 
-    it('has none of Nav’s deprecated aliases', () => {
-      // @ts-expect-error -- NavDrawer is new: it takes `value`, not Nav's deprecated `selectedValue`.
+    it('has no selectedValue, like Nav (removed in 1.0)', () => {
+      // @ts-expect-error -- NavDrawer takes `value`; Nav's 0.4 `selectedValue` is removed in 1.0.
       const props: NavDrawerProps = { selectedValue: 'home' };
       expect(props).toBeDefined();
     });
@@ -578,6 +579,16 @@ describe('NavDrawer', () => {
 
   // 6. Open state.
   describe('open state', () => {
+    it('types details as a required second argument of onOpenChange (1.0)', () => {
+      type Handler = NonNullable<NavDrawerProps['onOpenChange']>;
+      expectTypeOf<Handler>().parameter(1).toEqualTypeOf<DrawerOpenChangeDetails>();
+      // A handler of the value alone still fits.
+      expectTypeOf<(open: boolean) => void>().toExtend<Handler>();
+      // @ts-expect-error `details` is required (1.0)
+      const withoutDetails = (props: NavDrawerProps) => props.onOpenChange?.(false);
+      expect(withoutDetails).toBeTypeOf('function');
+    });
+
     it('is uncontrolled with defaultOpen and controlled with open', () => {
       const { rerender } = render(
         <NavDrawer type="inline" open={false}>
@@ -766,14 +777,18 @@ describe('NavDrawer', () => {
       expect(panel).toHaveAttribute('data-position', 'start');
       expect(panel).toHaveAttribute('data-size', 'small');
       expect(panel).toHaveAttribute('data-separator', '');
-      expect(panel).toHaveClass('border-e', 'w-80', 'data-[separator]:border-border');
+      expect(panel).toHaveClass(
+        'wave:border-e',
+        'wave:w-80',
+        'wave:data-[separator]:border-border',
+      );
       rerender(
         <NavDrawer type="inline" defaultOpen data-testid="panel" size="medium" separator={false}>
           {parts}
         </NavDrawer>,
       );
       expect(panel).toHaveAttribute('data-size', 'medium');
-      expect(panel).toHaveClass('w-148');
+      expect(panel).toHaveClass('wave:w-148');
       expect(panel).not.toHaveAttribute('data-separator');
     });
 
@@ -782,7 +797,7 @@ describe('NavDrawer', () => {
       const dialog = screen.getByRole('dialog');
       expect(dialog).toHaveAttribute('data-position', 'start');
       expect(dialog).toHaveAttribute('data-modal-type', 'modal');
-      expect(dialog).toHaveClass('start-0', 'border-e', 'w-80');
+      expect(dialog).toHaveClass('wave:start-0', 'wave:border-e', 'wave:w-80');
     });
 
     it('unmountOnClose={false} keeps a closed panel hidden and inert with its selection; outer aria-controls stays valid', async () => {
@@ -1255,8 +1270,8 @@ describe('NavDrawer', () => {
       const header = container.querySelector<HTMLElement>('.wave-nav-drawer-header')!;
       const body = container.querySelector<HTMLElement>('.wave-nav-drawer-body')!;
       const footer = container.querySelector<HTMLElement>('.wave-nav-drawer-footer')!;
-      expect(header).toHaveClass('border-b', 'data-[scroll-state=middle]:border-border');
-      expect(footer).toHaveClass('border-t', 'data-[scroll-state=top]:border-border');
+      expect(header).toHaveClass('wave:border-b', 'wave:data-[scroll-state=middle]:border-border');
+      expect(footer).toHaveClass('wave:border-t', 'wave:data-[scroll-state=top]:border-border');
       for (const part of [header, body, footer]) {
         expect(part).toHaveAttribute('data-scroll-state', 'none');
       }
@@ -1380,9 +1395,9 @@ describe('NavDrawer, NavDrawer.Body and NavDrawer.Footer — slotProps', () => {
     );
   /** The opening tags of the three parts at 234b990, named by the default label. */
   const PARTS_0_17 = [
-    '<nav aria-label="Navigation" class="wave-nav-drawer__nav flex min-h-0 flex-1 flex-col">',
-    '<ul class="wave-nav-drawer-body__list m-0 list-none p-0">',
-    '<ul class="wave-nav-drawer-footer__list m-0 list-none p-0">',
+    '<nav aria-label="Navigation" class="wave-nav-drawer__nav wave:flex wave:min-h-0 wave:flex-1 wave:flex-col">',
+    '<ul class="wave-nav-drawer-body__list wave:m-0 wave:list-none wave:p-0">',
+    '<ul class="wave-nav-drawer-footer__list wave:m-0 wave:list-none wave:p-0">',
   ].join('\n');
 
   /** An open drawer with a body of two items and a footer of one, each with its props. */
@@ -1463,9 +1478,9 @@ describe('NavDrawer, NavDrawer.Body and NavDrawer.Footer — slotProps', () => {
       />,
     );
     for (const [element, stable, own, mine, data, opacity] of [
-      [nav(), navDrawerClassNames.nav, 'flex-col', 'my-nav', 'nav', '0.5'],
-      [bodyList(), navDrawerBodyClassNames.list, 'list-none', 'my-body', 'b', '0.25'],
-      [footerList(), navDrawerFooterClassNames.list, 'list-none', 'my-foot', 'f', '0.75'],
+      [nav(), navDrawerClassNames.nav, 'wave:flex-col', 'my-nav', 'nav', '0.5'],
+      [bodyList(), navDrawerBodyClassNames.list, 'wave:list-none', 'my-body', 'b', '0.25'],
+      [footerList(), navDrawerFooterClassNames.list, 'wave:list-none', 'my-foot', 'f', '0.75'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -1484,11 +1499,11 @@ describe('NavDrawer, NavDrawer.Body and NavDrawer.Footer — slotProps', () => {
       />,
     );
     expect(nav()).toHaveClass('flex-row');
-    expect(nav()).not.toHaveClass('flex-col');
+    expect(nav()).not.toHaveClass('wave:flex-col');
     expect(bodyList()).toHaveClass('p-2');
-    expect(bodyList()).not.toHaveClass('p-0');
+    expect(bodyList()).not.toHaveClass('wave:p-0');
     expect(footerList()).toHaveClass('p-3');
-    expect(footerList()).not.toHaveClass('p-0');
+    expect(footerList()).not.toHaveClass('wave:p-0');
   });
 
   it('locks the landmark’s name to the drawer’s own and adds your ids after its own', () => {

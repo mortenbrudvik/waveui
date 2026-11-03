@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   tableBodyClassNames,
   tableCellActionsClassNames,
@@ -13,7 +13,7 @@ import {
   tableSelectionCellClassNames,
 } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
+import { isDev, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { mergeSlotProps } from '../../lib/slotProps';
@@ -122,12 +122,6 @@ export interface TableHeaderCellProps extends React.ThHTMLAttributes<HTMLTableCe
   ref?: React.Ref<HTMLTableCellElement>;
 }
 
-/** @deprecated Use `TableHeaderProps` (`Table.Header`). */
-export type TableHeadProps = TableHeaderProps;
-
-/** @deprecated Use `TableHeaderCellProps` (`Table.HeaderCell`). */
-export type TableHeadCellProps = TableHeaderCellProps;
-
 /** Properties for the TableBody sub-component. */
 export interface TableBodyProps extends React.HTMLAttributes<HTMLTableSectionElement> {
   /** Table row elements. */
@@ -155,8 +149,9 @@ export interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElem
 /** Second argument of `Table.SelectionCell`'s `onCheckedChange`: the event behind the change. */
 export interface TableSelectionCellCheckedChangeDetails {
   /**
-   * The DOM event behind the change: the click of the control (Space clicks it too), or, for an
-   * uncontrolled radio, the click that checked another radio of its group.
+   * The DOM event behind the change: the click of the control (Space clicks it too), for an
+   * uncontrolled radio the click that checked another radio of its group, or the form's `reset`
+   * event when a form reset restores `defaultChecked`.
    */
   event: Event;
 }
@@ -190,9 +185,10 @@ export interface TableSelectionCellProps extends Omit<
   /**
    * Called with the new checked state when the user checks or unchecks the control (not for no-op
    * updates), and when a form reset restores a `true` or `false` `defaultChecked`. The second
-   * argument holds the event. The table keeps no selection: update your rows' state here.
+   * argument holds the event; WaveUI always passes it. The table keeps no selection: update your
+   * rows' state here.
    */
-  onCheckedChange?: (checked: boolean, details?: TableSelectionCellCheckedChangeDetails) => void;
+  onCheckedChange?: (checked: boolean, details: TableSelectionCellCheckedChangeDetails) => void;
   /**
    * The native change event of the control, called before `onCheckedChange`;
    * `event.preventDefault()` in it cancels the change.
@@ -428,9 +424,9 @@ const TableRoot = ({
       aria-labelledby={
         isRegion ? regionLabelledBy : consumerRole !== undefined ? containerLabelledBy : undefined
       }
-      className={cn(
+      className={wcn(
         tableClassNames.container,
-        'overflow-x-auto rounded-md border border-border',
+        'wave:overflow-x-auto wave:rounded-md wave:border wave:border-border',
         scrollable && focusRing,
         containerClassName,
       )}
@@ -438,11 +434,11 @@ const TableRoot = ({
       <table
         ref={ref}
         data-striped={striped ? '' : undefined}
-        className={cn(
+        className={wcn(
           tableClassNames.root,
-          'w-full border-separate border-spacing-0',
+          'wave:w-full wave:border-separate wave:border-spacing-0',
           // `:where()` keeps the stripe at specificity 0, so any row class wins (C-CLASS).
-          striped && '[:where(&>tbody>tr:nth-child(odd))]:bg-card',
+          striped && 'wave:[:where(&>tbody>tr:nth-child(odd))]:bg-card',
           className,
         )}
         {...props}
@@ -456,7 +452,7 @@ TableRoot.displayName = 'Table';
 
 /** The table's `<thead>`. */
 const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) => (
-  <thead ref={ref} {...rest} className={cn(tableHeaderClassNames.root, 'bg-card', className)}>
+  <thead ref={ref} {...rest} className={wcn(tableHeaderClassNames.root, 'wave:bg-card', className)}>
     {children}
   </thead>
 );
@@ -480,10 +476,10 @@ const TableHeaderCell = ({
     ? renderSlot(
         aside,
         'span',
-        cn(
+        wcn(
           tableHeaderCellClassNames.aside,
-          'inline-flex shrink-0 items-center',
-          sortable && 'pe-4',
+          'wave:inline-flex wave:shrink-0 wave:items-center',
+          sortable && 'wave:pe-4',
         ),
       )
     : null;
@@ -491,7 +487,7 @@ const TableHeaderCell = ({
   let content: React.ReactNode = children;
   if (sortable) {
     content = (
-      <div className="flex items-center">
+      <div className="wave:flex wave:items-center">
         <TableSortButton
           component="Table.HeaderCell"
           direction={sortDirection}
@@ -508,7 +504,7 @@ const TableHeaderCell = ({
     );
   } else if (hasAside) {
     content = (
-      <div className="flex items-center gap-2">
+      <div className="wave:flex wave:items-center wave:gap-2">
         {children}
         {asideNode}
       </div>
@@ -520,10 +516,10 @@ const TableHeaderCell = ({
       ref={ref}
       scope="col"
       aria-sort={sortable ? (sortDirection ?? 'none') : undefined}
-      className={cn(
+      className={wcn(
         tableHeaderCellClassNames.root,
-        'px-4 py-3 text-start font-semibold text-caption-1 uppercase tracking-wider border-b border-border',
-        sortable && 'p-0 hover:bg-subtle-hover',
+        'wave:px-4 wave:py-3 wave:text-start wave:font-semibold wave:text-caption-1 wave:uppercase wave:tracking-wider wave:border-b wave:border-border',
+        sortable && 'wave:p-0 wave:hover:bg-subtle-hover',
         className,
       )}
       {...props}
@@ -534,23 +530,9 @@ const TableHeaderCell = ({
 };
 TableHeaderCell.displayName = 'TableHeaderCell';
 
-/** @deprecated Use `Table.Header` (`TableHeader`). */
-const TableHead = (props: TableHeadProps) => {
-  warnDeprecated('Table', 'Table.Head', 'Table.Header');
-  return <TableHeader {...props} />;
-};
-TableHead.displayName = 'TableHead';
-
-/** @deprecated Use `Table.HeaderCell` (`TableHeaderCell`). */
-const TableHeadCell = (props: TableHeadCellProps) => {
-  warnDeprecated('Table', 'Table.HeadCell', 'Table.HeaderCell');
-  return <TableHeaderCell {...props} />;
-};
-TableHeadCell.displayName = 'TableHeadCell';
-
 /** The table's `<tbody>`. */
 const TableBody = ({ children, className, ref, ...rest }: TableBodyProps) => (
-  <tbody ref={ref} {...rest} className={cn(tableBodyClassNames.root, className)}>
+  <tbody ref={ref} {...rest} className={wcn(tableBodyClassNames.root, className)}>
     {children}
   </tbody>
 );
@@ -564,10 +546,10 @@ TableBody.displayName = 'TableBody';
 const TableRow = ({ children, className, ref, ...props }: TableRowProps) => (
   <tr
     ref={ref}
-    className={cn(
+    className={wcn(
       tableRowClassNames.root,
-      'group/table-row',
-      'hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
+      'wave:group/table-row',
+      'wave:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none',
       className,
     )}
     {...props}
@@ -581,9 +563,9 @@ TableRow.displayName = 'TableRow';
 const TableCell = ({ children, className, ref, ...props }: TableCellProps) => (
   <td
     ref={ref}
-    className={cn(
+    className={wcn(
       tableCellClassNames.root,
-      'relative px-4 py-3 text-body-1 border-b border-border',
+      'wave:relative wave:px-4 wave:py-3 wave:text-body-1 wave:border-b wave:border-border',
       className,
     )}
     {...props}
@@ -644,10 +626,11 @@ const TableSelectionCell = ({
     defaultChecked,
     (next) => {
       // Only a form reset to a mixed `defaultChecked` sets `'mixed'`; the callback reports booleans.
-      if (next !== 'mixed') onCheckedChange?.(next, detailsRef.current);
+      const details = detailsRef.current;
+      if (next !== 'mixed' && details) onCheckedChange?.(next, details);
     },
   );
-  const changeChecked = useEventCallback((next: boolean, event: Event) => {
+  const changeChecked = useEventCallback((next: boolean | 'mixed', event: Event) => {
     detailsRef.current = { event };
     try {
       setChecked(next);
@@ -658,7 +641,8 @@ const TableSelectionCell = ({
 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const mergedControlRef = useMergedRefs<HTMLInputElement>(inputRef, controlRef);
-  useFormReset(inputRef, () => setChecked(defaultChecked), form);
+  // A form reset reports the form's `reset` event.
+  useFormReset(inputRef, (event) => changeChecked(defaultChecked, event), form);
 
   // A native radio group unchecks its other radios without an event, so an uncontrolled radio
   // listens for the click that checks another radio of its group: in the capture phase, before
@@ -697,7 +681,7 @@ const TableSelectionCell = ({
       ref={ref}
       data-type={type}
       {...rest}
-      className={cn(tableSelectionCellClassNames.root, SELECTION_CELL_CLASSES, className)}
+      className={wcn(tableSelectionCellClassNames.root, SELECTION_CELL_CLASSES, className)}
     >
       <TableSelectionControl
         ref={mergedControlRef}
@@ -740,8 +724,8 @@ const CELL_LAYOUT_AVATAR_BOX: AvatarSizeContextValue = { size: 32 };
 
 /** The media box: its icon at 20px, or 24px with the primary appearance. */
 const CELL_LAYOUT_MEDIA_CLASSES = {
-  default: 'flex shrink-0 items-center [&>svg]:size-5',
-  primary: 'flex shrink-0 items-center [&>svg]:size-6',
+  default: 'wave:flex wave:shrink-0 wave:items-center wave:[&>svg]:size-5',
+  primary: 'wave:flex wave:shrink-0 wave:items-center wave:[&>svg]:size-6',
 } as const;
 
 /**
@@ -781,15 +765,15 @@ const TableCellLayout = ({
   const hasMain = slotRendersContent(children);
   const hasDescription = slotRendersContent(description);
   const primary = appearance === 'primary';
-  const contentClassName = cn(
+  const contentClassName = wcn(
     tableCellLayoutClassNames.content,
-    'flex flex-col',
-    truncate && 'min-w-0 overflow-x-hidden',
+    'wave:flex wave:flex-col',
+    truncate && 'wave:min-w-0 wave:overflow-x-hidden',
   );
-  const mainClassName = cn(
+  const mainClassName = wcn(
     tableCellLayoutClassNames.main,
-    truncate && 'truncate',
-    primary && 'font-semibold',
+    truncate && 'wave:truncate',
+    primary && 'wave:font-semibold',
   );
   return (
     <div
@@ -797,10 +781,10 @@ const TableCellLayout = ({
       data-appearance={appearance}
       data-truncate={truncate ? '' : undefined}
       {...rest}
-      className={cn(
+      className={wcn(
         tableCellLayoutClassNames.root,
-        'flex items-center gap-2',
-        truncate && 'overflow-x-hidden',
+        'wave:flex wave:items-center wave:gap-2',
+        truncate && 'wave:overflow-x-hidden',
         className,
       )}
     >
@@ -810,7 +794,7 @@ const TableCellLayout = ({
           {renderSlot(
             media,
             'span',
-            cn(
+            wcn(
               tableCellLayoutClassNames.media,
               CELL_LAYOUT_MEDIA_CLASSES[primary ? 'primary' : 'default'],
             ),
@@ -842,10 +826,10 @@ const TableCellLayout = ({
             renderSlot(
               description,
               'span',
-              cn(
+              wcn(
                 tableCellLayoutClassNames.description,
-                'text-caption-1 text-muted-foreground',
-                truncate && 'truncate',
+                'wave:text-caption-1 wave:text-muted-foreground',
+                truncate && 'wave:truncate',
               ),
             )}
         </div>
@@ -865,14 +849,14 @@ TableCellLayout.displayName = 'TableCellLayout';
  * (brand and neutral appearances).
  */
 const CELL_ACTIONS_CLASSES =
-  'absolute inset-y-0 end-0 flex items-center gap-1 px-1 bg-background group-hover/table-row:bg-subtle-hover [:where([data-striped]>tbody>tr:nth-child(odd)>*)>&]:bg-card [[data-selection-appearance=brand]>tbody>[data-selected]>*>&]:bg-selected [[data-selection-appearance=neutral]>tbody>[data-selected]>*>&]:bg-subtle-selected transition-[opacity,background-color] motion-reduce:transition-none';
+  'wave:absolute wave:inset-y-0 wave:end-0 wave:flex wave:items-center wave:gap-1 wave:px-1 wave:bg-background wave:group-hover/table-row:bg-subtle-hover wave:[:where([data-striped]>tbody>tr:nth-child(odd)>*)>&]:bg-card wave:[[data-selection-appearance=brand]>tbody>[data-selected]>*>&]:bg-selected wave:[[data-selection-appearance=neutral]>tbody>[data-selected]>*>&]:bg-subtle-selected wave:transition-[opacity,background-color] wave:motion-reduce:transition-none';
 
 /**
  * Transparent until the row is hovered or holds focus, or focus is in the actions themselves;
  * forced colors and a coarse pointer (touch) always draw them.
  */
 const CELL_ACTIONS_REVEAL_CLASSES =
-  'opacity-0 group-hover/table-row:opacity-100 group-focus-within/table-row:opacity-100 focus-within:opacity-100 forced-colors:opacity-100 pointer-coarse:opacity-100';
+  'wave:opacity-0 wave:group-hover/table-row:opacity-100 wave:group-focus-within/table-row:opacity-100 wave:focus-within:opacity-100 wave:forced-colors:opacity-100 wave:pointer-coarse:opacity-100';
 
 /**
  * Actions of a cell (buttons, a menu button), shown over the end of the cell while its row is
@@ -888,7 +872,7 @@ const TableCellActions = ({ visible = false, className, ref, ...rest }: TableCel
     ref={ref}
     data-visible={visible ? '' : undefined}
     {...rest}
-    className={cn(
+    className={wcn(
       tableCellActionsClassNames.root,
       CELL_ACTIONS_CLASSES,
       visible ? undefined : CELL_ACTIONS_REVEAL_CLASSES,
@@ -901,8 +885,6 @@ TableCellActions.displayName = 'TableCellActions';
 export {
   TableHeader,
   TableHeaderCell,
-  TableHead,
-  TableHeadCell,
   TableBody,
   TableRow,
   TableCell,
@@ -928,16 +910,11 @@ export type { TableResizeHandleProps };
  * `Table.ResizeHandle` (the separator that resizes a column, for a header cell's `aside`) in client
  * components, and as the flat exports `TableHeader`, `TableHeaderCell`, `TableBody`, `TableRow`,
  * `TableCell`, `TableSelectionCell`, `TableCellLayout`, `TableCellActions` and
- * `TableResizeHandle` (the form React Server Components can import). `Table.Head`/`Table.HeadCell`
- * (`TableHead`/`TableHeadCell`) are deprecated aliases.
+ * `TableResizeHandle` (the form React Server Components can import).
  */
 export const Table = /* @__PURE__ */ Object.assign(TableRoot, {
   Header: TableHeader,
   HeaderCell: TableHeaderCell,
-  /** @deprecated Use `Table.Header`. */
-  Head: TableHead,
-  /** @deprecated Use `Table.HeaderCell`. */
-  HeadCell: TableHeadCell,
   Body: TableBody,
   Row: TableRow,
   Cell: TableCell,

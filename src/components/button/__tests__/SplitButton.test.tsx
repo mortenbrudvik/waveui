@@ -158,7 +158,7 @@ describe('SplitButton', () => {
     const menu = screen.getByRole('button', { name: 'More options' });
     for (const button of [primary, menu]) {
       expect(button).toBeDisabled();
-      expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(button).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
       await user.click(button);
     }
     expect(onClick).not.toHaveBeenCalled();
@@ -182,9 +182,9 @@ describe('SplitButton', () => {
       const primary = screen.getByRole('button', { name: 'Save' });
       const menu = screen.getByRole('button', { name: 'More options' });
       expect(menu).toBeDisabled();
-      expect(menu).toHaveClass('custom-menu', 'rounded-s-none', 'opacity-50');
+      expect(menu).toHaveClass('custom-menu', 'wave:rounded-s-none', 'wave:opacity-50');
       expect(primary).toBeEnabled();
-      expect(primary).not.toHaveClass('opacity-50');
+      expect(primary).not.toHaveClass('wave:opacity-50');
 
       await user.click(menu);
       expect(onMenuClick).not.toHaveBeenCalled();
@@ -208,9 +208,9 @@ describe('SplitButton', () => {
       const primary = screen.getByRole('button', { name: 'Save' });
       const menu = screen.getByRole('button', { name: 'More options' });
       expect(primary).toBeDisabled();
-      expect(primary).toHaveClass('opacity-50');
+      expect(primary).toHaveClass('wave:opacity-50');
       expect(menu).toBeEnabled();
-      expect(menu).not.toHaveClass('opacity-50');
+      expect(menu).not.toHaveClass('wave:opacity-50');
 
       await user.click(primary);
       expect(onClick).not.toHaveBeenCalled();
@@ -274,7 +274,7 @@ describe('SplitButton', () => {
       );
       const primary = screen.getByRole('button', { name: 'Save' });
       expect(primary.childNodes).toHaveLength(1);
-      expect(primary).toHaveClass('w-8', 'px-0');
+      expect(primary).toHaveClass('wave:w-8', 'wave:px-0');
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -299,7 +299,7 @@ describe('SplitButton', () => {
         </SplitButton>,
       );
       const wrapper = screen.getByTestId('menu-icon').parentElement;
-      expect(wrapper).toHaveClass('custom', 'shrink-0');
+      expect(wrapper).toHaveClass('custom', 'wave:shrink-0');
       expect(wrapper).toHaveAttribute('aria-hidden', 'true');
     });
 
@@ -447,7 +447,7 @@ describe('SplitButton', () => {
         expect(half).toHaveAttribute('aria-disabled', 'true');
         expect(half).toHaveAttribute('data-disabled', '');
         expect(half).toHaveAttribute('data-disabled-focusable', '');
-        expect(half).toHaveClass('opacity-50', 'cursor-not-allowed');
+        expect(half).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
       }
 
       await user.tab();
@@ -598,7 +598,7 @@ describe('SplitButton', () => {
       const primary = screen.getByRole('button', { name: 'Save' });
       expect(ref.current).toBe(primary);
       expect(primary).toHaveAttribute('title', 'Save the document');
-      expect(primary).toHaveClass('custom-primary', 'rounded-e-none');
+      expect(primary).toHaveClass('custom-primary', 'wave:rounded-e-none');
       await user.click(primary);
       expect(order).toEqual(['primaryActionButtonProps', 'onClick']);
     });
@@ -670,7 +670,7 @@ describe('SplitButton', () => {
       );
       const group = screen.getByRole('group', { name: 'Save options' });
       expect(ref.current).toBe(group);
-      expect(group).toHaveClass('custom', 'inline-flex');
+      expect(group).toHaveClass('custom', 'wave:inline-flex');
       expect(group).toHaveAttribute('data-testid', 'split');
     });
 
@@ -692,11 +692,11 @@ describe('SplitButton', () => {
 
   describe('styles (button-provider#3, #10, #19, #22, repo-level#7)', () => {
     const chevronPadding: Record<Size, string> = {
-      'extra-small': 'px-1.5',
-      small: 'px-1.5',
-      medium: 'px-2',
-      large: 'px-2',
-      'extra-large': 'px-3',
+      'extra-small': 'wave:px-1.5',
+      small: 'wave:px-1.5',
+      medium: 'wave:px-2',
+      large: 'wave:px-2',
+      'extra-large': 'wave:px-3',
     };
 
     it.each(Object.keys(chevronPadding) as Size[])(
@@ -704,13 +704,20 @@ describe('SplitButton', () => {
       (size) => {
         render(<SplitButton size={size}>Save</SplitButton>);
         const menu = screen.getByRole('button', { name: 'More options' });
-        expect(menu).toHaveClass('min-w-6', 'min-h-6', chevronPadding[size]);
+        expect(menu).toHaveClass('wave:min-w-6', 'wave:min-h-6', chevronPadding[size]);
         // No fixed square width and no narrower padding left over from the icon-only sizing.
-        for (const cls of ['w-5', 'w-6', 'w-8', 'px-0', 'px-0.5', 'px-1']) {
+        for (const cls of [
+          'wave:w-5',
+          'wave:w-6',
+          'wave:w-8',
+          'wave:px-0',
+          'wave:px-0.5',
+          'wave:px-1',
+        ]) {
           expect(menu).not.toHaveClass(cls);
         }
         // Both halves share the height, so the primary half matches at extra-small.
-        expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('min-h-6');
+        expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('wave:min-h-6');
       },
     );
 
@@ -719,8 +726,8 @@ describe('SplitButton', () => {
       const primary = screen.getByRole('button', { name: 'Save' });
       const menu = screen.getByRole('button', { name: 'More options' });
       expect(primary.closest('[dir]')).toHaveAttribute('dir', 'rtl');
-      expect(primary).toHaveClass('rounded-e-none', 'border-e-0');
-      expect(menu).toHaveClass('rounded-s-none', 'border-s-stroke');
+      expect(primary).toHaveClass('wave:rounded-e-none', 'wave:border-e-0');
+      expect(menu).toHaveClass('wave:rounded-s-none', 'wave:border-s-stroke');
       for (const el of [primary, menu, screen.getByRole('group')]) {
         expect(Array.from(el.classList).filter((c) => PHYSICAL.test(c))).toEqual([]);
       }
@@ -732,22 +739,22 @@ describe('SplitButton', () => {
       const menu = screen.getByRole('button', { name: 'More options' });
       for (const button of [primary, menu]) {
         expect(button).toHaveClass(
-          'bg-primary',
-          'text-primary-foreground',
-          'not-disabled:not-aria-disabled:hover:bg-primary-hover',
-          'not-disabled:not-aria-disabled:active:bg-primary-pressed',
+          'wave:bg-primary',
+          'wave:text-primary-foreground',
+          'wave:not-disabled:not-aria-disabled:hover:bg-primary-hover',
+          'wave:not-disabled:not-aria-disabled:active:bg-primary-pressed',
         );
         expect(Array.from(button.classList).filter((c) => /\[(#|rgba?\()/.test(c))).toEqual([]);
       }
-      expect(menu).toHaveClass('border-s-primary-foreground/30');
+      expect(menu).toHaveClass('wave:border-s-primary-foreground/30');
     });
 
     it('outline uses the stroke token for its border and separator', () => {
       render(<SplitButton>Save</SplitButton>);
-      expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('border-stroke');
+      expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('wave:border-stroke');
       expect(screen.getByRole('button', { name: 'More options' })).toHaveClass(
-        'border-stroke',
-        'border-s-stroke',
+        'wave:border-stroke',
+        'wave:border-s-stroke',
       );
     });
 
@@ -765,10 +772,10 @@ describe('SplitButton', () => {
           <SplitButton size="extra-large">Extra large</SplitButton>
         </>,
       );
-      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('text-body-2');
+      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('wave:text-body-2');
       const xl = screen.getByRole('button', { name: 'Extra large' });
-      expect(xl).toHaveClass('text-[18px]/[24px]');
-      expect(xl).not.toHaveClass('text-sm');
+      expect(xl).toHaveClass('wave:text-[18px]/[24px]');
+      expect(xl).not.toHaveClass('wave:text-sm');
     });
   });
 

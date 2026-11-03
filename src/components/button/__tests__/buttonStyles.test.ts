@@ -11,7 +11,7 @@ import {
   buttonDisabledClasses,
   buttonClassName,
 } from '../buttonStyles';
-import { cn } from '../../../lib/cn';
+import { wcn } from '../../../lib/cn';
 import type { Appearance, Size } from '../../../lib/types';
 
 const appearances: Appearance[] = ['primary', 'outline', 'subtle', 'transparent'];
@@ -45,9 +45,11 @@ const allClassStrings: Array<[string, string]> = [
 
 const classesOf = (value: string) => value.split(/\s+/).filter(Boolean);
 
-// Vitest empties `*.css?raw` imports (CSS processing is off), so the ramp is read from disk.
-const TOKENS_CSS = readFileSync(
-  join(import.meta.dirname, '..', '..', '..', 'styles', 'tokens.css'),
+// Vitest empties `*.css?raw` imports (CSS processing is off), so the ramp is read from disk: from
+// theme.css, the internal theme the components' classes compile against (tokens.css holds only
+// the namespaced keys apps use, `--text-wave-*`).
+const THEME_CSS = readFileSync(
+  join(import.meta.dirname, '..', '..', '..', 'styles', 'theme.css'),
   'utf8',
 );
 
@@ -68,11 +70,14 @@ interface FontSize {
 }
 
 /**
- * The font size a single class sets, or `undefined` when it sets none: a type-ramp token
- * (`text-body-2`, resolved from its `--text-*` declaration in tokens.css), an arbitrary px size
- * (`text-[18px]`, optionally with a px line height `/[24px]`) or a Tailwind default rem size.
+ * The font size a single class of Wave's sets, or `undefined` when it sets none: a type-ramp
+ * token (`text-body-2`, resolved from its `--text-*` declaration in theme.css), an arbitrary px
+ * size (`text-[18px]`, optionally with a px line height `/[24px]`) or a Tailwind default rem
+ * size, each written with the utility prefix (`wave:text-body-2`); a class without it sets none.
  */
-function fontSizeOfClass(cls: string): FontSize | undefined {
+function fontSizeOfClass(prefixed: string): FontSize | undefined {
+  if (!prefixed.startsWith('wave:')) return undefined;
+  const cls = prefixed.slice('wave:'.length);
   const arbitraryPx = /^text-\[(\d+(?:\.\d+)?)px\](?:\/\[\d+(?:\.\d+)?px\])?$/.exec(cls);
   if (arbitraryPx) return { px: Number(arbitraryPx[1]), unit: 'px' };
   const rem = TAILWIND_REM_FONT_SIZES[cls];
@@ -81,7 +86,7 @@ function fontSizeOfClass(cls: string): FontSize | undefined {
   if (!token) return undefined;
   const declaration = new RegExp(
     `(?:^|[\\s;{])--text-${token[1]}:\\s*(\\d+(?:\\.\\d+)?)(px|rem);`,
-  ).exec(TOKENS_CSS);
+  ).exec(THEME_CSS);
   if (!declaration) return undefined;
   const value = Number(declaration[1]);
   return declaration[2] === 'px' ? { px: value, unit: 'px' } : { px: value * 16, unit: 'rem' };
@@ -129,8 +134,9 @@ describe('buttonStyles', () => {
       '%s gates every hover/pressed class with not-disabled:not-aria-disabled:',
       (_name, value) => {
         for (const cls of classesOf(value)) {
-          if (/(^|:)hover:/.test(cls)) expect(cls.startsWith(HOVER_GATE), cls).toBe(true);
-          if (/(^|:)active:/.test(cls)) expect(cls.startsWith(ACTIVE_GATE), cls).toBe(true);
+          if (/(^|:)hover:/.test(cls)) expect(cls.startsWith(`wave:${HOVER_GATE}`), cls).toBe(true);
+          if (/(^|:)active:/.test(cls))
+            expect(cls.startsWith(`wave:${ACTIVE_GATE}`), cls).toBe(true);
         }
       },
     );
@@ -139,17 +145,17 @@ describe('buttonStyles', () => {
       const base = classesOf(buttonBaseClasses);
       expect(base).toEqual(
         expect.arrayContaining([
-          'inline-flex',
-          'items-center',
-          'justify-center',
-          'rounded',
-          'font-semibold',
-          'no-underline',
-          'transition-colors',
-          'motion-reduce:transition-none',
-          'focus-visible:outline-2',
-          'focus-visible:outline-offset-2',
-          'focus-visible:outline-ring',
+          'wave:inline-flex',
+          'wave:items-center',
+          'wave:justify-center',
+          'wave:rounded',
+          'wave:font-semibold',
+          'wave:no-underline',
+          'wave:transition-colors',
+          'wave:motion-reduce:transition-none',
+          'wave:focus-visible:outline-2',
+          'wave:focus-visible:outline-offset-2',
+          'wave:focus-visible:outline-ring',
         ]),
       );
     });
@@ -159,10 +165,10 @@ describe('buttonStyles', () => {
     it('primary uses the primary fill with hover and pressed tokens (no hard-coded white)', () => {
       expect(classesOf(buttonAppearanceClasses.primary)).toEqual(
         expect.arrayContaining([
-          'bg-primary',
-          'text-primary-foreground',
-          `${HOVER_GATE}bg-primary-hover`,
-          `${ACTIVE_GATE}bg-primary-pressed`,
+          'wave:bg-primary',
+          'wave:text-primary-foreground',
+          `wave:${HOVER_GATE}bg-primary-hover`,
+          `wave:${ACTIVE_GATE}bg-primary-pressed`,
         ]),
       );
     });
@@ -170,13 +176,13 @@ describe('buttonStyles', () => {
     it('outline uses the stroke border and subtle hover/pressed backgrounds', () => {
       expect(classesOf(buttonAppearanceClasses.outline)).toEqual(
         expect.arrayContaining([
-          'border',
-          'border-stroke',
-          'bg-background',
-          'text-foreground',
-          `${HOVER_GATE}border-stroke-hover`,
-          `${HOVER_GATE}bg-subtle-hover`,
-          `${ACTIVE_GATE}bg-subtle-pressed`,
+          'wave:border',
+          'wave:border-stroke',
+          'wave:bg-background',
+          'wave:text-foreground',
+          `wave:${HOVER_GATE}border-stroke-hover`,
+          `wave:${HOVER_GATE}bg-subtle-hover`,
+          `wave:${ACTIVE_GATE}bg-subtle-pressed`,
         ]),
       );
     });
@@ -186,34 +192,38 @@ describe('buttonStyles', () => {
       const transparent = classesOf(buttonAppearanceClasses.transparent);
       expect(subtle).toEqual(
         expect.arrayContaining([
-          'bg-transparent',
-          'text-foreground',
-          `${HOVER_GATE}bg-subtle-hover`,
-          `${ACTIVE_GATE}bg-subtle-pressed`,
+          'wave:bg-transparent',
+          'wave:text-foreground',
+          `wave:${HOVER_GATE}bg-subtle-hover`,
+          `wave:${ACTIVE_GATE}bg-subtle-pressed`,
         ]),
       );
-      expect(subtle).not.toContain('text-primary');
+      expect(subtle).not.toContain('wave:text-primary');
       expect(transparent).toEqual(
-        expect.arrayContaining(['bg-transparent', 'text-primary', `${HOVER_GATE}underline`]),
+        expect.arrayContaining([
+          'wave:bg-transparent',
+          'wave:text-primary',
+          `wave:${HOVER_GATE}underline`,
+        ]),
       );
-      expect(transparent).not.toContain('text-foreground');
-      expect(transparent).not.toContain(`${HOVER_GATE}bg-subtle-hover`);
+      expect(transparent).not.toContain('wave:text-foreground');
+      expect(transparent).not.toContain(`wave:${HOVER_GATE}bg-subtle-hover`);
     });
 
     it('every appearance draws a 1px border (transparent unless outline) so forced colors show an edge', () => {
       for (const appearance of appearances) {
-        expect(classesOf(buttonAppearanceClasses[appearance])).toContain('border');
+        expect(classesOf(buttonAppearanceClasses[appearance])).toContain('wave:border');
       }
       for (const appearance of ['primary', 'subtle', 'transparent'] as const) {
-        expect(classesOf(buttonAppearanceClasses[appearance])).toContain('border-transparent');
+        expect(classesOf(buttonAppearanceClasses[appearance])).toContain('wave:border-transparent');
       }
     });
 
     it('pressed maps use the selected / primary-pressed tokens', () => {
-      expect(classesOf(buttonPressedClasses.primary)).toContain('bg-primary-pressed');
+      expect(classesOf(buttonPressedClasses.primary)).toContain('wave:bg-primary-pressed');
       for (const appearance of ['outline', 'subtle', 'transparent'] as const) {
         expect(classesOf(buttonPressedClasses[appearance])).toEqual(
-          expect.arrayContaining(['bg-selected', 'text-selected-foreground']),
+          expect.arrayContaining(['wave:bg-selected', 'wave:text-selected-foreground']),
         );
       }
     });
@@ -221,13 +231,9 @@ describe('buttonStyles', () => {
 
   describe('sizes (button-provider#19)', () => {
     it('heights grow with the size ramp', () => {
-      expect(sizes.map((s) => classesOf(buttonSizeClasses[s]).find((c) => /^h-/.test(c)))).toEqual([
-        'h-5',
-        'h-6',
-        'h-8',
-        'h-10',
-        'h-12',
-      ]);
+      expect(
+        sizes.map((s) => classesOf(buttonSizeClasses[s]).find((c) => /^wave:h-/.test(c))),
+      ).toEqual(['wave:h-5', 'wave:h-6', 'wave:h-8', 'wave:h-10', 'wave:h-12']);
     });
 
     it('font sizes grow strictly with the size ramp (extra-large is larger than large)', () => {
@@ -251,31 +257,33 @@ describe('buttonStyles', () => {
     );
 
     it('extra-large uses 18px text on a 24px line (Fluent base 450; the type ramp has no 18px step)', () => {
-      expect(classesOf(buttonSizeClasses['extra-large'])).toContain('text-[18px]/[24px]');
-      expect(classesOf(buttonIconOnlySizeClasses['extra-large'])).toContain('text-[18px]/[24px]');
+      expect(classesOf(buttonSizeClasses['extra-large'])).toContain('wave:text-[18px]/[24px]');
+      expect(classesOf(buttonIconOnlySizeClasses['extra-large'])).toContain(
+        'wave:text-[18px]/[24px]',
+      );
     });
 
     it('the extra-large font size keeps a consumer text color and yields to a consumer font size', () => {
-      const withColor = cn(buttonClassName({ size: 'extra-large' }), 'text-error');
+      const withColor = wcn(buttonClassName({ size: 'extra-large' }), 'text-error');
       expect(classesOf(withColor)).toEqual(
-        expect.arrayContaining(['text-[18px]/[24px]', 'text-error']),
+        expect.arrayContaining(['wave:text-[18px]/[24px]', 'text-error']),
       );
-      const withFontSize = cn(buttonClassName({ size: 'extra-large' }), 'text-body-1');
+      const withFontSize = wcn(buttonClassName({ size: 'extra-large' }), 'text-body-1');
       expect(classesOf(withFontSize)).toContain('text-body-1');
-      expect(classesOf(withFontSize)).not.toContain('text-[18px]/[24px]');
+      expect(classesOf(withFontSize)).not.toContain('wave:text-[18px]/[24px]');
     });
 
     it('icon-only sizes are square with the same font size as the labelled size', () => {
       for (const size of sizes) {
         const cls = classesOf(buttonIconOnlySizeClasses[size]);
-        const h = cls.find((c) => /^h-/.test(c));
-        const w = cls.find((c) => /^w-/.test(c));
+        const h = cls.find((c) => /^wave:h-/.test(c));
+        const w = cls.find((c) => /^wave:w-/.test(c));
         expect(h, size).toBeDefined();
-        expect(w, size).toBe(h?.replace(/^h-/, 'w-'));
+        expect(w, size).toBe(h?.replace(/^wave:h-/, 'wave:w-'));
         expect(fontSizeOf(buttonIconOnlySizeClasses[size])).toBe(
           fontSizeOf(buttonSizeClasses[size]),
         );
-        expect(cls.some((c) => c.startsWith('min-w-'))).toBe(false);
+        expect(cls.some((c) => c.startsWith('wave:min-w-'))).toBe(false);
       }
     });
   });
@@ -285,12 +293,12 @@ describe('buttonStyles', () => {
       const cls = classesOf(buttonClassName());
       expect(cls).toEqual(
         expect.arrayContaining([
-          'inline-flex',
-          'h-8',
-          'min-w-24',
-          'text-body-1',
-          'border-stroke',
-          'text-foreground',
+          'wave:inline-flex',
+          'wave:h-8',
+          'wave:min-w-24',
+          'wave:text-body-1',
+          'wave:border-stroke',
+          'wave:text-foreground',
         ]),
       );
       expect(buttonClassName()).toBe(buttonClassName({ appearance: 'outline', size: 'medium' }));
@@ -298,8 +306,10 @@ describe('buttonStyles', () => {
 
     it.each(appearances)('combines base, size and the %s appearance', (appearance) => {
       const cls = classesOf(buttonClassName({ appearance, size: 'large' }));
-      expect(cls).toEqual(expect.arrayContaining(['inline-flex', 'h-10', 'text-body-2']));
-      for (const token of ['bg-primary', 'bg-background', 'bg-transparent']) {
+      expect(cls).toEqual(
+        expect.arrayContaining(['wave:inline-flex', 'wave:h-10', 'wave:text-body-2']),
+      );
+      for (const token of ['wave:bg-primary', 'wave:bg-background', 'wave:bg-transparent']) {
         expect(cls.includes(token)).toBe(
           classesOf(buttonAppearanceClasses[appearance]).includes(token),
         );
@@ -308,21 +318,21 @@ describe('buttonStyles', () => {
 
     it('iconOnly renders a square button without the minimum width', () => {
       const cls = classesOf(buttonClassName({ iconOnly: true, size: 'small' }));
-      expect(cls).toEqual(expect.arrayContaining(['h-6', 'w-6']));
-      expect(cls.some((c) => c.startsWith('min-w-'))).toBe(false);
+      expect(cls).toEqual(expect.arrayContaining(['wave:h-6', 'wave:w-6']));
+      expect(cls.some((c) => c.startsWith('wave:min-w-'))).toBe(false);
     });
 
     it('disabled adds the disabled look, including the forced-colors GrayText', () => {
       const cls = classesOf(buttonClassName({ disabled: true }));
       expect(cls).toEqual(
         expect.arrayContaining([
-          'opacity-50',
-          'cursor-not-allowed',
-          'forced-colors:text-[GrayText]',
-          'forced-colors:border-[GrayText]',
+          'wave:opacity-50',
+          'wave:cursor-not-allowed',
+          'wave:forced-colors:text-[GrayText]',
+          'wave:forced-colors:border-[GrayText]',
         ]),
       );
-      expect(classesOf(buttonClassName())).not.toContain('opacity-50');
+      expect(classesOf(buttonClassName())).not.toContain('wave:opacity-50');
     });
 
     it('the disabled look lifts its opacity while a focusable disabled button shows its focus ring', () => {
@@ -330,21 +340,25 @@ describe('buttonStyles', () => {
       // `aria-disabled` button keeps a full-strength ring. tailwind-merge keeps both classes
       // (different variants), and the variant's higher specificity wins while focused.
       expect(classesOf(buttonClassName({ disabled: true }))).toEqual(
-        expect.arrayContaining(['opacity-50', 'aria-disabled:focus-visible:opacity-100']),
+        expect.arrayContaining(['wave:opacity-50', 'wave:aria-disabled:focus-visible:opacity-100']),
       );
     });
 
     it('pressed layers the pressed tokens over the appearance (tailwind-merge resolves conflicts)', () => {
       const cls = classesOf(buttonClassName({ appearance: 'outline', pressed: true }));
       expect(cls).toEqual(
-        expect.arrayContaining(['bg-selected', 'text-selected-foreground', 'border-primary']),
+        expect.arrayContaining([
+          'wave:bg-selected',
+          'wave:text-selected-foreground',
+          'wave:border-primary',
+        ]),
       );
-      expect(cls).not.toContain('bg-background');
-      expect(cls).not.toContain('text-foreground');
-      expect(cls).not.toContain('border-stroke');
+      expect(cls).not.toContain('wave:bg-background');
+      expect(cls).not.toContain('wave:text-foreground');
+      expect(cls).not.toContain('wave:border-stroke');
       const primary = classesOf(buttonClassName({ appearance: 'primary', pressed: true }));
-      expect(primary).toContain('bg-primary-pressed');
-      expect(primary).not.toContain('bg-primary');
+      expect(primary).toContain('wave:bg-primary-pressed');
+      expect(primary).not.toContain('wave:bg-primary');
     });
 
     it.each(appearances)(
@@ -353,17 +367,17 @@ describe('buttonStyles', () => {
         const cls = classesOf(buttonClassName({ appearance, pressed: true }));
         expect(cls).toEqual(
           expect.arrayContaining([
-            'forced-colors:outline-2',
-            'forced-colors:outline-[Highlight]',
-            'forced-colors:-outline-offset-2',
-            'forced-colors:border-[Highlight]',
+            'wave:forced-colors:outline-2',
+            'wave:forced-colors:outline-[Highlight]',
+            'wave:forced-colors:-outline-offset-2',
+            'wave:forced-colors:border-[Highlight]',
           ]),
         );
         // A button is a container: `forced-color-adjust: none` would be inherited by its label,
         // icons and focus ring (forcedColors.selectedLeaf is for leaf indicators only).
         expect(cls.some((c) => c.includes('forced-color-adjust'))).toBe(false);
-        expect(cls).not.toContain('forced-colors:bg-[Highlight]');
-        expect(cls).not.toContain('forced-colors:text-[HighlightText]');
+        expect(cls).not.toContain('wave:forced-colors:bg-[Highlight]');
+        expect(cls).not.toContain('wave:forced-colors:text-[HighlightText]');
       },
     );
 
@@ -372,13 +386,13 @@ describe('buttonStyles', () => {
         const cls = classesOf(buttonClassName({ appearance, pressed: true, disabled: true }));
         expect(cls).toEqual(
           expect.arrayContaining([
-            'forced-colors:text-[GrayText]',
-            'forced-colors:border-[GrayText]',
-            'forced-colors:outline-[GrayText]',
+            'wave:forced-colors:text-[GrayText]',
+            'wave:forced-colors:border-[GrayText]',
+            'wave:forced-colors:outline-[GrayText]',
           ]),
         );
         expect(
-          cls.filter((c) => c.startsWith('forced-colors:') && c.includes('Highlight')),
+          cls.filter((c) => c.startsWith('wave:forced-colors:') && c.includes('Highlight')),
           appearance,
         ).toEqual([]);
         expect(cls.some((c) => c.includes('forced-color-adjust'))).toBe(false);
@@ -387,10 +401,10 @@ describe('buttonStyles', () => {
 
     it('the GrayText outline is added only when pressed and disabled', () => {
       expect(classesOf(buttonClassName({ disabled: true }))).not.toContain(
-        'forced-colors:outline-[GrayText]',
+        'wave:forced-colors:outline-[GrayText]',
       );
       expect(classesOf(buttonClassName({ pressed: true }))).not.toContain(
-        'forced-colors:outline-[GrayText]',
+        'wave:forced-colors:outline-[GrayText]',
       );
     });
   });
@@ -398,26 +412,26 @@ describe('buttonStyles', () => {
   describe('accessible pressed colors (ToggleButton isAccessible)', () => {
     it('draws the pressed state as a brand fill with on-brand text, per appearance', () => {
       expect(classesOf(buttonPressedAccessibleClasses.primary)).toEqual([
-        'bg-primary-pressed',
-        'text-primary-foreground',
-        'inset-ring-2',
-        'inset-ring-primary-foreground',
-        `${HOVER_GATE}bg-primary-pressed`,
+        'wave:bg-primary-pressed',
+        'wave:text-primary-foreground',
+        'wave:inset-ring-2',
+        'wave:inset-ring-primary-foreground',
+        `wave:${HOVER_GATE}bg-primary-pressed`,
       ]);
       expect(classesOf(buttonPressedAccessibleClasses.outline)).toEqual([
-        'border-primary',
-        'bg-primary',
-        'text-primary-foreground',
-        `${HOVER_GATE}border-primary-hover`,
-        `${HOVER_GATE}bg-primary-hover`,
-        `${ACTIVE_GATE}bg-primary-pressed`,
+        'wave:border-primary',
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+        `wave:${HOVER_GATE}border-primary-hover`,
+        `wave:${HOVER_GATE}bg-primary-hover`,
+        `wave:${ACTIVE_GATE}bg-primary-pressed`,
       ]);
       for (const appearance of ['subtle', 'transparent'] as const) {
         expect(classesOf(buttonPressedAccessibleClasses[appearance]), appearance).toEqual([
-          'bg-primary',
-          'text-primary-foreground',
-          `${HOVER_GATE}bg-primary-hover`,
-          `${ACTIVE_GATE}bg-primary-pressed`,
+          'wave:bg-primary',
+          'wave:text-primary-foreground',
+          `wave:${HOVER_GATE}bg-primary-hover`,
+          `wave:${ACTIVE_GATE}bg-primary-pressed`,
         ]);
       }
     });
@@ -426,22 +440,22 @@ describe('buttonStyles', () => {
       const outline = classesOf(buttonClassName({ pressed: true, accessible: true }));
       expect(outline).toEqual(
         expect.arrayContaining([
-          'border-primary',
-          'bg-primary',
-          'text-primary-foreground',
-          `${HOVER_GATE}border-primary-hover`,
-          `${HOVER_GATE}bg-primary-hover`,
-          `${ACTIVE_GATE}bg-primary-pressed`,
+          'wave:border-primary',
+          'wave:bg-primary',
+          'wave:text-primary-foreground',
+          `wave:${HOVER_GATE}border-primary-hover`,
+          `wave:${HOVER_GATE}bg-primary-hover`,
+          `wave:${ACTIVE_GATE}bg-primary-pressed`,
         ]),
       );
       for (const replaced of [
-        'bg-background',
-        'text-foreground',
-        'border-stroke',
-        'bg-selected',
-        'text-selected-foreground',
-        `${HOVER_GATE}bg-subtle-hover`,
-        `${ACTIVE_GATE}bg-subtle-pressed`,
+        'wave:bg-background',
+        'wave:text-foreground',
+        'wave:border-stroke',
+        'wave:bg-selected',
+        'wave:text-selected-foreground',
+        `wave:${HOVER_GATE}bg-subtle-hover`,
+        `wave:${ACTIVE_GATE}bg-subtle-pressed`,
       ]) {
         expect(outline, replaced).not.toContain(replaced);
       }
@@ -451,30 +465,32 @@ describe('buttonStyles', () => {
       );
       expect(primary).toEqual(
         expect.arrayContaining([
-          'bg-primary-pressed',
-          'text-primary-foreground',
-          'inset-ring-2',
-          'inset-ring-primary-foreground',
-          `${HOVER_GATE}bg-primary-pressed`,
+          'wave:bg-primary-pressed',
+          'wave:text-primary-foreground',
+          'wave:inset-ring-2',
+          'wave:inset-ring-primary-foreground',
+          `wave:${HOVER_GATE}bg-primary-pressed`,
         ]),
       );
-      expect(primary).not.toContain('bg-primary');
-      expect(primary).not.toContain(`${HOVER_GATE}bg-primary-hover`);
+      expect(primary).not.toContain('wave:bg-primary');
+      expect(primary).not.toContain(`wave:${HOVER_GATE}bg-primary-hover`);
 
       const subtle = classesOf(
         buttonClassName({ appearance: 'subtle', pressed: true, accessible: true }),
       );
-      expect(subtle).toEqual(expect.arrayContaining(['bg-primary', 'text-primary-foreground']));
-      expect(subtle).not.toContain('bg-transparent');
-      expect(subtle).not.toContain('text-foreground');
+      expect(subtle).toEqual(
+        expect.arrayContaining(['wave:bg-primary', 'wave:text-primary-foreground']),
+      );
+      expect(subtle).not.toContain('wave:bg-transparent');
+      expect(subtle).not.toContain('wave:text-foreground');
 
       const transparent = classesOf(
         buttonClassName({ appearance: 'transparent', pressed: true, accessible: true }),
       );
       expect(transparent).toEqual(
-        expect.arrayContaining(['bg-primary', 'text-primary-foreground']),
+        expect.arrayContaining(['wave:bg-primary', 'wave:text-primary-foreground']),
       );
-      expect(transparent).not.toContain('text-primary');
+      expect(transparent).not.toContain('wave:text-primary');
     });
 
     it.each(appearances)('accessible changes nothing on an unpressed %s button', (appearance) => {
@@ -491,7 +507,7 @@ describe('buttonStyles', () => {
       (appearance) => {
         const forced = (value: string) =>
           classesOf(value)
-            .filter((c) => c.startsWith('forced-colors:'))
+            .filter((c) => c.startsWith('wave:forced-colors:'))
             .sort();
         for (const disabled of [false, true]) {
           expect(
@@ -510,15 +526,15 @@ describe('buttonStyles', () => {
         );
         expect(cls).toEqual(
           expect.arrayContaining([
-            'opacity-50',
-            'cursor-not-allowed',
-            'forced-colors:text-[GrayText]',
-            'forced-colors:border-[GrayText]',
-            'forced-colors:outline-[GrayText]',
+            'wave:opacity-50',
+            'wave:cursor-not-allowed',
+            'wave:forced-colors:text-[GrayText]',
+            'wave:forced-colors:border-[GrayText]',
+            'wave:forced-colors:outline-[GrayText]',
           ]),
         );
         expect(
-          cls.filter((c) => c.startsWith('forced-colors:') && c.includes('Highlight')),
+          cls.filter((c) => c.startsWith('wave:forced-colors:') && c.includes('Highlight')),
         ).toEqual([]);
       },
     );

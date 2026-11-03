@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { comboboxClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { isFocused } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import {
   disabledStyles,
   focusRing,
@@ -136,12 +136,6 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * naming.
    */
   onValueChange?: M extends true ? (value: string[]) => void : (value: string) => void;
-  /**
-   * Called on every option activation, also when the current option is selected again (every
-   * toggle with `multiselect`; with `freeform`, every text change).
-   * @deprecated Use `onValueChange`.
-   */
-  onOptionSelect?: (value: string) => void;
   /**
    * Controlled open state of the listbox. The list renders only in the browser: an open combobox
    * is closed in the server HTML and opens once it has hydrated.
@@ -358,14 +352,15 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   /** Called when a key is released in the `<input role="combobox">`. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
-  /** Ref to the `<input role="combobox">` (the focusable element). */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Ref to the `<input role="combobox">`, the focusable control (Fluent UI's `ref`, on its primary
+   * element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
   /**
    * Props for the elements the Combobox draws, by part, merged into each part's own (Fluent UI's
-   * `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the part's
-   * (yours win a conflict), your styles over its styles, your handlers before its handlers
+   * `root`, `input`, `clearIcon`, `expandIcon` and `listbox` slot props): your classes after the
+   * part's (yours win a conflict), your styles over its styles, your handlers before its handlers
    * (`preventDefault()` in yours skips the Combobox's handling of the event, its own `on…` prop
    * included), your ref beside its ref, and your ids added to its `aria-labelledby` and
    * `aria-describedby`. Every attribute the Combobox sets on a part is locked and keeps the
@@ -374,8 +369,24 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    */
   slotProps?: {
     /**
+     * The root `<div>` around the input and its buttons (stable class `wave-combobox`), which the
+     * Combobox's `className`, `style`, `data-*` and other root props reach as well; its `ref` is
+     * the way to the root, since the Combobox's `ref` reaches the input. Your classes come after
+     * the Combobox's `className`, your style over its `style`. Locked: every prop you give the
+     * Combobox itself that reaches the root, `data-size`, `data-appearance`, and `hidden`, `inert`
+     * and `aria-hidden` (the Combobox's own: the root holds the input). Also locked, unset: `role`,
+     * `tabIndex` and the roving markers (`data-roving-container`, `data-roving-disabled`,
+     * `data-roving-value`, `aria-disabled`), so in a toolbar or another roving container the root
+     * is never a control of its own and never hides the control from the arrow order. Your handlers
+     * run before the Combobox's own root handlers (`preventDefault()` in yours skips them). The
+     * root passes no click to the input, so your `onClick` is called in every state, as the
+     * Combobox's own `onClick` is. Your ref joins the Combobox's own, which keeps a press inside
+     * the root from dismissing the open list.
+     */
+    root?: SlotPart<'div'>;
+    /**
      * The `<input role="combobox">`, the focusable control (stable class `wave-combobox__input`;
-     * `controlRef` reaches it as well). Locked: `type`, `role`, `value` (and, unset,
+     * the Combobox's `ref` reaches it as well). Locked: `type`, `role`, `value` (and, unset,
      * `defaultValue`: the Combobox controls the text), `id`, the naming, Field and listbox wiring
      * (`aria-label`, `aria-invalid`, `aria-required`, `aria-expanded`, `aria-controls`,
      * `aria-activedescendant`, `aria-haspopup`, `aria-autocomplete`, `aria-errormessage`,
@@ -468,7 +479,6 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    onOptionSelect,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -515,15 +525,13 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     onBlur,
     onKeyDown,
     onKeyUp,
-    controlRef,
     className,
+    style,
     children,
     ref,
     slotProps,
     ...rest
   } = props;
-
-  if (onOptionSelect !== undefined) warnDeprecated('Combobox', 'onOptionSelect', 'onValueChange');
 
   // The multi-select signature has no `freeform` (D11); passed anyway from JavaScript, it is
   // ignored there, with a warning.
@@ -686,7 +694,6 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   const commitText = (text: string) => {
     setTypedValue(text);
     setValue(text);
-    onOptionSelect?.(text);
   };
 
   const close = () => {
@@ -720,16 +727,13 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     selectedValues: values,
     onSelect: (next, details) => {
       if (!multiselect) {
-        // 0.7 order: the value callback first, the deprecated one after.
         setValue(next);
-        onOptionSelect?.(next);
         dropDraft();
         setTypedValue(null);
         return;
       }
       const { values: updated, added } = toggleValue(values, next);
       setValue(updated);
-      onOptionSelect?.(next);
       // The toggled option's label: the item useListbox passed in `details` (its own result,
       // `listbox`, cannot be read from inside the options object passed to it), else the label
       // read from `children` before the option registered, else the raw value. Announces a
@@ -737,7 +741,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       // which reach this callback.
       announceToggle(
         labels,
-        details?.item.label ?? optionLabels.get(next) ?? next,
+        details.item.label ?? optionLabels.get(next) ?? next,
         added,
         updated.length,
       );
@@ -803,10 +807,14 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     anchorRef: inputRef,
   });
 
-  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
+  // The root part's ref joins the root's own (the popup's dismissal reads it) through a merged ref
+  // set after the part's props, so an inline part ref never detaches the root's own.
+  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, slotProps?.root?.ref);
+  // The consumer's `ref` joins the input's own, the popup's positioning reference included: an
+  // inline `ref` that changes on every render is swapped alone, and the reference stays attached.
   const inputMergedRef = useMergedRefs<HTMLInputElement>(
     inputRef,
-    controlRef,
+    ref,
     setReference,
     slotProps?.input?.ref,
   );
@@ -964,10 +972,9 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     inputRef.current?.focus();
   };
 
-  // Clearing is not an option activation: the state is set directly, not through `commitText`
-  // (which calls the deprecated `onOptionSelect` in freeform mode). The button disappears with the
-  // value, so focus moves to the input explicitly (C-DISABLED). An event callback, like the
-  // input's handlers that read a ref.
+  // Clearing is not typing: the state is set directly, not through `commitText` (which keeps the
+  // text as typed). The button disappears with the value, so focus moves to the input explicitly
+  // (C-DISABLED). An event callback, like the input's handlers that read a ref.
   const handleClear = useEventCallback(() => {
     setValue(multiselect ? EMPTY_VALUES : '');
     setTypedValue(null);
@@ -993,14 +1000,14 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   };
 
   const inputProps = mergeSlotProps(slotProps?.input, {
-    className: cn(
+    className: wcn(
       comboboxClassNames.input,
       inputHeightClasses[size],
-      'w-full',
+      'wave:w-full',
       inputPaddingClasses[size],
       inputTextClasses[size],
       inputAppearanceClasses[appearance],
-      'text-foreground placeholder:text-muted-foreground',
+      'wave:text-foreground wave:placeholder:text-muted-foreground',
       inputFocus,
       disabledStyles,
       invalidLook && inputInvalid,
@@ -1057,16 +1064,32 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     },
   });
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      comboboxClassNames.root,
+      'wave:relative wave:inline-flex wave:flex-col',
+      className,
+    ),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
+      // The Combobox's own root props, after the data attributes as in 0.18, and over the part's;
+      // the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
-    <div
-      data-size={size}
-      data-appearance={appearance}
-      {...rest}
-      ref={rootMergedRef}
-      className={cn(comboboxClassNames.root, 'relative inline-flex flex-col', className)}
-    >
+    <div {...rootProps} ref={rootMergedRef}>
       {multiselect && <PickerAnnouncer />}
-      <div className="relative flex items-center">
+      <div className="wave:relative wave:flex wave:items-center">
         <input
           {...inputProps}
           ref={inputMergedRef}
@@ -1083,7 +1106,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
-              className: cn(
+              className: wcn(
                 comboboxClassNames.clearButton,
                 pickerIconButtonClasses(size, appearance),
                 pickerButtonOffset(size, showExpand ? 2 : 1),
@@ -1129,7 +1152,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
       </div>
       {/* Mounted before its text: a live region added together with its text is not announced by
           every screen reader. The row in the popup is the visible copy. */}
-      <span role="status" className="sr-only">
+      <span role="status" className="wave:sr-only">
         {noMatches && noMatchesText}
       </span>
       <PickerListboxSurface
@@ -1140,15 +1163,18 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         open={open}
         expanded={expanded}
         // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
-        listClassName={cn(comboboxClassNames.listbox, activeWindow && '[overflow-anchor:none]')}
+        listClassName={wcn(
+          comboboxClassNames.listbox,
+          activeWindow && 'wave:[overflow-anchor:none]',
+        )}
         surfaceClassName={comboboxClassNames.surface}
         emptyContent={
           draft ? (
             <div
               {...mergeSlotProps(slotProps?.emptyMessage, {
-                className: cn(
+                className: wcn(
                   comboboxClassNames.emptyMessage,
-                  'px-3 py-1.5 text-body-1 text-muted-foreground',
+                  'wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground',
                 ),
                 locked: { 'aria-hidden': 'true', tabIndex: undefined },
               })}
@@ -1235,17 +1261,17 @@ export const ComboboxOptionGroup = OptionGroup;
  * tall; the active option stays rendered, and opening scrolls it (else the first selected option)
  * to the middle of the list.
  *
- * The `<input>` receives `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
+ * The `<input>` receives `ref`, `id`, `aria-label`, `aria-labelledby`, `aria-describedby`,
  * `aria-invalid`, `aria-required`, `aria-errormessage`, `aria-details`, `tabIndex`, `autoFocus`,
  * `onFocus`/`onBlur`/`onKeyDown`/`onKeyUp` and the text input attributes `autoComplete`,
  * `autoCapitalize`, `autoCorrect`, `maxLength`, `inputMode`, `spellCheck` and `enterKeyHint`.
- * `ref`, `className`, `style`, other `aria-*` attributes and the remaining props stay on the root
- * `<div>`. Inside a `Field` the input is labelled and described by it. It shows the error look
- * whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field` error). With
- * `name`/`required` the value takes part in form submission (one hidden input per value with
- * `multiselect`), validation and reset (a `multiselect` reset is compared by content, so restoring
- * the same values reports nothing). The open listbox renders in a portal; while closed it stays
- * in the DOM, hidden.
+ * `className`, `style`, other `aria-*` attributes and the remaining props stay on the root `<div>`
+ * (`slotProps.root.ref` reaches it). Inside a `Field` the input is labelled and described by it.
+ * It shows the error look whenever it ends up `aria-invalid` (its own `aria-invalid` or a `Field`
+ * error). With `name`/`required` the value takes part in form submission (one hidden input per
+ * value with `multiselect`), validation and reset (a `multiselect` reset is compared by content,
+ * so restoring the same values reports nothing). The open listbox renders in a portal; while
+ * closed it stays in the DOM, hidden.
  *
  * **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  * `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own prop,

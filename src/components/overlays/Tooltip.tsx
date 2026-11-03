@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { tooltipClassNames } from '../../lib/classNames';
-import { resolveDeprecatedProp, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { FOCUSABLE_SELECTOR, getFirstTabbable } from '../../lib/focus';
 import { tooltipMotion } from '../../lib/motion';
@@ -39,10 +39,6 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    */
   appearance?: TooltipAppearance;
   /**
-   * @deprecated Use `appearance` (`'dark'` → `'inverted'`, `'light'` → `'normal'`).
-   */
-  variant?: 'dark' | 'light';
-  /**
    * Milliseconds before the tooltip appears when the pointer rests on the child or the child
    * receives keyboard focus (Fluent's `showDelay`; unlike Menu's and Popover's `openDelay`, it
    * applies to focus too).
@@ -55,8 +51,6 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
    * @default 100
    */
   closeDelay?: number;
-  /** @deprecated Use `openDelay`. */
-  delay?: number;
   /**
    * Controlled open state (Fluent's `visible`). The tooltip still asks to open on hover and focus
    * (after `openDelay`) and to close on leave, blur and Escape through `onOpenChange`. The surface
@@ -143,14 +137,10 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
   };
 }
 
-const VARIANT_APPEARANCE: Record<'dark' | 'light', TooltipAppearance> = {
-  dark: 'inverted',
-  light: 'normal',
-};
-
 const appearanceClasses: Record<TooltipAppearance, string> = {
-  inverted: 'border border-inverted-border bg-inverted text-inverted-foreground',
-  normal: 'border border-border bg-background text-foreground',
+  inverted:
+    'wave:border wave:border-inverted-border wave:bg-inverted wave:text-inverted-foreground',
+  normal: 'wave:border wave:border-border wave:bg-background wave:text-foreground',
 };
 
 /**
@@ -159,22 +149,22 @@ const appearanceClasses: Record<TooltipAppearance, string> = {
  * which would otherwise catch hovers and clicks meant for neighbouring controls.
  */
 const bridgeClasses = [
-  'before:absolute',
+  'wave:before:absolute',
   // Tooltip above the trigger: a strip below it.
-  'data-[side=top]:before:inset-x-0 data-[side=top]:before:top-full data-[side=top]:before:h-2',
+  'wave:data-[side=top]:before:inset-x-0 wave:data-[side=top]:before:top-full wave:data-[side=top]:before:h-2',
   // Tooltip below the trigger: a strip above it.
-  'data-[side=bottom]:before:inset-x-0 data-[side=bottom]:before:bottom-full data-[side=bottom]:before:h-2',
+  'wave:data-[side=bottom]:before:inset-x-0 wave:data-[side=bottom]:before:bottom-full wave:data-[side=bottom]:before:h-2',
   // wave-allow-physical: data-side is the physical side resolved by the positioning
-  'data-[side=left]:before:inset-y-0 data-[side=left]:before:left-full data-[side=left]:before:w-2',
+  'wave:data-[side=left]:before:inset-y-0 wave:data-[side=left]:before:left-full wave:data-[side=left]:before:w-2',
   // wave-allow-physical: data-side is the physical side resolved by the positioning
-  'data-[side=right]:before:inset-y-0 data-[side=right]:before:right-full data-[side=right]:before:w-2',
+  'wave:data-[side=right]:before:inset-y-0 wave:data-[side=right]:before:right-full wave:data-[side=right]:before:w-2',
 ].join(' ');
 
 /**
  * The visual surface: wrapping text, typography reset against the host (header cells, muted
  * panels), and the hover bridge towards the trigger.
  */
-const surfaceClasses = `max-w-60 whitespace-normal break-words rounded px-3 py-1.5 text-caption-1 font-normal normal-case tracking-normal text-start shadow-8 ${bridgeClasses}`;
+const surfaceClasses = `wave:max-w-60 wave:whitespace-normal wave:break-words wave:rounded wave:px-3 wave:py-1.5 wave:text-caption-1 wave:font-normal wave:normal-case wave:tracking-normal wave:text-start wave:shadow-8 ${bridgeClasses}`;
 
 type UnknownProps = Record<string, unknown>;
 type Relationship = NonNullable<TooltipProps['relationship']>;
@@ -351,10 +341,8 @@ function useRelationshipTarget(
 export const Tooltip = ({
   content,
   appearance: appearanceProp,
-  variant,
   openDelay: openDelayProp,
   closeDelay = 100,
-  delay,
   open: openProp,
   defaultOpen,
   onOpenChange,
@@ -373,16 +361,8 @@ export const Tooltip = ({
   slotProps,
   ...rest
 }: TooltipProps) => {
-  const appearance =
-    resolveDeprecatedProp(
-      'Tooltip',
-      appearanceProp,
-      variant === undefined ? undefined : VARIANT_APPEARANCE[variant],
-      'variant',
-      'appearance',
-    ) ?? 'inverted';
-  const openDelay =
-    resolveDeprecatedProp('Tooltip', openDelayProp, delay, 'delay', 'openDelay') ?? 200;
+  const appearance = appearanceProp ?? 'inverted';
+  const openDelay = openDelayProp ?? 200;
   const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
   // The surface lives in a portal, which renders only in the browser: until then (the server HTML,
   // hydration) the tooltip is closed; the hidden description is rendered either way.
@@ -502,7 +482,7 @@ export const Tooltip = ({
   let surface: React.ReactNode = null;
   if (isMounted) {
     const surfaceProps = mergeSlotProps(slotProps?.content, {
-      className: cn(
+      className: wcn(
         tooltipClassNames.content,
         surfaceClasses,
         appearanceClasses[appearance],
@@ -539,7 +519,7 @@ export const Tooltip = ({
     <span
       ref={wrapperElementRef}
       {...wrapperProps}
-      className={cn(tooltipClassNames.root, 'inline-block', className)}
+      className={wcn(tooltipClassNames.root, 'wave:inline-block', className)}
       onMouseEnter={composeEventHandlers(onMouseEnter, showOnEnter)}
       onMouseLeave={composeEventHandlers(onMouseLeave, scheduleHide)}
       onMouseOver={composeEventHandlers(

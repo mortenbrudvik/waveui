@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   tagPickerButtonClassNames,
   tagPickerClassNames,
@@ -59,9 +59,12 @@ import type { TagPickerSize } from './TagPicker.root';
 
 /** Per-size classes of the control and the trigger (medium is the 0.7 look). */
 const TAG_PICKER_SIZE: Readonly<Record<TagPickerSize, { control: string; trigger: string }>> = {
-  medium: { control: 'gap-1 px-2 py-1.5', trigger: 'py-0.5 text-body-1' },
-  large: { control: 'gap-1.5 px-2.5 py-2', trigger: 'py-1 text-body-1' },
-  'extra-large': { control: 'gap-1.5 px-3 py-2.5', trigger: 'py-1 text-body-2' },
+  medium: { control: 'wave:gap-1 wave:px-2 wave:py-1.5', trigger: 'wave:py-0.5 wave:text-body-1' },
+  large: { control: 'wave:gap-1.5 wave:px-2.5 wave:py-2', trigger: 'wave:py-1 wave:text-body-1' },
+  'extra-large': {
+    control: 'wave:gap-1.5 wave:px-3 wave:py-2.5',
+    trigger: 'wave:py-1 wave:text-body-2',
+  },
 };
 
 /**
@@ -69,9 +72,9 @@ const TAG_PICKER_SIZE: Readonly<Record<TagPickerSize, { control: string; trigger
  * padding plus half the row (the trigger line) minus half the box.
  */
 const END_BUTTON_TOP: Readonly<Record<TagPickerSize, string>> = {
-  medium: 'top-1.5',
-  large: 'top-1.5',
-  'extra-large': 'top-2.25',
+  medium: 'wave:top-1.5',
+  large: 'wave:top-1.5',
+  'extra-large': 'wave:top-2.25',
 };
 
 /**
@@ -163,14 +166,14 @@ function TagPickerClearButton({ ctx, position }: TagPickerClearButtonProps) {
       : NATIVELY_DISABLED
     : undefined;
   const props = mergeSlotProps(part, {
-    className: cn(
+    className: wcn(
       tagPickerClassNames.clearButton,
       END_BUTTON_TOP[ctx.size],
       pickerIconButtonClasses(ctx.coreSize, ctx.appearance),
       pickerButtonOffset(ctx.coreSize, position),
       focusRing,
       // The control dims as a whole (D66): the button keeps only the not-allowed cursor.
-      'disabled:cursor-not-allowed aria-disabled:cursor-not-allowed',
+      'wave:disabled:cursor-not-allowed wave:aria-disabled:cursor-not-allowed',
     ),
     locked: {
       type: 'button',
@@ -241,13 +244,13 @@ function TagPickerControlImpl({
   ref,
   ...rest
 }: ControlImplProps) {
-  const { registerTrigger, setReference, controlRef } = ctx;
+  const { registerTrigger, setReference, controlElementRef } = ctx;
   const controlContext = React.useMemo<TagPickerControlContextValue>(
     () => ({ registerTrigger }),
     [registerTrigger],
   );
   // The control is the popup's anchor: the list opens below it, as wide as it (0.10).
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, controlRef, setReference);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, controlElementRef, setReference);
 
   const glyph = expandIcon !== undefined ? expandIcon : ctx.expandIcon;
   const showExpand = showsExpandButton(glyph);
@@ -277,18 +280,18 @@ function TagPickerControlImpl({
         aria-disabled={ctx.disabled || undefined}
         {...rest}
         ref={mergedRef}
-        className={cn(
+        className={wcn(
           tagPickerControlClassNames.root,
-          tagPickerClassNames.control,
-          'relative flex flex-wrap items-center',
+          'wave:relative wave:flex wave:flex-wrap wave:items-center',
           TAG_PICKER_SIZE[ctx.size].control,
           inputAppearanceClasses[ctx.appearance],
           inputFocusWithin,
           ctx.invalidLook && inputInvalidWithin,
           pickerEndPadding(buttons, ctx.coreSize),
           // Dimmed once (D66); a focus ring inside (a held remove button) lifts it.
-          ctx.disabled && 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100',
-          ctx.collapsed && 'flex-nowrap',
+          ctx.disabled &&
+            'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
+          ctx.collapsed && 'wave:flex-nowrap',
           className,
         )}
         onMouseDown={composeEventHandlers(onMouseDown, handlePress)}
@@ -315,7 +318,7 @@ function TagPickerControlImpl({
             size={ctx.coreSize}
             appearance={ctx.appearance}
             dimDisabled={!ctx.disabled}
-            className={cn(tagPickerClassNames.expandButton, END_BUTTON_TOP[ctx.size])}
+            className={wcn(tagPickerClassNames.expandButton, END_BUTTON_TOP[ctx.size])}
             iconClassName={tagPickerClassNames.expandIcon}
             part={ctx.slotProps?.expandButton}
           />
@@ -512,11 +515,11 @@ function TagPickerGroupImpl({
           fallbackFocusRef={ctx.triggerRef}
           {...rest}
           ref={mergedRef}
-          className={cn(
+          className={wcn(
             tagPickerGroupClassNames.root,
-            tagPickerClassNames.group,
-            'flex flex-wrap items-center gap-1',
-            ctx.collapsed && 'min-w-0 flex-nowrap overflow-hidden whitespace-nowrap *:shrink-0',
+            'wave:flex wave:flex-wrap wave:items-center wave:gap-1',
+            ctx.collapsed &&
+              'wave:min-w-0 wave:flex-nowrap wave:overflow-hidden wave:whitespace-nowrap wave:*:shrink-0',
             className,
           )}
           onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
@@ -533,14 +536,14 @@ function TagPickerGroupImpl({
         // The "+N" chip (D62): hidden from assistive technology, which hears the summary.
         <span
           {...mergeSlotProps(chipPart, {
-            className: cn(
+            className: wcn(
               tagPickerClassNames.overflowCount,
               tagRootClasses({
                 size: ctx.tagSize,
                 appearance: ctx.tagAppearance,
                 shape: 'rounded',
               }),
-              'shrink-0 cursor-default',
+              'wave:shrink-0 wave:cursor-default',
             ),
             locked: {
               'aria-hidden': 'true',
@@ -651,11 +654,8 @@ function TagPickerInputImpl({
   const { registerTrigger } = control;
   React.useLayoutEffect(() => registerTrigger('input'), [registerTrigger]);
   const { triggerProps, inputProps, listbox } = ctx;
-  const mergedRef = useMergedRefs<HTMLInputElement>(
-    ref,
-    ctx.triggerRef as React.Ref<HTMLInputElement>,
-    inputProps.controlRef,
-  );
+  // TagPicker's `ref` follows the trigger that renders: merged here, and in TagPicker.Button.
+  const mergedRef = useMergedRefs<HTMLElement>(ref, ctx.triggerRef, triggerProps.ref);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     // Read-only: no listbox keys at all (they would open the list, add or remove tags).
@@ -736,10 +736,10 @@ function TagPickerInputImpl({
       )}
       onFocus={composeEventHandlers(onFocus, inputProps.onFocus)}
       onBlur={composeEventHandlers(onBlur, inputProps.onBlur)}
-      className={cn(
+      className={wcn(
         tagPickerInputClassNames.root,
         tagPickerClassNames.input,
-        'min-w-15 flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-hidden',
+        'wave:min-w-15 wave:flex-1 wave:bg-transparent wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden',
         TAG_PICKER_SIZE[ctx.size].trigger,
         className,
       )}
@@ -750,11 +750,12 @@ TagPickerInputImpl.displayName = 'TagPickerInputImpl';
 
 /**
  * The text field of a TagPicker (`TagPicker.Input`): the `<input role="combobox">` that filters
- * the options as you type, inside `TagPicker.Control`. TagPicker's `id`, name, description, Field
- * wiring and text input attributes reach it (its own `id`, `aria-label` and `aria-labelledby`
- * replace TagPicker's, and its `aria-describedby` comes first); its handlers run before
- * TagPicker's `onKeyDown` and the built-in keys. Backspace in the empty field, and Left (Right in
- * RTL) with the caret at its start, focus the last tag. The form fields are TagPicker's.
+ * the options as you type, inside `TagPicker.Control`. TagPicker's `ref`, `id`, name,
+ * description, Field wiring and text input attributes reach it (its own `ref` joins TagPicker's;
+ * its own `id`, `aria-label` and `aria-labelledby` replace TagPicker's, and its `aria-describedby`
+ * comes first); its handlers run before TagPicker's `onKeyDown` and the built-in keys. Backspace
+ * in the empty field, and Left (Right in RTL) with the caret at its start, focus the last tag.
+ * The form fields are TagPicker's.
  */
 export const TagPickerInput = (props: TagPickerInputProps) => {
   const ctx = useTagPickerContext('TagPicker.Input');
@@ -801,10 +802,8 @@ function TagPickerButtonImpl({
   const { registerTrigger } = control;
   React.useLayoutEffect(() => registerTrigger('button'), [registerTrigger]);
   const { triggerProps, listbox } = ctx;
-  const mergedRef = useMergedRefs<HTMLButtonElement>(
-    ref,
-    ctx.triggerRef as React.Ref<HTMLButtonElement>,
-  );
+  // TagPicker's `ref` follows the trigger that renders: merged here, and in TagPicker.Input.
+  const mergedRef = useMergedRefs<HTMLElement>(ref, ctx.triggerRef, triggerProps.ref);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!ctx.interactive) return;
@@ -849,16 +848,16 @@ function TagPickerButtonImpl({
       onClick={composeEventHandlers(onClick, () => ctx.toggleOpen())}
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       onKeyUp={composeEventHandlers(onKeyUp, listbox.onKeyUp)}
-      className={cn(
+      className={wcn(
         tagPickerButtonClassNames.root,
         // Padding and background set here (C-NATIVE); the control's focus look shows its focus.
-        'min-w-15 flex-1 border-0 bg-transparent px-0 text-start text-foreground focus:outline-hidden disabled:cursor-not-allowed',
+        'wave:min-w-15 wave:flex-1 wave:border-0 wave:bg-transparent wave:px-0 wave:text-start wave:text-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed',
         TAG_PICKER_SIZE[ctx.size].trigger,
         className,
       )}
     >
       {ctx.selected.length === 0 && (
-        <span className="text-muted-foreground">{placeholder ?? ctx.placeholder}</span>
+        <span className="wave:text-muted-foreground">{placeholder ?? ctx.placeholder}</span>
       )}
     </button>
   );
@@ -872,10 +871,10 @@ TagPickerButtonImpl.displayName = 'TagPickerButtonImpl';
  * keep it open; Escape, Alt+Up and Tab close it; a click toggles it. Backspace and Left (Right in
  * RTL) focus the last tag. It shows the placeholder while no tag is selected, else nothing, and
  * stays the click area of the rest of the row. No query, no filter and no create option
- * (`allowCreate` needs `TagPicker.Input`). TagPicker's `id`, name, description and Field wiring
- * reach it; pass handlers and `ref` on it (TagPicker's `onKeyDown` and `controlRef` are the
- * Input's). Read-only, it renders `aria-readonly`. Fluent's TagPickerButton is visually hidden
- * once a tag is selected; this one stays.
+ * (`allowCreate` needs `TagPicker.Input`). TagPicker's `ref`, `id`, name, description and Field
+ * wiring reach it (its own `ref` joins TagPicker's); pass handlers on it (TagPicker's `onFocus`,
+ * `onBlur`, `onKeyDown` and `onKeyUp` are the Input's). Read-only, it renders `aria-readonly`.
+ * Fluent's TagPickerButton is visually hidden once a tag is selected; this one stays.
  */
 export const TagPickerButton = (props: TagPickerButtonProps) => {
   const ctx = useTagPickerContext('TagPicker.Button');
@@ -938,7 +937,7 @@ function TagPickerListImpl({
   const optionPart = slotProps?.option;
   const createPart = slotProps?.createOption;
   const createLabel = ctx.showCreate ? ctx.labels.create(ctx.createText) : '';
-  const createClasses = cn(tagPickerClassNames.option, tagPickerClassNames.createOption);
+  const createClasses = wcn(tagPickerClassNames.option, tagPickerClassNames.createOption);
   const createOption = ctx.showCreate ? (
     <Option
       key={ctx.createValue}
@@ -1018,15 +1017,15 @@ function TagPickerListImpl({
       open={ctx.open}
       expanded={ctx.expanded}
       showCheck={false}
-      listClassName={cn(tagPickerListClassNames.root, tagPickerClassNames.listbox, className)}
+      listClassName={wcn(tagPickerListClassNames.root, tagPickerClassNames.listbox, className)}
       surfaceClassName={tagPickerClassNames.surface}
       emptyContent={
         ctx.emptyContent ? (
           <div
             {...mergeSlotProps(slotProps?.emptyMessage, {
-              className: cn(
+              className: wcn(
                 tagPickerClassNames.emptyMessage,
-                'px-3 py-1.5 text-body-1 text-muted-foreground',
+                'wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground',
               ),
               locked: { 'aria-hidden': 'true', tabIndex: undefined },
             })}

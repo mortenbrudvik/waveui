@@ -7,24 +7,28 @@ import { SearchBox, type SearchBoxProps } from '../SearchBox';
 import { Button } from '../../button/Button';
 import { Portal } from '../../portal/Portal';
 import { WaveProvider } from '../../provider/WaveProvider';
-import type { Slot, SlotObject } from '../../../lib/types';
+import type { Slot } from '../../../lib/types';
 import { inputInvalidWithin } from '../../../lib/styles';
 import { searchBoxClassNames } from '../../../lib/classNames';
 import {
   testSystemProps,
   testFocusEvents,
   testNoImplicitSubmit,
+  testRootPartRef,
   renderWithProviders,
   expectNoA11yViolations,
   asClientReference,
   expectInertSlotProps,
   openingTags,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
 /** The development warnings of the `dismiss` slot (C-SLOTS). */
 const ELEMENT_WARNING = /^\[WaveUI\] SearchBox: `dismiss` received a button element/;
-const OBJECT_WARNING = /^\[WaveUI\] SearchBox: `dismiss` with button props .* is deprecated/;
+/** A slot object whose `as` is a button, unwrapped (1.0: the button-object form is removed). */
+const SLOT_OBJECT_WARNING =
+  /^\[WaveUI\] SearchBox: `dismiss` received a slot object that renders a button; its children render inside the built-in clear button and its props were dropped/;
 
 /** Asserts that `warn` logged exactly one message per pattern (in any order) and nothing else. */
 function expectWarnings(warn: { mock: { calls: unknown[][] } }, patterns: RegExp[]) {
@@ -45,35 +49,42 @@ describe('SearchBox', () => {
     expectedTag: 'div',
     displayName: 'SearchBox',
     defaultProps: { 'aria-label': 'Search' },
-    control: { role: 'searchbox' },
+    ref: 'control',
+    control: { role: 'searchbox', tag: 'input' },
     a11yVariants: [
       { name: 'with value (clear button)', props: { defaultValue: 'hello' } },
       { name: 'disabled', props: { disabled: true, defaultValue: 'hello' } },
     ],
-    conflictingClass: { className: 'w-64', overrides: 'w-full' },
+    conflictingClass: { className: 'w-64', overrides: 'wave:w-full' },
   });
+
+  testRootPartRef(SearchBox, { props: { 'aria-label': 'Search' } });
 
   testFocusEvents(SearchBox, { 'aria-label': 'Search' }, 'input');
 
   testNoImplicitSubmit(SearchBox, { defaultProps: { 'aria-label': 'Search', defaultValue: 'x' } });
 
   describe('types', () => {
-    it('declares ref and controlRef in SearchBoxProps (C-REF, C-ROUTING)', () => {
-      expectTypeOf<SearchBoxProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
-      expectTypeOf<SearchBoxProps['controlRef']>().toEqualTypeOf<
+    it('declares ref (for the input) in SearchBoxProps, and no controlRef (C-REF, C-ROUTING)', () => {
+      expectTypeOf<SearchBoxProps['ref']>().toEqualTypeOf<
         React.Ref<HTMLInputElement> | undefined
       >();
+      expectTypeOf<SearchBoxProps>().not.toHaveProperty('controlRef');
+      const divRef = React.createRef<HTMLDivElement>();
+      // @ts-expect-error -- in 1.0 `ref` reaches the input; the root <div> is slotProps.root.ref
+      void (<SearchBox ref={divRef} />);
     });
 
-    it("types dismiss as Slot<'span'> | SlotObject<'button'> (table-core#18)", () => {
-      expectTypeOf<SearchBoxProps['dismiss']>().toEqualTypeOf<
-        Slot<'span'> | SlotObject<'button'> | undefined
-      >();
+    it("types dismiss as Slot<'span'>: no button-object form (removed in 1.0)", () => {
+      expectTypeOf<SearchBoxProps['dismiss']>().toEqualTypeOf<Slot<'span'> | undefined>();
       // Compile-time checks (type-checked by tsconfig.dev.json).
       const iconContent = <SearchBox dismiss={<span>x</span>} />;
       const spanObject = <SearchBox dismiss={{ children: 'x', title: 'Clear' }} />;
       const deprecatedButtonObject = (
-        <SearchBox dismiss={{ as: 'button', type: 'button', onClick: () => {}, children: 'x' }} />
+        <SearchBox
+          // @ts-expect-error -- the button-object form is removed in 1.0: no button attributes
+          dismiss={{ as: 'button', disabled: true, onClick: () => {}, children: 'x' }}
+        />
       );
       // @ts-expect-error `href` is neither a span nor a button attribute
       const invalid = <SearchBox dismiss={{ href: '/x' }} />;
@@ -128,9 +139,9 @@ describe('SearchBox', () => {
       );
       const after = screen.getByTestId('after');
       const slot = after.parentElement;
-      expect(slot).toHaveClass('shrink-0');
-      expect(slot?.parentElement).toHaveClass('shrink-0');
-      expect(slot?.parentElement).not.toHaveClass('absolute');
+      expect(slot).toHaveClass('wave:shrink-0');
+      expect(slot?.parentElement).toHaveClass('wave:shrink-0');
+      expect(slot?.parentElement).not.toHaveClass('wave:absolute');
       expect(slot?.parentElement?.parentElement).toBe(screen.getByTestId('root'));
       const input = screen.getByRole('searchbox', { name: 'Search' });
       expect(input).not.toContainElement(after);
@@ -214,15 +225,15 @@ describe('SearchBox', () => {
       const clear = screen.getByRole('button', { name: 'Clear search' });
       // In document order, as flex items of the root: none of them is positioned over the input.
       expect(Array.from(root.children)).toEqual([before, input, after, clear]);
-      expect(root).toHaveClass('inline-flex', 'items-center');
+      expect(root).toHaveClass('wave:inline-flex', 'wave:items-center');
       for (const part of [before, input, after, clear]) {
-        expect(part).not.toHaveClass('absolute');
-        expect(part.className).not.toMatch(/(^|\s)(start|end)-\d/);
+        expect(part).not.toHaveClass('wave:absolute');
+        expect(part.className).not.toMatch(/(^|\s)wave:(start|end)-\d/);
       }
       // The text takes the room the slots and the clear button leave; they keep their size.
-      expect(input).toHaveClass('min-w-0', 'flex-1');
-      expect(input.className).not.toMatch(/(^|\s)(ps|pe)-(8|9)(\s|$)/);
-      for (const part of [before, after, clear]) expect(part).toHaveClass('shrink-0');
+      expect(input).toHaveClass('wave:min-w-0', 'wave:flex-1');
+      expect(input.className).not.toMatch(/(^|\s)wave:(ps|pe)-(8|9)(\s|$)/);
+      for (const part of [before, after, clear]) expect(part).toHaveClass('wave:shrink-0');
     });
 
     it('draws the field (border, focus and disabled look) on the root around the input', () => {
@@ -230,16 +241,20 @@ describe('SearchBox', () => {
       const root = screen.getByTestId('root');
       const input = screen.getByRole('searchbox', { name: 'Search' });
       expect(root).toHaveClass(
-        'border',
-        'border-input',
-        'border-b-stroke-accessible',
-        'bg-background',
-        'focus-within:border-b-2',
-        'focus-within:border-b-primary',
-        'opacity-50',
+        'wave:border',
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+        'wave:bg-background',
+        'wave:focus-within:border-b-2',
+        'wave:focus-within:border-b-primary',
+        'wave:opacity-50',
       );
-      expect(input).toHaveClass('border-none', 'bg-transparent', 'focus:outline-hidden');
-      for (const absent of ['outline-none', 'outline-hidden', 'border-input']) {
+      expect(input).toHaveClass(
+        'wave:border-none',
+        'wave:bg-transparent',
+        'wave:focus:outline-hidden',
+      );
+      for (const absent of ['wave:outline-none', 'wave:outline-hidden', 'wave:border-input']) {
         expect(input).not.toHaveClass(absent);
       }
     });
@@ -379,28 +394,28 @@ describe('SearchBox', () => {
       expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveFocus();
     });
 
-    it('focuses the input after clearing with a consumer controlRef', async () => {
+    it('focuses the input after clearing with a consumer ref', async () => {
       const user = userEvent.setup();
-      const controlRef = React.createRef<HTMLInputElement>();
-      render(<SearchBox aria-label="Search" defaultValue="abc" controlRef={controlRef} />);
+      const ref = React.createRef<HTMLInputElement>();
+      render(<SearchBox aria-label="Search" defaultValue="abc" ref={ref} />);
       await user.click(screen.getByRole('button', { name: 'Clear search' }));
-      expect(controlRef.current).toBe(screen.getByRole('searchbox', { name: 'Search' }));
-      expect(controlRef.current).toHaveFocus();
+      expect(ref.current).toBe(screen.getByRole('searchbox', { name: 'Search' }));
+      expect(ref.current).toHaveFocus();
     });
 
     it('has a 24px target beside the text, never over it (input-basic#20)', () => {
       render(<SearchBox aria-label="Search" defaultValue="abc" />);
       const clear = screen.getByRole('button', { name: 'Clear search' });
-      expect(clear).toHaveClass('h-6', 'w-6', 'shrink-0');
-      expect(clear).not.toHaveClass('absolute');
+      expect(clear).toHaveClass('wave:h-6', 'wave:w-6', 'wave:shrink-0');
+      expect(clear).not.toHaveClass('wave:absolute');
       expect(clear.previousElementSibling).toBe(screen.getByRole('searchbox', { name: 'Search' }));
     });
 
     it('sets its own padding and background, so an app-wide button rule cannot fill it (C-NATIVE)', () => {
       render(<SearchBox aria-label="Search" defaultValue="abc" />);
       const clear = screen.getByRole('button', { name: 'Clear search' });
-      expect(clear).toHaveClass('p-0');
-      expect(clear).toHaveClass('bg-transparent');
+      expect(clear).toHaveClass('wave:p-0');
+      expect(clear).toHaveClass('wave:bg-transparent');
     });
 
     it('is disabled with the SearchBox', () => {
@@ -531,7 +546,7 @@ describe('SearchBox', () => {
         ['"button"', 'button'],
         ['a Wave Button', Button],
       ] as const)(
-        'merges an object whose `as` is %s into the wired button, never nesting one, with the warning',
+        'unwraps an object whose `as` is %s inside the wired button, never nesting one, with the warning',
         async (_name, as) => {
           const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
           const user = userEvent.setup();
@@ -555,7 +570,7 @@ describe('SearchBox', () => {
           expect(clear).toContainElement(screen.getByTestId('content'));
           await user.click(screen.getByTestId('content'));
           expect(onClear).toHaveBeenCalledOnce();
-          expectWarnings(warn, [OBJECT_WARNING]);
+          expectWarnings(warn, [SLOT_OBJECT_WARNING]);
         },
       );
     });
@@ -579,7 +594,7 @@ describe('SearchBox', () => {
       );
       expect(screen.getAllByRole('button')).toHaveLength(1);
       const clear = screen.getByRole('button', { name: 'Clear search' });
-      expect(clear).toHaveClass('custom-button', 'h-6');
+      expect(clear).toHaveClass('custom-button', 'wave:h-6');
       expect(clear).toContainElement(screen.getByTestId('inner'));
       await user.click(clear);
       expect(onClick).toHaveBeenCalledOnce();
@@ -628,21 +643,6 @@ describe('SearchBox', () => {
         ),
         ELEMENT_WARNING,
       ],
-      [
-        'a slot object whose `as` is a Wave Button (deprecated form)',
-        (onClick: () => void) =>
-          // Wave Button props are not part of the slot type: a JavaScript caller's 0.4 form.
-          ({
-            as: Button,
-            icon: <svg data-testid="button-icon" />,
-            iconPosition: 'after',
-            disabled: true,
-            disabledFocusable: true,
-            onClick,
-            children: 'Reset',
-          }) as Slot<'span'>,
-        OBJECT_WARNING,
-      ],
     ])(
       '%s: iconPosition and disabledFocusable take effect on the clear button and never reach the DOM',
       async (_, dismiss, warning) => {
@@ -679,10 +679,10 @@ describe('SearchBox', () => {
         expect(clear).toHaveAttribute('data-disabled', '');
         expect(clear).toHaveAttribute('data-disabled-focusable', '');
         expect(clear).toHaveClass(
-          'aria-disabled:cursor-not-allowed',
-          'aria-disabled:opacity-50',
+          'wave:aria-disabled:cursor-not-allowed',
+          'wave:aria-disabled:opacity-50',
           // The dimmed look lifts while the focus ring shows (opacity would dim the ring too).
-          'aria-disabled:focus-visible:opacity-100',
+          'wave:aria-disabled:focus-visible:opacity-100',
         );
         await user.tab();
         await user.tab();
@@ -738,8 +738,8 @@ describe('SearchBox', () => {
       // below 3:1. tailwind-merge keeps both classes (different variants); the variant wins while
       // it matches.
       expect(screen.getByTestId('disabled')).toHaveClass(
-        'opacity-50',
-        'has-focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:has-focus-visible:opacity-100',
       );
       expect(screen.getByTestId('enabled').className).not.toMatch(/opacity/);
       expectWarnings(warn, [ELEMENT_WARNING]);
@@ -760,7 +760,7 @@ describe('SearchBox', () => {
       expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
-    it('keeps type="button" when a merged slot passes type null (C-BUTTON-TYPE, P12 change request)', async () => {
+    it('keeps type="button" when a merged slot (or a slot object) passes type null (C-BUTTON-TYPE, P12 change request)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
@@ -781,7 +781,8 @@ describe('SearchBox', () => {
         await user.click(clear);
       }
       expect(onSubmit).not.toHaveBeenCalled();
-      expectWarnings(warn, [OBJECT_WARNING, ELEMENT_WARNING]);
+      // The slot object's `type` stays on its content (1.0: no button-object form).
+      expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
     it('lets a consumer slot handler cancel the clear with preventDefault', async () => {
@@ -799,7 +800,7 @@ describe('SearchBox', () => {
       expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
-    it('merges the deprecated button-object form onto the wired button with a warning', async () => {
+    it('has no button-object form (removed in 1.0): the onClick of a slot object stays on the content', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onClick = vi.fn();
@@ -814,14 +815,17 @@ describe('SearchBox', () => {
       );
       expect(screen.getAllByRole('button')).toHaveLength(1);
       const clear = screen.getByRole('button', { name: 'Clear search' });
-      expect(clear).toContainElement(screen.getByTestId('obj-content'));
-      await user.click(clear);
-      expect(onClick).toHaveBeenCalledOnce();
+      const content = screen.getByTestId('obj-content');
+      expect(clear).toContainElement(content);
+      // The button's own activation never reaches the content's handler.
+      clear.focus();
+      await user.keyboard('{Enter}');
+      expect(onClick).not.toHaveBeenCalled();
       expect(onClear).toHaveBeenCalledOnce();
-      expectWarnings(warn, [OBJECT_WARNING]);
+      expect(warn).not.toHaveBeenCalled();
     });
 
-    it('falls back to the default icon for a button object without children (table-core#18)', async () => {
+    it('falls back to the default icon for a slot object without children, handlers and button attributes included (table-core#18)', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onClick = vi.fn();
@@ -843,14 +847,20 @@ describe('SearchBox', () => {
         expect(icon).not.toBeNull();
         expect(icon).toHaveAttribute('aria-hidden', 'true');
       }
-      // The object's own content props still apply around the default icon.
+      // The object's own props, handlers and button attributes included, apply around the
+      // default icon (1.0: no button-object form).
       expect(clears[2].querySelector('[data-wave-icon="dismiss"]')?.parentElement).toHaveClass(
         'obj-content',
       );
-      await user.click(clears[0]);
-      expect(onClick).toHaveBeenCalledOnce();
+      expect(clears[1].querySelector('[data-wave-icon="dismiss"]')?.parentElement).toHaveAttribute(
+        'type',
+        'button',
+      );
+      clears[0].focus();
+      await user.keyboard('{Enter}');
+      expect(onClick).not.toHaveBeenCalled();
       expect(screen.getByRole('searchbox', { name: 'First' })).toHaveValue('');
-      expectWarnings(warn, [OBJECT_WARNING]);
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('keeps the default icon for empty shorthand (booleans, empty string, empty iterables and Fragments) (table-core#18)', () => {
@@ -1066,7 +1076,7 @@ describe('SearchBox', () => {
       expectWarnings(warn, [ELEMENT_WARNING]);
     });
 
-    it("renders { as: 'button' } without nesting buttons", () => {
+    it("unwraps { as: 'button' } without nesting buttons: its props are dropped (no button-object form in 1.0)", () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(
         <SearchBox
@@ -1076,8 +1086,12 @@ describe('SearchBox', () => {
         />,
       );
       expect(screen.getAllByRole('button')).toHaveLength(1);
-      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('obj-button');
-      expectWarnings(warn, [OBJECT_WARNING]);
+      const clear = screen.getByRole('button', { name: 'Clear search' });
+      expect(clear.outerHTML).not.toContain('obj-button');
+      const content = screen.getByText('X');
+      expect(content.tagName).toBe('SPAN');
+      expect(content).toHaveAttribute('aria-hidden', 'true');
+      expectWarnings(warn, [SLOT_OBJECT_WARNING]);
     });
   });
 
@@ -1110,7 +1124,6 @@ describe('SearchBox', () => {
 
     it.each([
       ['a Wave Button with a text label', <Button key="b">Reset</Button>],
-      ['the deprecated { as: "button" } object', { as: 'button', children: 'Reset' } as const],
       [
         'a <button> whose child component renders the text (i18n)',
         <button key="t" type="button">
@@ -1122,7 +1135,21 @@ describe('SearchBox', () => {
       render(<SearchBox aria-label="Search" defaultValue="a" dismiss={dismiss} />);
       expect(screen.getAllByRole('button')).toHaveLength(1);
       expect(screen.getByRole('button')).toHaveAccessibleName('Reset');
-      expectWarnings(warn, [React.isValidElement(dismiss) ? ELEMENT_WARNING : OBJECT_WARNING]);
+      expectWarnings(warn, [ELEMENT_WARNING]);
+    });
+
+    it('an unwrapped { as: "button" } object is decorative content: the default name stays (1.0)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="a"
+          dismiss={{ as: 'button', children: 'Reset' }}
+        />,
+      );
+      expect(screen.getAllByRole('button')).toHaveLength(1);
+      expect(screen.getByRole('button')).toHaveAccessibleName('Clear search');
+      expectWarnings(warn, [SLOT_OBJECT_WARNING]);
     });
 
     it.each([
@@ -1381,25 +1408,24 @@ describe('SearchBox', () => {
       expect(onValueChange).toHaveBeenCalledWith('fixedx');
     });
 
-    it('keeps the deprecated onChange(value) alias working and warns once', async () => {
+    it('has no onChange(value) alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
       const onChange = vi.fn();
       const onValueChange = vi.fn();
-      const { rerender } = render(
-        <SearchBox aria-label="Search" onChange={onChange} onValueChange={onValueChange} />,
+      render(
+        <SearchBox
+          aria-label="Search"
+          // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
       );
       await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'ab');
-      rerender(<SearchBox aria-label="Search" onChange={onChange} onValueChange={onValueChange} />);
-      expect(onChange).toHaveBeenCalledTimes(2);
-      expect(onChange).toHaveBeenLastCalledWith('ab');
-      expect(onValueChange).toHaveBeenLastCalledWith('ab');
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] SearchBox: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
-      ]);
+      expect(onValueChange.mock.calls).toEqual([['a'], ['ab']]);
+      // Untyped code that still passes it gets no value: it is never called with the text.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(String));
+      expect(warn).not.toHaveBeenCalled();
     });
 
     it('fires onValueChange once per interaction in StrictMode', async () => {
@@ -1570,12 +1596,13 @@ describe('SearchBox', () => {
       expect(onKeyUp).toHaveBeenCalledOnce();
     });
 
-    it('keeps ref on the root and exposes the input through controlRef', () => {
-      const ref = React.createRef<HTMLDivElement>();
-      const controlRef = React.createRef<HTMLInputElement>();
-      render(<SearchBox aria-label="Search" ref={ref} controlRef={controlRef} />);
-      expect(ref.current?.tagName.toLowerCase()).toBe('div');
-      expect(controlRef.current).toBe(screen.getByRole('searchbox', { name: 'Search' }));
+    it('gives ref the input and slotProps.root.ref the root', () => {
+      const ref = React.createRef<HTMLInputElement>();
+      const root = React.createRef<HTMLDivElement>();
+      render(<SearchBox aria-label="Search" ref={ref} slotProps={{ root: { ref: root } }} />);
+      expect(root.current?.tagName.toLowerCase()).toBe('div');
+      expect(ref.current).toBe(screen.getByRole('searchbox', { name: 'Search' }));
+      expect(root.current).toContainElement(ref.current);
     });
   });
 
@@ -1584,13 +1611,19 @@ describe('SearchBox', () => {
       const { container } = render(
         <SearchBox data-testid="root" aria-label="Search" defaultValue="abc" />,
       );
-      expect(screen.getByTestId('root')).toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(screen.getByTestId('root')).toHaveClass(
+        'wave:border-input',
+        'wave:border-b-stroke-accessible',
+      );
       const input = screen.getByRole('searchbox', { name: 'Search' });
-      expect(input).toHaveClass('placeholder:text-muted-foreground', 'focus:outline-hidden');
+      expect(input).toHaveClass(
+        'wave:placeholder:text-muted-foreground',
+        'wave:focus:outline-hidden',
+      );
       const clear = screen.getByRole('button', { name: 'Clear search' });
       expect(clear).toHaveClass(
-        'text-muted-foreground',
-        'not-disabled:not-aria-disabled:hover:text-foreground',
+        'wave:text-muted-foreground',
+        'wave:not-disabled:not-aria-disabled:hover:text-foreground',
       );
       expect(container.innerHTML).not.toMatch(/#[0-9a-f]{3,8}|outline-none|enabled:/i);
     });
@@ -1611,11 +1644,11 @@ describe('SearchBox', () => {
       expect(invalid).toHaveClass(...inputInvalidWithin.split(' '));
       // Keeps the destructive border and shows the focus color on the focused bottom border
       // (Phase 4 D4).
-      expect(invalid).toHaveClass('border-destructive', 'focus-within:border-b-primary');
-      for (const replaced of ['border-input', 'border-b-stroke-accessible']) {
+      expect(invalid).toHaveClass('wave:border-destructive', 'wave:focus-within:border-b-primary');
+      for (const replaced of ['wave:border-input', 'wave:border-b-stroke-accessible']) {
         expect(invalid).not.toHaveClass(replaced);
       }
-      expect(screen.getByTestId('valid')).not.toHaveClass('border-destructive');
+      expect(screen.getByTestId('valid')).not.toHaveClass('wave:border-destructive');
     });
 
     it('shows the error border for the invalid state of a surrounding Field', () => {
@@ -1624,7 +1657,7 @@ describe('SearchBox', () => {
         'aria-invalid',
         'true',
       );
-      expect(screen.getByTestId('root')).toHaveClass('border-destructive');
+      expect(screen.getByTestId('root')).toHaveClass('wave:border-destructive');
     });
 
     it('positions the icon and clear button with logical utilities in RTL (C-LOGICAL)', () => {
@@ -1633,10 +1666,10 @@ describe('SearchBox', () => {
         { dir: 'rtl' },
       );
       const input = screen.getByRole('searchbox', { name: 'Search' });
-      expect(input).toHaveClass('px-2');
-      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('me-1');
+      expect(input).toHaveClass('wave:px-2');
+      expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('wave:me-1');
       const icon = container.querySelector('[data-wave-icon="search"]');
-      expect(icon?.parentElement).toHaveClass('ps-2');
+      expect(icon?.parentElement).toHaveClass('wave:ps-2');
       expect(container.innerHTML).not.toMatch(/\b(left|right|pl|pr|ml|mr)-\d/);
     });
   });
@@ -1656,12 +1689,17 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
 
   it('renders the 0.7 classes and medium outline attributes by default', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" />);
-    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveClass(
+      'wave:h-8',
+      'wave:text-body-1',
+      'wave:border-input',
+      'wave:bg-background',
+    );
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
-    expect(clear()).toHaveClass('h-6', 'w-6', 'me-1');
-    expect(clear()).not.toHaveClass('relative');
-    expect(clear()).not.toHaveClass('before:absolute');
+    expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:me-1');
+    expect(clear()).not.toHaveClass('wave:relative');
+    expect(clear()).not.toHaveClass('wave:before:absolute');
   });
 
   it('an untyped size or appearance renders the medium outline defaults (no TypeError)', () => {
@@ -1673,32 +1711,37 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
         appearance={'glass' as unknown as 'outline'}
       />,
     );
-    expect(root()).toHaveClass('h-8', 'text-body-1', 'border-input', 'bg-background');
+    expect(root()).toHaveClass(
+      'wave:h-8',
+      'wave:text-body-1',
+      'wave:border-input',
+      'wave:bg-background',
+    );
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-appearance', 'outline');
-    expect(clear()).toHaveClass('h-6', 'w-6', 'me-1');
+    expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:me-1');
   });
 
   it('small: 20px clear button with a 24px hit area anchored on the button itself', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" size="small" />);
-    expect(root()).toHaveClass('h-6', 'text-caption-1');
+    expect(root()).toHaveClass('wave:h-6', 'wave:text-caption-1');
     expect(root()).toHaveAttribute('data-size', 'small');
     expect(clear()).toHaveClass(
-      'size-5',
-      'relative',
-      'before:absolute',
-      'before:-inset-0.5',
-      'me-1',
+      'wave:size-5',
+      'wave:relative',
+      'wave:before:absolute',
+      'wave:before:-inset-0.5',
+      'wave:me-1',
     );
   });
 
   it('large: 32px clear button', () => {
     render(<SearchBox aria-label="Search" defaultValue="x" size="large" />);
-    expect(root()).toHaveClass('h-10', 'text-body-2');
+    expect(root()).toHaveClass('wave:h-10', 'wave:text-body-2');
     expect(root()).toHaveAttribute('data-size', 'large');
-    expect(clear()).toHaveClass('size-8');
-    expect(clear()).not.toHaveClass('relative');
-    expect(clear()).not.toHaveClass('before:absolute');
+    expect(clear()).toHaveClass('wave:size-8');
+    expect(clear()).not.toHaveClass('wave:relative');
+    expect(clear()).not.toHaveClass('wave:before:absolute');
   });
 
   it('takes the Field size and the provider appearance', () => {
@@ -1715,9 +1758,9 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
   });
 
   it.each([
-    ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-    ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-    ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+    ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+    ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+    ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
   ] as const)('appearance="%s" renders its classes', (appearance, classes) => {
     render(<SearchBox aria-label="Search" appearance={appearance} />);
     expect(root()).toHaveClass(...classes);
@@ -1750,7 +1793,7 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
     'an invalid %s field keeps the destructive border and the focus color on its bottom (own aria-invalid)',
     (appearance) => {
       render(<SearchBox aria-label="Search" appearance={appearance} aria-invalid />);
-      expect(root()).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      expect(root()).toHaveClass('wave:border-destructive', 'wave:focus-within:border-b-primary');
     },
   );
 
@@ -1763,14 +1806,132 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
       const wrapper = screen
         .getByRole('searchbox', { name: FIELD_TEST_TEXT.label })
         .closest('[data-size]') as HTMLElement;
-      expect(wrapper).toHaveClass('border-destructive', 'focus-within:border-b-primary');
+      expect(wrapper).toHaveClass('wave:border-destructive', 'wave:focus-within:border-b-primary');
     },
   );
 });
 
+// 1.0 (Phase 14, R5): `ref` reaches the <input type="search">, the focusable control; the root
+// <div> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('SearchBox — ref reaches the control', () => {
+  const searchbox = (name = 'Search') => screen.getByRole('searchbox', { name });
+
+  it('focuses the searchbox through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(<SearchBox ref={ref} aria-label="Search" />);
+    act(() => ref.current?.focus());
+    expect(searchbox()).toHaveFocus();
+  });
+
+  it('gives ref and slotProps.input.ref the same input', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const input = React.createRef<HTMLInputElement>();
+    render(<SearchBox ref={ref} aria-label="Search" slotProps={{ input: { ref: input } }} />);
+    expect(ref.current).toBe(searchbox());
+    expect(input.current).toBe(searchbox());
+  });
+
+  it('keeps the clear and its focus, the press on the field and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Form">
+        <SearchBox
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          aria-label="Search"
+          name="q"
+          defaultValue="abc"
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { container, rerender } = render(ui(0));
+    rerender(ui(1));
+    const input = searchbox();
+    expect(nodes.at(-1)).toBe(input);
+    // The clear button focuses the input through the SearchBox's own ref.
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+    rerender(ui(2));
+    // So does a press on the field outside the input.
+    act(() => input.blur());
+    expect(fireEvent.mouseDown(container.querySelector('[data-wave-icon="search"]')!)).toBe(false);
+    expect(input).toHaveFocus();
+    await user.type(input, 'xyz');
+    rerender(ui(3));
+    act(() => (screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).reset());
+    expect(input).toHaveValue('abc');
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<SearchBox ref={ref} aria-label="Search" />);
+    const input = searchbox();
+    rerender(<SearchBox ref={ref} aria-label="Search" defaultValue="abc" disabled />);
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <SearchBox ref={ref} aria-label="Search" />
+      </React.StrictMode>,
+    );
+    const input = searchbox();
+    rerender(
+      <React.StrictMode>
+        <SearchBox ref={ref} aria-label="Search" defaultValue="abc" />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<SearchBox ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(searchbox(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <SearchBox
+          aria-label="Search"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the input
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(searchbox().closest(`.${searchBoxClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+});
+
 describe('SearchBox — slotProps', () => {
   type SearchBoxSlotProps = NonNullable<SearchBoxProps['slotProps']>;
-  const EVERY_PART: SearchBoxSlotProps = { input: {}, dismissButton: {} };
+  const EVERY_PART: SearchBoxSlotProps = { root: {}, input: {}, dismissButton: {} };
   const clearButton = () => screen.getByRole('button', { name: 'Clear search' });
 
   it('renders the 0.17.1 parts without slotProps (opening tags, attributes sorted)', () => {
@@ -1787,8 +1948,8 @@ describe('SearchBox — slotProps', () => {
       ),
     ).toBe(
       [
-        '<input aria-label="Search" class="wave-search-box__input h-full min-w-0 flex-1 appearance-none border-none bg-transparent text-foreground px-2 text-body-1 placeholder:text-muted-foreground focus:outline-hidden disabled:cursor-not-allowed [&amp;::-webkit-search-cancel-button]:hidden" name="q" placeholder="Search" type="search" value="query">',
-        '<button aria-label="Clear search" class="wave-search-box__dismiss-button me-1 flex shrink-0 items-center justify-center rounded bg-transparent p-0 text-muted-foreground h-6 w-6 not-disabled:not-aria-disabled:hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+        '<input aria-label="Search" class="wave-search-box__input wave:h-full wave:min-w-0 wave:flex-1 wave:appearance-none wave:border-none wave:bg-transparent wave:text-foreground wave:px-2 wave:text-body-1 wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed wave:[&amp;::-webkit-search-cancel-button]:hidden" name="q" placeholder="Search" type="search" value="query">',
+        '<button aria-label="Clear search" class="wave-search-box__dismiss-button wave:me-1 wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:h-6 wave:w-6 wave:not-disabled:not-aria-disabled:hover:text-foreground wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
       ].join('\n'),
     );
   });
@@ -1808,6 +1969,18 @@ describe('SearchBox — slotProps', () => {
       },
       { 'aria-label': 'Search', defaultValue: 'query', readOnly: true },
       { 'aria-label': 'Search', dismiss: { className: 'my-icon' }, defaultValue: 'query' },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Search',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+        onMouseDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -1852,12 +2025,12 @@ describe('SearchBox — slotProps', () => {
   it('puts your className, style, data-* and ref on each part, after its stable class and own classes', () => {
     const input = React.createRef<HTMLInputElement>();
     const dismissButton = React.createRef<HTMLButtonElement>();
-    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <SearchBox
         aria-label="Search"
         defaultValue="query"
-        controlRef={controlRef}
+        ref={ref}
         slotProps={{
           input: {
             ref: input,
@@ -1876,7 +2049,7 @@ describe('SearchBox — slotProps', () => {
     );
     const searchbox = screen.getByRole('searchbox', { name: 'Search' });
     expect(input.current).toBe(searchbox);
-    expect(controlRef.current).toBe(searchbox);
+    expect(ref.current).toBe(searchbox);
     expect(dismissButton.current).toBe(clearButton());
     for (const [element, stable, mine, name] of [
       [searchbox, searchBoxClassNames.input, 'my-input', 'input'],
@@ -1898,7 +2071,7 @@ describe('SearchBox — slotProps', () => {
       />,
     );
     expect(clearButton()).toHaveClass('text-foreground');
-    expect(clearButton()).not.toHaveClass('text-muted-foreground');
+    expect(clearButton()).not.toHaveClass('wave:text-muted-foreground');
   });
 
   it("runs your input handlers first; preventDefault() skips the SearchBox's handling", async () => {
@@ -2159,7 +2332,10 @@ describe('SearchBox — slotProps', () => {
   });
 
   it('types each part for its element, and takes no children', () => {
-    expectTypeOf<keyof SearchBoxSlotProps>().toEqualTypeOf<'input' | 'dismissButton'>();
+    expectTypeOf<keyof SearchBoxSlotProps>().toEqualTypeOf<'root' | 'input' | 'dismissButton'>();
+    expectTypeOf<NonNullable<SearchBoxSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
     expectTypeOf<NonNullable<SearchBoxSlotProps['input']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLInputElement> | undefined
     >();
@@ -2168,5 +2344,169 @@ describe('SearchBox — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: `dismiss` fills the clear button
     void (<SearchBox slotProps={{ dismissButton: { children: 'Reset' } }} />);
+    // @ts-expect-error -- a part takes no children: the SearchBox draws its content
+    void (<SearchBox slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const control = () => screen.getByRole('searchbox', { name: 'Search', hidden: true });
+    const root = () => control().closest(`.${searchBoxClassNames.root}`) as HTMLElement;
+    const icon = () => root().querySelector('[data-wave-icon="search"]') as Element;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the SearchBox's className and style", () => {
+      render(
+        <SearchBox
+          aria-label="Search"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(searchBoxClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(control()).not.toHaveAttribute('data-part');
+      expect(control()).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<SearchBox aria-label="Search" slotProps={{ root: { className: 'items-start' } }} />);
+      expect(root()).toHaveClass('items-start');
+      expect(root()).not.toHaveClass('wave:items-center');
+    });
+
+    it("keeps the props you give the SearchBox over the part's", () => {
+      render(
+        <SearchBox
+          aria-label="Search"
+          title="Own"
+          data-x="own"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <SearchBox
+          aria-label="Search"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The SearchBox's own hidden state stays its own.
+      rerender(
+        <SearchBox
+          aria-label="Search"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the SearchBox's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <SearchBox
+          aria-label="Search"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <SearchBox
+          aria-label="Search"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("runs your onMouseDown first; preventDefault() in it skips the SearchBox's onMouseDown and the press that focuses the input", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <SearchBox
+          aria-label="Search"
+          onMouseDown={() => order.push('own')}
+          slotProps={{ root: { onMouseDown: () => order.push('part') } }}
+        />,
+      );
+      expect(fireEvent.mouseDown(icon())).toBe(false);
+      expect(order).toEqual(['part', 'own']);
+      expect(control()).toHaveFocus();
+      act(() => control().blur());
+      rerender(
+        <SearchBox
+          aria-label="Search"
+          onMouseDown={() => order.push('own')}
+          slotProps={{
+            root: {
+              onMouseDown: (event) => {
+                order.push('prevented');
+                event.preventDefault();
+              },
+            },
+          }}
+        />,
+      );
+      fireEvent.mouseDown(icon());
+      expect(order).toEqual(['part', 'own', 'prevented']);
+      expect(control()).not.toHaveFocus();
+    });
+
+    it('calls your root onClick in every state, as the SearchBox calls its own: the root passes no click to the input', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <SearchBox aria-label="Search" onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(icon());
+      rerender(
+        <SearchBox aria-label="Search" disabled onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(icon());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <SearchBox
+          aria-label="Search"
+          defaultValue="query"
+          slotProps={{ root: { className: 'my-root', title: 'Search the docs' } }}
+        />,
+      );
+      await expectNoA11yViolations();
+    });
   });
 });

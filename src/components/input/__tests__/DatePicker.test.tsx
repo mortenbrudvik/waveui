@@ -21,11 +21,14 @@ import { formatDate } from '../dateUtils';
 import {
   axe,
   expectInertSlotProps,
+  expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   openingTags,
   renderWithProviders,
   testNoImplicitSubmit,
+  testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { FIELD_TEST_IDS, FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { datePickerClassNames } from '../../../lib/classNames';
@@ -93,11 +96,14 @@ describe('DatePicker', () => {
     expectedTag: 'div',
     displayName: 'DatePicker',
     defaultProps: { 'aria-label': 'Date picker' },
-    control: { role: 'textbox' },
+    ref: 'control',
+    control: { role: 'textbox', tag: 'input' },
     a11yVariants: [
       { name: 'disabled', props: { disabled: true, defaultValue: JUNE_15, clearable: true } },
     ],
   });
+
+  testRootPartRef(DatePicker, { props: { 'aria-label': 'Date picker' } });
 
   testNoImplicitSubmit(DatePicker, {
     defaultProps: { 'aria-label': 'Date', defaultValue: JUNE_15, clearable: true },
@@ -162,13 +168,17 @@ describe('DatePicker', () => {
 
     it('gives the calendar and clear buttons 24px targets and pads the input logically (input-datetime#15)', () => {
       const { unmount } = render(<DatePicker aria-label="Date" />);
-      expect(toggle()).toHaveClass('h-6', 'w-6', 'end-1');
-      expect(textbox()).toHaveClass('pe-8');
+      expect(toggle()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-1');
+      expect(textbox()).toHaveClass('wave:pe-8');
       unmount();
       render(<DatePicker aria-label="Date" defaultValue={JUNE_15} clearable />);
       // Toggle at 4–28px from the end, clear button at 28–52px: two adjacent 24px targets.
-      expect(screen.getByRole('button', { name: 'Clear date' })).toHaveClass('h-6', 'w-6', 'end-7');
-      expect(textbox()).toHaveClass('pe-14');
+      expect(screen.getByRole('button', { name: 'Clear date' })).toHaveClass(
+        'wave:h-6',
+        'wave:w-6',
+        'wave:end-7',
+      );
+      expect(textbox()).toHaveClass('wave:pe-14');
     });
 
     it('gives every button its own padding and background, so an app-wide button rule cannot fill them (C-NATIVE)', () => {
@@ -184,11 +194,11 @@ describe('DatePicker', () => {
       const buttons = screen.getAllByRole('button');
       expect(buttons.length).toBeGreaterThan(40); // toggle, clear, month buttons and 42 days
       for (const button of buttons) {
-        expect(button).toHaveClass('p-0');
-        expect(button).toHaveClass('bg-transparent');
+        expect(button).toHaveClass('wave:p-0');
+        expect(button).toHaveClass('wave:bg-transparent');
       }
       // The selected day keeps its own fill.
-      expect(dayButton('Sunday, June 15, 2025')).toHaveClass('data-[selected]:bg-primary');
+      expect(dayButton('Sunday, June 15, 2025')).toHaveClass('wave:data-[selected]:bg-primary');
     });
 
     it('uses theme tokens and gates hover on every button (button-provider#3)', () => {
@@ -197,9 +207,9 @@ describe('DatePicker', () => {
       expect(buttons.length).toBeGreaterThan(40); // toggle, clear, month buttons and 42 days
       for (const button of buttons) {
         expect(button.className).not.toMatch(RAW_COLOR_OR_ENABLED);
-        expect(button).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-hover');
+        expect(button).toHaveClass('wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover');
       }
-      expect(textbox()).toHaveClass('focus:outline-hidden');
+      expect(textbox()).toHaveClass('wave:focus:outline-hidden');
     });
 
     it.each([
@@ -267,26 +277,26 @@ describe('DatePicker', () => {
         const icon = button.querySelector('svg');
         // Wave's own direction variant: Tailwind's `rtl:` also matches inside an LTR subtree
         // (C-LOGICAL).
-        expect(icon).toHaveClass('wave-rtl:-scale-x-100');
-        expect(icon?.getAttribute('class')).not.toMatch(/(^|\s)rtl:/);
+        expect(icon).toHaveClass('wave:wave-rtl:-scale-x-100');
+        expect(icon?.getAttribute('class')).not.toMatch(/(^|\s)wave:rtl:/);
       }
     });
 
     it('draws the destructive border while the input is invalid', async () => {
       const user = userEvent.setup();
-      const invalidClasses = ['border-destructive'];
+      const invalidClasses = ['wave:border-destructive'];
       const { unmount } = render(<DatePicker aria-label="Date" locale="en-US" />);
-      expect(textbox()).toHaveClass('border-input', 'border-b-stroke-accessible');
+      expect(textbox()).toHaveClass('wave:border-input', 'wave:border-b-stroke-accessible');
       for (const name of invalidClasses) expect(textbox()).not.toHaveClass(name);
       // Its own rejected text.
       await user.type(textbox(), 'soon{Enter}');
       expect(textbox()).toHaveAttribute('aria-invalid', 'true');
       expect(textbox()).toHaveClass(...invalidClasses);
-      expect(textbox()).not.toHaveClass('border-input');
-      expect(textbox()).not.toHaveClass('border-b-stroke-accessible');
+      expect(textbox()).not.toHaveClass('wave:border-input');
+      expect(textbox()).not.toHaveClass('wave:border-b-stroke-accessible');
       // Keeps the destructive border and shows the focus color on the focused bottom border
       // (Phase 4 D4).
-      expect(textbox()).toHaveClass('focus:border-b-primary');
+      expect(textbox()).toHaveClass('wave:focus:border-b-primary');
       await user.clear(textbox());
       for (const name of invalidClasses) expect(textbox()).not.toHaveClass(name);
       unmount();
@@ -924,7 +934,7 @@ describe('DatePicker', () => {
       expect(textbox()).toHaveAttribute('readonly');
       expect(toggle()).toBeDisabled();
       expect(screen.queryByRole('button', { name: 'Clear date' })).not.toBeInTheDocument();
-      expect(textbox()).toHaveClass('pe-8');
+      expect(textbox()).toHaveClass('wave:pe-8');
       textbox().focus();
       await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -1357,9 +1367,9 @@ describe('DatePicker', () => {
       // Dimmed, except while its ring shows: `opacity` would dim the ring below 3:1. The variant's
       // higher specificity wins over `aria-disabled:opacity-50` while it matches.
       expect(day16).toHaveClass(
-        'aria-disabled:line-through',
-        'aria-disabled:opacity-50',
-        'aria-disabled:focus-visible:opacity-100',
+        'wave:aria-disabled:line-through',
+        'wave:aria-disabled:opacity-50',
+        'wave:aria-disabled:focus-visible:opacity-100',
       );
     });
 
@@ -1408,12 +1418,12 @@ describe('DatePicker', () => {
       const selected = dayButton('Sunday, June 15, 2025');
       expect(selected).toHaveFocus();
       expect(selected).toHaveClass(
-        'focus-visible:outline-2',
-        'focus-visible:outline-offset-2',
-        'focus-visible:outline-ring',
+        'wave:focus-visible:outline-2',
+        'wave:focus-visible:outline-offset-2',
+        'wave:focus-visible:outline-ring',
       );
       expect(selected).toHaveAttribute('data-selected');
-      expect(selected).toHaveClass('forced-colors:bg-[Highlight]');
+      expect(selected).toHaveClass('wave:forced-colors:bg-[Highlight]');
       expect(dayButton('Wednesday, June 18, 2025')).toHaveAttribute('data-today');
     });
 
@@ -1815,11 +1825,11 @@ describe('DatePicker', () => {
       expect(screen.queryByText(/Enter a date/)).not.toBeInTheDocument();
     });
 
-    it('routes id, aria-describedby, focus handlers and controlRef to the input', async () => {
+    it('routes id, aria-describedby, focus handlers and ref to the input', async () => {
       const user = userEvent.setup();
       const onFocus = vi.fn();
       const onBlur = vi.fn();
-      const controlRef = React.createRef<HTMLInputElement>();
+      const ref = React.createRef<HTMLInputElement>();
       render(
         <>
           <p id="help">Your birthday</p>
@@ -1829,7 +1839,7 @@ describe('DatePicker', () => {
             aria-describedby="help"
             onFocus={onFocus}
             onBlur={onBlur}
-            controlRef={controlRef}
+            ref={ref}
             data-testid="dp"
           />
         </>,
@@ -1837,7 +1847,7 @@ describe('DatePicker', () => {
       const input = textbox('Birthday');
       expect(input).toHaveAttribute('id', 'birthday');
       expect(input).toHaveAccessibleDescription('Your birthday');
-      expect(controlRef.current).toBe(input);
+      expect(ref.current).toBe(input);
       expect(screen.getByTestId('dp')).not.toHaveAttribute('id');
       await user.click(input);
       await user.tab();
@@ -2095,25 +2105,32 @@ describe('DatePicker', () => {
       expect(onValueChange).not.toHaveBeenCalled();
     });
 
-    it('keeps the deprecated onChange alias working and warns once', async () => {
+    it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
       const user = userEvent.setup();
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const onChange = vi.fn();
-      const { rerender } = render(
-        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} onChange={onChange} />,
-      );
-      rerender(
-        <DatePicker aria-label="Date" locale="en-US" defaultValue={JUNE_15} onChange={onChange} />,
+      const onValueChange = vi.fn();
+      render(
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          // @ts-expect-error -- `onChange(date)` is removed in 1.0: use `onValueChange`
+          onChange={onChange}
+          onValueChange={onValueChange}
+        />,
       );
       await openCalendar(user);
       await user.click(dayButton('Friday, June 20, 2025'));
-      expect(fields(onChange.mock.calls[0][0] as Date)).toEqual([2025, 6, 20]);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] DatePicker: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onValueChange` instead.',
-        ],
+      await user.clear(textbox());
+      await user.type(textbox(), '6/25/2025{Enter}');
+      expect(onValueChange.mock.calls.map(([date]) => fields(date as Date))).toEqual([
+        [2025, 6, 20],
+        [2025, 6, 25],
       ]);
+      // Untyped code that still passes it gets no value: it is never called with a date.
+      expect(onChange).not.toHaveBeenCalledWith(expect.any(Date));
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 
@@ -2410,10 +2427,10 @@ describe('DatePicker', () => {
         await user.click(toggle());
         for (const name of ['Close', 'Go to today']) {
           expect(within(dialog()).getByRole('button', { name })).toHaveClass(
-            'p-0',
-            'bg-transparent',
-            'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
-            'focus-visible:outline-2',
+            'wave:p-0',
+            'wave:bg-transparent',
+            'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+            'wave:focus-visible:outline-2',
           );
         }
       });
@@ -2445,34 +2462,40 @@ describe('DatePicker', () => {
 
     it('keeps the 0.7 classes and renders the medium outline attributes', () => {
       renderPicker();
-      expect(input()).toHaveClass('h-8', 'px-3', 'text-body-1', 'border-input', 'pe-14');
-      expect(calendar()).toHaveClass('h-6', 'w-6', 'end-1');
-      expect(clear()).toHaveClass('h-6', 'w-6', 'end-7');
+      expect(input()).toHaveClass(
+        'wave:h-8',
+        'wave:px-3',
+        'wave:text-body-1',
+        'wave:border-input',
+        'wave:pe-14',
+      );
+      expect(calendar()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-1');
+      expect(clear()).toHaveClass('wave:h-6', 'wave:w-6', 'wave:end-7');
       expect(root()).toHaveAttribute('data-size', 'medium');
       expect(root()).toHaveAttribute('data-appearance', 'outline');
     });
 
     it('small: 20px buttons with hit layers at end-1 and end-7, pe-13', () => {
       renderPicker({ size: 'small' });
-      expect(input()).toHaveClass('h-6', 'px-2', 'text-caption-1', 'pe-13');
-      expect(calendar()).toHaveClass('size-5', 'before:-inset-0.5', 'end-1');
-      expect(clear()).toHaveClass('size-5', 'before:-inset-0.5', 'end-7');
+      expect(input()).toHaveClass('wave:h-6', 'wave:px-2', 'wave:text-caption-1', 'wave:pe-13');
+      expect(calendar()).toHaveClass('wave:size-5', 'wave:before:-inset-0.5', 'wave:end-1');
+      expect(clear()).toHaveClass('wave:size-5', 'wave:before:-inset-0.5', 'wave:end-7');
     });
 
     it('large: 32px buttons at end-1 and end-9, pe-18, 20px glyphs', () => {
       renderPicker({ size: 'large' });
-      expect(input()).toHaveClass('h-10', 'px-4', 'text-body-2', 'pe-18');
-      expect(calendar()).toHaveClass('size-8', 'end-1');
-      expect(clear()).toHaveClass('size-8', 'end-9');
+      expect(input()).toHaveClass('wave:h-10', 'wave:px-4', 'wave:text-body-2', 'wave:pe-18');
+      expect(calendar()).toHaveClass('wave:size-8', 'wave:end-1');
+      expect(clear()).toHaveClass('wave:size-8', 'wave:end-9');
       expect(calendar().querySelector('svg')).toHaveAttribute('width', '20');
     });
 
     it('an appearance styles the input; the calendar dialog does not change', async () => {
       const user = userEvent.setup();
       renderPicker({ appearance: 'underline', size: 'large' });
-      expect(input()).toHaveClass('border-0', 'border-b');
+      expect(input()).toHaveClass('wave:border-0', 'wave:border-b');
       await user.click(calendar());
-      expect(screen.getByRole('dialog')).toHaveClass('p-3', 'shadow-16');
+      expect(screen.getByRole('dialog')).toHaveClass('wave:p-3', 'wave:shadow-16');
     });
 
     it('takes the Field size', () => {
@@ -2488,9 +2511,9 @@ describe('DatePicker', () => {
     // widths per size for both buttons; RTL.
 
     it.each([
-      ['underline', ['rounded-none', 'border-0', 'border-b', 'bg-transparent']],
-      ['filled-darker', ['border-input-filled-stroke', 'bg-input-filled-darker']],
-      ['filled-lighter', ['border-input-filled-stroke', 'bg-input-filled-lighter']],
+      ['underline', ['wave:rounded-none', 'wave:border-0', 'wave:border-b', 'wave:bg-transparent']],
+      ['filled-darker', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-darker']],
+      ['filled-lighter', ['wave:border-input-filled-stroke', 'wave:bg-input-filled-lighter']],
     ] as const)(
       'appearance="%s" renders its classes and data-appearance',
       (appearance, classes) => {
@@ -2527,7 +2550,7 @@ describe('DatePicker', () => {
           errorId: FIELD_TEST_IDS.errorId,
         });
         const byName = screen.getByRole('textbox', { name: FIELD_TEST_TEXT.label });
-        expect(byName).toHaveClass('border-destructive', 'focus:border-b-primary');
+        expect(byName).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
       },
     );
 
@@ -2540,7 +2563,7 @@ describe('DatePicker', () => {
         await user.type(input(), 'soon');
         await user.keyboard('{Enter}');
         expect(input()).toHaveAttribute('aria-invalid', 'true');
-        expect(input()).toHaveClass('border-destructive', 'focus:border-b-primary');
+        expect(input()).toHaveClass('wave:border-destructive', 'wave:focus:border-b-primary');
       },
     );
 
@@ -2559,8 +2582,8 @@ describe('DatePicker', () => {
         <DatePicker aria-label="Due" size="large" clearable defaultValue={new Date(2026, 0, 5)} />,
         { dir: 'rtl' },
       );
-      expect(screen.getByRole('button', { name: 'Open calendar' })).toHaveClass('end-1');
-      expect(screen.getByRole('button', { name: 'Clear date' })).toHaveClass('end-9');
+      expect(screen.getByRole('button', { name: 'Open calendar' })).toHaveClass('wave:end-1');
+      expect(screen.getByRole('button', { name: 'Clear date' })).toHaveClass('wave:end-9');
     });
   });
 });
@@ -2568,6 +2591,7 @@ describe('DatePicker', () => {
 describe('DatePicker — slotProps', () => {
   type DatePickerSlotProps = NonNullable<DatePickerProps['slotProps']>;
   const EVERY_PART: DatePickerSlotProps = {
+    root: {},
     input: {},
     clearButton: {},
     openCalendarButton: {},
@@ -2650,29 +2674,29 @@ describe('DatePicker — slotProps', () => {
       ),
     ).toBe(
       [
-        '<input aria-label="Date" autocomplete="off" class="wave-date-picker__input h-8 w-full px-3 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 pe-14" placeholder="Select a date" type="text" value="06/15/2025">',
-        '<button aria-label="Clear date" class="wave-date-picker__clear-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
-        '<button aria-controls="datepicker-dialog-_id0_" aria-expanded="true" aria-haspopup="dialog" aria-label="Open calendar" class="wave-date-picker__open-calendar-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
-        '<div aria-labelledby="datepicker-heading-_id1_" aria-modal="true" class="wave-date-picker__surface rounded-md border border-border bg-background p-3 text-foreground shadow-16" data-align="start" data-side="bottom" data-state="open" id="datepicker-dialog-_id0_" role="dialog" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, 4px);">',
-        '<div class="wave-date-picker__header mb-2 flex items-center justify-between gap-2">',
-        '<button aria-controls="calendar-grid-_id2_" aria-disabled="true" aria-label="Previous month" class="wave-date-picker__previous-month-button flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-disabled="" type="button">',
-        '<h2 aria-live="polite" class="wave-date-picker__heading text-body-1 font-semibold" id="datepicker-heading-_id1_">',
-        '<button aria-describedby="calendar-heading-hint-_id3_" class="wave-date-picker__heading-button flex h-8 items-center justify-center rounded bg-transparent p-0 px-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
-        '<button aria-controls="calendar-grid-_id2_" aria-label="Next month" class="wave-date-picker__next-month-button flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
-        '<table aria-labelledby="datepicker-heading-_id1_" class="wave-date-picker__grid border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id2_" role="grid">',
-        '<th abbr="Sunday" aria-label="Sunday" class="wave-date-picker__weekday h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground" scope="col">',
-        '<th class="wave-date-picker__week-number-header h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground" scope="col">',
-        '<th aria-label="Week 23" class="wave-date-picker__week-number h-8 w-8 text-center text-caption-1 font-normal text-muted-foreground" scope="row">',
-        '<button aria-disabled="true" aria-label="Sunday, June 1, 2025" class="wave-date-picker__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-06-01" data-disabled="" tabindex="-1" type="button">',
-        '<button aria-current="date" aria-label="Thursday, June 12, 2025" class="wave-date-picker__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-06-12" data-today="" tabindex="-1" type="button">',
-        '<button aria-label="Sunday, June 15, 2025" aria-pressed="true" class="wave-date-picker__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-date="2025-06-15" data-selected="" tabindex="0" type="button">',
-        '<button aria-label="Friday, June 20, 2025, marked" class="wave-date-picker__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-06-20" data-marked="" tabindex="-1" type="button">',
-        '<button aria-label="Saturday, June 21, 2025" class="wave-date-picker__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-06-21" tabindex="-1" type="button">',
-        '<button aria-label="Tuesday, July 1, 2025" class="wave-date-picker__day relative flex h-8 w-8 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-date="2025-07-01" data-outside="" tabindex="-1" type="button">',
-        '<span aria-hidden="true" class="wave-date-picker__marked-dot pointer-events-none absolute inset-x-0 bottom-0.5 mx-auto h-1 w-1 rounded-full bg-current forced-colors:forced-color-adjust-none">',
-        '<div class="wave-date-picker__footer mt-2 flex items-center justify-end gap-2">',
-        '<button class="wave-date-picker__today-button flex h-8 items-center justify-center rounded bg-transparent p-0 px-3 text-body-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
-        '<button class="wave-date-picker__close-button flex h-8 items-center justify-center rounded bg-transparent p-0 px-3 text-body-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+        '<input aria-label="Date" autocomplete="off" class="wave-date-picker__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:pe-14" placeholder="Select a date" type="text" value="06/15/2025">',
+        '<button aria-label="Clear date" class="wave-date-picker__clear-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-7 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
+        '<button aria-controls="datepicker-dialog-_id0_" aria-expanded="true" aria-haspopup="dialog" aria-label="Open calendar" class="wave-date-picker__open-calendar-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-1 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
+        '<div aria-labelledby="datepicker-heading-_id1_" aria-modal="true" class="wave-date-picker__surface wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-3 wave:text-foreground wave:shadow-16" data-align="start" data-side="bottom" data-state="open" id="datepicker-dialog-_id0_" role="dialog" style="position: fixed; left: 0px; top: 0px; transform: translate(8px, 4px);">',
+        '<div class="wave-date-picker__header wave:mb-2 wave:flex wave:items-center wave:justify-between wave:gap-2">',
+        '<button aria-controls="calendar-grid-_id2_" aria-disabled="true" aria-label="Previous month" class="wave-date-picker__previous-month-button wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-disabled="" type="button">',
+        '<h2 aria-live="polite" class="wave-date-picker__heading wave:text-body-1 wave:font-semibold" id="datepicker-heading-_id1_">',
+        '<button aria-describedby="calendar-heading-hint-_id3_" class="wave-date-picker__heading-button wave:flex wave:h-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:px-2 wave:text-body-1 wave:font-semibold wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
+        '<button aria-controls="calendar-grid-_id2_" aria-label="Next month" class="wave-date-picker__next-month-button wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
+        '<table aria-labelledby="datepicker-heading-_id1_" class="wave-date-picker__grid wave:border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id2_" role="grid">',
+        '<th abbr="Sunday" aria-label="Sunday" class="wave-date-picker__weekday wave:h-8 wave:w-8 wave:text-center wave:text-caption-1 wave:font-normal wave:text-muted-foreground" scope="col">',
+        '<th class="wave-date-picker__week-number-header wave:h-8 wave:w-8 wave:text-center wave:text-caption-1 wave:font-normal wave:text-muted-foreground" scope="col">',
+        '<th aria-label="Week 23" class="wave-date-picker__week-number wave:h-8 wave:w-8 wave:text-center wave:text-caption-1 wave:font-normal wave:text-muted-foreground" scope="row">',
+        '<button aria-disabled="true" aria-label="Sunday, June 1, 2025" class="wave-date-picker__day wave:relative wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-date="2025-06-01" data-disabled="" tabindex="-1" type="button">',
+        '<button aria-current="date" aria-label="Thursday, June 12, 2025" class="wave-date-picker__day wave:relative wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-date="2025-06-12" data-today="" tabindex="-1" type="button">',
+        '<button aria-label="Sunday, June 15, 2025" aria-pressed="true" class="wave-date-picker__day wave:relative wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none" data-date="2025-06-15" data-selected="" tabindex="0" type="button">',
+        '<button aria-label="Friday, June 20, 2025, marked" class="wave-date-picker__day wave:relative wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-date="2025-06-20" data-marked="" tabindex="-1" type="button">',
+        '<button aria-label="Saturday, June 21, 2025" class="wave-date-picker__day wave:relative wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-date="2025-06-21" tabindex="-1" type="button">',
+        '<button aria-label="Tuesday, July 1, 2025" class="wave-date-picker__day wave:relative wave:flex wave:h-8 wave:w-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-date="2025-07-01" data-outside="" tabindex="-1" type="button">',
+        '<span aria-hidden="true" class="wave-date-picker__marked-dot wave:pointer-events-none wave:absolute wave:inset-x-0 wave:bottom-0.5 wave:mx-auto wave:h-1 wave:w-1 wave:rounded-full wave:bg-current wave:forced-colors:forced-color-adjust-none">',
+        '<div class="wave-date-picker__footer wave:mt-2 wave:flex wave:items-center wave:justify-end wave:gap-2">',
+        '<button class="wave-date-picker__today-button wave:flex wave:h-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:px-3 wave:text-body-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
+        '<button class="wave-date-picker__close-button wave:flex wave:h-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:px-3 wave:text-body-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
       ].join('\n'),
     );
     fireEvent.click(screen.getByRole('button', { name: 'June 2025' }));
@@ -2689,12 +2713,12 @@ describe('DatePicker — slotProps', () => {
       ),
     ).toBe(
       [
-        '<h2 aria-live="polite" class="wave-date-picker__heading text-body-1 font-semibold" id="datepicker-heading-_id0_">',
-        '<button aria-describedby="calendar-heading-hint-_id1_" class="wave-date-picker__heading-button flex h-8 items-center justify-center rounded bg-transparent p-0 px-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
-        '<table aria-labelledby="datepicker-heading-_id0_" class="wave-date-picker__grid border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id2_" role="grid">',
-        '<button aria-disabled="true" aria-label="January 2025" class="wave-date-picker__month flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-disabled="" tabindex="-1" type="button">',
-        '<button aria-current="date" aria-label="June 2025" aria-pressed="true" class="wave-date-picker__month flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-selected="" data-today="" tabindex="0" type="button">',
-        '<button aria-label="July 2025" class="wave-date-picker__month flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<h2 aria-live="polite" class="wave-date-picker__heading wave:text-body-1 wave:font-semibold" id="datepicker-heading-_id0_">',
+        '<button aria-describedby="calendar-heading-hint-_id1_" class="wave-date-picker__heading-button wave:flex wave:h-8 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:px-2 wave:text-body-1 wave:font-semibold wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
+        '<table aria-labelledby="datepicker-heading-_id0_" class="wave-date-picker__grid wave:border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id2_" role="grid">',
+        '<button aria-disabled="true" aria-label="January 2025" class="wave-date-picker__month wave:flex wave:h-12 wave:w-14 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-disabled="" tabindex="-1" type="button">',
+        '<button aria-current="date" aria-label="June 2025" aria-pressed="true" class="wave-date-picker__month wave:flex wave:h-12 wave:w-14 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none" data-selected="" data-today="" tabindex="0" type="button">',
+        '<button aria-label="July 2025" class="wave-date-picker__month wave:flex wave:h-12 wave:w-14 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
       ].join('\n'),
     );
     fireEvent.click(screen.getByRole('button', { name: '2025' }));
@@ -2702,11 +2726,11 @@ describe('DatePicker — slotProps', () => {
     const years = all(k.year).filter((_, index) => [0, 6, 7, 11].includes(index));
     expect(openingTags(...all(k.grid), ...years)).toBe(
       [
-        '<table aria-labelledby="datepicker-heading-_id0_" class="wave-date-picker__grid border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id1_" role="grid">',
-        '<button aria-disabled="true" class="wave-date-picker__year flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-disabled="" data-outside="" tabindex="-1" type="button">',
-        '<button aria-current="date" aria-pressed="true" class="wave-date-picker__year flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-selected="" data-today="" tabindex="0" type="button">',
-        '<button class="wave-date-picker__year flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
-        '<button class="wave-date-picker__year flex h-12 w-14 items-center justify-center rounded bg-transparent p-0 text-caption-1 text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover data-[outside]:text-muted-foreground data-[today]:border data-[today]:border-primary data-[today]:font-semibold data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover aria-disabled:line-through focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" data-outside="" tabindex="-1" type="button">',
+        '<table aria-labelledby="datepicker-heading-_id0_" class="wave-date-picker__grid wave:border-collapse" data-wave-calendar-grid="" id="calendar-grid-_id1_" role="grid">',
+        '<button aria-disabled="true" class="wave-date-picker__year wave:flex wave:h-12 wave:w-14 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-disabled="" data-outside="" tabindex="-1" type="button">',
+        '<button aria-current="date" aria-pressed="true" class="wave-date-picker__year wave:flex wave:h-12 wave:w-14 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none" data-selected="" data-today="" tabindex="0" type="button">',
+        '<button class="wave-date-picker__year wave:flex wave:h-12 wave:w-14 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
+        '<button class="wave-date-picker__year wave:flex wave:h-12 wave:w-14 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-caption-1 wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:data-[outside]:text-muted-foreground wave:data-[today]:border wave:data-[today]:border-primary wave:data-[today]:font-semibold wave:data-[selected]:bg-primary wave:data-[selected]:font-semibold wave:data-[selected]:text-primary-foreground wave:not-disabled:not-aria-disabled:data-[selected]:hover:bg-primary-hover wave:aria-disabled:line-through wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" data-outside="" tabindex="-1" type="button">',
       ].join('\n'),
     );
     unmount();
@@ -2716,8 +2740,8 @@ describe('DatePicker — slotProps', () => {
     await act(async () => {});
     expect(openingTags(...select([`.${k.input}`, `.${k.errorMessage}`]))).toBe(
       [
-        '<input aria-describedby="datepicker-error-_id0_" aria-invalid="true" aria-label="Date" autocomplete="off" class="wave-date-picker__input h-8 w-full px-3 text-body-1 rounded border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 border-destructive pe-8" placeholder="Select a date" type="text" value="zz">',
-        '<p class="wave-date-picker__error-message mt-1 text-caption-1 text-error" id="datepicker-error-_id0_" role="alert">',
+        '<input aria-describedby="datepicker-error-_id0_" aria-invalid="true" aria-label="Date" autocomplete="off" class="wave-date-picker__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:border-destructive wave:pe-8" placeholder="Select a date" type="text" value="zz">',
+        '<p class="wave-date-picker__error-message wave:mt-1 wave:text-caption-1 wave:text-error" id="datepicker-error-_id0_" role="alert">',
       ].join('\n'),
     );
   });
@@ -2732,9 +2756,9 @@ describe('DatePicker — slotProps', () => {
       ),
     ).toBe(
       [
-        '<input aria-label="Date" autocomplete="off" class="wave-date-picker__input h-8 w-full px-3 text-body-1 rounded border border-input border-b-stroke-accessible bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100 pe-14" placeholder="Select a date" type="text" value="06/15/2025">',
-        '<button aria-label="Clear date" class="wave-date-picker__clear-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
-        '<button aria-expanded="false" aria-haspopup="dialog" aria-label="Open calendar" class="wave-date-picker__open-calendar-button absolute flex h-6 w-6 items-center justify-center rounded bg-transparent p-0 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground end-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:focus-visible:opacity-100" type="button">',
+        '<input aria-label="Date" autocomplete="off" class="wave-date-picker__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:pe-14" placeholder="Select a date" type="text" value="06/15/2025">',
+        '<button aria-label="Clear date" class="wave-date-picker__clear-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-7 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
+        '<button aria-expanded="false" aria-haspopup="dialog" aria-label="Open calendar" class="wave-date-picker__open-calendar-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-1 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
       ].join('\n'),
     );
     expect(all(k.surface, root)).toEqual([]);
@@ -2764,6 +2788,17 @@ describe('DatePicker — slotProps', () => {
         appearance: 'underline',
       },
       { 'aria-label': 'Date', readOnly: true, defaultValue: JUNE_15 },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        'aria-label': 'Date',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -2771,6 +2806,13 @@ describe('DatePicker — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Your own data attributes on the root, the locked ones among them.
+    expectInertSlotProps(
+      (slotProps) => (
+        <DatePicker aria-label="Date" data-size="large" data-x="1" slotProps={slotProps} />
+      ),
+      EVERY_PART,
+    );
   });
 
   it('renders the same markup in the month and year views and with an error, with and without slotProps', async () => {
@@ -2803,6 +2845,7 @@ describe('DatePicker — slotProps', () => {
       'data-part': name,
     });
     const refs = {
+      root: React.createRef<HTMLDivElement>(),
       input: React.createRef<HTMLInputElement>(),
       clearButton: React.createRef<HTMLButtonElement>(),
       openCalendarButton: React.createRef<HTMLButtonElement>(),
@@ -2824,13 +2867,14 @@ describe('DatePicker — slotProps', () => {
       todayButton: React.createRef<HTMLButtonElement>(),
       closeButton: React.createRef<HTMLButtonElement>(),
     };
-    const controlRef = React.createRef<HTMLInputElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <DatePicker
         {...FULL}
         defaultOpen
-        controlRef={controlRef}
+        ref={ref}
         slotProps={{
+          root: mine('root', refs.root),
           input: mine('input', refs.input),
           clearButton: mine('clearButton', refs.clearButton),
           openCalendarButton: mine('openCalendarButton', refs.openCalendarButton),
@@ -2870,6 +2914,7 @@ describe('DatePicker — slotProps', () => {
       }
     };
     check([
+      'root',
       'input',
       'clearButton',
       'openCalendarButton',
@@ -2889,7 +2934,7 @@ describe('DatePicker — slotProps', () => {
       'todayButton',
       'closeButton',
     ]);
-    expect(controlRef.current).toBe(refs.input.current);
+    expect(ref.current).toBe(refs.input.current);
     expect(refs.heading.current?.tagName).toBe('H2');
     // The surface is still placed (the positioning holds the same element), and its trap still
     // finds the grid: focus moved to the selected day.
@@ -3333,6 +3378,7 @@ describe('DatePicker — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof DatePickerSlotProps>().toEqualTypeOf<
+      | 'root'
       | 'input'
       | 'clearButton'
       | 'openCalendarButton'
@@ -3355,6 +3401,9 @@ describe('DatePicker — slotProps', () => {
       | 'todayButton'
       | 'closeButton'
     >();
+    expectTypeOf<NonNullable<DatePickerSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
     expectTypeOf<NonNullable<DatePickerSlotProps['input']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLInputElement> | undefined
     >();
@@ -3375,5 +3424,372 @@ describe('DatePicker — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the DatePicker draws its content
     void (<DatePicker aria-label="Date" slotProps={{ closeButton: { children: 'Done' } }} />);
+    // @ts-expect-error -- a part takes no children: the DatePicker draws its content
+    void (<DatePicker aria-label="Date" slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => part(k.root)!;
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the DatePicker's className and style", () => {
+      render(
+        <DatePicker
+          aria-label="Date"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(k.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(textbox()).not.toHaveAttribute('data-part');
+      expect(textbox()).not.toHaveAttribute('title');
+    });
+
+    it('reaches the root only: the open calendar, which takes the other parts, takes none of it', async () => {
+      const ref = React.createRef<HTMLDivElement>();
+      render(
+        <DatePicker
+          {...FULL}
+          defaultOpen
+          slotProps={{ root: { ref, className: 'my-root', 'data-part': 'root', title: 'R' } }}
+        />,
+      );
+      await act(async () => {});
+      expect(dialog()).toBeInTheDocument();
+      expect(ref.current).toBe(root());
+      expect(document.querySelectorAll('.my-root')).toHaveLength(1);
+      expect(document.querySelectorAll('[data-part="root"]')).toHaveLength(1);
+      expect(document.querySelectorAll('[title="R"]')).toHaveLength(1);
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<DatePicker aria-label="Date" slotProps={{ root: { className: 'flex-row' } }} />);
+      expect(root()).toHaveClass('flex-row');
+      expect(root()).not.toHaveClass('wave:flex-col');
+    });
+
+    it("keeps the props you give the DatePicker over the part's", () => {
+      render(
+        <DatePicker
+          aria-label="Date"
+          title="Own"
+          data-x="own"
+          data-size="large"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+      // Your own data-size reaches the root as in 0.18 (after the resolved one).
+      expect(root()).toHaveAttribute('data-size', 'large');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <DatePicker
+          aria-label="Date"
+          size="large"
+          appearance="underline"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-appearance': 'outline',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-appearance', 'underline');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The DatePicker's own hidden state stays its own.
+      rerender(
+        <DatePicker
+          aria-label="Date"
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it("runs your root handlers before the DatePicker's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <DatePicker
+          aria-label="Date"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <DatePicker
+          aria-label="Date"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it("opens the calendar from the toggle whatever your root onClick does: the toggle is the button's own, before the click reaches the root", async () => {
+      const user = userEvent.setup();
+      render(
+        <DatePicker
+          aria-label="Date"
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        />,
+      );
+      await user.click(toggle());
+      expect(dialog()).toBeInTheDocument();
+    });
+
+    it('calls your root onClick in every state, as the DatePicker calls its own: the root passes no click to the input', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(
+        <DatePicker aria-label="Date" onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(root());
+      rerender(
+        <DatePicker aria-label="Date" disabled onClick={own} slotProps={{ root: { onClick } }} />,
+      );
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <DatePicker
+          aria-label="Date"
+          defaultOpen
+          slotProps={{ root: { className: 'my-root', title: 'Pick a date' } }}
+        />,
+      );
+      await act(async () => {});
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the text <input>, the focusable control; the root <div> is
+// `slotProps.root.ref`, and `controlRef` is gone.
+describe('DatePicker — ref reaches the control', () => {
+  it('focuses the input through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(<DatePicker ref={ref} aria-label="Date" />);
+    act(() => ref.current?.focus());
+    expect(textbox()).toHaveFocus();
+  });
+
+  it('gives ref the input beside slotProps.input.ref, and slotProps.root.ref the root', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const root = React.createRef<HTMLDivElement>();
+    const input = React.createRef<HTMLInputElement>();
+    render(
+      <DatePicker
+        ref={ref}
+        aria-label="Date"
+        slotProps={{ root: { ref: root }, input: { ref: input } }}
+      />,
+    );
+    expect(ref.current).toBe(textbox());
+    expect(input.current).toBe(textbox());
+    expect(root.current).toHaveClass(datePickerClassNames.root);
+    expect(root.current).toContainElement(textbox());
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Order">
+        <DatePicker
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          name="due"
+          required
+          locale="en-US"
+          aria-label="Date"
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const input = textbox();
+    expect(nodes.at(-1)).toBe(input);
+    const form = screen.getByRole('form', { name: 'Order' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the input through the DatePicker's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(input).toHaveFocus();
+    await openCalendar(user);
+    await user.click(dayButton('Friday, June 20, 2025'));
+    rerender(ui(3));
+    expect(input).toHaveValue('06/20/2025');
+    expect(form.checkValidity()).toBe(true);
+    act(() => form.reset());
+    expect(input).toHaveValue('');
+    expect(form.checkValidity()).toBe(false);
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it("keeps the calendar's anchors with an inline ref that changes on every render: its placement and its focus return", async () => {
+    const html = document.documentElement;
+    Object.defineProperty(html, 'clientWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(html, 'clientHeight', { configurable: true, value: 768 });
+    // The calendar is placed against the row around the input and its buttons, near the
+    // viewport's bottom: it flips above it.
+    const box = (el: Element) => {
+      if (el.getAttribute('role') === 'dialog') return { x: 0, y: 0, width: 280, height: 320 };
+      if (el instanceof HTMLDivElement && el.firstElementChild instanceof HTMLInputElement) {
+        return { x: 100, y: 700, width: 250, height: 32 };
+      }
+      return { x: 0, y: 0, width: 0, height: 0 };
+    };
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const { x, y, width, height } = box(this);
+      const rect = { x, y, left: x, top: y, width, height, right: x + width, bottom: y + height };
+      return { ...rect, toJSON: () => rect } as DOMRect;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return box(this).width;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return box(this).height;
+    });
+    try {
+      const user = userEvent.setup();
+      const nodes: (HTMLInputElement | null)[] = [];
+      const ui = (pass: number) => (
+        <DatePicker
+          aria-label="Date"
+          locale="en-US"
+          defaultValue={JUNE_15}
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          data-pass={pass}
+        />
+      );
+      const { rerender } = render(ui(0));
+      rerender(ui(1));
+      act(() => textbox().focus());
+      await user.keyboard('{Alt>}{ArrowDown}{/Alt}');
+      rerender(ui(2));
+      rerender(ui(3));
+      await waitFor(() => expect(dialog()).toHaveAttribute('data-side', 'top'));
+      expect(dayButton('Sunday, June 15, 2025')).toHaveFocus();
+      // Escape returns focus to where the calendar was opened from: the input.
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(textbox()).toHaveFocus();
+      // Opened from the toggle, it returns focus to the toggle.
+      await openCalendar(user);
+      rerender(ui(4));
+      await user.keyboard('{Escape}');
+      expect(toggle()).toHaveFocus();
+      expect(nodes.at(-1)).toBe(textbox());
+    } finally {
+      Reflect.deleteProperty(html, 'clientWidth');
+      Reflect.deleteProperty(html, 'clientHeight');
+    }
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<DatePicker ref={ref} aria-label="Date" />);
+    const input = textbox();
+    rerender(<DatePicker ref={ref} aria-label="Date" defaultValue={JUNE_15} disabled />);
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <DatePicker ref={ref} aria-label="Date" />
+      </React.StrictMode>,
+    );
+    const input = textbox();
+    rerender(
+      <React.StrictMode>
+        <DatePicker ref={ref} aria-label="Date" readOnly />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<DatePicker ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(textbox(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref (for the input), and no controlRef', () => {
+    expectTypeOf<DatePickerProps['ref']>().toEqualTypeOf<React.Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<DatePickerProps>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the input; the root <div> is slotProps.root.ref
+    void (<DatePicker aria-label="Date" ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <DatePicker
+          aria-label="Date"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the input
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(document.querySelector(`.${datePickerClassNames.root}`)).toHaveAttribute(
+        'controlref',
+        '[object Object]',
+      );
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

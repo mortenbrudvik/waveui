@@ -271,7 +271,7 @@ const GREY_RAMP: Record<string, string> = {
   98: '#fafafa',
 };
 
-/** The 0.4 semantic names (they collide with shadcn/ui; only legacy-tokens.css may use them). */
+/** The 0.4 semantic names (they collide with shadcn/ui; Wave neither defines nor reads them). */
 const LEGACY_SEMANTIC_NAMES = [
   'background',
   'foreground',
@@ -401,10 +401,28 @@ const TABLED_MINIMUMS = ['presence-available', 'presence-busy', 'presence-away',
 // Shared lookups
 // ---------------------------------------------------------------------------------------------
 
-function themeBlock(): CssNode {
-  const block = tokensNodes().find((node) => /^@theme\b/.test(node.prelude));
-  if (!block || !block.children) throw new Error('tokens.css has no @theme block');
+/** The `@theme` blocks of a style file, in order. */
+function themeBlocks(name: string): CssNode[] {
+  return parseFile(name).filter((node) => /^@theme\b/.test(node.prelude) && node.children);
+}
+
+/** The `@theme` block of a style file that declares `key`. */
+function themeBlockDeclaring(name: string, key: string): CssNode {
+  const block = themeBlocks(name).find((node) => declarations(node.children ?? []).has(key));
+  if (!block || !block.children) {
+    throw new Error(`src/styles/${name} has no @theme block declaring ${key}`);
+  }
   return block;
+}
+
+/** The namespaced theme keys apps use (`--color-wave-*`, `--text-wave-*`, …), in tokens.css. */
+function themeBlock(): CssNode {
+  return themeBlockDeclaring('tokens.css', '--color-wave-background');
+}
+
+/** The unnamespaced theme that Wave's own utilities compile against: theme.css (internal). */
+function internalThemeBlock(): CssNode {
+  return themeBlockDeclaring('theme.css', '--color-background');
 }
 
 function allRules(nodes: CssNode[]): CssNode[] {
@@ -508,16 +526,25 @@ describe('tokens.css — theme groups (repo-level#7, button-provider#6)', () => 
     expect(names.filter((name) => !name.startsWith('--wave-'))).toEqual([]);
   });
 
-  it('never reads a 0.4 semantic name (only the ramp names, as fallbacks)', () => {
+  it('reads no 0.4 name, semantic or ramp: the ramps hold no fallbacks (removed in 1.0)', () => {
     const source = stripComments(readCss('tokens.css'));
     const reads = [...source.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]);
-    const foreign = reads.filter(
-      (name) => !name.startsWith('--wave-') && !/^--(brand|grey)-\d+$/.test(name),
-    );
-    expect(foreign).toEqual([]);
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.filter((name) => !name.startsWith('--wave-'))).toEqual([]);
     for (const name of LEGACY_SEMANTIC_NAMES) {
       expect(source).not.toMatch(new RegExp(`var\\(\\s*--${name}\\s*[,)]`));
     }
+  });
+
+  it('selects the themes by the wave-* classes only: no .dark or .high-contrast (removed in 1.0)', () => {
+    const selectors = allRules(tokensNodes())
+      .filter((rule) => !rule.prelude.startsWith('@'))
+      .flatMap((rule) => selectorList(rule.prelude));
+    expect(selectors).toContain('.wave-dark');
+    expect(selectors).toContain('.wave-high-contrast');
+    expect(
+      selectors.filter((selector) => /\.(dark|high-contrast)(?![\w-])/.test(selector)),
+    ).toEqual([]);
   });
 });
 
@@ -603,17 +630,30 @@ describe('tokens.css — per-theme shadows (0.17)', () => {
     expect(names).toEqual([]);
   });
 
-  it('maps --shadow-N in @theme inline to the runtime tokens and declares no literal shadow', () => {
-    const decls = declarations(themeBlock().children ?? []);
+  it('maps --shadow-wave-N (apps) and --shadow-N (internal) to the runtime tokens, no literal shadow', () => {
+    const blocks = {
+      'tokens.css': themeBlocks('tokens.css'),
+      'theme.css': [internalThemeBlock()],
+    };
+    const namespaced = declarations(themeBlock().children ?? []);
+    const internal = declarations(internalThemeBlock().children ?? []);
     for (const level of LEVELS) {
-      expect(decls.get(`--shadow-${level}`), `--shadow-${level}`).toBe(
+      expect(namespaced.get(`--shadow-wave-${level}`), `--shadow-wave-${level}`).toBe(
+        `var(--wave-shadow-${level})`,
+      );
+      expect(internal.get(`--shadow-${level}`), `--shadow-${level}`).toBe(
         `var(--wave-shadow-${level})`,
       );
     }
-    const literals = [...decls.entries()].filter(
-      ([name, value]) => name.startsWith('--shadow') && !/^var\(--wave-shadow-\d+\)$/.test(value),
-    );
-    expect(literals).toEqual([]);
+    for (const [file, nodes] of Object.entries(blocks)) {
+      const literals = nodes
+        .flatMap((node) => [...declarations(node.children ?? []).entries()])
+        .filter(
+          ([name, value]) =>
+            name.startsWith('--shadow') && !/^var\(--wave-shadow-\d+\)$/.test(value),
+        );
+      expect(literals, file).toEqual([]);
+    }
   });
 
   it.each(THEMES)('resolves every shadow token in a nested %s theme', (theme) => {
@@ -717,17 +757,17 @@ describe('tokens.css — palette tints, tint foregrounds and borders (0.17)', ()
 });
 
 describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)', () => {
-  it('declares the brand ramp on :root, reading the 0.4 names as fallbacks', () => {
+  it('declares the brand ramp on :root as literal colors (no 0.4 fallback, removed in 1.0)', () => {
     const constants = rootConstants();
     for (const [step, hex] of Object.entries(BRAND_RAMP)) {
-      expect(constants.get(`--wave-brand-${step}`)).toBe(`var(--brand-${step}, ${hex})`);
+      expect(constants.get(`--wave-brand-${step}`)).toBe(hex);
     }
   });
 
-  it('declares the grey ramp on :root, reading the 0.4 names as fallbacks', () => {
+  it('declares the grey ramp on :root as literal colors (no 0.4 fallback, removed in 1.0)', () => {
     const constants = rootConstants();
     for (const [step, hex] of Object.entries(GREY_RAMP)) {
-      expect(constants.get(`--wave-grey-${step}`)).toBe(`var(--grey-${step}, ${hex})`);
+      expect(constants.get(`--wave-grey-${step}`)).toBe(hex);
     }
   });
 
@@ -740,15 +780,15 @@ describe('tokens.css — ramps, font and z-index (repo-level#7, repo-level#15)',
     }
   });
 
-  it('re-themes when a consumer overrides a 0.4 ramp name on :root', () => {
+  it('ignores an override of a 0.4 ramp name on :root (removed in 1.0: override --wave-brand-*)', () => {
     const consumer: Decls = new Map([
       ['--brand-80', '#6b2fa0'],
       ['--brand-110', '#c89ef0'],
     ]);
     const root = merge(rootConstants(), consumer);
-    expect(resolveToken('--wave-primary', [themeDecls('light'), root])).toBe('#6b2fa0');
-    expect(resolveToken('--wave-accent', [themeDecls('light'), root])).toBe('#6b2fa0');
-    expect(resolveToken('--wave-primary', [themeDecls('dark'), root])).toBe('#c89ef0');
+    expect(resolveToken('--wave-primary', [themeDecls('light'), root])).toBe('#0f6cbd');
+    expect(resolveToken('--wave-accent', [themeDecls('light'), root])).toBe('#0f6cbd');
+    expect(resolveToken('--wave-primary', [themeDecls('dark'), root])).toBe('#62abf5');
   });
 
   it('re-themes when a consumer overrides a --wave-brand-* token', () => {
@@ -855,10 +895,8 @@ describe('tokens.css — color-scheme (repo-level#11)', () => {
     expect(colorSchemeFor('.wave-high-contrast')).toEqual(['dark']);
   });
 
-  it('never sets color-scheme on :root or on the deprecated .dark/.high-contrast aliases', () => {
+  it('never sets color-scheme on :root', () => {
     expect(colorSchemeFor(':root')).toEqual([]);
-    expect(colorSchemeFor('.dark')).toEqual([]);
-    expect(colorSchemeFor('.high-contrast')).toEqual([]);
   });
 });
 
@@ -952,41 +990,59 @@ describe('tokens.css — Tailwind mapping (@theme inline)', () => {
     return declarations(themeBlock().children ?? []);
   }
 
-  it('uses @theme inline', () => {
+  function internalDeclarations(): Decls {
+    return declarations(internalThemeBlock().children ?? []);
+  }
+
+  it('uses @theme inline for the namespaced keys and @theme inline reference internally', () => {
     expect(themeBlock().prelude).toMatch(/^@theme\s+inline$/);
+    // `reference`: a build with Tailwind's prefix emits none of the internal keys (spec R6).
+    expect(themeBlocks('theme.css').map((node) => node.prelude)).toEqual([
+      '@theme inline reference',
+    ]);
   });
 
-  it('maps every token to a --color-* utility color', () => {
+  it('maps every token to a --color-wave-* key for apps and a --color-* key internally', () => {
     const decls = themeDeclarations();
+    const internal = internalDeclarations();
     for (const token of Object.keys(TOKENS)) {
-      expect(decls.get(`--color-${token}`)).toBe(`var(--wave-${token})`);
+      expect(decls.get(`--color-wave-${token}`), token).toBe(`var(--wave-${token})`);
+      expect(internal.get(`--color-${token}`), token).toBe(`var(--wave-${token})`);
     }
   });
 
-  it('exposes the brand ramp as --color-brand-*', () => {
+  it('exposes the brand ramp as --color-wave-brand-* (and --color-brand-* internally)', () => {
     const decls = themeDeclarations();
+    const internal = internalDeclarations();
     for (const step of Object.keys(BRAND_RAMP)) {
-      expect(decls.get(`--color-brand-${step}`)).toBe(`var(--wave-brand-${step})`);
+      expect(decls.get(`--color-wave-brand-${step}`)).toBe(`var(--wave-brand-${step})`);
+      expect(internal.get(`--color-brand-${step}`)).toBe(`var(--wave-brand-${step})`);
     }
   });
 
   it('maps font-wave to the runtime font token and keeps the type ramp and shadows', () => {
-    const decls = themeDeclarations();
-    expect(decls.get('--font-wave')).toBe('var(--wave-font-family)');
-    expect(decls.get('--font-wave-mono')).toBe('var(--wave-font-family-monospace)');
-    expect(decls.get('--font-wave-numeric')).toBe('var(--wave-font-family-numeric)');
-    expect(decls.get('--text-body-1')).toBe('14px');
-    expect(decls.get('--text-body-1--line-height')).toBe('20px');
-    expect(decls.get('--text-display')).toBe('68px');
-    for (const size of ['2', '4', '8', '16', '28', '64']) {
-      expect(decls.has(`--shadow-${size}`)).toBe(true);
+    for (const [decls, ns] of [
+      [themeDeclarations(), 'wave-'],
+      [internalDeclarations(), ''],
+    ] as const) {
+      expect(decls.get('--font-wave')).toBe('var(--wave-font-family)');
+      expect(decls.get('--font-wave-mono')).toBe('var(--wave-font-family-monospace)');
+      expect(decls.get('--font-wave-numeric')).toBe('var(--wave-font-family-numeric)');
+      expect(decls.get(`--text-${ns}body-1`)).toBe('14px');
+      expect(decls.get(`--text-${ns}body-1--line-height`)).toBe('20px');
+      expect(decls.get(`--text-${ns}display`)).toBe('68px');
+      for (const size of ['2', '4', '8', '16', '28', '64']) {
+        expect(decls.has(`--shadow-${ns}${size}`)).toBe(true);
+      }
     }
   });
 
   it('does not override Tailwind radius or font-sans defaults (repo-level#7, repo-level#8)', () => {
-    const source = stripComments(readCss('tokens.css'));
-    expect(source).not.toMatch(/--radius/);
-    expect(source).not.toMatch(/--font-sans/);
+    for (const name of ['tokens.css', 'theme.css']) {
+      const source = stripComments(readCss(name));
+      expect(source, name).not.toMatch(/--radius/);
+      expect(source, name).not.toMatch(/--font-sans/);
+    }
   });
 
   it('declares the animation tokens (repo-level#6, repo-level#12, repo-level#13)', () => {
@@ -1028,8 +1084,101 @@ describe('tokens.css — Tailwind mapping (@theme inline)', () => {
   });
 });
 
+describe('the namespaced theme keys (1.0, spec R6): parity with the internal theme', () => {
+  /** The prefixes of a namespaced key: the Wave namespace sits right after the theme namespace. */
+  const NAMESPACED = /^--(?:color|text|shadow|font|transition-duration|ease|animate)-wave(?:-|$)/;
+
+  /** The internal key a namespaced key stands for (`--color-wave-primary` → `--color-primary`). */
+  function internalKey(key: string): string {
+    return key.replace(/^--(color|text|shadow)-wave-/, '--$1-');
+  }
+
+  /** The declarations (not the keyframes) of a block. */
+  function keys(block: CssNode): Decls {
+    return declarations(block.children ?? []);
+  }
+
+  /** The keyframes of a block, each as its name and its serialised steps. */
+  function keyframes(block: CssNode): Map<string, string> {
+    const text = (nodes: CssNode[]): string =>
+      nodes
+        .map((node) =>
+          node.children === null ? `${node.prelude};` : `${node.prelude}{${text(node.children)}}`,
+        )
+        .join('');
+    return new Map(
+      (block.children ?? [])
+        .filter((node) => node.prelude.startsWith('@keyframes'))
+        .map((node) => [node.prelude, text(node.children ?? [])]),
+    );
+  }
+
+  it('namespaces every key apps get: --color-wave-*, --text-wave-*, --shadow-wave-* and the rest', () => {
+    const plain = [...keys(themeBlock()).keys()].filter((key) => !NAMESPACED.test(key));
+    expect(plain).toEqual([]);
+  });
+
+  it('maps every namespaced key one to one to an internal key, with the same value', () => {
+    const namespaced = keys(themeBlock());
+    const internal = keys(internalThemeBlock());
+    const asInternal = new Map([...namespaced].map(([key, value]) => [internalKey(key), value]));
+    expect(asInternal.size).toBe(namespaced.size);
+    expect(Object.fromEntries(asInternal)).toEqual(Object.fromEntries(internal));
+    // The order follows too, so the two files read side by side.
+    expect([...asInternal.keys()]).toEqual([...internal.keys()]);
+  });
+
+  it('declares the same keyframes in both', () => {
+    const namespaced = keyframes(themeBlock());
+    expect([...namespaced.keys()]).toEqual([
+      '@keyframes wave-spin',
+      '@keyframes wave-pulse',
+      '@keyframes wave-indeterminate',
+      '@keyframes wave-indeterminate-rtl',
+    ]);
+    expect(Object.fromEntries(namespaced)).toEqual(
+      Object.fromEntries(keyframes(internalThemeBlock())),
+    );
+  });
+
+  it('reads only --wave-* tokens that tokens.css declares; the literals are the type ramp and the animations', () => {
+    const declared = new Set([
+      ...rootConstants().keys(),
+      ...THEMES.flatMap((theme) => [...themeDecls(theme).keys()]),
+    ]);
+    for (const block of [themeBlock(), internalThemeBlock()]) {
+      for (const [key, value] of keys(block)) {
+        const read = [...value.matchAll(/var\((--[\w-]+)\)/g)].map((match) => match[1]);
+        if (/^--(text|animate)-/.test(key)) {
+          expect(read, key).toEqual([]);
+          continue;
+        }
+        expect(value, key).toMatch(/^var\(--wave-[\w-]+\)$/);
+        expect(
+          read.filter((name) => !declared.has(name)),
+          key,
+        ).toEqual([]);
+      }
+    }
+  });
+
+  it('declares one @theme block in tokens.css, with no unnamespaced key (the transitional block went with the precompiled ./tailwind)', () => {
+    // The unnamespaced keys of 0.x (`bg-primary`, `text-body-1`, `shadow-4`) are theme.css's
+    // only: `./tailwind` imports the precompiled dist/components.css and generates nothing from
+    // dist, so an app's Tailwind build gets the namespaced keys alone (spec R6 of Phase 14).
+    expect(themeBlocks('tokens.css').map((node) => node.prelude)).toEqual(['@theme inline']);
+    const plain = [
+      ...declarations(themeBlocks('tokens.css').flatMap((node) => node.children ?? [])),
+    ]
+      .map(([key]) => key)
+      .filter((key) => !NAMESPACED.test(key));
+    expect(plain).toEqual([]);
+    expect(stripComments(readCss('tokens.css'))).not.toMatch(/--color-background\s*:/);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
-// base.css, animations.css (button-provider#2, repo-level#7, repo-level#12)
+// base.css, reduced motion (button-provider#2, repo-level#7, repo-level#12)
 // ---------------------------------------------------------------------------------------------
 
 describe('base.css — scoped base (button-provider#2, repo-level#7)', () => {
@@ -1169,12 +1318,7 @@ describe('base.css — scoped base (button-provider#2, repo-level#7)', () => {
   });
 });
 
-describe('animations.css (repo-level#12)', () => {
-  it('is empty: keyframes live in @theme and there is no global reduced-motion override', () => {
-    expect(parseFile('animations.css')).toEqual([]);
-    expect(readCss('animations.css')).toMatch(/deprecated/i);
-  });
-
+describe('reduced motion (repo-level#12)', () => {
   it('no style entry carries a global `*` reduced-motion reset', () => {
     expect(CSS_FILE_NAMES).toContain('tokens.css');
     for (const name of CSS_FILE_NAMES) {
@@ -1194,10 +1338,23 @@ function statements(name: string): string[] {
 }
 
 /**
+ * styles.css as an unprefixed project writes it, 0.x's form: the real file without Wave's utility
+ * prefix. The fixtures of the prefix-independent assertions use it (a fixture project without
+ * src/lib/cn.ts runs none of the prefix gates); the real entries are compiled prefixed below.
+ */
+function unprefixedStylesCss(): string {
+  const css = readCss('styles.css');
+  if (css.split(' prefix(wave)').length !== 2)
+    throw new Error('styles.css: no single prefix(wave)');
+  return css.replace(' prefix(wave)', '').replaceAll('wave:', '');
+}
+
+/**
  * Tailwind utilities that no component uses as a class, but whose names occur in the library
- * sources as words of comments, identifiers or non-class strings. styles.css
- * excludes them, so the unlayered precompiled file never restyles an app's own `.collapse`,
- * `.container` or `.table`.
+ * sources as words of comments, identifiers or non-class strings. Through 0.x styles.css excluded
+ * them (`@source not inline()`), so the unlayered precompiled file never restyled an app's own
+ * `.collapse`, `.container` or `.table`; with Wave's utility prefix (1.0) no unprefixed word
+ * generates, and none of them ships in either form.
  */
 const EXCLUDED_WORDS = [
   'blur',
@@ -1225,9 +1382,10 @@ const EXCLUDED_WORDS = [
 ];
 
 describe('style entries (repo-level#1)', () => {
-  it('styles.css builds the unlayered precompiled CSS with pinned sources, utilities last', () => {
+  it('styles.css builds the unlayered, prefixed precompiled CSS with pinned sources, utilities last', () => {
     expect(statements('styles.css')).toEqual([
-      "@import 'tailwindcss/theme.css' theme(inline)",
+      "@import 'tailwindcss/theme.css' theme(inline) prefix(wave)",
+      "@import './theme.css'",
       "@import './tokens.css'",
       "@import './base.css'",
       "@import './variants.css'",
@@ -1236,20 +1394,51 @@ describe('style entries (repo-level#1)', () => {
       "@source '../lib'",
       "@source not '../components/**/__tests__'",
       "@source not '../lib/**/__tests__'",
-      "@source inline('animate-wave-spin animate-wave-spin-slow animate-wave-pulse animate-wave-indeterminate animate-wave-indeterminate-rtl')",
-      `@source not inline('${EXCLUDED_WORDS.join(' ')}')`,
+      "@source inline('wave:animate-wave-spin wave:animate-wave-spin-slow wave:animate-wave-pulse wave:animate-wave-indeterminate wave:animate-wave-indeterminate-rtl')",
     ]);
     expect(parseFile('styles.css').filter((node) => node.children !== null)).toEqual([]);
     expect(readCss('styles.css')).not.toMatch(/layer\(/);
   });
 
-  it('tailwind.css joins the consumer layer order, defines wave-rtl and scans dist', () => {
+  it('theme.css is internal: only the build input styles.css imports it, no export names it', () => {
+    const importers = CSS_FILE_NAMES.filter((name) =>
+      statements(name).some((statement) => /^@import '\.\/theme\.css'/.test(statement)),
+    );
+    expect(importers).toEqual(['styles.css']);
+    expect(statements('theme.css')).toEqual([]);
+    const manifest = JSON.parse(
+      readFileSync(join(import.meta.dirname, '..', '..', '..', 'package.json'), 'utf8'),
+    ) as { exports: Record<string, unknown> };
+    const targets = Object.entries(manifest.exports).flatMap(([subpath, target]) => [
+      subpath,
+      ...(typeof target === 'string' ? [target] : Object.values(target as object).map(String)),
+    ]);
+    expect(targets.filter((value) => value.includes('theme.css'))).toEqual([]);
+  });
+
+  it('tailwind.css declares the layer order, layers tokens, base and the precompiled utilities, defines wave-rtl and scans nothing', () => {
+    // The corrected form of spec §6, Task 1 (Phase 14): tokens in `theme` and base in `base`, so
+    // an app's layered token overrides and `@layer base` element styles win over Wave's, and the
+    // components' precompiled utilities alone (dist/components.css) in `components`.
     expect(statements('tailwind.css')).toEqual([
+      '@layer theme, base, components, utilities',
       "@import './tokens.css' layer(theme)",
       "@import './base.css' layer(base)",
       "@import './variants.css'",
-      "@source '../../dist'",
+      "@import '../../dist/components.css' layer(components)",
     ]);
+    expect(parseFile('tailwind.css').filter((node) => node.children !== null)).toEqual([]);
+    expect(stripComments(readCss('tailwind.css'))).not.toMatch(/@source/);
+  });
+
+  it('utilities.css is the build input of dist/utilities.css: the token keys as a reference, Tailwind utilities unlayered, no sources', () => {
+    // scripts/build-css.mjs appends the `@source inline()` list it generates from tokens.css.
+    // Unlayered (ruling BL): a layered class would lose to the base styles of styles.css.
+    expect(statements('utilities.css')).toEqual([
+      "@import './tokens.css' reference",
+      "@import 'tailwindcss/utilities.css' source(none)",
+    ]);
+    expect(parseFile('utilities.css').filter((node) => node.children !== null)).toEqual([]);
   });
 
   it('preflight.css is an opt-in, unlayered Preflight entry', () => {
@@ -1257,6 +1446,8 @@ describe('style entries (repo-level#1)', () => {
   });
 
   it('globals.css is the dev entry mirroring the Tailwind consumer path', () => {
+    // For the app's own classes: an unprefixed build compiles none of the components' prefixed
+    // classes, so it imports no internal theme.css (its keys would give the app `bg-primary`).
     expect(statements('globals.css')).toEqual([
       "@import 'tailwindcss'",
       "@import './tokens.css' layer(theme)",
@@ -1302,110 +1493,6 @@ describe('style entries (repo-level#1)', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// legacy-tokens.css (repo-level#7): opt-in, deprecated, read + write compatible, cycle-free
-// ---------------------------------------------------------------------------------------------
-
-describe('legacy-tokens.css (repo-level#7)', () => {
-  const NESTED_LIGHT = ':where(.wave-dark, .dark, .wave-high-contrast, .high-contrast) .wave-light';
-
-  function legacyNodes(): CssNode[] {
-    return parseFile('legacy-tokens.css');
-  }
-
-  /** Declarations applying to an element with the given selectors: tokens.css, then legacy. */
-  function elementDecls(selectors: string[], extra: Decls = new Map()): Decls {
-    return merge(
-      declsMatching(tokensNodes(), selectors),
-      declsMatching(legacyNodes(), selectors),
-      extra,
-    );
-  }
-
-  /** `<html>` (`:root`), optionally with consumer overrides loaded after Wave. */
-  function htmlScope(consumer: Decls = new Map()): Decls {
-    return elementDecls([':root'], consumer);
-  }
-
-  const providerSelectors = PROVIDER_SELECTORS;
-
-  it('declares the 0.4 ramp names as literal constants (no var(), no cycle)', () => {
-    const root = declsMatching(legacyNodes(), [':root']);
-    for (const [step, hex] of Object.entries(BRAND_RAMP)) {
-      expect(root.get(`--brand-${step}`)).toBe(hex);
-    }
-    for (const [step, hex] of Object.entries(GREY_RAMP)) {
-      expect(root.get(`--grey-${step}`)).toBe(hex);
-    }
-    expect(stripComments(readCss('legacy-tokens.css'))).not.toMatch(
-      /--(brand|grey)-\d+\s*:\s*var\(/,
-    );
-  });
-
-  it.each(THEMES)('re-declares every 0.4 semantic name for the %s theme', (theme) => {
-    const decls =
-      theme === 'light'
-        ? declsMatching(legacyNodes(), [':root'])
-        : declsMatching(legacyNodes(), providerSelectors[theme]);
-    const missing = LEGACY_SEMANTIC_NAMES.filter((name) => !decls.has(`--${name}`));
-    expect(missing).toEqual([]);
-  });
-
-  it('re-declares the light 0.4 names on a light subtree nested inside another theme', () => {
-    const nested = declsMatching(legacyNodes(), [NESTED_LIGHT]);
-    expect(LEGACY_SEMANTIC_NAMES.filter((name) => !nested.has(`--${name}`))).toEqual([]);
-  });
-
-  it('points every matching --wave-* semantic at its 0.4 name in every theme group', () => {
-    for (const theme of THEMES) {
-      const decls = declsMatching(legacyNodes(), providerSelectors[theme]);
-      for (const name of LEGACY_SEMANTIC_NAMES) {
-        expect(decls.get(`--wave-${name}`), `${theme} --wave-${name}`).toBe(`var(--${name})`);
-      }
-    }
-  });
-
-  it.each(THEMES)('is cycle-free and keeps every %s token value', (theme) => {
-    const html = htmlScope();
-    const scopes = theme === 'light' ? [html] : [elementDecls(providerSelectors[theme]), html];
-    const column = THEMES.indexOf(theme);
-    for (const [token, values] of Object.entries(TOKENS)) {
-      expect(resolveToken(`--wave-${token}`, scopes), `${theme} ${token}`).toBe(values[column]);
-    }
-    for (const [name] of elementDecls(theme === 'light' ? [':root'] : providerSelectors[theme])) {
-      expect(() => resolveToken(name, scopes)).not.toThrow();
-    }
-  });
-
-  it('keeps the light values in a light provider nested in a dark one', () => {
-    const html = htmlScope();
-    const dark = elementDecls(providerSelectors.dark);
-    const nestedLight = elementDecls(['.wave-light', NESTED_LIGHT]);
-    for (const [token, values] of Object.entries(TOKENS)) {
-      expect(resolveToken(`--wave-${token}`, [nestedLight, dark, html]), token).toBe(values[0]);
-    }
-  });
-
-  it('a 0.4 override on :root still reaches a top-level light provider (write compatibility)', () => {
-    const html = htmlScope(new Map([['--primary', '#6b2fa0']]));
-    const provider = elementDecls(providerSelectors.light);
-    expect(resolveToken('--wave-primary', [provider, html])).toBe('#6b2fa0');
-    expect(resolveToken('--wave-accent', [provider, html])).toBe('#6b2fa0');
-  });
-
-  it('a 0.4 override on .dark still reaches a dark provider (write compatibility)', () => {
-    const provider = elementDecls(providerSelectors.dark, new Map([['--primary', '#c89ef0']]));
-    expect(resolveToken('--wave-primary', [provider, htmlScope()])).toBe('#c89ef0');
-  });
-
-  it('never sets color-scheme or a style property (variables only)', () => {
-    const names = styleRules(legacyNodes()).flatMap((rule) => [
-      ...declarations(rule.children ?? []).keys(),
-    ]);
-    expect(names.filter((name) => !name.startsWith('--'))).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------------------------
 // scripts/build-css.mjs — the dist gate's own assertions (repo-level#1)
 // ---------------------------------------------------------------------------------------------
 
@@ -1441,6 +1528,19 @@ interface BuildCss {
     options: { tokensCss: string; baseCss: string; storySources?: StorySources },
   ): string[];
   assertPreflightCss(css: string): string[];
+  assertComponentsCss(
+    css: string,
+    options: { stylesCss?: string; tokensCss: string; baseCss: string },
+  ): string[];
+  assertUtilitiesCss(
+    css: string,
+    options: { tokensCss: string; baseCss?: string; stylesCss?: string },
+  ): string[];
+  componentsSource(stylesCss: string): string;
+  namespacedUtilities(tokensCss: string): string[];
+  utilitiesSource(utilitiesCss: string, tokensCss: string): string;
+  OUTPUTS: string[];
+  parseCss(css: string): CssNode[];
   selectorClasses(css: string): Set<string>;
   selectorList(prelude: string): string[];
   expandBraces(pattern: string): string[];
@@ -1471,6 +1571,98 @@ const VERIFY_DIST_PATH = join(dirname(BUILD_CSS_PATH), 'verify-dist.mjs');
 
 async function loadEntryGuard(): Promise<EntryGuard> {
   return (await import(/* @vite-ignore */ pathToFileURL(VERIFY_DIST_PATH).href)) as EntryGuard;
+}
+
+/**
+ * The report of a passing build-css run whose outputs are in `dir` (a regular expression source:
+ * `'dist'`, or `String.raw\`\S+\`` for any directory): every output with its size, in order. With
+ * `compileCheckPassed` (a project whose src/lib/cn.ts sets `UTILITY_PREFIX` to `wave`: this
+ * repository, or the copy of the real style entries), the line of the passed compile check comes
+ * first; a fixture project without src/lib/cn.ts prints none.
+ */
+function passingReport(dir: string, { compileCheckPassed = false } = {}): RegExp {
+  const file = (name: string) => `${dir}\\/${name.replace('.', '\\.')} \\([\\d.]+ kB\\)`;
+  const check = compileCheckPassed
+    ? 'build-css: compile check passed \\(prefix wave: \\d+ class words in \\d+ files, ' +
+      '\\d+ allowlisted pairs\\)\\n'
+    : '';
+  return new RegExp(
+    `^${check}build-css: ${file('styles.css')}, ${file('components.css')}, ` +
+      `${file('utilities.css')} and ${file('preflight.css')} OK$`,
+  );
+}
+
+type Specificity = [number, number, number];
+
+/**
+ * The specificity of one complex selector (Selectors Level 4): `:where()` counts nothing, `:is()`,
+ * `:not()` and `:has()` their most specific argument, any other functional pseudo-class one class
+ * (its argument ignored), and the legacy one-colon pseudo-elements a minifier writes
+ * (`:before`) an element.
+ */
+function specificity(selector: string): Specificity {
+  let text = selector.replace(/\\./g, 'x');
+  const total: Specificity = [0, 0, 0];
+  const add = ([a, b, c]: Specificity) => {
+    total[0] += a;
+    total[1] += b;
+    total[2] += c;
+  };
+  for (let match = /::?([\w-]+)\(/.exec(text); match; match = /::?([\w-]+)\(/.exec(text)) {
+    let end = match.index + match[0].length;
+    for (let depth = 1; depth > 0; end++) {
+      if (text[end] === '(') depth++;
+      else if (text[end] === ')') depth--;
+    }
+    const name = match[1];
+    if (['is', 'not', 'has'].includes(name)) {
+      const args = selectorList(text.slice(match.index + match[0].length, end - 1));
+      add(args.map(specificity).reduce((a, b) => (compareSpecificity(a, b) >= 0 ? a : b)));
+    } else if (name !== 'where') {
+      add(match[0].startsWith('::') ? [0, 0, 1] : [0, 1, 0]);
+    }
+    text = text.slice(0, match.index) + text.slice(end);
+  }
+  for (const [token] of text.matchAll(/#[\w-]+|\.[\w-]+|\[[^\]]*\]|::?[\w-]+|[a-z][\w-]*/gi)) {
+    if (token.startsWith('#')) add([1, 0, 0]);
+    else if (token.startsWith('.') || token.startsWith('[')) add([0, 1, 0]);
+    else if (token.startsWith('::')) add([0, 0, 1]);
+    else if (token.startsWith(':')) {
+      add(/^:(before|after|first-line|first-letter)$/.test(token) ? [0, 0, 1] : [0, 1, 0]);
+    } else add([0, 0, 1]);
+  }
+  return total;
+}
+
+function compareSpecificity(a: Specificity, b: Specificity): number {
+  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+}
+
+/**
+ * A utilities.css that passes the gate for `tokensCss`: every class `namespacedUtilities`
+ * generates, unlayered, with Tailwind's `properties` fallback and the keyframes of tokens.css's
+ * `@theme` block.
+ */
+async function utilitiesCssFor(tokensCss: string): Promise<string> {
+  const { namespacedUtilities, parseCss } = await loadBuildCss();
+  const text = (nodes: CssNode[]): string =>
+    nodes
+      .map((node) =>
+        node.children === null ? `${node.prelude};` : `${node.prelude}{${text(node.children)}}`,
+      )
+      .join('');
+  const keyframes = parseCss(tokensCss)
+    .filter((node) => /^@theme\b/.test(node.prelude))
+    .flatMap((node) => node.children ?? [])
+    .filter((node) => node.prelude.startsWith('@keyframes'));
+  return (
+    '@layer properties{@supports ((-webkit-hyphens:none)){*,:before,:after{--tw-ring-color:initial}}}' +
+    namespacedUtilities(tokensCss)
+      .map((name) => `.${name}{color:red}`)
+      .join('') +
+    '@property --tw-ring-color{syntax:"*";inherits:false}' +
+    text(keyframes)
+  );
 }
 
 describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
@@ -1524,6 +1716,17 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
 
   it('passes a stylesheet that satisfies every assertion', async () => {
     expect(await gate(GATE_CSS)).toEqual([]);
+  });
+
+  it('fails on a rule of the theme classes 1.0 removed (.dark, .high-contrast)', async () => {
+    const removed = ':where(.dark,.high-contrast) .wave-light{--wave-primary:#0f6cbd}';
+    expect(await gate(GATE_CSS + removed)).toEqual([
+      'styles.css: selects the theme classes 1.0 removed (.dark, .high-contrast); the themes are ' +
+        '.wave-light, .wave-dark and .wave-high-contrast',
+    ]);
+    // The wave-* classes, and Tailwind's media-based dark variant, are not those classes.
+    const kept = String.raw`.wave-dark{color-scheme:dark}@media (prefers-color-scheme:dark){.dark\:bg-primary{background-color:var(--wave-primary)}}`;
+    expect(await gate(GATE_CSS + kept)).toEqual([]);
   });
 
   describe('escaped characters in class names', () => {
@@ -1723,7 +1926,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       // tokens.css names the motion-reduce:* classes in a comment; that must not exempt them.
       const { styleEntryClasses } = await loadBuildCss();
       const libraryClasses = styleEntryClasses({
-        stylesCss: readCss('styles.css'),
+        stylesCss: unprefixedStylesCss(),
         tokensCss: readCss('tokens.css'),
         baseCss: readCss('base.css'),
       });
@@ -1918,7 +2121,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
         tokensCss: [
           '/* .border-b-2 */',
           ':root, .wave-light { --wave-primary: #0f6cbd; }',
-          '.wave-dark, .dark { color-scheme: dark; }',
+          '.wave-dark, .wave-high-contrast { color-scheme: dark; }',
           '@theme inline { --color-primary: var(--wave-primary);',
           '  @keyframes wave-pulse { 33.3% { opacity: 1; } } }',
         ].join('\n'),
@@ -1930,13 +2133,13 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           'animate-wave-spin',
           'bg-primary-hover',
           'bg-primary-pressed',
-          'dark',
           'hover:bg-primary-hover',
           'hover:bg-primary-pressed',
           'm-0',
           'm-4',
           'm-8',
           'wave-dark',
+          'wave-high-contrast',
           'wave-light',
           'wave-portal',
           'wave-root',
@@ -1953,7 +2156,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           baseCss: readCss('base.css'),
         }),
       ];
-      for (const name of ['animate-wave-spin-slow', 'animate-wave-indeterminate-rtl']) {
+      for (const name of ['wave:animate-wave-spin-slow', 'wave:animate-wave-indeterminate-rtl']) {
         expect(classes).toContain(name);
       }
       for (const name of ['wave-light', 'wave-dark', 'wave-high-contrast', 'wave-root']) {
@@ -2060,6 +2263,20 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       );
     }
 
+    /**
+     * dist/styles.css as {@link shippedCss} and dist/components.css as the CLI emits it from the
+     * same sources: the same CSS without the rules of tokens.css and base.css.
+     */
+    function writeDist(extra: string) {
+      const isTheme = (node: CssNode) => /^@theme\b/.test(node.prelude);
+      const keyframes = parseFile('tokens.css')
+        .filter(isTheme)
+        .flatMap((node) => node.children ?? [])
+        .filter((node) => node.prelude.startsWith('@keyframes'));
+      write('dist/styles.css', shippedCss(extra));
+      write('dist/components.css', UTILITIES.join('') + serialize(keyframes) + extra);
+    }
+
     /** Runs main() and returns its exit code and everything it printed. */
     async function run(argv: string[]): Promise<{ code: number; output: string }> {
       const { main } = await loadBuildCss();
@@ -2075,11 +2292,14 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       }
     }
 
-    beforeAll(() => {
+    beforeAll(async () => {
       project = mkdtempSync(join(tmpdir(), 'wave-build-css-project-'));
-      for (const name of ['styles.css', 'tokens.css', 'base.css']) {
+      // An unprefixed project (no src/lib/cn.ts, so no prefix gate): styles.css without the prefix.
+      write('src/styles/styles.css', unprefixedStylesCss());
+      for (const name of ['tokens.css', 'base.css']) {
         write(`src/styles/${name}`, readCss(name));
       }
+      write('dist/utilities.css', await utilitiesCssFor(readCss('tokens.css')));
       write(
         'src/components/Box.tsx',
         "/** Keeps its container. */\nexport const box = cn('bg-primary text-body-1');\n" +
@@ -2104,12 +2324,51 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       // story-only class that did not ship.
       write('stories/Box.stories.tsx', '<i className="bg-primary w-20 wave-dark" />;\n');
       write('stories/Notes.mdx', '<i className="h-96" />\n');
-      write('dist/styles.css', shippedCss('.w-20{width:5rem}'));
+      writeDist('.w-20{width:5rem}');
       const { code, output } = await run(['--check-only']);
-      expect(output).toMatch(
-        /^build-css: dist\/styles\.css \([\d.]+ kB\) and dist\/preflight\.css \([\d.]+ kB\) OK$/,
-      );
+      expect(output).toMatch(passingReport('dist'));
       expect(code).toBe(0);
+    });
+
+    it('checks components.css and utilities.css next to styles.css', async () => {
+      write('stories/Box.stories.tsx', '<i className="bg-primary" />;\n');
+      write('stories/Notes.mdx', '\n');
+      writeDist('');
+      const utilities = readFileSync(join(project, 'dist/utilities.css'), 'utf8');
+      // components.css without a utility of styles.css, with a token rule; utilities.css without
+      // one of its classes.
+      write(
+        'dist/components.css',
+        readFileSync(join(project, 'dist/components.css'), 'utf8').replace(UTILITIES[1], '') +
+          '.wave-light{color-scheme:light}',
+      );
+      write('dist/utilities.css', utilities.replace('.bg-wave-primary{color:red}', ''));
+      try {
+        const { code, output } = await run(['--check-only']);
+        expect(output.split('\n')).toEqual([
+          'build-css: 3 problem(s) in dist:',
+          '  - components.css: holds rules of tokens.css or base.css (.wave-light)',
+          expect.stringMatching(
+            /^ {2}- components\.css: is not styles\.css without the rules of tokens\.css and base\.css \(\d+ nodes for \d+; the first difference, node \d+: "\.animate-wave-spin\{/,
+          ),
+          expect.stringMatching(
+            /^ {2}- utilities\.css: missing 1 of the \d+ namespaced utilities \(bg-wave-primary\)$/,
+          ),
+        ]);
+        expect(code).toBe(1);
+      } finally {
+        write('dist/utilities.css', utilities);
+      }
+    });
+
+    it('fails when components.css or utilities.css is missing', async () => {
+      writeDist('');
+      rmSync(join(project, 'dist/components.css'));
+      const { code, output } = await run(['--check-only']);
+      expect(output.split('\n')).toEqual([
+        `build-css: ${join(project, 'dist', 'components.css')} does not exist (run without --check-only to build it)`,
+      ]);
+      expect(code).toBe(1);
     });
 
     it('fails on classes that only a comment or a non-TypeScript library file names', async () => {
@@ -2117,7 +2376,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       // container: a word of a comment in Box.tsx.
       write('stories/Box.stories.tsx', '<i className="bg-primary w-96" />;\n');
       write('stories/Notes.mdx', '\n');
-      write('dist/styles.css', shippedCss('.w-96{width:24rem}.container{width:100%}'));
+      writeDist('.w-96{width:24rem}.container{width:100%}');
       const { code, output } = await run(['--check-only']);
       expect(output.split('\n')).toEqual([
         'build-css: 1 problem(s) in dist:',
@@ -2136,12 +2395,9 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
         '<i className="bg-primary motion-reduce:animate-none w-7" />;\n',
       );
       write('stories/Notes.mdx', '<i className="h-7" />\n');
-      write(
-        'dist/styles.css',
-        shippedCss(
-          String.raw`.h-7{height:1.75rem}.w-7{width:1.75rem}` +
-            String.raw`@media (prefers-reduced-motion:reduce){.motion-reduce\:animate-none{animation:none}}`,
-        ),
+      writeDist(
+        String.raw`.h-7{height:1.75rem}.w-7{width:1.75rem}` +
+          String.raw`@media (prefers-reduced-motion:reduce){.motion-reduce\:animate-none{animation:none}}`,
       );
       const { code, output } = await run(['--check-only', '--out-dir', join(project, 'dist')]);
       expect(output.split('\n')).toEqual([
@@ -2158,14 +2414,22 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
      * under the repository's node_modules/.cache, so `tailwindcss/*.css` resolves as it does here.
      */
     const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
+    /** The motion representatives as the library writes them, with Wave's utility prefix. */
+    const WAVE_MOTION_CLASSES = MOTION_CLASSES.split(' ')
+      .map((word) => `wave:${word}`)
+      .join(' ');
     const COMPONENT = [
       '/** A box that keeps its container in view; the chevron mirrors in RTL. */',
       'export function Box({ open, el }: { open: boolean; el: Element }) {',
       "  window.addEventListener('blur', close);",
       "  if (getComputedStyle(el).visibility === 'collapse') return null;",
-      "  return <i className={cn('bg-primary text-body-1 wave-rtl:-scale-x-100', open && 'grid')} />;",
+      '  return (',
+      '    <i',
+      "      className={wcn('wave:bg-primary wave:text-body-1 wave:wave-rtl:-scale-x-100', open && 'wave:grid')}",
+      '    />',
+      '  );',
       '}',
-      `export const fade = '${MOTION_CLASSES}';`,
+      `export const fade = '${WAVE_MOTION_CLASSES}';`,
       '',
     ].join('\n');
     let project = '';
@@ -2197,15 +2461,24 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       project = mkdtempSync(join(cache, 'wave-build-css-compile-'));
       for (const name of [
         'styles.css',
+        'theme.css',
         'tokens.css',
         'base.css',
         'variants.css',
         'preflight.css',
+        'utilities.css',
       ]) {
         write(`src/styles/${name}`, readCss(name));
       }
       write('src/components/Box.tsx', COMPONENT);
       write('stories/Box.stories.tsx', '<Box open />;\n');
+      // The prefix, as this repository declares it, so the compile check and the prefix gates run;
+      // the allowlist names the two words of Box's non-class strings.
+      write('src/lib/cn.ts', "export const UTILITY_PREFIX: string = 'wave';\n");
+      write(
+        'scripts/prefix-allowlist.json',
+        `${JSON.stringify({ 'src/components/Box.tsx': ['blur', 'collapse'] })}\n`,
+      );
     });
 
     afterAll(() => {
@@ -2216,40 +2489,198 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       const { code, output, css } = await build();
       const { selectorClasses, missingDirectionVariant } = await loadBuildCss();
       const classes = selectorClasses(css);
+      // With the prefix no unprefixed word generates: no exclusion list is needed.
+      expect(readCss('styles.css')).not.toMatch(/@source not inline/);
       for (const word of ['container', 'blur', 'collapse', 'visible']) {
         expect(classes, word).not.toContain(word);
+        expect(classes, word).not.toContain(`wave:${word}`);
       }
       for (const name of [
-        'bg-primary',
-        'text-body-1',
-        'grid',
-        'wave-rtl:-scale-x-100',
-        ...MOTION_CLASSES.split(' '),
+        'wave:bg-primary',
+        'wave:text-body-1',
+        'wave:grid',
+        'wave:wave-rtl:-scale-x-100',
+        ...WAVE_MOTION_CLASSES.split(' '),
       ]) {
         expect(classes, name).toContain(name);
       }
-      expect(missingDirectionVariant(css, ['wave-rtl:-scale-x-100'])).toEqual([]);
-      expect(output).toMatch(/^build-css: dist\/styles\.css \([\d.]+ kB\) and .* OK$/);
+      expect(missingDirectionVariant(css, ['wave:wave-rtl:-scale-x-100'])).toEqual([]);
+      expect(output).toMatch(passingReport('dist', { compileCheckPassed: true }));
       expect(code).toBe(0);
     }, 60_000);
 
-    it('fails on a comment word that styles.css does not exclude', async () => {
+    it('compiles components.css from styles.css without the tokens and the base, and utilities.css from the namespaced keys', async () => {
+      const { code } = await build();
+      expect(code).toBe(0);
+      const { selectorClasses, missingDirectionVariant, namespacedUtilities } =
+        await loadBuildCss();
+      const components = readFileSync(join(project, 'dist', 'components.css'), 'utf8');
+      const componentClasses = selectorClasses(components);
+      for (const name of [
+        'wave:bg-primary',
+        'wave:text-body-1',
+        'wave:grid',
+        'wave:wave-rtl:-scale-x-100',
+      ]) {
+        expect(componentClasses, name).toContain(name);
+      }
+      expect(missingDirectionVariant(components, ['wave:wave-rtl:-scale-x-100'])).toEqual([]);
+      // No token rule, no base rule: the classes of tokens.css and base.css are not there.
+      for (const name of ['wave-light', 'wave-dark', 'wave-high-contrast', 'wave-root']) {
+        expect(componentClasses, name).not.toContain(name);
+      }
+      expect(components).not.toMatch(/--wave-primary:/);
+      expect(components).toMatch(/@keyframes wave-spin\b/);
+
+      const utilities = readFileSync(join(project, 'dist', 'utilities.css'), 'utf8');
+      const expected = namespacedUtilities(readCss('tokens.css'));
+      expect([...selectorClasses(utilities)].sort()).toEqual(expected);
+      expect(expected).toEqual(
+        expect.arrayContaining(['bg-wave-primary', 'text-wave-body-1', 'shadow-wave-4']),
+      );
+      expect(utilities).toMatch(/\}\.animate-wave-indeterminate\{/);
+      expect(utilities).not.toMatch(/@layer utilities/);
+      expect(utilities).not.toMatch(/--wave-primary:/);
+    }, 60_000);
+
+    it('ships utilities.css unlayered, so its classes beat the base styles of styles.css inside the root (ruling BL)', async () => {
+      // The outputs are read whatever the gate says (it also fails on a layered utilities.css).
+      const { code } = await build();
+      const { parseCss } = await loadBuildCss();
+      /** Every style rule outside keyframes, with the `@layer` names around it. */
+      const rules = (nodes: CssNode[], layers: string[] = []): [CssNode, string[]][] =>
+        nodes.flatMap((node): [CssNode, string[]][] => {
+          if (node.children === null || node.prelude.startsWith('@keyframes')) return [];
+          if (!node.prelude.startsWith('@')) return [[node, layers]];
+          const layer = /^@layer\s+([\w-]+)$/.exec(node.prelude);
+          return rules(node.children, layer ? [...layers, layer[1]] : layers);
+        });
+      const properties = (rule: CssNode) =>
+        (rule.children ?? [])
+          .filter((node) => node.children === null && node.prelude.includes(':'))
+          .map((node) => node.prelude.slice(0, node.prelude.indexOf(':')).trim());
+      const read = (name: string) =>
+        rules(parseCss(readFileSync(join(project, 'dist', name), 'utf8')));
+
+      // The utility classes sit in no layer (Tailwind's `properties` fallback holds none).
+      const utilities = read('utilities.css').filter(([rule]) =>
+        selectorList(rule.prelude).some((selector) => selector.startsWith('.')),
+      );
+      expect(utilities.length).toBeGreaterThan(800);
+      expect(
+        utilities.filter(([, layers]) => layers.length > 0).map(([rule]) => rule.prelude),
+      ).toEqual([]);
+
+      // The base styles of styles.css for the elements inside the root and a portal: unlayered,
+      // zero-specificity resets (a native button's transparent background, inherited color and
+      // font, every element's border color).
+      const inside = /^:where\(\.wave-root, \.wave-portal\) /;
+      const base = read('styles.css').filter(([rule]) =>
+        selectorList(rule.prelude).every((selector) => inside.test(selector)),
+      );
+      expect(base.filter(([, layers]) => layers.length > 0)).toEqual([]);
+      /** The longhands a shorthand of base.css sets. */
+      const LONGHANDS: Record<string, string[]> = {
+        font: ['font-family', 'font-size', 'line-height', 'font-weight', 'font-style'],
+        border: ['border-color', 'border-width', 'border-style'],
+        background: ['background-color'],
+      };
+      const sets = (rule: CssNode) =>
+        new Set(properties(rule).flatMap((name) => [name, ...(LONGHANDS[name] ?? [])]));
+
+      // Every utility beats every base rule that sets a property it sets, by specificity alone.
+      const pairs: string[] = [];
+      const losers: string[] = [];
+      for (const [utility] of utilities) {
+        const own = properties(utility);
+        for (const [rule] of base) {
+          const reset = sets(rule);
+          const shared = own.filter((name) => reset.has(name));
+          if (shared.length === 0) continue;
+          for (const selector of selectorList(utility.prelude)) {
+            for (const target of selectorList(rule.prelude)) {
+              pairs.push(`${selector} ${shared.join(',')} / ${target}`);
+              if (compareSpecificity(specificity(selector), specificity(target)) <= 0) {
+                losers.push(`${selector} / ${target}`);
+              }
+            }
+          }
+        }
+      }
+      expect(losers).toEqual([]);
+      // The cases of the browser pass: a native button's background, color and font, and the
+      // border color of any element.
+      const button = ':where(.wave-root, .wave-portal) :where(button, input, select, textarea)';
+      const any = ':where(.wave-root, .wave-portal) :where(*)';
+      expect(pairs).toEqual(
+        expect.arrayContaining([
+          `.bg-wave-error background-color / ${button}`,
+          `.text-wave-foreground color / ${button}`,
+          `.text-wave-body-1 font-size,line-height / ${button}`,
+          `.font-wave font-family / ${button}`,
+          `.border-wave-stroke border-color / ${any}`,
+        ]),
+      );
+      expect(compareSpecificity(specificity('.bg-wave-error'), specificity(button))).toBe(1);
+      expect(code).toBe(0);
+    }, 60_000);
+
+    it('throws instead of shipping the tokens in components.css when styles.css renames their import', async () => {
+      const { main } = await loadBuildCss();
       write(
         'src/styles/styles.css',
-        readCss('styles.css').replace(/@source not inline\([^)]*\);/, ''),
+        readCss('styles.css').replace("@import './tokens.css';", '@import "./tokens.css" ;'),
       );
+      try {
+        // A double-quoted import with a space is still the plain statement: it builds.
+        expect((await build()).code).toBe(0);
+        // Another form is not recognised: the build stops before it writes any output.
+        rmSync(join(project, 'dist'), { recursive: true, force: true });
+        write(
+          'src/styles/styles.css',
+          readCss('styles.css').replace("@import './tokens.css';", "@import url('./tokens.css');"),
+        );
+        // The compile check runs first and reports; its line is the only output before the throw.
+        const printed: unknown[][] = [];
+        const error = vi
+          .spyOn(console, 'error')
+          .mockImplementation((...args) => printed.push(args));
+        const log = vi.spyOn(console, 'log').mockImplementation((...args) => printed.push(args));
+        try {
+          expect(() => main([], { projectRoot: project })).toThrow(
+            new Error(
+              "componentsSource: styles.css must @import './tokens.css' and './base.css' once " +
+                'each (found: base)',
+            ),
+          );
+        } finally {
+          error.mockRestore();
+          log.mockRestore();
+        }
+        expect(printed.map((args) => args.join(' ')).join('\n')).toMatch(
+          /^build-css: compile check passed \(prefix wave: \d+ class words in \d+ files, \d+ allowlisted pairs\)$/,
+        );
+        expect(existsSync(join(project, 'dist'))).toBe(true);
+        expect(existsSync(join(project, 'dist', 'styles.css'))).toBe(false);
+      } finally {
+        write('src/styles/styles.css', readCss('styles.css'));
+      }
+    }, 60_000);
+
+    it('fails on a prefixed class that only a comment names (an unprefixed one never generates)', async () => {
+      write('src/components/Box.tsx', `/** Sits in a wave:container box. */\n${COMPONENT}`);
       try {
         const { code, output, css } = await build();
         const { selectorClasses } = await loadBuildCss();
-        expect(selectorClasses(css)).toContain('container');
+        expect(selectorClasses(css)).toContain('wave:container');
         expect(output.split('\n')).toContain(
           '  - styles.css: contains classes that no class string of src/components or src/lib ' +
             'uses (words of comments, identifiers or other files; exclude them in ' +
-            'src/styles/styles.css with @source not inline()): container',
+            'src/styles/styles.css with @source not inline()): wave:container',
         );
         expect(code).toBe(1);
       } finally {
-        write('src/styles/styles.css', readCss('styles.css'));
+        write('src/components/Box.tsx', COMPONENT);
       }
     }, 60_000);
 
@@ -2264,7 +2695,7 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
           "styles.css: not compiled with Wave's wave-rtl variant " +
             '(:where(:nth-child(n of :dir(rtl))) under @supports selector(:nth-child(n of ' +
             ':dir(rtl))) and the [dir=rtl] fallback; is src/styles/variants.css imported?): ' +
-            'wave-rtl:-scale-x-100',
+            'wave:wave-rtl:-scale-x-100',
         );
         expect(code).toBe(1);
       } finally {
@@ -2287,13 +2718,21 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
     try {
       const code = main(['--out-dir', out]);
       const output = printed.map((args) => args.join(' ')).join('\n');
-      expect(output).toMatch(
-        /^build-css: \S+\/styles\.css \([\d.]+ kB\) and \S+\/preflight\.css \([\d.]+ kB\) OK$/,
-      );
+      expect(output).toMatch(passingReport(String.raw`\S+`, { compileCheckPassed: true }));
       expect(code).toBe(0);
       const classes = selectorClasses(readFileSync(join(out, 'styles.css'), 'utf8'));
-      expect(classes).toContain('bg-primary');
-      expect(EXCLUDED_WORDS.filter((word) => classes.has(word))).toEqual([]);
+      expect(classes).toContain('wave:bg-primary');
+      expect(
+        EXCLUDED_WORDS.filter((word) => classes.has(word) || classes.has(`wave:${word}`)),
+      ).toEqual([]);
+      // No class without the prefix but the selector classes of the style entries.
+      expect([...classes].filter((name) => !name.startsWith('wave:')).sort()).toEqual([
+        'wave-dark',
+        'wave-high-contrast',
+        'wave-light',
+        'wave-portal',
+        'wave-root',
+      ]);
     } finally {
       for (const spy of spies) spy.mockRestore();
       rmSync(out, { recursive: true, force: true });
@@ -2311,6 +2750,320 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       'preflight.css: contains Wave tokens',
     ]);
     expect(assertPreflightCss('.x{margin:0}')).toEqual(['preflight.css: Preflight rules missing']);
+  });
+
+  describe('components.css and utilities.css (spec R6 of Phase 14)', () => {
+    it('lists the four outputs in the order of the report', async () => {
+      const { OUTPUTS } = await loadBuildCss();
+      expect(OUTPUTS).toEqual(['styles.css', 'components.css', 'utilities.css', 'preflight.css']);
+    });
+
+    it('derives the components source from styles.css without its tokens and base imports', async () => {
+      const { componentsSource, parseCss } = await loadBuildCss();
+      const statementsOf = (css: string) =>
+        parseCss(css)
+          .filter((node) => node.children === null)
+          .map((node) => node.prelude.replace(/\s+/g, ' ').replace(/"/g, "'"));
+      expect(statementsOf(componentsSource(readCss('styles.css')))).toEqual(
+        statements('styles.css').filter(
+          (statement) => !/^@import '\.\/(tokens|base)\.css'$/.test(statement),
+        ),
+      );
+      expect(componentsSource(`@import "./base.css";\n@import './tokens.css' ;\n.x{}`)).toBe(
+        '.x{}',
+      );
+    });
+
+    it.each([
+      ['neither import', "@import './theme.css';", 'neither'],
+      ['one import', "@import './tokens.css';", 'tokens'],
+      [
+        'an import twice',
+        "@import './tokens.css';\n@import './base.css';\n@import './base.css';",
+        'base, base, tokens',
+      ],
+      ['another form', "@import url('./tokens.css');\n@import './base.css';", 'base'],
+    ])('refuses a styles.css with %s', async (_, css, found) => {
+      const { componentsSource } = await loadBuildCss();
+      expect(() => componentsSource(css)).toThrow(
+        new Error(
+          "componentsSource: styles.css must @import './tokens.css' and './base.css' once each " +
+            `(found: ${found})`,
+        ),
+      );
+    });
+
+    const THEME = [
+      '@theme inline {',
+      '  --color-wave-primary: var(--wave-primary);',
+      '  --text-wave-body-1: 14px;',
+      '  --text-wave-body-1--line-height: 20px;',
+      '  --shadow-wave-4: var(--wave-shadow-4);',
+      '  --font-wave: var(--wave-font-family);',
+      '  --font-wave-mono: var(--wave-font-family-monospace);',
+      '  --transition-duration-wave-fast: var(--wave-duration-fast);',
+      '  --ease-wave-linear: var(--wave-curve-linear);',
+      '  --animate-wave-spin: wave-spin 0.8s linear infinite;',
+      '  --color-primary: var(--wave-primary);',
+      '  @keyframes wave-spin { to { transform: rotate(360deg); } }',
+      '}',
+      ':root { --wave-primary: #0f6cbd; --color-wave-outside: red; }',
+    ].join('\n');
+    const GENERATED = [
+      'animate-wave-spin',
+      'bg-wave-primary',
+      'border-wave-primary',
+      'fill-wave-primary',
+      'font-wave',
+      'font-wave-mono',
+      'ring-wave-primary',
+      'shadow-wave-4',
+      'stroke-wave-primary',
+      'text-wave-body-1',
+      'text-wave-primary',
+    ];
+
+    it('generates the namespaced token utilities from the @theme keys of tokens.css', async () => {
+      // Six color utilities per color, one per type-ramp step, shadow level, font family and
+      // animation; no sub-key, motion key, unnamespaced key or key outside @theme.
+      const { namespacedUtilities } = await loadBuildCss();
+      expect(namespacedUtilities(THEME)).toEqual(GENERATED);
+    });
+
+    it('generates the utilities of every namespaced key of the real tokens.css', async () => {
+      const { namespacedUtilities } = await loadBuildCss();
+      const keys = [...declarations(themeBlock().children ?? []).keys()];
+      const count = (pattern: RegExp) => keys.filter((key) => pattern.test(key)).length;
+      const classes = namespacedUtilities(readCss('tokens.css'));
+      expect(classes).toHaveLength(
+        count(/^--color-wave-/) * 6 +
+          count(/^--text-wave-(?:(?!--).)+$/) +
+          count(/^--shadow-wave-/) +
+          count(/^--font-wave/) +
+          count(/^--animate-wave-/),
+      );
+      expect(classes).toEqual(
+        expect.arrayContaining([
+          'bg-wave-primary',
+          'text-wave-foreground',
+          'border-wave-border',
+          'ring-wave-ring',
+          'fill-wave-palette-red',
+          'stroke-wave-brand-80',
+          'text-wave-body-1',
+          'text-wave-display',
+          'shadow-wave-64',
+          'font-wave-numeric',
+          'animate-wave-indeterminate-rtl',
+        ]),
+      );
+      expect(classes.filter((name) => !/^[a-z]+-wave\b/.test(name))).toEqual([]);
+    });
+
+    it('appends the generated list to utilities.css as an @source inline()', async () => {
+      const { utilitiesSource } = await loadBuildCss();
+      expect(utilitiesSource("@import './tokens.css' reference;\n", THEME)).toBe(
+        "@import './tokens.css' reference;\n\n" + `@source inline('${GENERATED.join(' ')}');\n`,
+      );
+      expect(() => utilitiesSource('', ':root { --wave-primary: #0f6cbd; }')).toThrow(
+        'utilitiesSource: tokens.css declares no namespaced theme key (--color-wave-*, …)',
+      );
+    });
+
+    describe('assertComponentsCss', () => {
+      /** styles.css: a token rule, a base rule, utilities, an @supports block and a keyframe. */
+      const STYLES =
+        '@layer properties{@supports ((-webkit-hyphens:none)){*,:before{--tw-x:0}}}' +
+        ':root,.wave-light{--wave-primary:#0f6cbd;--wave-foreground:#242424}' +
+        '.wave-light{color-scheme:light}' +
+        '.wave-root,.wave-portal{color:var(--wave-foreground)}' +
+        '.bg-primary{background-color:var(--wave-primary)}' +
+        String.raw`.\[--wave-card-padding\:12px\]{--wave-card-padding:12px}` +
+        String.raw`@supports selector(:nth-child(n of :dir(rtl))){.wave-rtl\:-scale-x-100:where(:nth-child(n of :dir(rtl))){scale:-1 1}}` +
+        '@keyframes wave-spin{to{opacity:1}}';
+      const COMPONENTS =
+        '@layer properties{@supports ((-webkit-hyphens:none)){*,:before{--tw-x:0}}}' +
+        '.bg-primary{background-color:var(--wave-primary)}' +
+        String.raw`.\[--wave-card-padding\:12px\]{--wave-card-padding:12px}` +
+        String.raw`@supports selector(:nth-child(n of :dir(rtl))){.wave-rtl\:-scale-x-100:where(:nth-child(n of :dir(rtl))){scale:-1 1}}` +
+        '@keyframes wave-spin{to{opacity:1}}';
+
+      /** The gate on `css`, against STYLES unless `parity` is false (no styles.css given). */
+      async function check(css: string, { parity = true } = {}) {
+        const { assertComponentsCss } = await loadBuildCss();
+        return assertComponentsCss(css, {
+          ...(parity ? { stylesCss: STYLES } : {}),
+          tokensCss: GATE_TOKENS,
+          baseCss: GATE_BASE,
+        });
+      }
+
+      it('passes styles.css without the token and base rules (a component custom property is no token)', async () => {
+        expect(await check(COMPONENTS)).toEqual([]);
+        expect(await check(COMPONENTS, { parity: false })).toEqual([]);
+      });
+
+      it('fails on a token rule, a base rule, a :root rule or a theme variable', async () => {
+        expect(
+          await check(`:root,.wave-light{--wave-primary:#0f6cbd}${COMPONENTS}`, { parity: false }),
+        ).toEqual([
+          'components.css: holds a :root rule (:root)',
+          'components.css: holds rules of tokens.css or base.css (.wave-light)',
+          'components.css: declares the tokens --wave-primary',
+        ]);
+        expect(
+          await check(`${COMPONENTS}.wave-root,.wave-portal{color:var(--wave-foreground)}`, {
+            parity: false,
+          }),
+        ).toEqual([
+          'components.css: holds rules of tokens.css or base.css (.wave-root .wave-portal)',
+        ]);
+        expect(
+          await check(`:host{--color-primary:var(--wave-primary);--spacing:.25rem}${COMPONENTS}`, {
+            parity: false,
+          }),
+        ).toEqual([
+          'components.css: declares the theme variables --color-primary, --spacing',
+          'components.css: contains "--spacing:"',
+        ]);
+      });
+
+      it('fails on layered output and on a Tailwind directive', async () => {
+        expect(await check(`@layer components{${COMPONENTS}}`, { parity: false })).toEqual([
+          'components.css: layered output (@layer components)',
+        ]);
+        expect(await check(`@import 'tailwindcss';${COMPONENTS}`, { parity: false })).toEqual([
+          `components.css: unprocessed directive "@import 'tailwindcss'"`,
+        ]);
+      });
+
+      it('fails when it is not styles.css without the token and base rules', async () => {
+        // Node 4, the @supports block, serialised and cut at 80 characters in the message.
+        const supports = (scale: string) =>
+          JSON.stringify(
+            (
+              '@supports selector(:nth-child(n of :dir(rtl))){' +
+              String.raw`.wave-rtl\:-scale-x-100:where(:nth-child(n of :dir(rtl))){scale:${scale};}}`
+            ).slice(0, 80),
+          );
+        expect(await check(COMPONENTS.replace('scale:-1 1', 'scale:1 1'))).toEqual([
+          'components.css: is not styles.css without the rules of tokens.css and base.css ' +
+            `(5 nodes for 5; the first difference, node 4: ${supports('1 1')} for ${supports('-1 1')})`,
+        ]);
+        expect(await check(COMPONENTS.replace('@keyframes wave-spin{to{opacity:1}}', ''))).toEqual([
+          'components.css: is not styles.css without the rules of tokens.css and base.css ' +
+            '(4 nodes for 5; the first difference, node 5: "<none>" for "@keyframes wave-spin{to{opacity:1;}}")',
+        ]);
+      });
+    });
+
+    describe('assertUtilitiesCss', () => {
+      const KEYS = THEME.replace(
+        '  @keyframes wave-spin { to { transform: rotate(360deg); } }',
+        ['wave-spin', 'wave-pulse', 'wave-indeterminate', 'wave-indeterminate-rtl']
+          .map((name) => `  @keyframes ${name} { to { opacity: 1; } }`)
+          .join('\n'),
+      );
+      let good = '';
+
+      beforeAll(async () => {
+        good = await utilitiesCssFor(KEYS);
+      });
+
+      async function check(css: string) {
+        const { assertUtilitiesCss } = await loadBuildCss();
+        return assertUtilitiesCss(css, { tokensCss: KEYS, baseCss: GATE_BASE });
+      }
+
+      it('passes exactly the generated classes, unlayered, with the keyframes', async () => {
+        expect(good).toMatch(/^@layer properties\{.*\}\}\.animate-wave-spin\{/);
+        expect(await check(good)).toEqual([]);
+      });
+
+      it('fails on a missing class, a variant, an unnamespaced or another utility', async () => {
+        expect(await check(good.replace('.shadow-wave-4{color:red}', ''))).toEqual([
+          'utilities.css: missing 1 of the 11 namespaced utilities (shadow-wave-4)',
+        ]);
+        const extra = good.replace(
+          '.animate-wave-spin{',
+          String.raw`.hover\:bg-wave-primary:hover{color:red}.bg-primary{color:red}.p-4{padding:1rem}.animate-wave-spin{`,
+        );
+        expect(await check(extra)).toEqual([
+          'utilities.css: holds classes other than the namespaced token utilities ' +
+            '(bg-primary hover:bg-wave-primary p-4)',
+        ]);
+      });
+
+      it('fails on a layer, a class inside a layer and a directive (ruling BL: unlayered)', async () => {
+        // The layered sheet of the first 1.0 build: its classes lose to the base styles.
+        expect(await check(`${good}@layer utilities{.bg-wave-primary{color:red}}`)).toEqual([
+          'utilities.css: layered output (@layer utilities)',
+          'utilities.css: classes inside a @layer (.bg-wave-primary)',
+        ]);
+        // Tailwind's properties fallback is the one layer allowed, and it holds no class.
+        expect(await check(`${good}@layer properties{.bg-wave-primary{color:red}}`)).toEqual([
+          'utilities.css: classes inside a @layer (.bg-wave-primary)',
+        ]);
+        expect(await check(`@layer base{.x{color:red}}${good}`)).toEqual([
+          'utilities.css: layered output (@layer base)',
+          'utilities.css: classes inside a @layer (.x)',
+          'utilities.css: holds classes other than the namespaced token utilities (x)',
+        ]);
+        expect(await check(`${good}@source inline('x');`)).toEqual([
+          `utilities.css: unprocessed directive "@source inline('x')"`,
+        ]);
+      });
+
+      it('fails on a token rule, a theme variable, another custom property and missing keyframes', async () => {
+        expect(await check(`:root,.wave-root{--wave-primary:#0f6cbd}${good}`)).toEqual([
+          'utilities.css: holds a :root rule (:root)',
+          'utilities.css: holds rules of tokens.css or base.css (.wave-root)',
+          'utilities.css: declares the tokens --wave-primary',
+          'utilities.css: holds classes other than the namespaced token utilities (wave-root)',
+        ]);
+        expect(
+          await check(
+            good.replace(
+              '.bg-wave-primary{color:red}',
+              '.bg-wave-primary{--color-wave-primary:var(--wave-primary);--app-x:1;color:red}',
+            ),
+          ),
+        ).toEqual([
+          'utilities.css: declares the theme variables --color-wave-primary',
+          'utilities.css: declares the custom properties --app-x',
+        ]);
+        expect(await check(good.replace(/@keyframes wave-pulse\{[^}]*\{[^}]*\}\}/, ''))).toEqual([
+          'utilities.css: missing @keyframes wave-pulse',
+        ]);
+      });
+
+      it('given styles.css, fails on a custom property it reads that styles.css does not declare (Task 20 review)', async () => {
+        const { assertUtilitiesCss } = await loadBuildCss();
+        // The styles.css of a plain app: the tokens, and Tailwind's own --tw-* registrations.
+        const stylesCss =
+          ':root,.wave-light{--wave-primary:#0f6cbd;--wave-error:#c50f1f}' +
+          '@property --tw-shadow{syntax:"*";inherits:false}';
+        const check = (css: string) =>
+          assertUtilitiesCss(css, { tokensCss: KEYS, baseCss: GATE_BASE, stylesCss });
+        // A token read through var(), and a --tw-* property: both resolve in a plain app.
+        const reading = good.replace(
+          '.bg-wave-primary{color:red}',
+          '.bg-wave-primary{background-color:var(--wave-primary);box-shadow:var(--tw-shadow)}',
+        );
+        expect(check(reading)).toEqual([]);
+        // A key mapped to a theme variable instead of a token: nothing declares it without Tailwind.
+        const theme = good.replace(
+          '.bg-wave-primary{color:red}',
+          '.bg-wave-primary{background-color:var(--color-wave-primary);color:var(--wave-gone, red)}',
+        );
+        expect(check(theme)).toEqual([
+          'utilities.css: reads custom properties that styles.css does not declare (a namespaced ' +
+            'key mapped to a theme variable, not a token?): --color-wave-primary, --wave-gone',
+        ]);
+        // Without styles.css the rule is not checked (the unit fixtures above pass none).
+        expect(assertUtilitiesCss(theme, { tokensCss: KEYS, baseCss: GATE_BASE })).toEqual([]);
+      });
+    });
   });
 
   describe('entry-script guard', () => {
@@ -2398,7 +3151,9 @@ describe('scripts/build-css.mjs — gate assertions (repo-level#1)', () => {
       }
       expect(existsSync(link)).toBe(false);
       expect(existsSync(BUILD_CSS_PATH)).toBe(true);
-    });
+      // The run reads the repository's UTILITY_PREFIX, so the compile check (a TypeScript program
+      // over src) runs before the outputs are checked: seconds, more under a loaded suite.
+    }, 60_000);
 
     it('fails closed when invoked as build-css.mjs but not recognised as this script', async () => {
       const { entryStatus } = await loadEntryGuard();

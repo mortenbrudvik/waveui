@@ -27,22 +27,54 @@ const THEMES: WaveTheme[] = ['light', 'dark', 'high-contrast'];
 // One distinguishing token set per appearance and color: Badge's palette, with the outline text
 // in the brand color for `brand` (the look CounterBadge had before it took a color).
 const COLOR_CLASSES: Array<[CounterBadgeAppearance, BadgeColor, string[]]> = [
-  ['filled', 'brand', ['bg-primary', 'text-primary-foreground']],
-  ['filled', 'success', ['bg-success', 'text-success-foreground']],
-  ['filled', 'warning', ['bg-warning', 'text-warning-foreground']],
-  ['filled', 'danger', ['bg-destructive', 'text-destructive-foreground']],
-  ['filled', 'important', ['bg-severe', 'text-severe-foreground']],
-  ['filled', 'informative', ['bg-muted', 'text-foreground']],
-  ['filled', 'severe', ['bg-severe', 'text-severe-foreground']],
-  ['filled', 'subtle', ['bg-background', 'text-foreground']],
-  ['outline', 'brand', ['bg-transparent', 'border', 'border-primary', 'text-primary']],
-  ['outline', 'success', ['bg-transparent', 'border', 'border-success', 'text-foreground']],
-  ['outline', 'warning', ['bg-transparent', 'border', 'border-warning', 'text-foreground']],
-  ['outline', 'danger', ['bg-transparent', 'border', 'border-destructive', 'text-foreground']],
-  ['outline', 'important', ['bg-transparent', 'border', 'border-severe', 'text-foreground']],
-  ['outline', 'informative', ['bg-transparent', 'border', 'border-border', 'text-foreground']],
-  ['outline', 'severe', ['bg-transparent', 'border', 'border-severe', 'text-foreground']],
-  ['outline', 'subtle', ['bg-transparent', 'border', 'border-border', 'text-foreground']],
+  ['filled', 'brand', ['wave:bg-primary', 'wave:text-primary-foreground']],
+  ['filled', 'success', ['wave:bg-success', 'wave:text-success-foreground']],
+  ['filled', 'warning', ['wave:bg-warning', 'wave:text-warning-foreground']],
+  ['filled', 'danger', ['wave:bg-destructive', 'wave:text-destructive-foreground']],
+  ['filled', 'important', ['wave:bg-foreground', 'wave:text-background']],
+  ['filled', 'informative', ['wave:bg-muted', 'wave:text-foreground']],
+  ['filled', 'severe', ['wave:bg-severe', 'wave:text-severe-foreground']],
+  ['filled', 'subtle', ['wave:bg-background', 'wave:text-foreground']],
+  [
+    'outline',
+    'brand',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-primary', 'wave:text-primary'],
+  ],
+  [
+    'outline',
+    'success',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-success', 'wave:text-foreground'],
+  ],
+  [
+    'outline',
+    'warning',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-warning', 'wave:text-foreground'],
+  ],
+  [
+    'outline',
+    'danger',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-destructive', 'wave:text-foreground'],
+  ],
+  [
+    'outline',
+    'important',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-stroke-accessible', 'wave:text-foreground'],
+  ],
+  [
+    'outline',
+    'informative',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-border', 'wave:text-foreground'],
+  ],
+  [
+    'outline',
+    'severe',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-severe', 'wave:text-foreground'],
+  ],
+  [
+    'outline',
+    'subtle',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-border', 'wave:text-foreground'],
+  ],
 ];
 
 /**
@@ -51,34 +83,31 @@ const COLOR_CLASSES: Array<[CounterBadgeAppearance, BadgeColor, string[]]> = [
  * than their count badges. `subtle` keeps the page color, for dots on colored surfaces.
  */
 const DOT_COLOR_CLASSES: Array<[BadgeColor, fill: string, ring: string]> = [
-  ['brand', 'bg-primary', 'border-primary'],
-  ['success', 'bg-success', 'border-success'],
-  ['warning', 'bg-warning-tint-foreground', 'border-warning-tint-foreground'],
-  ['danger', 'bg-destructive', 'border-destructive'],
-  ['important', 'bg-severe', 'border-severe'],
-  ['informative', 'bg-muted-foreground', 'border-muted-foreground'],
-  ['severe', 'bg-severe', 'border-severe'],
-  ['subtle', 'bg-background', 'border-border'],
+  ['brand', 'wave:bg-primary', 'wave:border-primary'],
+  ['success', 'wave:bg-success', 'wave:border-success'],
+  ['warning', 'wave:bg-warning-tint-foreground', 'wave:border-warning-tint-foreground'],
+  ['danger', 'wave:bg-destructive', 'wave:border-destructive'],
+  ['important', 'wave:bg-foreground', 'wave:border-foreground'],
+  ['informative', 'wave:bg-muted-foreground', 'wave:border-muted-foreground'],
+  ['severe', 'wave:bg-severe', 'wave:border-severe'],
+  ['subtle', 'wave:bg-background', 'wave:border-border'],
 ];
 
-const DOT_CLASSES = ['h-1.5', 'w-1.5', 'min-w-0', 'p-0'];
+const DOT_CLASSES = ['wave:h-1.5', 'wave:w-1.5', 'wave:min-w-0', 'wave:p-0'];
 const DOT_FORCED_COLORS = [
-  'forced-colors:forced-color-adjust-none',
-  'forced-colors:bg-[CanvasText]',
+  'wave:forced-colors:forced-color-adjust-none',
+  'wave:forced-colors:bg-[CanvasText]',
 ];
-
-/** The development warning of `color="important"` (P13-03), which the color tables render on purpose. */
-const IMPORTANT_WARNING =
-  '[WaveUI] CounterBadge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.';
 
 describe('CounterBadge', () => {
-  // The tables below render `important` (0.x: the severe colors); nothing else may be logged.
+  // The tables below render every color, `important` included (1.0: no warning); nothing may be
+  // logged.
   let warn: MockInstance<typeof console.warn>;
   beforeEach(() => {
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
   afterEach(() => {
-    expect(warn.mock.calls.every((call) => call[0] === IMPORTANT_WARNING)).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
@@ -125,8 +154,8 @@ describe('CounterBadge', () => {
 
   // The default (brand) color keeps its 0.5 look, in theme tokens only.
   it.each([
-    ['filled', ['bg-primary', 'text-primary-foreground']],
-    ['outline', ['bg-transparent', 'border', 'border-primary', 'text-primary']],
+    ['filled', ['wave:bg-primary', 'wave:text-primary-foreground']],
+    ['outline', ['wave:bg-transparent', 'wave:border', 'wave:border-primary', 'wave:text-primary']],
   ] as const)('%s appearance uses %j', (appearance, classes) => {
     render(<CounterBadge count={5} appearance={appearance} data-testid="cb" />);
     const badge = screen.getByTestId('cb');
@@ -173,7 +202,7 @@ describe('CounterBadge', () => {
       const dot = screen.getByTestId('cb');
       expect(dot).toBeEmptyDOMElement();
       expect(dot).toHaveClass(...DOT_CLASSES);
-      expect(dot).not.toHaveClass('h-5', 'min-w-5', 'px-1.5');
+      expect(dot).not.toHaveClass('wave:h-5', 'wave:min-w-5', 'wave:px-1.5');
     });
 
     it('renders for a count of 0, a negative count and without a count', () => {
@@ -220,13 +249,17 @@ describe('CounterBadge', () => {
           </>,
         );
         expect(screen.getByTestId('filled')).toHaveClass(fill);
-        expect(screen.getByTestId('outline')).toHaveClass('bg-transparent', 'border', ring);
+        expect(screen.getByTestId('outline')).toHaveClass(
+          'wave:bg-transparent',
+          'wave:border',
+          ring,
+        );
       },
     );
 
     it.each([
-      ['informative', 'bg-muted', 'border-border'],
-      ['warning', 'bg-warning', 'border-warning'],
+      ['informative', 'wave:bg-muted', 'wave:border-border'],
+      ['warning', 'wave:bg-warning', 'wave:border-warning'],
     ] as const)(
       'the %s dot does not use %s or %s, which are faint on the page background',
       (color, countFill, countRing) => {
@@ -295,17 +328,17 @@ describe('CounterBadge', () => {
       const count = screen.getByTestId('count');
       expect(count).toHaveTextContent(/^3$/);
       expect(count).toHaveAttribute('data-color', 'brand');
-      expect(count).toHaveClass('bg-primary', 'text-primary-foreground');
+      expect(count).toHaveClass('wave:bg-primary', 'wave:text-primary-foreground');
       expect(count).not.toHaveAttribute('color');
       expect(screen.getByTestId('dot')).toHaveAttribute('data-color', 'brand');
-      expect(screen.getByTestId('dot')).toHaveClass('bg-primary');
+      expect(screen.getByTestId('dot')).toHaveClass('wave:bg-primary');
     });
 
     it.each(COLORS.filter((color) => color !== 'brand'))(
       'outline %s draws its text in the foreground color, not the brand color',
       (color) => {
         render(<CounterBadge count={5} appearance="outline" color={color} data-testid="cb" />);
-        expect(screen.getByTestId('cb')).not.toHaveClass('text-primary');
+        expect(screen.getByTestId('cb')).not.toHaveClass('wave:text-primary');
       },
     );
 

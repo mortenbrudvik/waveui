@@ -1,6 +1,6 @@
 {
   "name": "@mortenbrudvik/waveui",
-  "version": "0.18.1",
+  "version": "1.0.0",
   "type": "module",
   "description": "A comprehensive React component library with modern design tokens — accessible, composable components built with TypeScript and Tailwind CSS",
   "license": "MIT",
@@ -39,36 +39,32 @@
   "sideEffects": [
     "*.css"
   ],
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.mjs"
     },
     "./styles": "./dist/styles.css",
     "./styles.css": "./dist/styles.css",
     "./preflight.css": "./dist/preflight.css",
+    "./utilities": "./dist/utilities.css",
+    "./utilities.css": "./dist/utilities.css",
     "./tailwind": "./src/styles/tailwind.css",
     "./tailwind.css": "./src/styles/tailwind.css",
     "./tokens": "./src/styles/tokens.css",
     "./tokens.css": "./src/styles/tokens.css",
     "./variants": "./src/styles/variants.css",
     "./variants.css": "./src/styles/variants.css",
-    "./legacy-tokens.css": "./src/styles/legacy-tokens.css",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "src/styles",
-    "!src/styles/__tests__"
+    "!src/styles/__tests__",
+    "codemod",
+    "!codemod/__tests__"
   ],
   "publishConfig": {
     "access": "public"
@@ -82,11 +78,11 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build && node scripts/verify-storybook.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.dev.json --noEmit && tsc -p tsconfig.node.json --noEmit && node scripts/check-ts-coverage.mjs",
-    "lint": "eslint --max-warnings 0 src/ stories/ .storybook/ scripts/",
-    "lint:fix": "eslint src/ stories/ .storybook/ scripts/ --fix",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\"",
-    "check:package": "publint && node scripts/attw-pack.mjs --profile node16 --exclude-entrypoints styles styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css legacy-tokens.css",
+    "lint": "eslint --max-warnings 0 src/ stories/ .storybook/ scripts/ codemod/",
+    "lint:fix": "eslint src/ stories/ .storybook/ scripts/ codemod/ --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\" \"codemod/**/*.{js,mjs}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"stories/**/*.{ts,tsx}\" \".storybook/**/*.{ts,tsx,css}\" \"scripts/**/*.{js,mjs,cjs,ts,mts,cts,tsx,css,json}\" \"codemod/**/*.{js,mjs}\"",
+    "check:package": "publint && node scripts/attw-pack.mjs --profile esm-only --exclude-entrypoints styles styles.css preflight.css utilities utilities.css tailwind tailwind.css tokens tokens.css variants variants.css",
     "test:pack": "node scripts/pack-smoke.mjs",
     "prepublishOnly": "npm run typecheck && npm run build && node scripts/verify-dist.mjs --final && npm test && npm run check:package && npm run test:pack"
   },
@@ -103,7 +99,7 @@
   "dependencies": {
     "@floating-ui/react-dom": "^2.1.9",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "3.7.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

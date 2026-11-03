@@ -118,10 +118,10 @@ export const FitModes: Story = {
     <div className="flex gap-4">
       {(['none', 'center', 'contain', 'cover', 'default'] as const).map((fit) => (
         <figure key={fit} className="m-0 flex flex-col items-center gap-1">
-          <div className="size-[100px] border border-border">
+          <div className="size-[100px] border border-wave-border">
             <Image {...args} alt={`Fit ${fit}`} fit={fit} />
           </div>
-          <figcaption className="text-caption-1 text-foreground">{fit}</figcaption>
+          <figcaption className="text-wave-caption-1 text-wave-foreground">{fit}</figcaption>
         </figure>
       ))}
     </div>

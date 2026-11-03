@@ -62,7 +62,7 @@ export function DataGridSpacerRow({ size, columnCount }: { size: number; columnC
       className={dataGridClassNames.spacer}
       style={{ height: size }}
     >
-      <td colSpan={columnCount} className="p-0" />
+      <td colSpan={columnCount} className="wave:p-0" />
     </tr>
   );
 }

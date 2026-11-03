@@ -77,6 +77,26 @@ describe('useFormReset', () => {
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 
+  it('hands the form’s reset event to the callback (Table.SelectionCell reports it, 1.0)', () => {
+    const onReset = vi.fn<(event: Event) => void>();
+    function Field() {
+      const ref = React.useRef<HTMLInputElement>(null);
+      useFormReset(ref, onReset);
+      return <input ref={ref} aria-label="Field" />;
+    }
+    render(
+      <form aria-label="Owner">
+        <Field />
+      </form>,
+    );
+    const form = screen.getByRole('form', { name: 'Owner' }) as HTMLFormElement;
+    act(() => form.reset());
+    expect(onReset).toHaveBeenCalledTimes(1);
+    const [event] = onReset.mock.calls[0]!;
+    expect(event.type).toBe('reset');
+    expect(event.target).toBe(form);
+  });
+
   it('honours the control element’s own form attribute', () => {
     const onReset = vi.fn();
     function Attr() {

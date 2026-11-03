@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { tagPickerClassNames } from '../../lib/classNames';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import type { Slot } from '../../lib/slot';
+import { composeAfterPart, mergeSlotProps, ROVING_PART_LOCKS } from '../../lib/slotProps';
 import type { SlotPart } from '../../lib/slotProps';
 import type {
   CoreSize,
@@ -123,12 +124,6 @@ export interface TagPickerProps extends Omit<
    * or removed, or a form reset restores different tags. Fluent's `onOptionSelect`.
    */
   onValueChange?: (value: string[]) => void;
-  /**
-   * Called with the new selection when it changes: a tag is added or removed, or a form reset
-   * restores different tags.
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (value: string[]) => void;
   /**
    * Controlled open state of the option list. The list renders only in the browser: an open
    * picker is closed in the server HTML and opens once it has hydrated.
@@ -284,7 +279,7 @@ export interface TagPickerProps extends Omit<
   labels?: TagPickerLabels;
   /**
    * Called when TagPicker.Input's `<input role="combobox">` receives focus (the root keeps other
-   * handlers). With TagPicker.Button, pass it (and `ref`) on the Button.
+   * handlers). With TagPicker.Button, pass it on the Button.
    */
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
   /** Called when TagPicker.Input's `<input>` loses focus. With TagPicker.Button, pass it on the Button. */
@@ -298,28 +293,48 @@ export interface TagPickerProps extends Omit<
   /** Called when a key is released in TagPicker.Input's `<input>`. With TagPicker.Button, pass it on the Button. */
   onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>;
   /**
-   * Ref to TagPicker.Input's `<input role="combobox">` (the focusable element). With
-   * TagPicker.Button, pass `ref` on the Button.
+   * Ref to the trigger that renders, the focusable control (Fluent UI's `ref`, on its primary
+   * element): TagPicker.Input's `<input role="combobox">`, also the one TagPicker renders without
+   * children, or TagPicker.Button's `<button role="combobox">`. It follows the trigger: a parts
+   * form that swaps the Input for the Button moves it to the button (a state setter you pass
+   * takes state typed for both, or `HTMLElement`). The part's own `ref` joins it. The root
+   * `<div>` is `slotProps.root.ref`.
    */
-  controlRef?: React.Ref<HTMLInputElement>;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
+  ref?: React.Ref<HTMLInputElement | HTMLButtonElement>;
   /**
    * Props for the elements TagPicker generates in its parts, by part, merged into each part's own
    * (Fluent UI's TagPicker parts take their own props, as `TagPicker.Control`, `TagPicker.Group`,
-   * `TagPicker.Input`, `TagPicker.Button` and `TagPicker.List` do here): your classes after the
-   * part's (yours win a conflict), your styles over its styles, your handlers before its handlers
-   * (`preventDefault()` in yours skips TagPicker's handling of the event), your ref beside its
-   * ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every attribute
-   * TagPicker sets on a part is locked; you add the attributes it does not set. A part takes no
-   * `children`. The parts reach only what TagPicker draws itself: the tags of a `TagPicker.Group`
-   * without children, the end buttons of `TagPicker.Control`, the "+N" chip, the options of a
-   * `TagPicker.List` without children and the create option; a Tag or an option you write takes
-   * its own props. TagPicker puts `slotProps` in the context its parts read, so keep the
-   * object's identity across renders (a constant, or `useMemo`): a new object each render
-   * re-renders every part that reads it.
+   * `TagPicker.Input`, `TagPicker.Button` and `TagPicker.List` do here, and the root `<div>` is
+   * `root`): your classes after the part's (yours win a conflict), your styles over its styles,
+   * your handlers before its handlers (`preventDefault()` in yours skips TagPicker's handling of
+   * the event), your ref beside its ref, and your ids added to its `aria-labelledby` and
+   * `aria-describedby`. Every attribute TagPicker sets on a part is locked; you add the
+   * attributes it does not set. A part takes no `children`. Besides the root, the parts reach
+   * only what TagPicker draws itself: the tags of a `TagPicker.Group` without children, the end
+   * buttons of `TagPicker.Control`, the "+N" chip, the options of a `TagPicker.List` without
+   * children and the create option; a Tag or an option you write takes its own props. TagPicker
+   * puts `slotProps` in the context its parts read, so keep the object's identity across renders
+   * (a constant, or `useMemo`): a new object each render re-renders every part that reads it.
    */
   slotProps?: {
+    /**
+     * The root `<div>` around the parts (stable class `wave-tag-picker`), which TagPicker's
+     * `className`, `style`, `data-*` and other root props reach as well; its `ref` is the way to
+     * the root, since TagPicker's `ref` reaches the trigger. Your classes come after TagPicker's
+     * `className`, your style over its `style`. Locked: every prop you give TagPicker itself that
+     * reaches the root, `data-size`, `data-appearance`, `data-overflow`, `data-collapsed`, and
+     * `hidden`, `inert` and `aria-hidden` (TagPicker's own: the root holds the trigger). Also
+     * locked, unset: `role`, `tabIndex` and the roving markers (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`), so in a toolbar or another
+     * roving container the root is never a control of its own and never hides the control from the
+     * arrow order. Your handlers run before TagPicker's own root handlers (`preventDefault()` in
+     * yours skips them); the tracking of focus inside the root, which the single-line layout reads,
+     * runs after your `onFocus` and `onBlur`, also when they prevent the default. The root passes
+     * no click to the trigger, so your `onClick` is called in every state, as TagPicker's own
+     * `onClick` is. Your ref joins TagPicker's own, which keeps a press inside the root from
+     * dismissing the open list and which a form reset reads.
+     */
+    root?: SlotPart<'div'>;
     /**
      * Every default tag, the `Tag` root `<span>` that TagPicker renders per selected value in a
      * `TagPicker.Group` without children (stable class `wave-tag-picker__tag`): your props are
@@ -449,7 +464,6 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     value: valueProp,
     defaultValue,
     onValueChange,
-    onChange,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -493,14 +507,13 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     onBlur,
     onKeyDown,
     onKeyUp,
-    controlRef,
     className,
+    style,
     ref,
     slotProps,
     ...rest
   } = props;
 
-  if (onChange !== undefined) warnDeprecated('TagPicker', 'onChange', 'onValueChange');
   const overflow = overflowProp === 'count' ? 'count' : 'wrap';
 
   const field = useFieldContext();
@@ -541,10 +554,8 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     valueProp,
     defaultValue ?? EMPTY_VALUES,
     (next) => {
-      // The props are read only; the callbacks receive an array of their own.
-      const list = [...next];
-      onValueChange?.(list);
-      onChange?.(list);
+      // The props are read only; the callback receives an array of its own.
+      onValueChange?.([...next]);
     },
   );
   const selectedSet = React.useMemo(() => new Set(selected), [selected]);
@@ -729,7 +740,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     selectedValues: selected,
     onSelect: (value, details) => {
       if (value === createValue) commitCreate();
-      else addTag(value, details?.item.label ?? value);
+      else addTag(value, details.item.label ?? value);
     },
     items,
     filter: listFilter,
@@ -791,7 +802,9 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     anchorRef: triggerRef,
   });
 
-  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
+  // The root part's ref joins the root's own (the popup's dismissal and the form reset read it)
+  // through a merged ref set after the part's props, so an inline part ref never detaches it.
+  const rootMergedRef = useMergedRefs<HTMLDivElement>(rootRef, slotProps?.root?.ref);
 
   useFormReset(
     rootRef,
@@ -873,6 +886,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       'aria-details': ariaDetails,
       tabIndex,
       autoFocus,
+      ref,
     }),
     [
       triggerId,
@@ -885,6 +899,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       ariaDetails,
       tabIndex,
       autoFocus,
+      ref,
     ],
   );
   const inputProps = React.useMemo<TagPickerInputOnlyProps>(
@@ -900,7 +915,6 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       onBlur,
       onKeyDown,
       onKeyUp,
-      controlRef,
     }),
     [
       autoComplete,
@@ -914,7 +928,6 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       onBlur,
       onKeyDown,
       onKeyUp,
-      controlRef,
     ],
   );
   const listLabelledBy =
@@ -962,7 +975,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       summaryId: hasSummary ? summaryId : undefined,
       triggerRef,
       setReference,
-      controlRef: controlElementRef,
+      controlElementRef,
       groupRef,
       chipRef,
       registerTrigger,
@@ -1050,18 +1063,35 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       </>
     );
 
+  const rootPart = slotProps?.root;
+  const rootProps = mergeSlotProps(rootPart, {
+    className: wcn(tagPickerClassNames.root, 'wave:relative', className),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      'data-overflow': overflow,
+      'data-collapsed': collapsed ? '' : undefined,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
+      // TagPicker's own root props, after the data attributes as in 0.18, and over the part's;
+      // the root holds the trigger, so only they hide it or take it out of reach.
+      ...rest,
+      hidden: rest.hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
     <div
-      data-size={size}
-      data-appearance={appearance}
-      data-overflow={overflow}
-      data-collapsed={collapsed ? '' : undefined}
-      {...rest}
+      {...rootProps}
       ref={rootMergedRef}
-      className={cn(tagPickerClassNames.root, 'relative', className)}
-      // Focus inside the root (DOM containment) expands the single-line layout.
-      onFocus={trackFocus}
-      onBlur={trackBlur}
+      // Focus inside the root (DOM containment) expands the single-line layout: bookkeeping that
+      // runs after the part's handlers, also when they prevent the default.
+      onFocus={composeAfterPart(rootPart?.onFocus, trackFocus)}
+      onBlur={composeAfterPart(rootPart?.onBlur, trackBlur)}
     >
       <TagPickerContext.Provider value={context}>{parts}</TagPickerContext.Provider>
       {hasSummary && (
@@ -1072,7 +1102,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       )}
       {/* Mounted before its text: a live region added together with its text is not announced by
           every screen reader. The row in the popup is the visible copy. */}
-      <span role="status" className="sr-only">
+      <span role="status" className="wave:sr-only">
         {noMatches && noMatchesText}
       </span>
       <HiddenInput

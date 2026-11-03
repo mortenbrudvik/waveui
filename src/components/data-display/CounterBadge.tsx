@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { badgeClassNames, counterBadgeClassNames } from '../../lib/classNames';
 import type { BadgeColor } from '../../lib/types';
-import { badgeColorClasses, warnImportantColor } from './Badge.colors';
+import { badgeColorClasses } from './Badge.colors';
 
 /** Properties for the CounterBadge component. */
 export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -22,10 +22,10 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
   appearance?: 'filled' | 'outline';
   /**
    * Semantic color, from Badge's palette: `brand`, `danger`, `important`, `informative`, `severe`,
-   * `subtle`, `success`, `warning`. `important` follows Badge (see `BadgeProps.color`): it renders
-   * the severe (orange) colors in 0.x and becomes a neutral high-emphasis color in 1.0; development
-   * builds log a warning once (pass `severe` to keep the orange look). A value outside the palette
-   * (from untyped code) renders as `brand`.
+   * `subtle`, `success`, `warning`. `important` follows Badge (see `BadgeProps.color`): Fluent's
+   * neutral high-emphasis color, near black in the light theme and inverted in the dark one
+   * (`severe` is the orange it drew through 0.x). A value outside the palette (from untyped code)
+   * renders as `brand`.
    * @default 'brand'
    */
   color?: BadgeColor;
@@ -78,13 +78,6 @@ export const CounterBadge = ({
   ref,
   ...props
 }: CounterBadgeProps) => {
-  const rendersBadge = dot || (count >= 0 && (count !== 0 || showZero));
-
-  // C-DEV: `important` changes meaning in 1.0; only a badge that draws is affected.
-  React.useEffect(() => {
-    if (color === 'important' && rendersBadge) warnImportantColor('CounterBadge');
-  }, [color, rendersBadge]);
-
   if (!dot && (count < 0 || (count === 0 && !showZero))) return null;
 
   // Before 0.6 `color` was the span's HTML attribute (any string): a value outside the palette
@@ -96,13 +89,13 @@ export const CounterBadge = ({
   const appearanceClasses = dot
     ? appearance === 'filled'
       ? c.dot
-      : cn('bg-transparent border', c.dotBorder)
+      : wcn('wave:bg-transparent wave:border', c.dotBorder)
     : appearance === 'filled'
       ? c.filled
-      : cn(
-          'bg-transparent border',
+      : wcn(
+          'wave:bg-transparent wave:border',
           c.border,
-          resolvedColor === 'brand' ? 'text-primary' : 'text-foreground',
+          resolvedColor === 'brand' ? 'wave:text-primary' : 'wave:text-foreground',
         );
 
   // A name on a role-less <span> is not announced by screen readers: name it as an image. An empty
@@ -116,14 +109,14 @@ export const CounterBadge = ({
       data-color={resolvedColor}
       data-appearance={appearance}
       data-dot={dot ? '' : undefined}
-      className={cn(
+      className={wcn(
         badgeClassNames.root,
         counterBadgeClassNames.root,
-        'inline-flex items-center justify-center rounded-full',
+        'wave:inline-flex wave:items-center wave:justify-center wave:rounded-full',
         dot
           ? // In forced colors the background would become Canvas and hide the dot.
-            'h-1.5 w-1.5 min-w-0 p-0 forced-colors:forced-color-adjust-none forced-colors:bg-[CanvasText]'
-          : 'h-5 min-w-5 px-1.5 text-caption-1 font-semibold',
+            'wave:h-1.5 wave:w-1.5 wave:min-w-0 wave:p-0 wave:forced-colors:forced-color-adjust-none wave:forced-colors:bg-[CanvasText]'
+          : 'wave:h-5 wave:min-w-5 wave:px-1.5 wave:text-caption-1 wave:font-semibold',
         appearanceClasses,
         className,
       )}

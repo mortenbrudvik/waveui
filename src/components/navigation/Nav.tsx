@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   navCategoryClassNames,
   navItemClassNames,
@@ -8,7 +8,7 @@ import {
 import type { MotionPreference, MotionSlot, Slot } from '../../lib/types';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 // Aliased: `expandIconMotion` is also Nav.Category's prop.
 import {
@@ -71,10 +71,9 @@ export interface NavCategoryProps extends React.HTMLAttributes<HTMLLIElement> {
    */
   value: string;
   /**
-   * Label of the category's toggle button (any content). Without it, the text children are used
-   * as the label — deprecated: pass the label here and only the sub-items as children.
+   * Label of the category's toggle button (any content). The children are only the sub-items.
    */
-  label?: React.ReactNode;
+  label: React.ReactNode;
   /**
    * Icon displayed before the category label. Rendered with `aria-hidden="true"`. A falsy icon
    * (`''`, `0`) or a list of nothing renders no icon box.
@@ -418,7 +417,8 @@ type NavEntryProps = NavItemOwnProps &
 // Styles
 // ---------------------------------------------------------------------------
 
-const iconClasses = 'flex h-5 w-5 shrink-0 items-center justify-center';
+const iconClasses =
+  'wave:flex wave:h-5 wave:w-5 wave:shrink-0 wave:items-center wave:justify-center';
 
 /**
  * The `icon` slot of Nav.Item and Nav.Category, or `null` when it renders nothing. A falsy icon
@@ -431,33 +431,34 @@ function renderIcon(
   className: string | undefined,
 ): React.ReactElement | null {
   return icon && slotRendersContent(icon)
-    ? renderSlot(icon, 'span', cn(className, iconClasses), { 'aria-hidden': true })
+    ? renderSlot(icon, 'span', wcn(className, iconClasses), { 'aria-hidden': true })
     : null;
 }
 
 const itemClasses = {
-  base: cn(
-    'flex w-full items-center gap-2 px-4 py-2 text-body-1 text-start no-underline transition-colors motion-reduce:transition-none',
+  base: wcn(
+    'wave:flex wave:w-full wave:items-center wave:gap-2 wave:px-4 wave:py-2 wave:text-body-1 wave:text-start wave:no-underline wave:transition-colors wave:motion-reduce:transition-none',
     focusRingInset,
     disabledStyles,
   ),
-  selected: 'bg-subtle-selected text-primary font-semibold border-s-2 border-s-primary',
-  idle: 'text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+  selected:
+    'wave:bg-subtle-selected wave:text-primary wave:font-semibold wave:border-s-2 wave:border-s-primary',
+  idle: 'wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
   // With actions, the selected background and indicator move to the row (D121).
-  selectedInRow: 'text-primary font-semibold',
-  rowSelected: 'bg-subtle-selected border-s-2 border-s-primary',
+  selectedInRow: 'wave:text-primary wave:font-semibold',
+  rowSelected: 'wave:bg-subtle-selected wave:border-s-2 wave:border-s-primary',
 };
 
 const subItemClasses = {
-  base: cn(
-    'flex w-full items-center ps-11 pe-4 py-1.5 text-body-1 text-start no-underline transition-colors motion-reduce:transition-none',
+  base: wcn(
+    'wave:flex wave:w-full wave:items-center wave:ps-11 wave:pe-4 wave:py-1.5 wave:text-body-1 wave:text-start wave:no-underline wave:transition-colors wave:motion-reduce:transition-none',
     focusRingInset,
     disabledStyles,
   ),
-  selected: 'text-primary font-semibold',
-  idle: 'text-muted-foreground not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+  selected: 'wave:text-primary wave:font-semibold',
+  idle: 'wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
   // Sub-items have no selected background: a sub-item row gets only the hover.
-  selectedInRow: 'text-primary font-semibold',
+  selectedInRow: 'wave:text-primary wave:font-semibold',
   rowSelected: undefined,
 };
 
@@ -476,8 +477,8 @@ interface NavEntryClasses {
  * item cannot be disabled, so its hover needs no gate.
  */
 const rowClasses =
-  'group/nav-row flex items-center transition-colors motion-reduce:transition-none';
-const rowHoverClasses = 'hover:bg-subtle-hover';
+  'wave:group/nav-row wave:flex wave:items-center wave:transition-colors wave:motion-reduce:transition-none';
+const rowHoverClasses = 'wave:hover:bg-subtle-hover';
 
 /**
  * The actions element (D120). Each direct child is transparent until the row is hovered or has
@@ -488,18 +489,18 @@ const rowHoverClasses = 'hover:bg-subtle-hover';
  * the actions' reveal motion of `lib/motion` to these classes unless the provider's motion is
  * `'none'` (it has no slot: it is not a presence motion).
  */
-const actionsClasses = cn(
-  'flex shrink-0 items-center gap-1 pe-2',
-  '*:opacity-0 group-hover/nav-row:*:opacity-100 group-focus-within/nav-row:*:opacity-100',
-  'forced-colors:*:opacity-100 [@media(hover:none)]:*:opacity-100',
-  '*:has-[[aria-pressed=true]]:opacity-100 *:has-[[aria-expanded=true]]:opacity-100',
-  '[&>[aria-pressed=true]]:opacity-100 [&>[aria-expanded=true]]:opacity-100',
+const actionsClasses = wcn(
+  'wave:flex wave:shrink-0 wave:items-center wave:gap-1 wave:pe-2',
+  'wave:*:opacity-0 wave:group-hover/nav-row:*:opacity-100 wave:group-focus-within/nav-row:*:opacity-100',
+  'wave:forced-colors:*:opacity-100 wave:[@media(hover:none)]:*:opacity-100',
+  'wave:*:has-[[aria-pressed=true]]:opacity-100 wave:*:has-[[aria-expanded=true]]:opacity-100',
+  'wave:[&>[aria-pressed=true]]:opacity-100 wave:[&>[aria-expanded=true]]:opacity-100',
 );
 
-const categoryButtonClasses = cn(
-  'flex w-full items-center gap-2 px-4 py-2 text-body-1 font-semibold text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
+const categoryButtonClasses = wcn(
+  'wave:flex wave:w-full wave:items-center wave:gap-2 wave:px-4 wave:py-2 wave:text-body-1 wave:font-semibold wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none',
   // A closed category that contains the current page shows the selected look of an item.
-  'data-[contains-current]:bg-subtle-selected data-[contains-current]:text-primary data-[contains-current]:border-s-2 data-[contains-current]:border-s-primary',
+  'wave:data-[contains-current]:bg-subtle-selected wave:data-[contains-current]:text-primary wave:data-[contains-current]:border-s-2 wave:data-[contains-current]:border-s-primary',
   focusRingInset,
 );
 
@@ -588,7 +589,9 @@ function renderNavEntry(
 
   // The parts are merged only when given: a Nav renders many entries.
   const contentPart = slotProps?.content;
-  const contentClassName = withIcon ? cn(stable.content, 'flex-1 text-start') : undefined;
+  const contentClassName = withIcon
+    ? wcn(stable.content, 'wave:flex-1 wave:text-start')
+    : undefined;
   const content = (
     <>
       {withIcon && renderIcon(icon, stable.icon)}
@@ -610,16 +613,16 @@ function renderNavEntry(
     </>
   );
 
-  const entryClassName = cn(
+  const entryClassName = wcn(
     stable.root,
     classes.base,
     isSelected ? (hasActions ? classes.selectedInRow : classes.selected) : classes.idle,
-    hasActions && 'min-w-0 flex-1',
+    hasActions && 'wave:min-w-0 wave:flex-1',
     className,
   );
 
   const listItemClassName = hasActions
-    ? cn(
+    ? wcn(
         stable.listItem,
         rowClasses,
         isSelected && classes.rowSelected ? classes.rowSelected : !disabled && rowHoverClasses,
@@ -635,7 +638,7 @@ function renderNavEntry(
   let actionsGroup: React.ReactElement | null = null;
   if (hasActions) {
     const actionsPart = slotProps?.actions;
-    const actionsClassName = cn(
+    const actionsClassName = wcn(
       stable.actions,
       actionsClasses,
       motionPreference === 'none' ? undefined : navActionsReveal,
@@ -831,11 +834,11 @@ const NavCategory = ({
   if (expandGlyph === undefined || expandGlyph === null) {
     expandIconElement = (
       <ChevronDownIcon
-        className={cn(
+        className={wcn(
           navCategoryClassNames.expandIcon,
-          'shrink-0',
+          'wave:shrink-0',
           expandIconMotionClassName,
-          isOpen && 'rotate-180',
+          isOpen && 'wave:rotate-180',
         )}
       />
     );
@@ -843,25 +846,13 @@ const NavCategory = ({
     expandIconElement = renderSlot(
       expandGlyph,
       'span',
-      cn(navCategoryClassNames.expandIcon, 'inline-flex shrink-0', expandIconMotionClassName),
+      wcn(
+        navCategoryClassNames.expandIcon,
+        'wave:inline-flex wave:shrink-0',
+        expandIconMotionClassName,
+      ),
       { 'aria-hidden': true },
     );
-  }
-
-  let buttonLabel: React.ReactNode = label;
-  let items: React.ReactNode = children;
-  if (label === undefined) {
-    // Deprecated 0.4 path: the text children are the label, the other children the sub-items.
-    warnDeprecated(
-      'Nav.Category',
-      'text children as the label',
-      'label',
-      'Pass the category label in `label` and only the sub-items as children.',
-    );
-    const parts = React.Children.toArray(children);
-    const isText = (part: unknown) => typeof part === 'string' || typeof part === 'number';
-    buttonLabel = parts.filter(isText).join('');
-    items = parts.filter((part) => !isText(part));
   }
 
   // The parts are merged only when given, with the attributes the category sets on each (those it
@@ -881,14 +872,14 @@ const NavCategory = ({
   const ariaCurrent = containsCurrent ? true : undefined;
   const containsCurrentMarker = containsCurrent ? '' : undefined;
   const rovingValue = roving ? `wave-nav-category:${value}` : undefined;
-  const buttonClassName = cn(navCategoryClassNames.button, categoryButtonClasses);
-  const labelClassName = cn(navCategoryClassNames.label, 'flex-1 text-start');
+  const buttonClassName = wcn(navCategoryClassNames.button, categoryButtonClasses);
+  const labelClassName = wcn(navCategoryClassNames.label, 'wave:flex-1 wave:text-start');
   const listClassName = isListMounted
-    ? cn(navCategoryClassNames.list, 'm-0 list-none p-0')
+    ? wcn(navCategoryClassNames.list, 'wave:m-0 wave:list-none wave:p-0')
     : undefined;
 
   return (
-    <li ref={ref} {...rest} className={cn(navCategoryClassNames.root, className)}>
+    <li ref={ref} {...rest} className={wcn(navCategoryClassNames.root, className)}>
       <button
         type="button"
         aria-expanded={isOpen}
@@ -926,7 +917,7 @@ const NavCategory = ({
               locked: { ...NAV_SHOWN_PART_LOCKS, 'aria-label': undefined },
             }))}
         >
-          {buttonLabel}
+          {label}
         </span>
         {expandIconElement}
       </button>
@@ -935,7 +926,7 @@ const NavCategory = ({
           <div
             ref={collapseRef}
             {...collapsePresenceProps}
-            className={cn(navCategoryClassNames.collapse, collapseClassName)}
+            className={wcn(navCategoryClassNames.collapse, collapseClassName)}
           >
             <ul
               id={listId}
@@ -947,7 +938,7 @@ const NavCategory = ({
                 }))}
               ref={listMergedRef}
             >
-              {items}
+              {children}
             </ul>
           </div>
         </NavCategoryValueContext.Provider>
@@ -1055,10 +1046,9 @@ markNavPart(NavSubItem, 'entry');
  * collapsible categories.
  *
  * - **Selection**: `value`/`defaultValue`/`onValueChange` (`onValueChange` fires only when the
- *   value changes). The deprecated `selectedValue`/`defaultSelectedValue`/`onNavItemSelect` still
- *   work; `onNavItemSelect` keeps firing on every activation, re-selection included. A click that
- *   opens a link in another tab or window (or downloads it) selects nothing, unless the item's
- *   `onClick` prevents the default (client-side routing: then nothing opens elsewhere).
+ *   value changes). A click that opens a link in another tab or window (or downloads it) selects
+ *   nothing, unless the item's `onClick` prevents the default (client-side routing: then nothing
+ *   opens elsewhere).
  * - **Categories**: `openCategories`/`defaultOpenCategories`/`onOpenCategoriesChange`. Without
  *   `defaultOpenCategories`, the categories containing the selected item (`value` or
  *   `defaultValue`) start open. A closed category that contains the selected item marks its toggle

@@ -72,7 +72,7 @@ export interface NavContextValue {
   value: string;
   /**
    * Activation of an item: sets the value, then calls the root's `onActivate` (every activation,
-   * re-selection included; Nav's deprecated `onNavItemSelect`).
+   * re-selection included; NavDrawer's `onItemSelect`).
    */
   select: (value: string) => void;
   /** The values of the open categories. */
@@ -214,8 +214,8 @@ export type NavPartKind = 'entry' | 'category';
 
 /**
  * The marker property of a Nav part, read only by {@link getNavPartKind}. A registry symbol
- * (`Symbol.for`), as Field's label marker (`fieldLabel.ts`): the ESM and CJS copies of the package
- * share it, so a part marked by one copy is recognised by the other.
+ * (`Symbol.for`), as Field's label marker (`fieldLabel.ts`): two copies of the package (duplicate
+ * installs, bundler duplicates) share it, so a part marked by one copy is recognised by the other.
  */
 const NAV_PART: symbol = Symbol.for('wave.navPart');
 

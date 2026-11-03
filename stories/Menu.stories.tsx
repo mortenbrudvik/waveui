@@ -349,7 +349,7 @@ function ControlledViewMenu(args: MenuProps) {
   const shown = checkedValues.view?.join(', ') || 'nothing';
   return (
     <div className="flex flex-col items-start gap-3">
-      <p className="text-body-1 text-foreground">
+      <p className="text-wave-body-1 text-wave-foreground">
         Showing: {shown}. Sorted by: {checkedValues.sort?.[0] ?? 'none'}.
       </p>
       <Menu
@@ -586,8 +586,8 @@ export const SplitGroup: Story = {
  * A `motion` of your own replaces the default one: this menu appears at once and fades out over
  * 150ms. While it closes, its surface carries `data-presence="exiting"` (and `inert`), the phase
  * these classes key on, and it unmounts when the fade ends; focus is back on the trigger at once.
- * The fade is off under reduced motion. (0.14 put such classes in `className`, which still works:
- * a `className` with `data-[presence=…]` classes and no `motion` gets no default motion.)
+ * The fade is off under reduced motion. (In `className` the same classes would apply next to the
+ * default motion: only `motion` replaces it.)
  */
 export const ExitMotion: Story = {
   args: {
@@ -697,9 +697,9 @@ export const ContextMenu: Story = {
         <Menu.Trigger>
           <div
             aria-keyshortcuts="Shift+F10"
-            className="flex w-72 flex-col items-stretch gap-1 rounded-md border border-border p-2"
+            className="flex w-72 flex-col items-stretch gap-1 rounded-md border border-wave-border p-2"
           >
-            <p className="px-2 text-caption-1 text-muted-foreground">
+            <p className="px-2 text-wave-caption-1 text-wave-muted-foreground">
               Right-click a file, or press Shift+F10 on it.
             </p>
             {FILES.map((file) => (
@@ -737,7 +737,7 @@ function CustomTargetMenu({ onOpenChange, ...args }: MenuProps) {
   };
   return (
     <div className="flex items-center gap-2">
-      <span className="text-body-1 text-foreground">Layout</span>
+      <span className="text-wave-body-1 text-wave-foreground">Layout</span>
       <Button
         ref={setToggle}
         aria-haspopup="menu"
@@ -802,17 +802,17 @@ function TemplateItem({ title, description, onSelect }: TemplateItemProps) {
       className={cn(
         'flex cursor-pointer select-none items-start gap-2 px-3 py-1.5',
         // Gated as the built-in items' colors are: a disabled item takes no hover or focus color.
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed not-disabled:not-aria-disabled:focus:bg-subtle-hover',
+        'not-disabled:not-aria-disabled:hover:bg-wave-subtle-hover not-disabled:not-aria-disabled:active:bg-wave-subtle-pressed not-disabled:not-aria-disabled:focus:bg-wave-subtle-hover',
         focusRingInset,
       )}
     >
       {hasCheckmarks && <span aria-hidden="true" className="w-4 shrink-0" />}
       {hasIcons && <span aria-hidden="true" className="h-5 w-5 shrink-0" />}
       <span className="flex flex-col">
-        <span id={`${id}-title`} className="text-body-1 text-foreground">
+        <span id={`${id}-title`} className="text-wave-body-1 text-wave-foreground">
           {title}
         </span>
-        <span id={`${id}-description`} className="text-caption-1 text-muted-foreground">
+        <span id={`${id}-description`} className="text-wave-caption-1 text-wave-muted-foreground">
           {description}
         </span>
       </span>

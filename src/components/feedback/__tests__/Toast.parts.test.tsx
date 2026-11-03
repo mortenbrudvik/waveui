@@ -729,7 +729,7 @@ describe('ToastTitle — slotProps', () => {
       </Toast>,
     );
     expect(openingTags(host.querySelector('.' + toastTitleClassNames.label) as Element)).toBe(
-      '<span class="wave-toast-title__label min-w-0 flex-1 text-body-2 font-semibold text-foreground" id="wave-toast-title-_id0_">',
+      '<span class="wave-toast-title__label wave:min-w-0 wave:flex-1 wave:text-body-2 wave:font-semibold wave:text-foreground" id="wave-toast-title-_id0_">',
     );
   });
 
@@ -773,7 +773,7 @@ describe('ToastTitle — slotProps', () => {
     );
     const text = label();
     expect(text.classList[0]).toBe(toastTitleClassNames.label);
-    expect(text).toHaveClass('font-semibold', 'my-label');
+    expect(text).toHaveClass('wave:font-semibold', 'my-label');
     expect(text.classList[text.classList.length - 1]).toBe('my-label');
     expect(text).toHaveAttribute('data-part', 'label');
     expect(text).toHaveStyle({ letterSpacing: '1px' });
@@ -790,7 +790,7 @@ describe('ToastTitle — slotProps', () => {
       </Toast>,
     );
     expect(label()).toHaveClass('font-bold');
-    expect(label()).not.toHaveClass('font-semibold');
+    expect(label()).not.toHaveClass('wave:font-semibold');
   });
 
   it('keeps the title text the toast’s name: its id, name and hidden state are locked', () => {
@@ -897,7 +897,7 @@ describe('ToastBody — slotProps', () => {
       </Toast>,
     );
     expect(openingTags(host.querySelector('.' + toastBodyClassNames.subtitle) as Element)).toBe(
-      '<div class="wave-toast-body__subtitle mt-1 text-caption-1 text-muted-foreground">',
+      '<div class="wave-toast-body__subtitle wave:mt-1 wave:text-caption-1 wave:text-muted-foreground">',
     );
   });
 
@@ -943,7 +943,7 @@ describe('ToastBody — slotProps', () => {
     );
     const line = subtitle();
     expect(line.classList[0]).toBe(toastBodyClassNames.subtitle);
-    expect(line).toHaveClass('text-caption-1', 'my-subtitle');
+    expect(line).toHaveClass('wave:text-caption-1', 'my-subtitle');
     expect(line.classList[line.classList.length - 1]).toBe('my-subtitle');
     expect(line).toHaveAttribute('data-part', 'subtitle');
     expect(line).toHaveStyle({ letterSpacing: '1px' });
@@ -962,7 +962,7 @@ describe('ToastBody — slotProps', () => {
       </Toast>,
     );
     expect(subtitle()).toHaveClass('mt-2');
-    expect(subtitle()).not.toHaveClass('mt-1');
+    expect(subtitle()).not.toHaveClass('wave:mt-1');
   });
 
   it('keeps the subtitle in the toast’s description: its name and hidden state are locked', () => {

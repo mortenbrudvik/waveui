@@ -2,7 +2,7 @@ import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { isElementOfType } from '../../lib/children';
 import { messageBarClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
 import { hasRenderedTextLabel, hasTextLabel, observeTextLabel } from '../../lib/labelInName';
@@ -17,7 +17,7 @@ import {
 } from '../../lib/slot';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
-import type { Status, Slot, SlotObject } from '../../lib/types';
+import type { Status, Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
@@ -107,15 +107,16 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * (`<button aria-label="Close">…</button>`). An `aria-label`, `aria-labelledby` or `title` on
    * the element names the button.
    *
-   * The 0.4 button-object form (`{ as: 'button', onClick, … }`, `{ as: Button, … }` or an object
-   * with button props) is **deprecated**: its button props (`type` included), `className` and
-   * `style` are merged the same way, and a Wave Button's own props apply as for the element form.
-   * Pass icon content instead, e.g. `dismiss={<CloseIcon />}`.
+   * A slot object is the content element, not the button: its attributes, `className`, `style`,
+   * `ref` and event handlers included, go to that element (only the naming attributes above reach
+   * the button), so handle the press in `onDismiss`. A slot object whose `as` is a `<button>` or a
+   * Wave `Button` cannot render inside the button: its children render as the content (the
+   * default icon when it has none) and its props are dropped, with a development warning.
    *
    * `slotProps.dismissButton` reaches the same button; its attributes replace those of a merged
    * button (see there).
    */
-  dismiss?: Slot<'span'> | SlotObject<'button'>;
+  dismiss?: Slot<'span'>;
   /**
    * How the text and the actions share the bar. `'singleline'`: the actions sit on the text's row
    * (the text wraps inside its column; it is never cut off). `'multiline'`: the actions get a row of
@@ -159,7 +160,7 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
     /**
      * The Dismiss `<button>`, rendered while the bar has `onDismiss` or `dismiss` content (stable
      * class `wave-message-bar__dismiss-button`; `dismiss` fills its content). A `<button>` or
-     * `Button` passed as `dismiss`, or the deprecated button object, reaches this button too: its
+     * `Button` passed as `dismiss` reaches this button too: its
      * attributes are the defaults these props replace (yours win), its classes come before yours
      * and its handlers run after yours. Locked, at the values the bar and that button give
      * together: `type`, `disabled`, `tabIndex`, `hidden`, `aria-hidden`, `inert`, `role`,
@@ -180,10 +181,10 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const tintClasses: Record<Status, string> = {
-  info: 'bg-info-tint',
-  success: 'bg-success-tint',
-  warning: 'bg-warning-tint',
-  error: 'bg-error-tint',
+  info: 'wave:bg-info-tint',
+  success: 'wave:bg-success-tint',
+  warning: 'wave:bg-warning-tint',
+  error: 'wave:bg-error-tint',
 };
 
 type UnknownProps = Record<string, unknown>;
@@ -191,30 +192,11 @@ type UnknownProps = Record<string, unknown>;
 /** Name of the dismiss button when nothing else names it. */
 const DEFAULT_DISMISS_LABEL = 'Dismiss';
 
-/** Attributes that only make sense on the dismiss `<button>` itself. */
-const BUTTON_ONLY_KEYS: ReadonlySet<string> = new Set([
-  'type',
-  'disabled',
-  'autoFocus',
-  'form',
-  'formAction',
-  'formEncType',
-  'formMethod',
-  'formNoValidate',
-  'formTarget',
-  'name',
-  'value',
-  'popoverTarget',
-  'popoverTargetAction',
-]);
-
 /**
  * Attributes that name the dismiss button. On a slot object they go to the button (its content is
  * decorative); on the merged button, any of them replaces the default `aria-label`.
  */
 const NAMING_KEYS: ReadonlySet<string> = new Set(['aria-label', 'aria-labelledby', 'title']);
-
-const HANDLER_KEY = /^on[A-Z]/;
 
 /**
  * The Dismiss button's attributes that `slotProps.dismissButton` cannot change, at the values the
@@ -246,7 +228,7 @@ const DISMISS_LOCKS = {
 /** The handlers a part does not receive while its button activates nothing (`blockHandlers`). */
 const BLOCK_CLICK = ['onClick'] as const;
 
-const dismissContentClassName = 'inline-flex items-center justify-center';
+const dismissContentClassName = 'wave:inline-flex wave:items-center wave:justify-center';
 
 /** Live-region roles: a title is read as the start of their content, never as their name. */
 const LIVE_REGION_ROLES: ReadonlySet<string> = new Set([
@@ -293,8 +275,11 @@ interface DismissParts {
    * but focusable, as the Button would be.
    */
   disabledFocusable: boolean;
-  /** Which development warning the slot needs. */
-  warning: 'button-element' | 'button-object' | null;
+  /**
+   * Which development warning the slot needs: a `<button>`/`Button` element merged, or a slot
+   * object whose `as` is a button unwrapped.
+   */
+  warning: 'button-element' | 'button-slot-object' | null;
 }
 
 const noop = () => {};
@@ -365,7 +350,7 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
     const icon = element.props.icon as Slot<'span'>;
     const iconNode =
       isWaveButton && slotRendersContent(icon)
-        ? renderSlot(icon, 'span', cn(messageBarClassNames.dismissIcon, dismissContentClassName), {
+        ? renderSlot(icon, 'span', wcn(messageBarClassNames.dismissIcon, dismissContentClassName), {
             'aria-hidden': true,
           })
         : null;
@@ -385,71 +370,50 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
 
   // Everything else is classified by the slot system (F2): shorthand content resolves to the
   // default `span` with no attributes; a slot object resolves to its element and attributes.
-  // A render function is merged with a button `as`, or dropped when it renders nothing.
+  // A render function is resolved with a button `as` (it renders the content), or dropped when it
+  // renders nothing.
   const resolved = resolveWiredSlot(resolveSlot(dismiss as Slot<'span'>, 'span'), isButtonType);
   if (!resolved) return defaultDismiss();
-  const { Component, props, children } = resolved;
-  const asButton = isButtonType(Component);
-  const isButtonObject =
-    asButton ||
-    Object.keys(props).some((key) => BUTTON_ONLY_KEYS.has(key) || HANDLER_KEY.test(key));
+  const { children } = resolved;
+  // A slot object whose `as` is a button cannot render inside the dismiss button: it is
+  // unwrapped, so its children are the content of a span and its props are dropped.
+  const unwrapped = isButtonType(resolved.Component);
+  const Component: React.ElementType = unwrapped ? 'span' : resolved.Component;
   const buttonProps: UnknownProps = {};
   const contentProps: UnknownProps = {};
-  let iconNode: React.ReactNode = null;
-  for (const [key, value] of Object.entries(props)) {
-    if (Component === Button && BUTTON_OWN_PROP_KEYS.has(key)) {
-      // Wave Button's own props are not attributes: `icon`, `iconPosition` and
-      // `disabledFocusable` are applied below, the others (`appearance`, `size`) are dropped.
-      if (key === 'icon' && slotRendersContent(value)) {
-        iconNode = renderSlot(
-          value as Slot<'span'>,
-          'span',
-          cn(messageBarClassNames.dismissIcon, dismissContentClassName),
-          { 'aria-hidden': true },
-        );
-      }
-    } else if (
-      BUTTON_ONLY_KEYS.has(key) ||
-      HANDLER_KEY.test(key) ||
-      NAMING_KEYS.has(key) ||
-      // 0.4 rendered the object as the button itself: its className, style and ref stay there.
-      (isButtonObject && (key === 'className' || key === 'style' || key === 'ref'))
-    ) {
-      buttonProps[key] = value;
-    } else {
-      contentProps[key] = value;
-    }
+  for (const [key, value] of Object.entries(unwrapped ? {} : resolved.props)) {
+    // The content is decorative: a naming attribute names the dismiss button instead.
+    (NAMING_KEYS.has(key) ? buttonProps : contentProps)[key] = value;
   }
 
-  // The content element: the object's own element, or a span for the button-object form. An
-  // object whose children render nothing styles the default icon
-  // (e.g. `{ className: 'text-error' }`), unless its element is the icon itself.
-  const ContentTag: React.ElementType = asButton ? 'span' : Component;
+  // The content element: the object's own element. An object whose children render nothing
+  // styles the default icon (e.g. `{ className: 'text-error' }`), unless its element is the icon
+  // itself.
   const elementProps = {
     'aria-hidden': true,
     ...contentProps,
-    className: cn(
-      iconNode === null && messageBarClassNames.dismissIcon,
+    className: wcn(
+      messageBarClassNames.dismissIcon,
       dismissContentClassName,
       contentProps.className as string | undefined,
     ),
   };
   let inner: React.ReactNode = null;
-  if (iconNode || slotRendersContent(children)) {
-    inner = placeButtonIcon(iconNode, children, Component === Button && props.iconPosition);
-  } else if (slotWrapsDefaultContent(ContentTag, { ...contentProps, children })) {
+  if (slotRendersContent(children)) {
+    inner = children;
+  } else if (slotWrapsDefaultContent(Component, { ...contentProps, children })) {
     inner = defaultDismissContent();
   }
   return {
     buttonProps,
     content:
       inner === null
-        ? React.createElement(ContentTag, elementProps)
-        : React.createElement(ContentTag, elementProps, inner),
+        ? React.createElement(Component, elementProps)
+        : React.createElement(Component, elementProps, inner),
     contentMayName: false,
     literalTextLabel: false,
-    disabledFocusable: Component === Button && Boolean(props.disabledFocusable),
-    warning: isButtonObject ? 'button-object' : null,
+    disabledFocusable: false,
+    warning: unwrapped ? 'button-slot-object' : null,
   };
 }
 
@@ -467,9 +431,9 @@ const MessageBarRoot = ({
   ref,
   ...rest
 }: MessageBarProps) => {
-  const iconClassName = cn(
+  const iconClassName = wcn(
     messageBarClassNames.icon,
-    'mt-0.5 inline-flex shrink-0',
+    'wave:mt-0.5 wave:inline-flex wave:shrink-0',
     STATUS_ICON_COLOR[status],
   );
   const renderedIcon =
@@ -494,10 +458,10 @@ const MessageBarRoot = ({
         'MessageBar:dismiss-button-element',
         'MessageBar: `dismiss` received a button element; its props were merged into the built-in dismiss button (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.',
       );
-    } else if (dismissWarning === 'button-object') {
+    } else if (dismissWarning === 'button-slot-object') {
       warnOnce(
-        'MessageBar:dismiss-button-object',
-        'MessageBar: the button-object form of `dismiss` is deprecated and will be removed in 1.0; its button props were merged into the built-in dismiss button. Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.',
+        'MessageBar:dismiss-button-slot-object',
+        'MessageBar: `dismiss` received a slot object that renders a button; its children render inside the built-in dismiss button and its props were dropped (buttons cannot be nested). Pass icon content instead, e.g. `dismiss={<CloseIcon />}`, and use `onDismiss`.',
       );
     }
   }, [dismissWarning]);
@@ -539,13 +503,13 @@ const MessageBarRoot = ({
       {
         'aria-label': hasOwnName || namedByContent ? undefined : DEFAULT_DISMISS_LABEL,
         onClick: () => onDismiss?.(),
-        className: cn(
+        className: wcn(
           messageBarClassNames.dismissButton,
-          'ms-auto inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground',
-          'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground',
-          'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+          'wave:ms-auto wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded wave:border-none wave:bg-transparent wave:p-1 wave:text-muted-foreground',
+          'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground',
+          'wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
           focusRing,
-          'disabled:cursor-not-allowed disabled:opacity-50',
+          'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
           mergedAriaDisabledClasses,
         ),
       },
@@ -646,10 +610,10 @@ const MessageBarRoot = ({
     measuring ? setTextElement : undefined,
     bodyPart?.ref,
   );
-  const bodyClassName = cn(
+  const bodyClassName = wcn(
     messageBarClassNames.body,
-    'min-w-0 flex-1 text-body-1',
-    unwrapped && 'whitespace-nowrap',
+    'wave:min-w-0 wave:flex-1 wave:text-body-1',
+    unwrapped && 'wave:whitespace-nowrap',
   );
   const text = (
     <div
@@ -688,9 +652,9 @@ const MessageBarRoot = ({
       data-layout={resolvedLayout}
       {...rest}
       aria-labelledby={labelledBy}
-      className={cn(
+      className={wcn(
         messageBarClassNames.root,
-        'flex items-start gap-3 rounded border-s-4 px-4 py-3 text-foreground',
+        'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border-s-4 wave:px-4 wave:py-3 wave:text-foreground',
         tintClasses[status],
         STATUS_BORDER[status],
         className,
@@ -702,9 +666,9 @@ const MessageBarRoot = ({
           {hasActions ? (
             // A layout wrapper (not a part): the text column and the actions, in this DOM order.
             <div
-              className={cn(
-                'flex min-w-0 flex-1 gap-x-3 gap-y-2',
-                resolvedLayout === 'multiline' ? 'flex-col' : 'items-start',
+              className={wcn(
+                'wave:flex wave:min-w-0 wave:flex-1 wave:gap-x-3 wave:gap-y-2',
+                resolvedLayout === 'multiline' ? 'wave:flex-col' : 'wave:items-start',
               )}
             >
               {text}

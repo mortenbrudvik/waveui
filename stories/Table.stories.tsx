@@ -87,7 +87,9 @@ export const WithCaptionAndScroll: Story = {
   },
   render: (args) => (
     <Table {...args}>
-      <caption className="px-4 py-2 text-start text-body-1 font-semibold">Team directory</caption>
+      <caption className="px-4 py-2 text-start text-wave-body-1 font-semibold">
+        Team directory
+      </caption>
       {header(['ID', 'Name', 'Email', 'Role', 'Location'])}
       <Table.Body>
         {members.map((member) => (

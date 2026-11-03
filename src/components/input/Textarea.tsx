@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { textareaClassNames } from '../../lib/classNames';
 import { inputAppearanceClasses, inputFocus, inputInvalid } from '../../lib/styles';
@@ -44,9 +44,9 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 
 /** Minimum height, padding and type ramp of each size (medium is the 0.7 look). */
 const TEXTAREA_SIZE: Readonly<Record<CoreSize, string>> = {
-  small: 'min-h-16 px-2 py-1 text-caption-1',
-  medium: 'min-h-20 px-3 py-2 text-body-1',
-  large: 'min-h-24 px-4 py-2.5 text-body-2',
+  small: 'wave:min-h-16 wave:px-2 wave:py-1 wave:text-caption-1',
+  medium: 'wave:min-h-20 wave:px-3 wave:py-2 wave:text-body-1',
+  large: 'wave:min-h-24 wave:px-4 wave:py-2.5 wave:text-body-2',
 };
 
 /**
@@ -107,14 +107,14 @@ export const Textarea = ({
       ref={ref}
       data-size={size}
       data-appearance={appearance}
-      className={cn(
+      className={wcn(
         textareaClassNames.root,
-        'w-full resize-y',
+        'wave:w-full wave:resize-y',
         TEXTAREA_SIZE[size],
         inputAppearanceClasses[appearance],
-        'text-foreground placeholder:text-muted-foreground',
+        'wave:text-foreground wave:placeholder:text-muted-foreground',
         inputFocus,
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
         invalidLook && inputInvalid,
         className,
       )}

@@ -401,32 +401,35 @@ export function alphaValueText(
  * named group, and its part class.
  */
 export const COLOR_THUMB_CLASSES =
-  'pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText]';
+  'wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText]';
 
 /** The root of a horizontal ColorSlider or AlphaSlider (24 px, as tall as the thumb). */
-export const RAIL_ROOT_HORIZONTAL = 'h-6 w-full items-center';
+export const RAIL_ROOT_HORIZONTAL = 'wave:h-6 wave:w-full wave:items-center';
 /** The root of a vertical one: a size container, so the turned input can be as long as it is tall. */
-export const RAIL_ROOT_VERTICAL = 'h-40 w-6 flex-col items-center [container-type:size]';
+export const RAIL_ROOT_VERTICAL =
+  'wave:h-40 wave:w-6 wave:flex-col wave:items-center wave:[container-type:size]';
 /** The drawn rail, inset by half a thumb at both ends (a horizontal one mirrors in right-to-left layouts). */
-export const RAIL_TRACK_HORIZONTAL = 'mx-3 h-3 flex-1 wave-rtl:-scale-x-100';
-export const RAIL_TRACK_VERTICAL = 'my-3 w-3 flex-1';
+export const RAIL_TRACK_HORIZONTAL = 'wave:mx-3 wave:h-3 wave:flex-1 wave:wave-rtl:-scale-x-100';
+export const RAIL_TRACK_VERTICAL = 'wave:my-3 wave:w-3 wave:flex-1';
 /** The rail's gradient, read from the inline `--wave-color-slider-gradient` property. */
-export const RAIL_GRADIENT = 'bg-(image:--wave-color-slider-gradient)';
+export const RAIL_GRADIENT = 'wave:bg-(image:--wave-color-slider-gradient)';
 /**
  * The native range input of a rail: over the whole slider and invisible, with its own thumb as
  * wide as the drawn one, so a press lands on the value under the drawn thumb.
  */
 export const RAIL_INPUT_CLASSES =
-  'absolute m-0 cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed [&::-webkit-slider-thumb]:size-6 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:size-6';
-export const RAIL_INPUT_HORIZONTAL = 'inset-0 size-full';
+  'wave:absolute wave:m-0 wave:cursor-pointer wave:appearance-none wave:opacity-0 wave:disabled:cursor-not-allowed wave:[&::-webkit-slider-thumb]:size-6 wave:[&::-webkit-slider-thumb]:appearance-none wave:[&::-moz-range-thumb]:size-6';
+export const RAIL_INPUT_HORIZONTAL = 'wave:inset-0 wave:size-full';
 /** Turned a quarter, so its start (the minimum) is at the bottom; it carries `dir="ltr"`. */
 export const RAIL_INPUT_VERTICAL =
-  'start-1/2 top-1/2 h-6 w-[100cqh] -translate-x-1/2 wave-rtl:translate-x-1/2 -translate-y-1/2 -rotate-90';
+  'wave:start-1/2 wave:top-1/2 wave:h-6 wave:w-[100cqh] wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:-translate-y-1/2 wave:-rotate-90';
 /** The box the thumb moves in: the rail's length, so its center meets the native thumb's. */
-export const THUMB_TRACK_HORIZONTAL = 'pointer-events-none absolute inset-x-3 inset-y-0';
-export const THUMB_TRACK_VERTICAL = 'pointer-events-none absolute inset-x-0 inset-y-3';
+export const THUMB_TRACK_HORIZONTAL =
+  'wave:pointer-events-none wave:absolute wave:inset-x-3 wave:inset-y-0';
+export const THUMB_TRACK_VERTICAL =
+  'wave:pointer-events-none wave:absolute wave:inset-x-0 wave:inset-y-3';
 /** The thumb's place along the rail, read from the inline `--wave-color-slider-position` property. */
 export const THUMB_POSITION_HORIZONTAL =
-  'start-(--wave-color-slider-position) top-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 -translate-y-1/2';
+  'wave:start-(--wave-color-slider-position) wave:top-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:-translate-y-1/2';
 export const THUMB_POSITION_VERTICAL =
-  'bottom-(--wave-color-slider-position) start-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2';
+  'wave:bottom-(--wave-color-slider-position) wave:start-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:translate-y-1/2';

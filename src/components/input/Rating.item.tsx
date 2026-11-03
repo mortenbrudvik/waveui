@@ -4,7 +4,7 @@ import {
   ratingDisplayClassNames,
   ratingItemClassNames,
 } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getDirection } from '../../lib/direction';
@@ -20,13 +20,13 @@ export type RatingColor = 'neutral' | 'brand' | 'marigold';
 
 /** Filled-star color of each `color` (unfilled stars keep {@link UNFILLED_COLOR}). */
 export const FILLED_COLOR: Readonly<Record<RatingColor, string>> = {
-  marigold: 'text-rating',
-  brand: 'text-primary',
-  neutral: 'text-foreground',
+  marigold: 'wave:text-rating',
+  brand: 'wave:text-primary',
+  neutral: 'wave:text-foreground',
 };
 
 /** Unfilled-star color in every `color`: the outline token, with a 3:1 non-text contrast. */
-const UNFILLED_COLOR = 'text-stroke-accessible';
+const UNFILLED_COLOR = 'wave:text-stroke-accessible';
 
 /**
  * The color a root draws (Phase 4 D24): `color` itself, or `'marigold'` (the default) for
@@ -38,20 +38,20 @@ export function resolveRatingColor(color: RatingColor | undefined): RatingColor 
 
 /** Icon size of each star size. */
 const sizeMap: Record<Size, string> = {
-  'extra-small': 'h-3 w-3',
-  small: 'h-4 w-4',
-  medium: 'h-5 w-5',
-  large: 'h-6 w-6',
-  'extra-large': 'h-8 w-8',
+  'extra-small': 'wave:h-3 wave:w-3',
+  small: 'wave:h-4 wave:w-4',
+  medium: 'wave:h-5 wave:w-5',
+  large: 'wave:h-6 wave:w-6',
+  'extra-large': 'wave:h-8 wave:w-8',
 };
 
 /** Padding that gives every interactive star a target of at least 24×24px (WCAG 2.5.8). */
 const targetPaddingMap: Record<Size, string> = {
-  'extra-small': 'p-1.5', // 12px icon + 12px
-  small: 'p-1', // 16px icon + 8px
-  medium: 'p-0.5', // 20px icon + 4px
-  large: 'p-0.5',
-  'extra-large': 'p-0.5',
+  'extra-small': 'wave:p-1.5', // 12px icon + 12px
+  small: 'wave:p-1', // 16px icon + 8px
+  medium: 'wave:p-0.5', // 20px icon + 4px
+  large: 'wave:p-0.5',
+  'extra-large': 'wave:p-0.5',
 };
 
 /**
@@ -190,9 +190,14 @@ function GlyphLayer({
   className: string;
 }) {
   if (glyph != null) {
-    return renderSlot(glyph, 'span', cn('inline-flex shrink-0 [&>svg]:size-full', className), {
-      'aria-hidden': true,
-    });
+    return renderSlot(
+      glyph,
+      'span',
+      wcn('wave:inline-flex wave:shrink-0 wave:[&>svg]:size-full', className),
+      {
+        'aria-hidden': true,
+      },
+    );
   }
   return filled ? (
     <StarIcon className={className} />
@@ -255,17 +260,29 @@ export const StarGlyph = ({
       <span
         {...rest}
         ref={ref}
-        className={cn(starClassName, 'relative inline-flex', unfilled.colorClass, className)}
+        className={wcn(
+          starClassName,
+          'wave:relative wave:inline-flex',
+          unfilled.colorClass,
+          className,
+        )}
       >
-        <GlyphLayer filled={false} glyph={unfilled.glyph} className={cn(iconClassName, starSize)} />
+        <GlyphLayer
+          filled={false}
+          glyph={unfilled.glyph}
+          className={wcn(iconClassName, starSize)}
+        />
         <span
-          className={cn('absolute inset-y-0 start-0 flex overflow-hidden', filled.colorClass)}
+          className={wcn(
+            'wave:absolute wave:inset-y-0 wave:start-0 wave:flex wave:overflow-hidden',
+            filled.colorClass,
+          )}
           style={{ width: `${percent}%` }}
         >
           <GlyphLayer
             filled
             glyph={filled.glyph}
-            className={cn(iconClassName, starSize, 'shrink-0')}
+            className={wcn(iconClassName, starSize, 'wave:shrink-0')}
           />
         </span>
       </span>
@@ -277,9 +294,9 @@ export const StarGlyph = ({
     <span
       {...rest}
       ref={ref}
-      className={cn(starClassName, 'inline-flex', look.colorClass, className)}
+      className={wcn(starClassName, 'wave:inline-flex', look.colorClass, className)}
     >
-      <GlyphLayer filled={filled} glyph={look.glyph} className={cn(iconClassName, starSize)} />
+      <GlyphLayer filled={filled} glyph={look.glyph} className={wcn(iconClassName, starSize)} />
     </span>
   );
 };
@@ -522,12 +539,12 @@ export const RatingItem = ({
   // rendered inside another, D5), whether the root generated the item or the consumer passed it.
   const starClassName =
     ctx.kind === 'display'
-      ? cn(ratingItemClassNames.root, ratingDisplayClassNames.star)
-      : cn(ratingItemClassNames.root, ratingClassNames.star);
+      ? wcn(ratingItemClassNames.root, ratingDisplayClassNames.star)
+      : wcn(ratingItemClassNames.root, ratingClassNames.star);
   const iconClassName =
     ctx.kind === 'display'
-      ? cn(ratingItemClassNames.icon, ratingDisplayClassNames.icon)
-      : cn(ratingItemClassNames.icon, ratingClassNames.icon);
+      ? wcn(ratingItemClassNames.icon, ratingDisplayClassNames.icon)
+      : wcn(ratingItemClassNames.icon, ratingClassNames.icon);
 
   // `rest` keeps every consumer handler: a star without handlers of its own (a display star)
   // spreads them all, and a star that composes one takes that one out of `rest` itself.
@@ -571,12 +588,12 @@ export const RatingItem = ({
       <span
         {...starProps}
         ref={ref as React.Ref<HTMLSpanElement>}
-        className={cn(
+        className={wcn(
           starClassName,
-          'relative inline-flex cursor-pointer rounded',
+          'wave:relative wave:inline-flex wave:cursor-pointer wave:rounded',
           targetPaddingMap[ctx.size],
-          'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring',
-          ctx.disabled && 'cursor-not-allowed',
+          'wave:has-focus-visible:outline-2 wave:has-focus-visible:outline-offset-2 wave:has-focus-visible:outline-ring',
+          ctx.disabled && 'wave:cursor-not-allowed',
           className,
         )}
         onClick={composeEventHandlers(onClick, (event) => {
@@ -616,9 +633,9 @@ export const RatingItem = ({
               data-roving-value={radioKey}
               tabIndex={ctx.disabled ? -1 : ctx.getTabIndex(radioKey)}
               disabled={ctx.disabled}
-              className={cn(
-                'pointer-events-none absolute inset-y-0 w-1/2 border-0 bg-transparent p-0 opacity-0',
-                index === 0 ? 'start-0' : 'end-0',
+              className={wcn(
+                'wave:pointer-events-none wave:absolute wave:inset-y-0 wave:w-1/2 wave:border-0 wave:bg-transparent wave:p-0 wave:opacity-0',
+                index === 0 ? 'wave:start-0' : 'wave:end-0',
               )}
               onClick={() => {
                 // Choosing the current value again is a no-op for both callbacks (useControllable).
@@ -648,9 +665,9 @@ export const RatingItem = ({
       data-roving-value={key}
       tabIndex={ctx.disabled ? -1 : ctx.getTabIndex(key)}
       disabled={ctx.disabled}
-      className={cn(
+      className={wcn(
         starClassName,
-        'inline-flex cursor-pointer rounded border-0 bg-transparent transition-colors motion-reduce:transition-none disabled:cursor-not-allowed',
+        'wave:inline-flex wave:cursor-pointer wave:rounded wave:border-0 wave:bg-transparent wave:transition-colors wave:motion-reduce:transition-none wave:disabled:cursor-not-allowed',
         targetPaddingMap[ctx.size],
         focusRing,
         look.colorClass,
@@ -668,7 +685,7 @@ export const RatingItem = ({
       <GlyphLayer
         filled={filled}
         glyph={look.glyph}
-        className={cn(iconClassName, sizeMap[ctx.size])}
+        className={wcn(iconClassName, sizeMap[ctx.size])}
       />
     </button>
   );

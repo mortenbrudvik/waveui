@@ -321,7 +321,7 @@ describe('List', () => {
       await user.click(item);
       expect(item).toHaveAttribute('aria-selected', 'true');
       expect(item).toHaveAttribute('data-selected');
-      expect(item).toHaveClass('bg-subtle-selected');
+      expect(item).toHaveClass('wave:bg-subtle-selected');
     });
 
     it('sets aria-multiselectable for multi-select mode', () => {
@@ -712,7 +712,8 @@ describe('List', () => {
         <List key="5" selectable selectionMode="multiple" onSelectedItemChange={() => {}} />,
       ];
       expect(elements).toHaveLength(5);
-      expectTypeOf<ListSelectionMode>().toEqualTypeOf<'single' | 'multiple' | 'multi'>();
+      expectTypeOf<ListSelectionMode>().toEqualTypeOf<'single' | 'multiple'>();
+      expectTypeOf<'multi'>().not.toExtend<ListSelectionMode>();
       interface DocumentListProps extends ListProps {
         documents: string[];
       }
@@ -792,26 +793,26 @@ describe('List', () => {
   });
 
   describe("selectionMode 'multiple' (data-display#30)", () => {
-    it("accepts the deprecated 'multi' alias with a warning", async () => {
+    it("has no 'multi' alias: the 0.4 value is removed in 1.0 and selects one item", async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const user = userEvent.setup();
-      const onChange = vi.fn();
+      const onSelectionChange = vi.fn();
       render(
-        <List selectable selectionMode="multi" onSelectionChange={onChange} aria-label="Fruits">
+        <List
+          selectable
+          // @ts-expect-error -- `selectionMode="multi"` is removed in 1.0: use `"multiple"`
+          selectionMode="multi"
+          onSelectionChange={onSelectionChange}
+          aria-label="Fruits"
+        >
           {fruits}
         </List>,
       );
-      expect(screen.getByRole('listbox')).toHaveAttribute('aria-multiselectable', 'true');
+      expect(screen.getByRole('listbox')).not.toHaveAttribute('aria-multiselectable', 'true');
       await user.click(option('Apple'));
       await user.click(option('Banana'));
-      expect(onChange).toHaveBeenLastCalledWith(['apple', 'banana']);
-      expect(warn.mock.calls).toEqual([
-        [
-          expect.stringContaining(
-            '[WaveUI] List: `selectionMode="multi"` is deprecated and will be removed in 1.0. Use `selectionMode="multiple"` instead.',
-          ),
-        ],
-      ]);
+      expect(onSelectionChange.mock.calls).toEqual([[['apple']], [['banana']]]);
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 
@@ -1201,7 +1202,7 @@ describe('List', () => {
       await user.keyboard('{ArrowRight}');
       expect(row(/Alpha/)).toHaveFocus();
       const actionCell = row(/Alpha/).querySelector('[data-list-action]');
-      expect(actionCell).toHaveClass('ms-2');
+      expect(actionCell).toHaveClass('wave:ms-2');
     });
 
     describe('several arrow stops in one action', () => {
@@ -2225,10 +2226,10 @@ describe('List.Item — slotProps', () => {
 
   // Captured from ee05cf8's dist (client and server agree).
   const BASE_PINS = [
-    '<span class="wave-list-item__content min-w-0 flex-1">',
-    '<div class="wave-list-item__content min-w-0 flex-1" role="gridcell">',
-    '<span class="wave-list-item__action ms-2 shrink-0" data-list-action="">',
-    '<div class="wave-list-item__action ms-2 shrink-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" data-list-action="" role="gridcell" tabindex="-1">',
+    '<span class="wave-list-item__content wave:min-w-0 wave:flex-1">',
+    '<div class="wave-list-item__content wave:min-w-0 wave:flex-1" role="gridcell">',
+    '<span class="wave-list-item__action wave:ms-2 wave:shrink-0" data-list-action="">',
+    '<div class="wave-list-item__action wave:ms-2 wave:shrink-0 wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring" data-list-action="" role="gridcell" tabindex="-1">',
   ].join('\n');
 
   it('renders the parts of ee05cf8 (attributes sorted), on the client and the server', () => {
@@ -2310,8 +2311,8 @@ describe('List.Item — slotProps', () => {
       />,
     );
     for (const [cls, name, conflict] of [
-      [listItemClassNames.content, 'content', 'flex-1'],
-      [listItemClassNames.action, 'action', 'ms-2'],
+      [listItemClassNames.content, 'content', 'wave:flex-1'],
+      [listItemClassNames.action, 'action', 'wave:ms-2'],
     ] as const) {
       const elements = all(document, cls);
       expect(elements.map((el) => el.localName)).toEqual(['span', 'div']);

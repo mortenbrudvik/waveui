@@ -11,8 +11,11 @@ import {
   expectNoA11yViolations,
   openingTags,
   renderWithProviders,
+  testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
+import { FIELD_TEST_TEXT, renderWithFieldContext } from '../../../test-utils-field';
 import { PickerHarness } from './colorPartHarness';
 
 const slider = (name = 'Opacity') => screen.getByRole('slider', { name });
@@ -25,13 +28,16 @@ describe('AlphaSlider', () => {
   testSystemProps(AlphaSlider, {
     expectedTag: 'div',
     displayName: 'AlphaSlider',
-    control: { role: 'slider' },
+    ref: 'control',
+    control: { role: 'slider', tag: 'input' },
     a11yVariants: [
       { name: 'transparency', props: { transparency: true } },
       { name: 'vertical', props: { orientation: 'vertical' } },
       { name: 'disabled', props: { disabled: true } },
     ],
   });
+
+  testRootPartRef(AlphaSlider);
 
   it('shows the opacity: "Opacity", 0–100, the percentage as value text; no alpha is 100 %', () => {
     // Two separate mounts, not a rerender: switching the same instance from an uncontrolled
@@ -77,11 +83,14 @@ describe('AlphaSlider', () => {
     const rail = railOf(input);
     expect(rail.className).toContain('var(--wave-stroke)');
     expect(rail.className).toContain('var(--wave-background)');
-    expect(rail).toHaveClass('forced-colors:forced-color-adjust-none', 'wave-rtl:-scale-x-100');
-    expect(rail.firstElementChild).toHaveClass('bg-(image:--wave-color-slider-gradient)');
+    expect(rail).toHaveClass(
+      'wave:forced-colors:forced-color-adjust-none',
+      'wave:wave-rtl:-scale-x-100',
+    );
+    expect(rail.firstElementChild).toHaveClass('wave:bg-(image:--wave-color-slider-gradient)');
     expect(rootOf(input).querySelector(`.${alphaSliderClassNames.thumb}`)).toHaveClass(
-      'group-has-[:focus-visible]/alpha-slider:outline-ring',
-      'forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas]',
+      'wave:group-has-[:focus-visible]/alpha-slider:outline-ring',
+      'wave:forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas]',
     );
   });
 
@@ -255,7 +264,7 @@ describe('AlphaSlider', () => {
 
 describe('AlphaSlider — slotProps', () => {
   type AlphaSliderSlotProps = NonNullable<AlphaSliderProps['slotProps']>;
-  const EVERY_PART: AlphaSliderSlotProps = { rail: {}, thumb: {} };
+  const EVERY_PART: AlphaSliderSlotProps = { root: {}, rail: {}, thumb: {} };
   const HALF_RED = { h: 0, s: 1, v: 1, a: 0.4 };
   const thumbOf = (input: HTMLElement) =>
     rootOf(input).querySelector<HTMLElement>(`.${alphaSliderClassNames.thumb}`) as HTMLElement;
@@ -273,9 +282,9 @@ describe('AlphaSlider — slotProps', () => {
     template.innerHTML = renderToString(<AlphaSlider defaultValue={HALF_RED} />);
     expect(openingTags(...parts(template.content))).toBe(
       [
-        '<div aria-hidden="true" class="wave-alpha-slider__rail relative overflow-hidden rounded-full bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none mx-3 h-3 flex-1 wave-rtl:-scale-x-100">',
-        '<span class="absolute inset-0 bg-(image:--wave-color-slider-gradient)">',
-        '<span class="wave-alpha-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] start-(--wave-color-slider-position) top-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 -translate-y-1/2 group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
+        '<div aria-hidden="true" class="wave-alpha-slider__rail wave:relative wave:overflow-hidden wave:rounded-full wave:bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] wave:bg-size-[8px_8px] wave:forced-colors:forced-color-adjust-none wave:mx-3 wave:h-3 wave:flex-1 wave:wave-rtl:-scale-x-100">',
+        '<span class="wave:absolute wave:inset-0 wave:bg-(image:--wave-color-slider-gradient)">',
+        '<span class="wave-alpha-slider__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:start-(--wave-color-slider-position) wave:top-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:-translate-y-1/2 wave:group-has-[:focus-visible]/alpha-slider:ring-2 wave:group-has-[:focus-visible]/alpha-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] wave:group-has-[:focus-visible]/alpha-slider:outline-2 wave:group-has-[:focus-visible]/alpha-slider:outline-offset-2 wave:group-has-[:focus-visible]/alpha-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
       ].join('\n'),
     );
     render(
@@ -283,9 +292,9 @@ describe('AlphaSlider — slotProps', () => {
     );
     expect(openingTags(...parts(document))).toBe(
       [
-        '<div aria-hidden="true" class="wave-alpha-slider__rail relative overflow-hidden bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] bg-size-[8px_8px] forced-colors:forced-color-adjust-none my-3 w-3 flex-1 rounded-none">',
-        '<span class="absolute inset-0 bg-(image:--wave-color-slider-gradient)">',
-        '<span class="wave-alpha-slider__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] bottom-(--wave-color-slider-position) start-1/2 -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2 group-has-[:focus-visible]/alpha-slider:ring-2 group-has-[:focus-visible]/alpha-slider:ring-background forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] group-has-[:focus-visible]/alpha-slider:outline-2 group-has-[:focus-visible]/alpha-slider:outline-offset-2 group-has-[:focus-visible]/alpha-slider:outline-ring forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
+        '<div aria-hidden="true" class="wave-alpha-slider__rail wave:relative wave:overflow-hidden wave:bg-[conic-gradient(var(--wave-stroke)_25%,var(--wave-background)_0_50%,var(--wave-stroke)_0_75%,var(--wave-background)_0)] wave:bg-size-[8px_8px] wave:forced-colors:forced-color-adjust-none wave:my-3 wave:w-3 wave:flex-1 wave:rounded-none">',
+        '<span class="wave:absolute wave:inset-0 wave:bg-(image:--wave-color-slider-gradient)">',
+        '<span class="wave-alpha-slider__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:bottom-(--wave-color-slider-position) wave:start-1/2 wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:translate-y-1/2 wave:group-has-[:focus-visible]/alpha-slider:ring-2 wave:group-has-[:focus-visible]/alpha-slider:ring-background wave:forced-colors:group-has-[:focus-visible]/alpha-slider:ring-[Canvas] wave:group-has-[:focus-visible]/alpha-slider:outline-2 wave:group-has-[:focus-visible]/alpha-slider:outline-offset-2 wave:group-has-[:focus-visible]/alpha-slider:outline-ring wave:forced-colors:group-has-[:focus-visible]/alpha-slider:outline-[Highlight]">',
       ].join('\n'),
     );
   });
@@ -295,6 +304,16 @@ describe('AlphaSlider — slotProps', () => {
       { defaultValue: HALF_RED },
       { transparency: true, orientation: 'vertical', shape: 'square' },
       { disabled: true, name: 'opacity', required: true, 'aria-label': 'Alpha' },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -302,6 +321,15 @@ describe('AlphaSlider — slotProps', () => {
         EVERY_PART,
       );
     }
+    // Bound to a ColorPicker.
+    expectInertSlotProps(
+      (slotProps) => (
+        <PickerHarness>
+          <AlphaSlider slotProps={slotProps} />
+        </PickerHarness>
+      ),
+      EVERY_PART,
+    );
   });
 
   it('puts your className, style and data-* on each part, after its stable class and own classes', () => {
@@ -316,8 +344,8 @@ describe('AlphaSlider — slotProps', () => {
     );
     const input = slider();
     for (const [element, stable, own, mine, part, opacity] of [
-      [railOf(input), alphaSliderClassNames.rail, 'overflow-hidden', 'my-rail', 'rail', '0.5'],
-      [thumbOf(input), alphaSliderClassNames.thumb, 'size-6', 'my-thumb', 'thumb', '0.25'],
+      [railOf(input), alphaSliderClassNames.rail, 'wave:overflow-hidden', 'my-rail', 'rail', '0.5'],
+      [thumbOf(input), alphaSliderClassNames.thumb, 'wave:size-6', 'my-thumb', 'thumb', '0.25'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -328,7 +356,7 @@ describe('AlphaSlider — slotProps', () => {
     // The gradient inside the rail is no part: it keeps its own classes only.
     expect(railOf(input).firstElementChild).toHaveAttribute(
       'class',
-      'absolute inset-0 bg-(image:--wave-color-slider-gradient)',
+      'wave:absolute wave:inset-0 wave:bg-(image:--wave-color-slider-gradient)',
     );
   });
 
@@ -338,27 +366,26 @@ describe('AlphaSlider — slotProps', () => {
     );
     const rail = railOf(slider());
     expect(rail).toHaveClass('rounded-md');
-    expect(rail).not.toHaveClass('rounded-full');
+    expect(rail).not.toHaveClass('wave:rounded-full');
   });
 
-  it('attaches your refs to the parts, beside controlRef and ref', () => {
+  it('attaches your refs to the parts, beside ref', () => {
+    const root = React.createRef<HTMLDivElement>();
     const rail = React.createRef<HTMLDivElement>();
     const thumb = React.createRef<HTMLSpanElement>();
-    const controlRef = React.createRef<HTMLInputElement>();
-    const ref = React.createRef<HTMLDivElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       <AlphaSlider
         ref={ref}
-        controlRef={controlRef}
         defaultValue={HALF_RED}
-        slotProps={{ rail: { ref: rail }, thumb: { ref: thumb } }}
+        slotProps={{ root: { ref: root }, rail: { ref: rail }, thumb: { ref: thumb } }}
       />,
     );
     const input = slider();
     expect(rail.current).toBe(railOf(input));
     expect(thumb.current).toBe(thumbOf(input));
-    expect(controlRef.current).toBe(input);
-    expect(ref.current).toBe(rootOf(input));
+    expect(ref.current).toBe(input);
+    expect(root.current).toBe(rootOf(input));
   });
 
   it('keeps the rail out of the tab order: a part sets no tabIndex on it', () => {
@@ -413,8 +440,8 @@ describe('AlphaSlider — slotProps', () => {
       { dir: 'rtl' },
     );
     const input = slider();
-    expect(railOf(input)).toHaveClass('wave-rtl:-scale-x-100', 'my-rail');
-    expect(thumbOf(input)).toHaveClass('wave-rtl:translate-x-1/2', 'my-thumb');
+    expect(railOf(input)).toHaveClass('wave:wave-rtl:-scale-x-100', 'my-rail');
+    expect(thumbOf(input)).toHaveClass('wave:wave-rtl:translate-x-1/2', 'my-thumb');
   });
 
   it('has no accessibility violations with every part customised', async () => {
@@ -431,7 +458,10 @@ describe('AlphaSlider — slotProps', () => {
   });
 
   it('types each part for its element, its own and not ColorSlider’s, and takes no children', () => {
-    expectTypeOf<keyof AlphaSliderSlotProps>().toEqualTypeOf<'rail' | 'thumb'>();
+    expectTypeOf<keyof AlphaSliderSlotProps>().toEqualTypeOf<'root' | 'rail' | 'thumb'>();
+    expectTypeOf<NonNullable<AlphaSliderSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLDivElement> | undefined
+    >();
     expectTypeOf<NonNullable<AlphaSliderSlotProps['rail']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLDivElement> | undefined
     >();
@@ -440,5 +470,276 @@ describe('AlphaSlider — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the slider draws them
     void (<AlphaSlider slotProps={{ thumb: { children: 'Thumb' } }} />);
+    // @ts-expect-error -- a part takes no children: the slider draws its content
+    void (<AlphaSlider slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const control = (label = 'Opacity') =>
+      screen.getByRole('slider', { name: label, hidden: true });
+    const root = (label?: string) => rootOf(control(label));
+
+    it("puts your className, style, data-* and attributes on the root <div>, after the slider's className and style", () => {
+      render(
+        <AlphaSlider
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(alphaSliderClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(control()).not.toHaveAttribute('data-part');
+      expect(control()).not.toHaveAttribute('title');
+    });
+
+    it("keeps the custom properties that draw the value the slider's: a part style does not move the thumb", () => {
+      const keys = [
+        '--wave-color-slider-gradient',
+        '--wave-color-slider-position',
+        '--wave-color-thumb',
+      ];
+      const { rerender } = render(<AlphaSlider defaultValue={{ h: 0, s: 1, v: 1, a: 0.4 }} />);
+      const drawn = keys.map((key) => root().style.getPropertyValue(key));
+      expect(drawn.every((value) => value !== '')).toBe(true);
+      const partStyle = Object.fromEntries(
+        keys.map((key) => [key, 'initial']),
+      ) as React.CSSProperties;
+      rerender(
+        <AlphaSlider
+          defaultValue={{ h: 0, s: 1, v: 1, a: 0.4 }}
+          slotProps={{ root: { style: partStyle } }}
+        />,
+      );
+      expect(keys.map((key) => root().style.getPropertyValue(key))).toEqual(drawn);
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<AlphaSlider slotProps={{ root: { className: 'items-start' } }} />);
+      expect(root()).toHaveClass('items-start');
+      expect(root()).not.toHaveClass('wave:items-center');
+    });
+
+    it("keeps the props you give the slider over the part's", () => {
+      render(
+        <AlphaSlider
+          title="Own"
+          data-x="own"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <AlphaSlider
+          orientation="vertical"
+          slotProps={{
+            root: {
+              'data-orientation': 'horizontal',
+              'data-disabled': '',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root('Opacity')).toHaveAttribute('data-orientation', 'vertical');
+      expect(root('Opacity')).not.toHaveAttribute('data-disabled');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root('Opacity')).not.toHaveAttribute(attribute);
+      }
+      // The slider's own hidden state stays its own.
+      rerender(
+        <AlphaSlider
+          hidden
+          inert
+          aria-hidden
+          slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('hidden');
+      expect(root()).toHaveAttribute('inert');
+      expect(root()).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('keeps data-disabled the state of the slider, which a disabled slider sets', () => {
+      render(<AlphaSlider disabled slotProps={{ root: { 'data-disabled': 'no' } }} />);
+      expect(root()).toHaveAttribute('data-disabled', '');
+    });
+
+    it("runs your root handlers before the slider's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <AlphaSlider
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <AlphaSlider
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    it('calls your root onClick in every state, as the slider calls its own: only the range input is disabled', () => {
+      const onClick = vi.fn();
+      const own = vi.fn();
+      const { rerender } = render(<AlphaSlider onClick={own} slotProps={{ root: { onClick } }} />);
+      fireEvent.click(root());
+      rerender(<AlphaSlider disabled onClick={own} slotProps={{ root: { onClick } }} />);
+      fireEvent.click(root());
+      expect(onClick).toHaveBeenCalledTimes(2);
+      expect(own).toHaveBeenCalledTimes(2);
+    });
+
+    it('reaches the root of a slider bound to a ColorPicker', () => {
+      const ref = React.createRef<HTMLDivElement>();
+      render(
+        <PickerHarness>
+          <AlphaSlider slotProps={{ root: { ref, className: 'my-root' } }} />
+        </PickerHarness>,
+      );
+      expect(ref.current).toBe(root());
+      expect(root()).toHaveClass('my-root');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(<AlphaSlider slotProps={{ root: { className: 'my-root', title: 'Pick' } }} />);
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the range input, the slider itself; the root <div> is
+// `slotProps.root.ref`, and `controlRef` is gone.
+describe('AlphaSlider — ref reaches the control', () => {
+  it('focuses the slider through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(<AlphaSlider ref={ref} />);
+    act(() => ref.current?.focus());
+    expect(slider()).toHaveFocus();
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', () => {
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Form">
+        <AlphaSlider
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          name="accent"
+          required
+          defaultValue={{ h: 0, s: 1, v: 1, a: 0.4 }}
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { container, rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const input = slider();
+    expect(nodes.at(-1)).toBe(input);
+    // The hidden input's invalid event focuses the slider through the slider's own ref.
+    fireEvent.invalid(container.querySelector('input[name="accent"]') as HTMLInputElement);
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: '80' } });
+    rerender(ui(3));
+    expect(input).toHaveValue('80');
+    act(() => (screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).reset());
+    expect(input).toHaveValue('40');
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it('reaches the input of a slider bound to a ColorPicker', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(
+      <PickerHarness>
+        <AlphaSlider ref={ref} />
+      </PickerHarness>,
+    );
+    expect(ref.current).toBe(slider());
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<AlphaSlider ref={ref} />);
+    const input = slider();
+    rerender(<AlphaSlider ref={ref} disabled orientation="vertical" />);
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <AlphaSlider ref={ref} />
+      </React.StrictMode>,
+    );
+    const input = slider();
+    rerender(
+      <React.StrictMode>
+        <AlphaSlider ref={ref} disabled />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    renderWithFieldContext(<AlphaSlider ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(slider(FIELD_TEST_TEXT.label));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('declares ref for the range input, and no controlRef', () => {
+    expectTypeOf<AlphaSliderProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<AlphaSliderProps>().not.toHaveProperty('controlRef');
+    const divRef = React.createRef<HTMLDivElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the range input; the root <div> is slotProps.root.ref
+    void (<AlphaSlider ref={divRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <AlphaSlider
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the range input
+          controlRef={controlRef}
+        />,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(rootOf(slider())).toHaveAttribute('controlref', '[object Object]');
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

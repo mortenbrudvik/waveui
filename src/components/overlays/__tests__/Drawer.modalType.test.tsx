@@ -841,7 +841,12 @@ describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', 
       const panel = screen.getByRole('dialog', { name: 'Filters' });
       const backdrop = panel.previousElementSibling;
       expect(backdrop).toBe(backdropElement());
-      expect(backdrop).toHaveClass(drawerClassNames.backdrop, 'fixed', 'inset-0', 'bg-backdrop');
+      expect(backdrop).toHaveClass(
+        drawerClassNames.backdrop,
+        'wave:fixed',
+        'wave:inset-0',
+        'wave:bg-backdrop',
+      );
       expect(backdrop).toHaveAttribute('aria-hidden', 'true');
       expect(backdrop).toHaveAttribute('data-appearance', 'dimmed');
     });
@@ -859,7 +864,7 @@ describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', 
       const backdrop = screen.getByTestId('bd');
       expect(backdrop).toBe(backdropElement());
       expect(backdrop).toHaveClass('bg-transparent');
-      expect(backdrop).not.toHaveClass('bg-backdrop');
+      expect(backdrop).not.toHaveClass('wave:bg-backdrop');
       expect(backdrop.style.opacity).toBe('0.4');
     });
 
@@ -870,7 +875,7 @@ describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', 
         </Drawer>,
       );
       expect(backdropElement()).toHaveAttribute('data-appearance', 'transparent');
-      expect(backdropElement()).toHaveClass('bg-transparent');
+      expect(backdropElement()).toHaveClass('wave:bg-transparent');
     });
 
     it('null renders none: the page stays inert, and a press outside still closes it', async () => {
@@ -1025,7 +1030,7 @@ describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', 
         </Drawer>,
       );
       const close = button('Close');
-      expect(close).toHaveClass(drawerClassNames.closeButton, 'ms-auto');
+      expect(close).toHaveClass(drawerClassNames.closeButton, 'wave:ms-auto');
       expect(close).toContainElement(screen.getByTestId('glyph'));
       expect(screen.getByTestId('glyph').closest('[aria-hidden="true"]')).not.toBeNull();
       unmount();
@@ -1139,15 +1144,15 @@ describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', 
         const action = pin.parentElement;
         expect(action).toHaveClass(
           drawerClassNames.titleAction,
-          'ms-auto',
-          'flex',
-          'shrink-0',
-          'items-center',
-          'gap-1',
+          'wave:ms-auto',
+          'wave:flex',
+          'wave:shrink-0',
+          'wave:items-center',
+          'wave:gap-1',
         );
         expect(heading.nextElementSibling).toBe(action);
         expect(action?.nextElementSibling).toBe(close);
-        expect(close).not.toHaveClass('ms-auto');
+        expect(close).not.toHaveClass('wave:ms-auto');
         // Initial focus is the first focusable element, then the Tab order follows the DOM.
         expect(pin).toHaveFocus();
         await user.tab();
@@ -1164,7 +1169,7 @@ describe('Drawer backdrop, closeButton and titleAction (P6-06 D93–D95, D98)', 
         </Drawer>,
       );
       expect(document.querySelector('.' + drawerClassNames.titleAction)).toBeNull();
-      expect(button('Close')).toHaveClass('ms-auto');
+      expect(button('Close')).toHaveClass('wave:ms-auto');
     });
 
     it('is ignored next to a Drawer.Header, with the title-ignored warning', () => {

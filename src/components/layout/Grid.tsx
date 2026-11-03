@@ -1,57 +1,57 @@
 import * as React from 'react';
 import { gridClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 
 const columnsMap = {
-  1: 'grid-cols-1',
-  2: 'grid-cols-2',
-  3: 'grid-cols-3',
-  4: 'grid-cols-4',
-  5: 'grid-cols-5',
-  6: 'grid-cols-6',
-  12: 'grid-cols-12',
+  1: 'wave:grid-cols-1',
+  2: 'wave:grid-cols-2',
+  3: 'wave:grid-cols-3',
+  4: 'wave:grid-cols-4',
+  5: 'wave:grid-cols-5',
+  6: 'wave:grid-cols-6',
+  12: 'wave:grid-cols-12',
 } as const;
 
 const gapMap = {
-  none: 'gap-0',
-  xs: 'gap-1',
-  sm: 'gap-2',
-  md: 'gap-3',
-  lg: 'gap-4',
-  xl: 'gap-6',
+  none: 'wave:gap-0',
+  xs: 'wave:gap-1',
+  sm: 'wave:gap-2',
+  md: 'wave:gap-3',
+  lg: 'wave:gap-4',
+  xl: 'wave:gap-6',
 } as const;
 
 const columnGapMap = {
-  none: 'gap-x-0',
-  xs: 'gap-x-1',
-  sm: 'gap-x-2',
-  md: 'gap-x-3',
-  lg: 'gap-x-4',
-  xl: 'gap-x-6',
+  none: 'wave:gap-x-0',
+  xs: 'wave:gap-x-1',
+  sm: 'wave:gap-x-2',
+  md: 'wave:gap-x-3',
+  lg: 'wave:gap-x-4',
+  xl: 'wave:gap-x-6',
 } as const;
 
 const rowGapMap = {
-  none: 'gap-y-0',
-  xs: 'gap-y-1',
-  sm: 'gap-y-2',
-  md: 'gap-y-3',
-  lg: 'gap-y-4',
-  xl: 'gap-y-6',
+  none: 'wave:gap-y-0',
+  xs: 'wave:gap-y-1',
+  sm: 'wave:gap-y-2',
+  md: 'wave:gap-y-3',
+  lg: 'wave:gap-y-4',
+  xl: 'wave:gap-y-6',
 } as const;
 
 const alignMap = {
-  start: 'items-start',
-  center: 'items-center',
-  end: 'items-end',
-  stretch: 'items-stretch',
+  start: 'wave:items-start',
+  center: 'wave:items-center',
+  end: 'wave:items-end',
+  stretch: 'wave:items-stretch',
 } as const;
 
 const justifyMap = {
-  start: 'justify-items-start',
-  center: 'justify-items-center',
-  end: 'justify-items-end',
-  stretch: 'justify-items-stretch',
+  start: 'wave:justify-items-start',
+  center: 'wave:justify-items-center',
+  end: 'wave:justify-items-end',
+  stretch: 'wave:justify-items-stretch',
 } as const;
 
 /**
@@ -119,9 +119,9 @@ export const Grid: PolymorphicComponent<'div', GridOwnProps> = (props) => {
   return (
     <Component
       ref={ref}
-      className={cn(
+      className={wcn(
         gridClassNames.root,
-        'grid',
+        'wave:grid',
         columns && columnsMap[columns],
         gap && gapMap[gap],
         columnGap && columnGapMap[columnGap],

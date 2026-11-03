@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -118,13 +118,13 @@ export const PickerExpandButton = ({
       // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
       type="button"
       {...mergeSlotProps(part, {
-        className: cn(
+        className: wcn(
           className,
           pickerIconButtonClasses(size, appearance),
           pickerButtonOffset(size, 1),
           focusRing,
           // Inside a field that dims as a whole, a second dimming would multiply the opacity.
-          dimDisabled ? disabledStyles : 'disabled:cursor-not-allowed',
+          dimDisabled ? disabledStyles : 'wave:disabled:cursor-not-allowed',
         ),
         locked: {
           type: 'button',
@@ -145,10 +145,10 @@ export const PickerExpandButton = ({
       {renderSlot(
         glyph,
         'span',
-        cn(
+        wcn(
           iconClassName,
-          'inline-flex transition-transform motion-reduce:transition-none',
-          expanded && 'rotate-180',
+          'wave:inline-flex wave:transition-transform wave:motion-reduce:transition-none',
+          expanded && 'wave:rotate-180',
         ),
         { 'aria-hidden': true },
       )}

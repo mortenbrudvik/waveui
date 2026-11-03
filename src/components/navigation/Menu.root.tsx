@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -75,9 +75,9 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Called when an item changes the checked items (only on change): the new checked values of every
    * group first, then `details` with the group's `name`, its `checkedItems` and the `event` (Fluent's
-   * `onCheckedValueChange(event, { name, checkedItems })`). WaveUI always passes `details`; it is
-   * typed optional until 1.0. On a submenu that shares its parent's state it only listens: it is
-   * called after the parent's callback, for changes made in this submenu.
+   * `onCheckedValueChange(event, { name, checkedItems })`). WaveUI always passes `details`. On a
+   * submenu that shares its parent's state it only listens: it is called after the parent's
+   * callback, for changes made in this submenu.
    */
   onCheckedValuesChange?: CheckedValuesChangeHandler;
   /**
@@ -699,7 +699,7 @@ export const MenuRoot = ({
           )}
           onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
           onPointerMove={composeEventHandlers(onPointerMove, listPointerMove)}
-          className={cn(menuClassNames.root, menuSurfaceClasses, focusRing, className)}
+          className={wcn(menuClassNames.root, menuSurfaceClasses, focusRing, className)}
         >
           <MenuListElementContext.Provider value={listElement}>
             {children}

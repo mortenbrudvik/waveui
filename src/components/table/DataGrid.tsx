@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   dataGridBodyClassNames,
   dataGridCellClassNames,
@@ -9,7 +9,7 @@ import {
 } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, resolveDeprecatedProp, warnDeprecated, warnOnce } from '../../lib/dev';
+import { isDev, warnOnce } from '../../lib/dev';
 import type { ColumnSizingOption } from '../../lib/columnSizing';
 import { endsTextSelection, isForeignEvent } from '../../lib/events';
 import { clearIds, selectAllIds, summarizeSelection, toggleId } from '../../lib/selection';
@@ -115,15 +115,10 @@ export interface DataGridSelectedItemsChangeDetails {
 export interface DataGridColumn<T = unknown> {
   /**
    * Unique identifier of the column: the `columnId` of its header cell (and of the grid's sort) and
-   * the React key of its cells. Required in practice: a column without it (and without the
-   * deprecated `id`) cannot sort, with a development warning.
+   * the React key of its cells. Required in practice: a column without it cannot sort, with a
+   * development warning.
    */
   columnId?: string;
-  /**
-   * @deprecated Use `columnId`. Read only when `columnId` is not given, with a development
-   * warning.
-   */
-  id?: string;
   /** The header content (text or any React node), unless `renderHeaderCell` is given. */
   label: React.ReactNode;
   /**
@@ -230,7 +225,7 @@ export interface DataGridSelectionCellProps
 
 /**
  * The `items` prop of a DataGrid that renders its rows from data, part of every sort form of
- * `DataGridProps` but the 0.4 one. `T` is the type of the items.
+ * `DataGridProps` that takes `onSortChange`. `T` is the type of the items.
  */
 export interface DataGridItemsProps<T = unknown> {
   /**
@@ -238,9 +233,9 @@ export interface DataGridItemsProps<T = unknown> {
    * (see `DataGridColumn.compare`). With `columns` and no `DataGrid.Body` child (or one without
    * children), the grid renders the rows and cells from the columns; a `DataGrid.Body` whose child
    * is a render function renders the row of each item. Each row's `rowId` comes from `getRowId`.
-   * The grid reads the array and never changes it. With `items`, `onSortChange` receives a
-   * `DataGridSort` object and `details`, never the 0.4 arguments. `items` may not be `undefined`
-   * unless `sort` or `defaultSort` is given; pass `items={data ?? []}` while loading.
+   * The grid reads the array and never changes it. `onSortChange` receives a `DataGridSort`
+   * object and `details`. `items` may not be `undefined` unless `sort` or `defaultSort` is given;
+   * pass `items={data ?? []}` while loading.
    */
   items?: readonly T[];
 }
@@ -322,13 +317,12 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * Called with the width of every column (by `columnId`) whenever a width changes, at every step
    * of a drag (at most once per animation frame) or key press, then `details`: `{ columnId,
    * width, event }`, the resized column, its new width and the event behind it. The grid always
-   * passes `details`; it is typed optional through 0.x, as every `details` argument. Setting the
-   * width a column already has does not call it once a width is state. Fluent's `onColumnResize`,
-   * whose data is in `details`.
+   * passes `details`. Setting the width a column already has does not call it once a width is
+   * state. Fluent's `onColumnResize`, whose data is in `details`.
    */
   onColumnWidthsChange?: (
     widths: Record<string, number>,
-    details?: TableColumnWidthsChangeDetails,
+    details: TableColumnWidthsChangeDetails,
   ) => void;
   /**
    * Renders only the body rows in view, plus an overscan, of a grid with many `items`: pass the
@@ -439,14 +433,8 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    */
   onSelectedItemsChange?: (
     selectedItems: string[],
-    details?: DataGridSelectedItemsChangeDetails,
+    details: DataGridSelectedItemsChangeDetails,
   ) => void;
-  /** @deprecated Use `selectedItems` (an array). A `Set` or an array is accepted. */
-  selectedKeys?: ReadonlySet<string> | readonly string[];
-  /** @deprecated Use `defaultSelectedItems` (an array). A `Set` or an array is accepted. */
-  defaultSelectedKeys?: ReadonlySet<string> | readonly string[];
-  /** @deprecated Use `onSelectedItemsChange`, which receives an array. Both are called. */
-  onSelectionChange?: (keys: Set<string>) => void;
   /**
    * Props for the wrapper `<div>` around the `<table>`: a horizontally scrollable container
    * (`overflow-x-auto`). Use it for its className, style (e.g. a max height) or ref. With a
@@ -465,15 +453,8 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
   ref?: React.Ref<HTMLTableElement>;
 }
 
-interface NoDeprecatedSortProps {
-  sortColumn?: never;
-  defaultSortColumn?: never;
-  sortDirection?: never;
-  defaultSortDirection?: never;
-}
-
 /** The 0.5 sort API, controlled: `sort` + `onSortChange(sort, details)`. */
-export interface DataGridControlledSortProps extends NoDeprecatedSortProps {
+export interface DataGridControlledSortProps {
   /** The controlled sort, or `null` for an unsorted grid. */
   sort: DataGridSort | null;
   /** Initial sort while `sort` is not given yet. */
@@ -484,11 +465,11 @@ export interface DataGridControlledSortProps extends NoDeprecatedSortProps {
    * With `items`, the grid orders its rows by the sorted column's `compare` (see
    * `DataGridColumn.compare`), also while `sort` is controlled; otherwise the consumer orders them.
    */
-  onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
+  onSortChange?: (sort: DataGridSort, details: DataGridSortChangeDetails) => void;
 }
 
 /** The 0.5 sort API, uncontrolled: `defaultSort` (`null` for none) + `onSortChange(sort, details)`. */
-export interface DataGridUncontrolledSortProps extends NoDeprecatedSortProps {
+export interface DataGridUncontrolledSortProps {
   sort?: undefined;
   /** The initial sort, or `null` for an initially unsorted grid. */
   defaultSort: DataGridSort | null;
@@ -498,16 +479,14 @@ export interface DataGridUncontrolledSortProps extends NoDeprecatedSortProps {
    * With `items`, the grid orders its rows by the sorted column's `compare` (see
    * `DataGridColumn.compare`); otherwise the consumer orders them.
    */
-  onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
+  onSortChange?: (sort: DataGridSort, details: DataGridSortChangeDetails) => void;
 }
 
 /**
  * The sort props of a grid with `items`: the 0.5 sort API, whether or not `sort` or `defaultSort`
- * is given (unsorted at first without them). The 0.4 positional `onSortChange` and the deprecated
- * sort props do not apply to such a grid.
+ * is given (unsorted at first without them).
  */
-export interface DataGridItemsSortProps<T = unknown>
-  extends DataGridItemsProps<T>, NoDeprecatedSortProps {
+export interface DataGridItemsSortProps<T = unknown> extends DataGridItemsProps<T> {
   /** The grid's data (see `DataGridItemsProps.items`). */
   items: readonly T[];
   /** The controlled sort, or `null` for an unsorted grid; `undefined` leaves the sort to the grid. */
@@ -519,61 +498,36 @@ export interface DataGridItemsSortProps<T = unknown>
    * `useDataGridSort` is called), then `details` (`{ event }`).
    * The grid orders its rows by the sorted column's `compare` (see `DataGridColumn.compare`).
    */
-  onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
-}
-
-/**
- * The 0.4 sort API: `onSortChange(columnId, direction)` and the deprecated `sortColumn`/
- * `sortDirection` props. It applies whenever none of `items`, `sort` and `defaultSort` is given.
- * As in 0.4, the column and the direction can be controlled independently: the half that is not
- * controlled is kept internally and follows every sort request (mixed control, warned in
- * development).
- */
-export interface DataGridLegacySortProps {
-  /** A grid with `items` uses the 0.5 sort API (`DataGridItemsSortProps`). */
-  items?: undefined;
-  sort?: undefined;
-  defaultSort?: undefined;
-  /**
-   * @deprecated Use `sort` (`{ columnId, direction }` or `null`). Without `sortDirection`, the
-   * direction is kept internally (it toggles on repeated clicks).
-   */
-  sortColumn?: string;
-  /** @deprecated Use `defaultSort`. */
-  defaultSortColumn?: string;
-  /**
-   * @deprecated Use `sort`. Without `sortColumn`, the column is kept internally (it follows the
-   * clicked header, starting from `defaultSortColumn`).
-   */
-  sortDirection?: SortDirection;
-  /** @deprecated Use `defaultSort`. */
-  defaultSortDirection?: SortDirection;
-  /**
-   * Called when a sortable header is activated (or `setSort` of `useDataGridSort` is called),
-   * with the 0.4 arguments (deprecated: removed in 1.0, with a development warning). Pass
-   * `items`, `sort` or `defaultSort` to receive a `DataGridSort` object (and `details`) instead:
-   * `defaultSort={null}` turns the object form on for an initially unsorted grid. A `sort` that is
-   * still `undefined` (e.g. while data loads) does not: pass `sort={sort ?? null}`.
-   *
-   * @example
-   * <DataGrid defaultSort={null} onSortChange={(sort) => setSort(sort)}>…</DataGrid>
-   */
-  onSortChange?: (columnId: string, direction: SortDirection) => void;
+  onSortChange?: (sort: DataGridSort, details: DataGridSortChangeDetails) => void;
 }
 
 /**
  * Properties for the DataGrid component, whose `items` are of type `T`. The sort props form a
- * union: `sort`/`defaultSort` with `onSortChange(sort, details)` (0.5, also the form of every grid
- * with `items`), or the 0.4 form `onSortChange(columnId, direction)` with the deprecated
- * `sortColumn`/`sortDirection`/`defaultSortColumn`/`defaultSortDirection`, for a grid without
- * `items`. The two cannot be mixed.
+ * union: `sort` or `defaultSort` with `onSortChange(sort, details)`, `items` with or without them
+ * (the same callback), or none of the three. A grid without `items`, `sort` and `defaultSort`
+ * keeps its sort itself, unsorted at first, and takes no `onSortChange` (the 0.4 positional
+ * `onSortChange(columnId, direction)` is removed in 1.0): give it `defaultSort={null}` to receive
+ * `onSortChange(sort, details)`, or `sort={sort ?? null}` while a controlled sort still loads.
+ *
+ * @example
+ * <DataGrid defaultSort={null} onSortChange={(sort) => setSort(sort)}>…</DataGrid>
  */
 export type DataGridProps<T = unknown> = DataGridBaseProps<T> &
   (
     | (DataGridItemsProps<T> & DataGridControlledSortProps)
     | (DataGridItemsProps<T> & DataGridUncontrolledSortProps)
     | DataGridItemsSortProps<T>
-    | DataGridLegacySortProps
+    | {
+        /** A grid with `items` takes the sort props of `DataGridItemsSortProps`. */
+        items?: undefined;
+        sort?: undefined;
+        defaultSort?: undefined;
+        /**
+         * None without `items`, `sort` or `defaultSort` (the 0.4 positional form is removed in
+         * 1.0): pass `defaultSort={null}` to receive `onSortChange(sort, details)`.
+         */
+        onSortChange?: never;
+      }
   );
 
 /** Properties for the DataGridHeader sub-component. */
@@ -786,12 +740,6 @@ export interface DataGridCellProps extends React.TdHTMLAttributes<HTMLTableCellE
 const EMPTY_ITEMS: readonly string[] = [];
 const NO_COLUMN_IDS: readonly (string | undefined)[] = [];
 
-function toItems(
-  keys: ReadonlySet<string> | readonly string[] | undefined,
-): readonly string[] | undefined {
-  return keys === undefined ? undefined : Array.from(keys);
-}
-
 function sameItems(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((item, index) => item === b[index]);
 }
@@ -832,17 +780,6 @@ function countHeaderRows(children: React.ReactNode): number {
   return flattenChildren(children).filter(({ node }) => React.isValidElement(node)).length;
 }
 
-/** A column's id: `columnId`, else the deprecated `id` (warned once). */
-function columnIdOf<T>(column: DataGridColumn<T>): string | undefined {
-  return resolveDeprecatedProp(
-    'DataGrid',
-    column.columnId,
-    column.id,
-    'columns[].id',
-    'columns[].columnId',
-  );
-}
-
 function warnDuplicateRowId(rowId: string): void {
   warnOnce(
     `DataGrid:duplicate-rowId:${rowId}`,
@@ -854,10 +791,10 @@ function warnDuplicateRowId(rowId: string): void {
 /** A body row: its hover and, per `selectionAppearance`, the fill of a selected row. */
 const BODY_ROW_CLASSES: Record<DataGridSelectionAppearance, string> = {
   brand:
-    'hover:bg-subtle-hover data-[selected]:bg-selected transition-colors motion-reduce:transition-none',
+    'wave:hover:bg-subtle-hover wave:data-[selected]:bg-selected wave:transition-colors wave:motion-reduce:transition-none',
   neutral:
-    'hover:bg-subtle-hover data-[selected]:bg-subtle-selected transition-colors motion-reduce:transition-none',
-  none: 'hover:bg-subtle-hover transition-colors motion-reduce:transition-none',
+    'wave:hover:bg-subtle-hover wave:data-[selected]:bg-subtle-selected wave:transition-colors wave:motion-reduce:transition-none',
+  none: 'wave:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none',
 };
 
 // ---------------------------------------------------------------------------
@@ -881,18 +818,11 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     isSelectionDisabled,
     sort: sortProp,
     defaultSort,
-    sortColumn: sortColumnProp,
-    defaultSortColumn,
-    sortDirection: sortDirectionProp,
-    defaultSortDirection,
     onSortChange,
     selectionMode = 'none',
     selectedItems: selectedItemsProp,
     defaultSelectedItems,
     onSelectedItemsChange,
-    selectedKeys,
-    defaultSelectedKeys,
-    onSelectionChange,
     labels,
     selectOnRowClick = false,
     selectionAppearance = 'brand',
@@ -916,151 +846,24 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     ...rest
   } = props;
 
-  // --- sort -----------------------------------------------------------------
   const hasItems = items !== undefined;
-  /** The 0.5 sort props, which win over the deprecated ones. */
-  const usesSortApi = sortProp !== undefined || defaultSort !== undefined;
-  /**
-   * The 0.4 rules (the deprecated sort props, the positional callback) apply without `items`,
-   * `sort` and `defaultSort`.
-   */
-  const legacySort = !usesSortApi && !hasItems;
-  /** `onSortChange(sort, details)`; sticky, so the form never changes under the consumer. */
-  const [objectMode, setObjectMode] = React.useState(!legacySort);
-  if (!legacySort && !objectMode) setObjectMode(true);
-  const objectCallbacks = objectMode || !legacySort;
 
-  const legacySortControlled = sortColumnProp !== undefined || sortDirectionProp !== undefined;
-  if (sortColumnProp !== undefined) warnDeprecated('DataGrid', 'sortColumn', 'sort');
-  if (sortDirectionProp !== undefined) warnDeprecated('DataGrid', 'sortDirection', 'sort');
-  if (defaultSortColumn !== undefined) {
-    warnDeprecated('DataGrid', 'defaultSortColumn', 'defaultSort');
-  }
-  if (defaultSortDirection !== undefined) {
-    warnDeprecated('DataGrid', 'defaultSortDirection', 'defaultSort');
-  }
-  const deprecatedSortProps =
-    legacySortControlled || defaultSortColumn !== undefined || defaultSortDirection !== undefined;
-  const mixedSortApi = usesSortApi && deprecatedSortProps;
-  /** A grid with `items` (and no `sort`/`defaultSort`) ignores the deprecated sort props. */
-  const ignoredSortProps = !legacySort && !usesSortApi && deprecatedSortProps;
-
-  // C-DEV: the positional callback of the 0.4 sort API is removed in 1.0.
-  const positionalSortCallback = !objectCallbacks && onSortChange !== undefined;
-  React.useEffect(() => {
-    if (!positionalSortCallback) return;
-    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
-    // production bundle then drops the warning and its text. Without a bundler and without
-    // `process` (an unbundled import in a browser), the read throws and it is skipped.
-    try {
-      if (process.env.NODE_ENV !== 'production') {
-        warnDeprecated(
-          'DataGrid',
-          'onSortChange(columnId, direction)',
-          'onSortChange(sort, details?)',
-          'Pass `items`, `sort` or `defaultSort` to receive the sort object.',
-        );
-      }
-    } catch {
-      // No `process`: see above.
-    }
-  }, [positionalSortCallback]);
-
-  React.useEffect(() => {
-    if (mixedSortApi) {
-      warnOnce(
-        'DataGrid:mixed-sort',
-        'DataGrid: do not mix `sort`/`defaultSort` with the deprecated `sortColumn`/`sortDirection`/' +
-          '`defaultSortColumn`/`defaultSortDirection`. `sort`/`defaultSort` win.',
-      );
-    } else if (ignoredSortProps) {
-      warnOnce(
-        'DataGrid:items-deprecated-sort',
-        'DataGrid: the deprecated `sortColumn`/`sortDirection`/`defaultSortColumn`/' +
-          '`defaultSortDirection` do not apply to a grid with `items` and are ignored. Pass `sort` ' +
-          'or `defaultSort`.',
-      );
-    }
-  }, [mixedSortApi, ignoredSortProps]);
-  // 0.4 mixed control: `sortColumn` and `sortDirection` are controlled independently. The half the
-  // parent does not control is kept here (seeded from its default) and follows every sort request,
-  // as 0.4 did, so repeated clicks still alternate and aria-sort shows what was reported.
-  React.useEffect(() => {
-    if (!legacySort) return;
-    if (sortColumnProp !== undefined && sortDirectionProp === undefined) {
-      warnOnce(
-        'DataGrid:sortColumn-without-sortDirection',
-        'DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control). The ' +
-          'direction is kept internally and toggles on repeated clicks, as in 0.4. Pass `sort` ' +
-          '(`{ columnId, direction }`) to control both.',
-      );
-    } else if (sortDirectionProp !== undefined && sortColumnProp === undefined) {
-      warnOnce(
-        'DataGrid:sortDirection-without-sortColumn',
-        'DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control). The ' +
-          'column is kept internally and follows the clicked header, as in 0.4. Pass `sort` ' +
-          '(`{ columnId, direction }`) to control both.',
-      );
-    }
-  }, [legacySort, sortColumnProp, sortDirectionProp]);
-
-  /** The uncontrolled halves of the 0.4 sort props (used while the other half is controlled). */
-  const [legacyHalves, setLegacyHalves] = React.useState<{
-    column: string;
-    direction: SortDirection;
-  }>(() => ({
-    column: defaultSortColumn ?? '',
-    direction: defaultSortDirection ?? 'ascending',
-  }));
-
-  const legacyControlledSort = React.useMemo<DataGridSort | null | undefined>(() => {
-    if (sortColumnProp === undefined && sortDirectionProp === undefined) return undefined;
-    const column = sortColumnProp ?? legacyHalves.column;
-    return column === ''
-      ? null
-      : { columnId: column, direction: sortDirectionProp ?? legacyHalves.direction };
-  }, [sortColumnProp, sortDirectionProp, legacyHalves]);
-
-  const legacyDefaultSort = React.useMemo<DataGridSort | null>(
-    () =>
-      defaultSortColumn
-        ? { columnId: defaultSortColumn, direction: defaultSortDirection ?? 'ascending' }
-        : null,
-    [defaultSortColumn, defaultSortDirection],
-  );
-
-  const controlledSort = legacySort ? legacyControlledSort : sortProp;
-  // A grid with `items` and no `defaultSort` starts unsorted: the deprecated defaults are ignored.
-  let initialSort = legacyDefaultSort;
-  if (defaultSort !== undefined) initialSort = defaultSort;
-  else if (ignoredSortProps) initialSort = null;
-
+  // --- sort -----------------------------------------------------------------
   // The details of the sort being requested, set around the setter: useControllable calls its
   // onChange synchronously inside it, and only on change (the useCheckedValues pattern).
   const sortDetailsRef = React.useRef<DataGridSortChangeDetails | undefined>(undefined);
 
+  // Every grid reports `onSortChange(sort, details)`. The types offer the callback only next to
+  // `items`, `sort` or `defaultSort`; untyped code that passes one without them gets the same form.
   const emitSortChange = (next: DataGridSort | null) => {
-    if (!next) return;
-    if (legacySort) {
-      setLegacyHalves((previous) =>
-        previous.column === next.columnId && previous.direction === next.direction
-          ? previous
-          : { column: next.columnId, direction: next.direction },
-      );
-    }
-    if (!onSortChange) return;
-    if (objectCallbacks) {
-      const objectForm = onSortChange as NonNullable<DataGridItemsSortProps['onSortChange']>;
-      objectForm(next, sortDetailsRef.current);
-    } else {
-      const legacy = onSortChange as (columnId: string, direction: SortDirection) => void;
-      legacy(next.columnId, next.direction);
-    }
+    const details = sortDetailsRef.current;
+    if (next && details) onSortChange?.(next, details);
   };
 
+  // Unsorted at first without `defaultSort` (a grid with `items` too).
   const [sort, setSort] = useControllable<DataGridSort | null>(
-    controlledSort,
-    initialSort,
+    sortProp,
+    defaultSort ?? null,
     emitSortChange,
   );
 
@@ -1105,43 +908,19 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   );
 
   // --- selection ------------------------------------------------------------
-  if (onSelectionChange !== undefined) {
-    warnDeprecated('DataGrid', 'onSelectionChange', 'onSelectedItemsChange');
-  }
-  const legacySelected = React.useMemo(() => toItems(selectedKeys), [selectedKeys]);
-  const legacyDefaultSelected = React.useMemo(
-    () => toItems(defaultSelectedKeys),
-    [defaultSelectedKeys],
-  );
-  const controlledSelected = resolveDeprecatedProp(
-    'DataGrid',
-    selectedItemsProp,
-    legacySelected,
-    'selectedKeys',
-    'selectedItems',
-  );
-  const defaultSelected =
-    resolveDeprecatedProp(
-      'DataGrid',
-      defaultSelectedItems,
-      legacyDefaultSelected,
-      'defaultSelectedKeys',
-      'defaultSelectedItems',
-    ) ?? EMPTY_ITEMS;
-
   // The details of the change being made, set around the setter (as `sortDetailsRef`).
   const selectionDetailsRef = React.useRef<DataGridSelectedItemsChangeDetails | undefined>(
     undefined,
   );
 
   const emitSelectionChange = (next: readonly string[]) => {
-    onSelectedItemsChange?.([...next], selectionDetailsRef.current);
-    onSelectionChange?.(new Set(next));
+    const details = selectionDetailsRef.current;
+    if (details) onSelectedItemsChange?.([...next], details);
   };
 
   const [selected, setSelectedValue] = useControllable<readonly string[]>(
-    controlledSelected,
-    defaultSelected,
+    selectedItemsProp,
+    defaultSelectedItems ?? EMPTY_ITEMS,
     emitSelectionChange,
   );
 
@@ -1301,7 +1080,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   const sortDirection = sort?.direction;
   const sortCompare = React.useMemo(() => {
     if (!hasItems || sortColumnId === undefined || !columns) return undefined;
-    return columns.find((column) => columnIdOf(column) === sortColumnId)?.compare;
+    return columns.find((column) => column.columnId === sortColumnId)?.compare;
   }, [hasItems, sortColumnId, columns]);
 
   const sortedRows = React.useMemo(() => {
@@ -1319,10 +1098,10 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
       );
   }, [itemRows, sortCompare, sortDirection]);
 
-  // Built only with `items`: the column ids are read (and the deprecated `id` warned) when used.
+  // Built only with `items`: the column ids are read when used.
   const renderColumnsRow = React.useMemo<DataGridRenderRow | null>(() => {
     if (!columns || !hasItems) return null;
-    const cellKeys = columns.map((column, index) => columnIdOf(column) ?? index);
+    const cellKeys = columns.map((column, index) => column.columnId ?? index);
     return (item) => (
       <DataGridRow>
         {columns.map((column, index) => (
@@ -1337,14 +1116,13 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     [sortedRows, renderColumnsRow, itemSelectionDisabled],
   );
 
-  const columnWithoutId =
-    columns?.some((column) => column.columnId === undefined && column.id === undefined) ?? false;
+  const columnWithoutId = columns?.some((column) => column.columnId === undefined) ?? false;
   React.useEffect(() => {
     if (columnWithoutId) {
       warnOnce(
         'DataGrid:column-without-columnId',
-        'DataGrid: a column in `columns` has no `columnId` (nor the deprecated `id`), so its ' +
-          'header cannot sort. Give every column a unique `columnId`.',
+        'DataGrid: a column in `columns` has no `columnId`, so its header cannot sort. Give every ' +
+          'column a unique `columnId`.',
       );
     }
   }, [columnWithoutId]);
@@ -1416,9 +1194,9 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
   }, [sizingIgnored]);
   // A windowed grid is laid out from widths too: its columns never follow the rendered rows.
   const sizingEnabled = (sizingRequested && !sizingIgnored) || windowed;
-  // Read (and the deprecated `id` warned) only when the widths are used.
+  // Read only when the widths are used.
   const columnIds = React.useMemo(
-    () => (sizingEnabled && columns ? columns.map(columnIdOf) : NO_COLUMN_IDS),
+    () => (sizingEnabled && columns ? columns.map((column) => column.columnId) : NO_COLUMN_IDS),
     [sizingEnabled, columns],
   );
   const sizing = useDataGridColumnSizing({
@@ -1441,7 +1219,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
       <DataGridHeader key="wave-generated-header">
         <tr>
           {columns.map((column, index) => {
-            const columnId = columnIdOf(column);
+            const { columnId } = column;
             return (
               <DataGridHeaderCell
                 key={columnId ?? index}
@@ -1527,12 +1305,12 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                       ref={containerRef}
                       aria-label={containerHasRole ? containerLabel : undefined}
                       aria-labelledby={containerHasRole ? containerLabelledBy : undefined}
-                      className={cn(
+                      className={wcn(
                         dataGridClassNames.container,
-                        'overflow-x-auto rounded-md border border-border',
+                        'wave:overflow-x-auto wave:rounded-md wave:border wave:border-border',
                         // The window lays the rows out: the browser's scroll anchoring only
                         // fights it.
-                        windowed && '[overflow-anchor:none]',
+                        windowed && 'wave:[overflow-anchor:none]',
                         containerClassName,
                       )}
                     >
@@ -1545,11 +1323,11 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                         data-selection-appearance={selectionAppearance}
                         data-subtle-selection={subtleSelection ? '' : undefined}
                         data-resizing={sizing.resizing ? '' : undefined}
-                        className={cn(
+                        className={wcn(
                           dataGridClassNames.root,
-                          'w-full border-separate border-spacing-0',
+                          'wave:w-full wave:border-separate wave:border-spacing-0',
                           // The group whose hover or focus draws the subtle select-all checkbox.
-                          subtleSelection && 'group/grid',
+                          subtleSelection && 'wave:group/grid',
                           className,
                         )}
                         // The widths are runtime data: the layout and the width are inline.
@@ -1703,7 +1481,7 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
 
   return (
     <DataGridSectionContext.Provider value="body">
-      <tbody ref={ref} className={cn(dataGridBodyClassNames.root, className)} {...rest}>
+      <tbody ref={ref} className={wcn(dataGridBodyClassNames.root, className)} {...rest}>
         {content}
       </tbody>
     </DataGridSectionContext.Provider>
@@ -1947,11 +1725,11 @@ const DataGridRow = ({
     <DataGridRowContext.Provider value={rowContext}>
       <tr
         ref={ref}
-        className={cn(
+        className={wcn(
           dataGridRowClassNames.root,
           // The group whose hover or focus draws a subtle selection control (its own name: a
           // Tree in a cell keys its actions on its rows' `group/row`).
-          'group/table-row',
+          'wave:group/table-row',
           !inHeader && BODY_ROW_CLASSES[selectionAppearance],
           selectable && isSelected && forcedColors.selectedContainer,
           className,
@@ -2013,11 +1791,11 @@ function DataGridBodySelectionCell({
       {...rest}
       ref={ref}
       data-selection-cell=""
-      className={cn(
+      className={wcn(
         stableClassName,
         dataGridRowClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
-        windowedRow && 'py-0 align-middle',
+        windowedRow && 'wave:py-0 wave:align-middle',
         focusRingInset,
         row.selectionCellProps?.className,
         className,
@@ -2110,7 +1888,7 @@ const DataGridSelectionCell = ({
         stableClassName={dataGridSelectionCellClassNames.root}
         cellProps={{
           ...rest,
-          className: cn(rowProps?.className, className),
+          className: wcn(rowProps?.className, className),
           disabled: disabled ?? rowProps?.disabled,
           invisible: invisible ?? rowProps?.invisible,
           'aria-label': ariaLabel ?? rowProps?.['aria-label'],
@@ -2151,12 +1929,13 @@ const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) 
     <td
       ref={ref}
       role="gridcell"
-      className={cn(
+      className={wcn(
         dataGridCellClassNames.root,
         cellBase,
-        'relative text-body-1',
-        (fixedLayout || windowedRow) && 'overflow-hidden text-ellipsis whitespace-nowrap',
-        windowedRow && 'py-0 align-middle',
+        'wave:relative wave:text-body-1',
+        (fixedLayout || windowedRow) &&
+          'wave:overflow-hidden wave:text-ellipsis wave:whitespace-nowrap',
+        windowedRow && 'wave:py-0 wave:align-middle',
         focusRingInset,
         className,
       )}

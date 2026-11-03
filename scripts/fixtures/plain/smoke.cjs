@@ -1,7 +1,9 @@
 /**
- * CommonJS consumer of the packed tarball (run by scripts/pack-smoke.mjs inside an installed copy
- * of this fixture). Requires the package, calls `cn`, resolves every exported subpath through
- * the `require` condition of the package's `exports` map and prints what it observed as JSON.
+ * `require(esm)` consumer of the packed tarball (run by scripts/pack-smoke.mjs inside an installed
+ * copy of this fixture, on the current Node and, when a Node 22.12 binary is given, on the Node
+ * floor). The package ships ES modules only: `require()` loads its ES entry (Node.js 22.12 and
+ * later) and returns the same module namespace as `import()`. Resolves every exported subpath
+ * through the `require`-side resolver and prints what it observed as JSON.
  *
  * Usage: node smoke.cjs '<JSON array of subpaths, e.g. ["./styles"]>'
  */

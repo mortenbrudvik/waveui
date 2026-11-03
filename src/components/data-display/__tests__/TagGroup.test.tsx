@@ -183,7 +183,7 @@ describe('TagGroup', () => {
     expectedTag: 'div',
     displayName: 'TagGroup',
     defaultProps: { 'aria-label': 'Filters', children: <Tag dismissible>Red</Tag> },
-    conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+    conflictingClass: { className: 'gap-4', overrides: 'wave:gap-2' },
     a11yVariants: [
       {
         name: 'dismissible Tags',
@@ -287,7 +287,8 @@ describe('TagGroup', () => {
         expect(group).toHaveAttribute('aria-orientation', orientation);
         expect(group).toHaveAttribute('data-orientation', orientation);
         expect(group).toHaveAttribute('data-roving-container', '');
-        if (orientation === 'vertical') expect(group).toHaveClass('flex-col', 'items-start');
+        if (orientation === 'vertical')
+          expect(group).toHaveClass('wave:flex-col', 'wave:items-start');
       },
     );
 
@@ -306,19 +307,19 @@ describe('TagGroup', () => {
       expect(Array.from(group.classList).sort()).toEqual(
         [
           tagGroupClassNames.root,
-          'relative',
-          'inline-flex',
-          'flex-wrap',
-          'items-center',
-          'gap-2',
+          'wave:relative',
+          'wave:inline-flex',
+          'wave:flex-wrap',
+          'wave:items-center',
+          'wave:gap-2',
         ].sort(),
       );
     });
 
     it.each([
-      ['medium', 'gap-2'],
-      ['small', 'gap-1.5'],
-      ['extra-small', 'gap-1'],
+      ['medium', 'wave:gap-2'],
+      ['small', 'wave:gap-1.5'],
+      ['extra-small', 'wave:gap-1'],
     ] as const)('spaces %s tags with %s', (size, gap) => {
       render(
         <TagGroup aria-label="Filters" size={size} dismissible>
@@ -780,23 +781,35 @@ describe('TagGroup', () => {
       expect(interaction).toHaveAttribute('data-size', 'small');
       expect(interaction).toHaveAttribute('data-appearance', 'brand');
       expect(interaction).toHaveAttribute('data-shape', 'rounded');
-      expect(primaryButton('Cherry')).toHaveClass('min-h-6', 'bg-selected', 'rounded');
-      expect(dismissButton('Cherry')).toHaveClass('min-w-6', 'bg-selected', 'rounded-e');
+      expect(primaryButton('Cherry')).toHaveClass(
+        'wave:min-h-6',
+        'wave:bg-selected',
+        'wave:rounded',
+      );
+      expect(dismissButton('Cherry')).toHaveClass(
+        'wave:min-w-6',
+        'wave:bg-selected',
+        'wave:rounded-e',
+      );
       const ownInteraction = screen.getByTestId('own-interaction');
       expect(ownInteraction).toHaveAttribute('data-size', 'medium');
       expect(ownInteraction).toHaveAttribute('data-appearance', 'outline');
       expect(ownInteraction).toHaveAttribute('data-shape', 'circular');
-      expect(primaryButton('Plum')).toHaveClass('min-h-7', 'border-stroke', 'rounded-full');
+      expect(primaryButton('Plum')).toHaveClass(
+        'wave:min-h-7',
+        'wave:border-stroke',
+        'wave:rounded-full',
+      );
       const inherits = screen.getByTestId('inherits');
       expect(inherits).toHaveAttribute('data-size', 'small');
       expect(inherits).toHaveAttribute('data-appearance', 'brand');
       expect(inherits).toHaveAttribute('data-shape', 'rounded');
-      expect(inherits).toHaveClass('min-h-6', 'bg-selected', 'rounded');
+      expect(inherits).toHaveClass('wave:min-h-6', 'wave:bg-selected', 'wave:rounded');
       const own = screen.getByTestId('own');
       expect(own).toHaveAttribute('data-size', 'medium');
       expect(own).toHaveAttribute('data-appearance', 'outline');
       expect(own).toHaveAttribute('data-shape', 'circular');
-      expect(own).toHaveClass('min-h-7', 'border-stroke', 'rounded-full');
+      expect(own).toHaveClass('wave:min-h-7', 'wave:border-stroke', 'wave:rounded-full');
     });
 
     it("disables every tag's controls; a tag's disabled={false} does not re-enable", () => {
@@ -814,7 +827,7 @@ describe('TagGroup', () => {
       expect(screen.getByTestId('cherry')).toHaveAttribute('data-disabled', '');
       expect(screen.getByTestId('red')).toHaveAttribute('data-disabled', '');
       expect(screen.getByTestId('blue')).toHaveAttribute('data-disabled', '');
-      expect(screen.getByTestId('blue')).toHaveClass('opacity-50');
+      expect(screen.getByTestId('blue')).toHaveClass('wave:opacity-50');
     });
 
     it('gives Tags its dismissible; dismissible={false} opts out', () => {
@@ -826,7 +839,7 @@ describe('TagGroup', () => {
       );
       expect(dismissButton('Red')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Dismiss Blue' })).toBeNull();
-      expect(screen.getByText('Blue').parentElement).toHaveClass('pe-2.75');
+      expect(screen.getByText('Blue').parentElement).toHaveClass('wave:pe-2.75');
     });
 
     it('does not warn for onDismiss on a Tag in a dismissible group', () => {
@@ -1680,18 +1693,18 @@ describe('TagGroup', () => {
         </>,
       );
       const hosted = screen.getByTestId('hosted');
-      expect(hosted).not.toHaveClass('opacity-50');
-      expect(hosted).not.toHaveClass('focus-visible:opacity-100');
-      expect(hosted).not.toHaveClass('has-focus-visible:opacity-100');
+      expect(hosted).not.toHaveClass('wave:opacity-50');
+      expect(hosted).not.toHaveClass('wave:focus-visible:opacity-100');
+      expect(hosted).not.toHaveClass('wave:has-focus-visible:opacity-100');
       expect(hosted).toHaveClass(...forcedColors.disabled.split(' '));
       expect(dismissButton('Red')).toBeDisabled();
-      expect(dismissButton('Red')).toHaveClass('disabled:cursor-not-allowed');
-      expect(dismissButton('Red')).not.toHaveClass('disabled:opacity-50');
+      expect(dismissButton('Red')).toHaveClass('wave:disabled:cursor-not-allowed');
+      expect(dismissButton('Red')).not.toHaveClass('wave:disabled:opacity-50');
       // Without a host, a disabled tag dims itself.
       expect(screen.getByTestId('plain')).toHaveClass(
-        'opacity-50',
-        'focus-visible:opacity-100',
-        'has-focus-visible:opacity-100',
+        'wave:opacity-50',
+        'wave:focus-visible:opacity-100',
+        'wave:has-focus-visible:opacity-100',
       );
     });
 
@@ -1708,18 +1721,18 @@ describe('TagGroup', () => {
           </TagGroup>
         </>,
       );
-      const opacity = ['disabled:opacity-50', 'aria-disabled:opacity-50'];
+      const opacity = ['wave:disabled:opacity-50', 'wave:aria-disabled:opacity-50'];
       for (const button of [primaryButton('Cherry'), dismissButton('Cherry')]) {
         expect(button).toBeDisabled();
         for (const name of opacity) expect(button).not.toHaveClass(name);
-        expect(button).not.toHaveClass('aria-disabled:focus-visible:opacity-100');
+        expect(button).not.toHaveClass('wave:aria-disabled:focus-visible:opacity-100');
         expect(button).toHaveClass(
-          'disabled:cursor-not-allowed',
-          'aria-disabled:cursor-not-allowed',
+          'wave:disabled:cursor-not-allowed',
+          'wave:aria-disabled:cursor-not-allowed',
           ...forcedColors.disabled.split(' '),
         );
       }
-      expect(screen.getByTestId('hosted')).not.toHaveClass('opacity-50');
+      expect(screen.getByTestId('hosted')).not.toHaveClass('wave:opacity-50');
       // Without a host, each button dims itself.
       for (const button of [primaryButton('Plum'), dismissButton('Plum')]) {
         expect(button).toHaveClass(...opacity);
@@ -1740,7 +1753,7 @@ describe('TagGroup', () => {
       });
       expect(dismissButton('Cherry')).toHaveFocus();
       expect(dismissButton('Cherry')).toHaveAttribute('aria-disabled', 'true');
-      expect(dismissButton('Cherry')).not.toHaveClass('aria-disabled:opacity-50');
+      expect(dismissButton('Cherry')).not.toHaveClass('wave:aria-disabled:opacity-50');
     });
 
     it('renders hidden on the InteractionTags whose value is in hiddenValues', () => {
@@ -1775,7 +1788,7 @@ describe('TagGroup', () => {
       expect(screen.getByTestId('outer')).toHaveAttribute('hidden');
       const inner = screen.getByTestId('inner');
       expect(inner).not.toHaveAttribute('hidden');
-      expect(inner).toHaveClass('opacity-50');
+      expect(inner).toHaveClass('wave:opacity-50');
     });
 
     it("names a Dismiss button by a host's dismissName with aria-label alone and adds its class", () => {
@@ -1925,10 +1938,13 @@ describe('TagGroup', () => {
       // A Secondary is never a toggle.
       expect(dismissButton('Cherry')).not.toHaveAttribute('aria-pressed');
       // The selected look, as InteractionTag's own `selected` draws it.
-      expect(primaryButton('Cherry')).toHaveClass('bg-primary', 'text-primary-foreground');
-      expect(dismissButton('Cherry')).toHaveClass('border-s-primary-foreground');
-      expect(primaryButton('Plum')).toHaveClass('bg-muted');
-      expect(primaryButton('Plum')).not.toHaveClass('bg-primary');
+      expect(primaryButton('Cherry')).toHaveClass(
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+      );
+      expect(dismissButton('Cherry')).toHaveClass('wave:border-s-primary-foreground');
+      expect(primaryButton('Plum')).toHaveClass('wave:bg-muted');
+      expect(primaryButton('Plum')).not.toHaveClass('wave:bg-primary');
     });
 
     it('toggles on Space and Enter, never on an arrow key', async () => {
@@ -2098,7 +2114,7 @@ describe('TagGroup', () => {
       expect(onValueChange).not.toHaveBeenCalled();
       expect(pressedStates()).toEqual(['false', 'true', 'false']);
       // Disabled wins over the selected look.
-      expect(primaryButton('Plum')).not.toHaveClass('bg-primary');
+      expect(primaryButton('Plum')).not.toHaveClass('wave:bg-primary');
     });
 
     it('a held Primary does not toggle', async () => {
@@ -2191,7 +2207,7 @@ describe('TagGroup', () => {
       const inputs = document.querySelectorAll('input[name="fruit"]');
       expect(inputs).toHaveLength(3);
       for (const input of inputs) expect(input.parentElement).toBe(group);
-      expect(group).toHaveClass('relative');
+      expect(group).toHaveClass('wave:relative');
     });
 
     it("blocks submission while required and empty, and focuses the group's Tab stop", async () => {

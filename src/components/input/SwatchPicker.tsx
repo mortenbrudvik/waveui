@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { swatchPickerClassNames, swatchPickerRowClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { joinIds } from '../../lib/aria';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import type { FocusMode, Shape } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -68,11 +68,6 @@ export interface SwatchPickerProps extends Omit<
   defaultValue?: string;
   /** Called with the new value when the selection changes (not when the selected swatch is chosen again). */
   onValueChange?: (value: string) => void;
-  /**
-   * Called with the new value when the selection changes.
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (value: string) => void;
   // D18: an explicit C-ROUTING exception — a swatch's own ref/className/style/rest land on its
   // button, so a wrapping element's props reach the element that has focus.
   /**
@@ -147,7 +142,7 @@ export interface SwatchPickerRowProps extends React.HTMLAttributes<HTMLDivElemen
 
 /** The gap class the root and the rows share. */
 function swatchGap(spacing: 'small' | 'medium'): string {
-  return spacing === 'small' ? 'gap-1' : 'gap-2';
+  return spacing === 'small' ? 'wave:gap-1' : 'wave:gap-2';
 }
 
 /** Tab mode: every swatch is a tab stop. */
@@ -194,11 +189,11 @@ export const SwatchPickerRow = ({ className, ref, ...rest }: SwatchPickerRowProp
         role={isGridRow ? 'row' : undefined}
         {...rest}
         ref={ref}
-        className={cn(
+        className={wcn(
           swatchPickerRowClassNames.root,
           // The grid's rows never wrap: Up and Down would not reach a wrapped swatch. Tab mode
           // has no arrow keys, so its rows wrap like the row layout's.
-          isGridRow ? 'flex' : 'flex basis-full flex-wrap',
+          isGridRow ? 'wave:flex' : 'wave:flex wave:basis-full wave:flex-wrap',
           swatchGap(spacing),
           className,
         )}
@@ -249,7 +244,6 @@ const SwatchPickerRoot = ({
   value: valueProp,
   defaultValue,
   onValueChange,
-  onChange,
   children,
   layout = 'row',
   focusMode = 'arrow',
@@ -272,12 +266,8 @@ const SwatchPickerRoot = ({
   ref,
   ...rest
 }: SwatchPickerProps) => {
-  if (onChange !== undefined) warnDeprecated('SwatchPicker', 'onChange', 'onValueChange');
   const initialValue = defaultValue ?? '';
-  const [value, setValue] = useControllable(valueProp, initialValue, (next: string) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [value, setValue] = useControllable(valueProp, initialValue, onValueChange);
   const isTab = focusMode === 'tab';
   // The grid layout's rows are visual in tab mode: the grid keys and roles belong to arrow mode.
   const isGrid = layout === 'grid';
@@ -389,9 +379,9 @@ const SwatchPickerRoot = ({
       data-size={size}
       data-shape={shape}
       data-spacing={spacing}
-      className={cn(
+      className={wcn(
         swatchPickerClassNames.root,
-        isGrid ? 'relative flex flex-col' : 'relative flex flex-wrap',
+        isGrid ? 'wave:relative wave:flex wave:flex-col' : 'wave:relative wave:flex wave:flex-wrap',
         swatchGap(spacing),
         className,
       )}

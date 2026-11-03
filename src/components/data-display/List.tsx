@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { focusableDisabledProps } from '../../lib/aria';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { listClassNames, listItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
+import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { INTERACTIVE_SELECTOR, isForeignEvent, type ForeignEventOptions } from '../../lib/events';
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
@@ -21,8 +21,8 @@ import { ownsArrowKeys, useRovingTabIndex } from '../../hooks/useRovingTabIndex'
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { ListRegistry, type ListFocusLoss } from './List.registry';
 
-/** Selection modes of {@link List}: the shared `SelectionMode` plus the deprecated `'multi'`. */
-export type ListSelectionMode = SelectionMode | 'multi';
+/** Selection modes of {@link List}: the shared `SelectionMode` (`'single'` or `'multiple'`). */
+export type ListSelectionMode = SelectionMode;
 
 /**
  * How the keyboard reaches the items of a {@link List} (Fluent's `navigationMode`): `'none'`, no
@@ -116,7 +116,7 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    */
   selectable?: boolean;
   /**
-   * Selection behavior when `selectable` is true. `'multi'` is a deprecated alias of `'multiple'`.
+   * Selection behavior when `selectable` is true.
    * @default 'single'
    */
   selectionMode?: M;
@@ -692,10 +692,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     [itemCount, itemSize],
   );
 
-  if (selectionMode === 'multi') {
-    warnDeprecated('List', 'selectionMode="multi"', 'selectionMode="multiple"');
-  }
-  const multiple = selectionMode === 'multiple' || selectionMode === 'multi';
+  const multiple = selectionMode === 'multiple';
 
   const controlledSelection = React.useMemo<readonly string[] | undefined>(() => {
     if (!multiple && selectedItem !== undefined) {
@@ -1108,11 +1105,11 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
         // A windowed list that navigates its items has its Tab stop on an item: the scroller is
         // none of its own (Firefox makes a scroller a Tab stop). The consumer's `tabIndex` wins.
         tabIndex={windowed && navigable ? -1 : undefined}
-        className={cn(
+        className={wcn(
           listClassNames.root,
-          'm-0 list-none p-0',
+          'wave:m-0 wave:list-none wave:p-0',
           // The window lays the items out: the browser's scroll anchoring only fights it.
-          windowed && 'overflow-y-auto [overflow-anchor:none]',
+          windowed && 'wave:overflow-y-auto wave:[overflow-anchor:none]',
           className,
         )}
         {...rest}
@@ -1152,9 +1149,9 @@ ListRoot.displayName = 'List';
  * system color reaches the glyph.
  */
 const CHECKMARK_FORCED_COLORS =
-  'forced-colors:text-[Highlight] forced-colors:forced-color-adjust-none';
+  'wave:forced-colors:text-[Highlight] wave:forced-colors:forced-color-adjust-none';
 const CHECKMARK_DISABLED_FORCED_COLORS =
-  'forced-colors:text-[GrayText] forced-colors:forced-color-adjust-none';
+  'wave:forced-colors:text-[GrayText] wave:forced-colors:forced-color-adjust-none';
 
 /**
  * The check mark of an item of a selectable list: decorative, kept in its place but not drawn while
@@ -1166,13 +1163,13 @@ function renderCheckmark(
   glyph: Slot<'span'> | undefined,
   { selected, disabled }: { selected: boolean; disabled: boolean },
 ): React.ReactNode {
-  const classes = cn(
+  const classes = wcn(
     listItemClassNames.checkmark,
-    'order-first me-2 inline-flex shrink-0 items-center justify-center',
+    'wave:order-first wave:me-2 wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center',
     disabled
-      ? ['text-muted-foreground', CHECKMARK_DISABLED_FORCED_COLORS]
-      : ['text-primary', CHECKMARK_FORCED_COLORS],
-    !selected && 'invisible',
+      ? ['wave:text-muted-foreground', CHECKMARK_DISABLED_FORCED_COLORS]
+      : ['wave:text-primary', CHECKMARK_FORCED_COLORS],
+    !selected && 'wave:invisible',
   );
   return glyph === undefined ? (
     <span aria-hidden="true" className={classes}>
@@ -1393,7 +1390,7 @@ export const ListItem = ({
   const ContentCell = (mode === 'grid' ? 'div' : 'span') as React.ElementType;
   const role = mode === 'grid' ? 'row' : mode === 'listbox' ? 'option' : 'listitem';
   const contentRole = mode === 'grid' ? 'gridcell' : undefined;
-  const contentClassName = cn(listItemClassNames.content, 'min-w-0 flex-1');
+  const contentClassName = wcn(listItemClassNames.content, 'wave:min-w-0 wave:flex-1');
 
   const interactiveProps: Record<string, unknown> = navigable
     ? {
@@ -1419,9 +1416,9 @@ export const ListItem = ({
   // action; in a list without selection only the items with an action are.
   const cursor = selection
     ? ariaDisabled
-      ? 'cursor-default'
-      : 'cursor-pointer'
-    : onAction && 'cursor-pointer';
+      ? 'wave:cursor-default'
+      : 'wave:cursor-pointer'
+    : onAction && 'wave:cursor-pointer';
   const hoverable = selection ? !ariaDisabled : onAction !== undefined;
 
   // `checkmark` is an optional indicator (C-SLOTS): unset follows the List, content replaces the
@@ -1445,18 +1442,18 @@ export const ListItem = ({
     <Element
       role={role}
       data-disabled-selection={selectionDisabled ? '' : undefined}
-      className={cn(
+      className={wcn(
         listItemClassNames.root,
-        'flex items-center border-b border-border px-4 py-2 text-body-1',
+        'wave:flex wave:items-center wave:border-b wave:border-border wave:px-4 wave:py-2 wave:text-body-1',
         // A windowed item is exactly the window's item size, its bottom rule included.
-        windowIndex !== null && 'box-border',
-        navigable ? ['relative', cursor, focusRingInset] : cursor,
+        windowIndex !== null && 'wave:box-border',
+        navigable ? ['wave:relative', cursor, focusRingInset] : cursor,
         isSelected
           ? [
-              'bg-subtle-selected before:absolute before:inset-y-2 before:start-0 before:w-0.5 before:rounded-full before:bg-primary',
+              'wave:bg-subtle-selected wave:before:absolute wave:before:inset-y-2 wave:before:start-0 wave:before:w-0.5 wave:before:rounded-full wave:before:bg-primary',
               forcedColors.selectedContainer,
             ]
-          : hoverable && 'hover:bg-subtle-hover',
+          : hoverable && 'wave:hover:bg-subtle-hover',
         className,
       )}
       style={listWindow && windowIndex !== null ? { ...style, height: listWindow.itemSize } : style}
@@ -1634,7 +1631,11 @@ function ListActionCell({ grid, onRemovedWithFocus, part, children }: ListAction
   const Cell = (grid ? 'div' : 'span') as React.ElementType;
   const role = grid ? 'gridcell' : undefined;
   const tabIndex = grid ? -1 : undefined;
-  const className = cn(listItemClassNames.action, 'ms-2 shrink-0', grid && focusRingInset);
+  const className = wcn(
+    listItemClassNames.action,
+    'wave:ms-2 wave:shrink-0',
+    grid && focusRingInset,
+  );
   return (
     <Cell
       role={role}

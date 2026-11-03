@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flatTreeClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -647,11 +647,11 @@ const FlatTreeRoot = ({
         // A windowed tree's tab stop is an item: the scroller is none of its own (Firefox makes a
         // scroller a tab stop). The consumer's `tabIndex` wins.
         tabIndex={windowed && tabStop !== null ? -1 : undefined}
-        className={cn(
+        className={wcn(
           flatTreeClassNames.root,
-          'text-body-1',
+          'wave:text-body-1',
           // The window lays the rows out: the browser's scroll anchoring only fights it.
-          windowed && 'overflow-y-auto [overflow-anchor:none]',
+          windowed && 'wave:overflow-y-auto wave:[overflow-anchor:none]',
           className,
         )}
         {...rest}

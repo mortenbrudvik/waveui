@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { presenceBadgeClassNames } from '../../lib/classNames';
 import {
   PresenceAvailableIcon,
@@ -10,17 +10,19 @@ import {
   PresenceOofIcon,
 } from '../../lib/icons';
 import type { IconComponent } from '../../lib/icons';
-import { warnDeprecated } from '../../lib/dev';
 import { AvatarBadgeSizeContext } from './Avatar.context';
+import { warnOnce } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
-import type { DeprecatedPresenceStatus, PresenceStatus, Size } from '../../lib/types';
+import type { PresenceStatus, Size } from '../../lib/types';
 
 /** Properties for the PresenceBadge component. */
 export interface PresenceBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   /**
-   * Presence status to display. `'dnd'` and `'oof'` are deprecated aliases of `'do-not-disturb'`
-   * and `'out-of-office'`: they render the same and warn once in development (removed in 1.0).
+   * Presence status to display. The names of 0.x that 1.0 removed from the type, `'dnd'` and
+   * `'oof'`, still draw `'do-not-disturb'` and `'out-of-office'` when they come from code that no
+   * type checker reads (server data, JavaScript), with a development warning once per name: a
+   * bridge that may go in 2.0, so map such data to the new names.
    * @default 'available'
    */
   status?: PresenceStatus;
@@ -67,42 +69,42 @@ type PresenceGlyph = 'check' | 'solid' | 'clock' | 'ring-x' | 'bar' | 'arrow';
  * instead of an empty ring.
  */
 const statusStyles: Record<
-  Exclude<PresenceStatus, DeprecatedPresenceStatus>,
+  PresenceStatus,
   { glyph: PresenceGlyph; Icon: IconComponent; className: string }
 > = {
   available: {
     glyph: 'check',
     Icon: PresenceAvailableIcon,
-    className: 'bg-presence-available text-presence-glyph',
+    className: 'wave:bg-presence-available wave:text-presence-glyph',
   },
   busy: {
     glyph: 'solid',
     Icon: PresenceBusyIcon,
-    className: 'bg-presence-busy text-presence-busy',
+    className: 'wave:bg-presence-busy wave:text-presence-busy',
   },
   away: {
     glyph: 'clock',
     Icon: PresenceAwayIcon,
-    className: 'bg-presence-away text-presence-glyph',
+    className: 'wave:bg-presence-away wave:text-presence-glyph',
   },
   offline: {
     glyph: 'ring-x',
     Icon: PresenceOfflineIcon,
-    className: 'bg-background text-presence-offline',
+    className: 'wave:bg-background wave:text-presence-offline',
   },
   'do-not-disturb': {
     glyph: 'bar',
     Icon: PresenceDndIcon,
-    className: 'bg-presence-busy text-presence-glyph',
+    className: 'wave:bg-presence-busy wave:text-presence-glyph',
   },
   'out-of-office': {
     glyph: 'arrow',
     Icon: PresenceOofIcon,
-    className: 'bg-presence-oof text-presence-glyph',
+    className: 'wave:bg-presence-oof wave:text-presence-glyph',
   },
 };
 
-const statusLabels: Record<Exclude<PresenceStatus, DeprecatedPresenceStatus>, string> = {
+const statusLabels: Record<PresenceStatus, string> = {
   available: 'Available',
   busy: 'Busy',
   away: 'Away',
@@ -111,29 +113,21 @@ const statusLabels: Record<Exclude<PresenceStatus, DeprecatedPresenceStatus>, st
   'out-of-office': 'Out of office',
 };
 
-const DEPRECATED_STATUS_NAMES = {
+/**
+ * The status names of 0.x that 1.0 removed from `PresenceStatus`, and the Fluent names they draw
+ * (ruling BR): a bridge for server data and untyped code, which no type checker reads.
+ */
+const RENAMED_STATUSES: Readonly<Record<string, PresenceStatus>> = {
   dnd: 'do-not-disturb',
   oof: 'out-of-office',
-} as const;
-
-/** Maps the deprecated spellings to their Fluent names; warns once for an alias. */
-function normalizePresenceStatus(
-  status: PresenceStatus,
-): Exclude<PresenceStatus, DeprecatedPresenceStatus> {
-  if (status === 'dnd' || status === 'oof') {
-    const current = DEPRECATED_STATUS_NAMES[status];
-    warnDeprecated('PresenceBadge', `status '${status}'`, `status '${current}'`);
-    return current;
-  }
-  return status;
-}
+};
 
 const sizeClasses: Record<Size, string> = {
-  'extra-small': 'size-2', // 8px
-  small: 'size-2.5', // 10px
-  medium: 'size-3', // 12px
-  large: 'size-4', // 16px
-  'extra-large': 'size-5', // 20px
+  'extra-small': 'wave:size-2', // 8px
+  small: 'wave:size-2.5', // 10px
+  medium: 'wave:size-3', // 12px
+  large: 'wave:size-4', // 16px
+  'extra-large': 'wave:size-5', // 20px
 };
 
 /**
@@ -157,15 +151,33 @@ export const PresenceBadge = ({
   slotProps,
   ...props
 }: PresenceBadgeProps) => {
+  // A removed name from untyped code draws its new name (on the server too).
+  const oldName = Object.hasOwn(RENAMED_STATUSES, statusProp) ? statusProp : undefined;
+  const status = oldName ? RENAMED_STATUSES[oldName] : statusProp;
+  React.useEffect(() => {
+    // Written out so a bundler replaces it and a production bundle drops the warning and its
+    // text; without `process` (an unbundled import in a browser) the read throws and it is skipped.
+    try {
+      if (process.env.NODE_ENV !== 'production' && oldName) {
+        warnOnce(
+          `PresenceBadge:status:${oldName}`,
+          `PresenceBadge: status '${oldName}' was removed in 1.0; the badge draws ` +
+            `'${RENAMED_STATUSES[oldName]}' for it. Use '${RENAMED_STATUSES[oldName]}': this ` +
+            'fallback for server data and untyped code may be removed in 2.0.',
+        );
+      }
+    } catch {
+      // No `process`: see above.
+    }
+  }, [oldName]);
   const avatarBadgeSize = React.useContext(AvatarBadgeSizeContext);
   const size = sizeProp ?? avatarBadgeSize ?? 'medium';
-  const status = normalizePresenceStatus(statusProp);
   const { glyph, Icon, className: statusClassName } = statusStyles[status];
   const iconPart = slotProps?.icon;
-  const iconClassName = cn(
+  const iconClassName = wcn(
     presenceBadgeClassNames.icon,
-    'size-full',
-    glyph === 'arrow' && 'wave-rtl:-scale-x-100',
+    'wave:size-full',
+    glyph === 'arrow' && 'wave:wave-rtl:-scale-x-100',
   );
 
   return (
@@ -176,10 +188,10 @@ export const PresenceBadge = ({
       data-glyph={glyph}
       data-status={status}
       {...props}
-      className={cn(
+      className={wcn(
         presenceBadgeClassNames.root,
-        'inline-flex shrink-0 items-center justify-center rounded-full ring-2 ring-background',
-        'forced-colors:border',
+        'wave:inline-flex wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:ring-2 wave:ring-background',
+        'wave:forced-colors:border',
         forcedColors.border,
         sizeClasses[size],
         statusClassName,

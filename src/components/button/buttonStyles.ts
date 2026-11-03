@@ -10,13 +10,13 @@
  *   work for `<a>` and `role="button"` elements (`Button as="a"`) and never fire on a disabled or
  *   `aria-disabled` control. The `enabled:` variant is never used (it only matches form controls).
  * - The gate raises the specificity of those classes (`:not(:disabled):not([aria-disabled="true"])
- *   :hover` is 0,4,0; a bare `hover:` class is 0,2,0), and `cn()` keeps both because their variants
+ *   :hover` is 0,4,0; a bare `hover:` class is 0,2,0), and `wcn()` keeps both because their variants
  *   differ. A consumer overrides a hover/pressed color with the same gate prefix
- *   (`not-disabled:not-aria-disabled:hover:bg-error`, which `cn()` merges over the built-in class)
+ *   (`not-disabled:not-aria-disabled:hover:bg-error`, which `wcn()` merges over the built-in class)
  *   or with the important modifier (`hover:bg-error!`).
  * - Class strings stay literal so Tailwind's scanner sees every utility.
  */
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Appearance, Size } from '../../lib/types';
 
@@ -24,7 +24,7 @@ import type { Appearance, Size } from '../../lib/types';
  * Layout, typography, focus ring and color transition shared by every button. `no-underline`
  * keeps `Button as="a"` from showing the browser's link underline.
  */
-export const buttonBaseClasses = `inline-flex items-center justify-center rounded font-semibold no-underline transition-colors motion-reduce:transition-none ${focusRing}`;
+export const buttonBaseClasses = `wave:inline-flex wave:items-center wave:justify-center wave:rounded wave:font-semibold wave:no-underline wave:transition-colors wave:motion-reduce:transition-none ${focusRing}`;
 
 /**
  * Height, horizontal padding, minimum width and font size per size. The font size grows with the
@@ -36,20 +36,20 @@ export const buttonBaseClasses = `inline-flex items-center justify-center rounde
  * would shrink below the 16px large size in an app with a root font size under about 14.2px.
  */
 export const buttonSizeClasses: Record<Size, string> = {
-  'extra-small': 'h-5 min-w-24 px-1.5 text-caption-2',
-  small: 'h-6 min-w-24 px-2 text-caption-1',
-  medium: 'h-8 min-w-24 px-3 text-body-1',
-  large: 'h-10 min-w-24 px-4 text-body-2',
-  'extra-large': 'h-12 min-w-24 px-5 text-[18px]/[24px]',
+  'extra-small': 'wave:h-5 wave:min-w-24 wave:px-1.5 wave:text-caption-2',
+  small: 'wave:h-6 wave:min-w-24 wave:px-2 wave:text-caption-1',
+  medium: 'wave:h-8 wave:min-w-24 wave:px-3 wave:text-body-1',
+  large: 'wave:h-10 wave:min-w-24 wave:px-4 wave:text-body-2',
+  'extra-large': 'wave:h-12 wave:min-w-24 wave:px-5 wave:text-[18px]/[24px]',
 };
 
 /** Square sizes for icon-only buttons (no minimum width, no horizontal padding). */
 export const buttonIconOnlySizeClasses: Record<Size, string> = {
-  'extra-small': 'h-5 w-5 px-0 text-caption-2',
-  small: 'h-6 w-6 px-0 text-caption-1',
-  medium: 'h-8 w-8 px-0 text-body-1',
-  large: 'h-10 w-10 px-0 text-body-2',
-  'extra-large': 'h-12 w-12 px-0 text-[18px]/[24px]',
+  'extra-small': 'wave:h-5 wave:w-5 wave:px-0 wave:text-caption-2',
+  small: 'wave:h-6 wave:w-6 wave:px-0 wave:text-caption-1',
+  medium: 'wave:h-8 wave:w-8 wave:px-0 wave:text-body-1',
+  large: 'wave:h-10 wave:w-10 wave:px-0 wave:text-body-2',
+  'extra-large': 'wave:h-12 wave:w-12 wave:px-0 wave:text-[18px]/[24px]',
 };
 
 /**
@@ -58,28 +58,29 @@ export const buttonIconOnlySizeClasses: Record<Size, string> = {
  */
 export const buttonAppearanceClasses: Record<Appearance, string> = {
   primary:
-    'border border-transparent bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+    'wave:border wave:border-transparent wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed',
   outline:
-    'border border-stroke bg-background text-foreground not-disabled:not-aria-disabled:hover:border-stroke-hover not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+    'wave:border wave:border-stroke wave:bg-background wave:text-foreground wave:not-disabled:not-aria-disabled:hover:border-stroke-hover wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   subtle:
-    'border border-transparent bg-transparent text-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+    'wave:border wave:border-transparent wave:bg-transparent wave:text-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
   transparent:
-    'border border-transparent bg-transparent text-primary not-disabled:not-aria-disabled:hover:underline',
+    'wave:border wave:border-transparent wave:bg-transparent wave:text-primary wave:not-disabled:not-aria-disabled:hover:underline',
 };
 
 /**
  * Pressed/checked colors per appearance (ToggleButton). Layer them **after** the appearance
- * classes with `cn()` (or use `buttonClassName({ pressed: true })`); tailwind-merge then replaces
+ * classes with `wcn()` (or use `buttonClassName({ pressed: true })`); tailwind-merge then replaces
  * the conflicting appearance colors. Hover keeps the pressed color so the state stays visible.
  */
 export const buttonPressedClasses: Record<Appearance, string> = {
   primary:
-    'bg-primary-pressed text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-pressed',
+    'wave:bg-primary-pressed wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-pressed',
   outline:
-    'border-primary bg-selected text-selected-foreground not-disabled:not-aria-disabled:hover:border-primary not-disabled:not-aria-disabled:hover:bg-selected',
-  subtle: 'bg-selected text-selected-foreground not-disabled:not-aria-disabled:hover:bg-selected',
+    'wave:border-primary wave:bg-selected wave:text-selected-foreground wave:not-disabled:not-aria-disabled:hover:border-primary wave:not-disabled:not-aria-disabled:hover:bg-selected',
+  subtle:
+    'wave:bg-selected wave:text-selected-foreground wave:not-disabled:not-aria-disabled:hover:bg-selected',
   transparent:
-    'bg-selected text-selected-foreground not-disabled:not-aria-disabled:hover:bg-selected',
+    'wave:bg-selected wave:text-selected-foreground wave:not-disabled:not-aria-disabled:hover:bg-selected',
 };
 
 /**
@@ -91,13 +92,13 @@ export const buttonPressedClasses: Record<Appearance, string> = {
  */
 export const buttonPressedAccessibleClasses: Record<Appearance, string> = {
   primary:
-    'bg-primary-pressed text-primary-foreground inset-ring-2 inset-ring-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-pressed',
+    'wave:bg-primary-pressed wave:text-primary-foreground wave:inset-ring-2 wave:inset-ring-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-pressed',
   outline:
-    'border-primary bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:border-primary-hover not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+    'wave:border-primary wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:border-primary-hover wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed',
   subtle:
-    'bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+    'wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed',
   transparent:
-    'bg-primary text-primary-foreground not-disabled:not-aria-disabled:hover:bg-primary-hover not-disabled:not-aria-disabled:active:bg-primary-pressed',
+    'wave:bg-primary wave:text-primary-foreground wave:not-disabled:not-aria-disabled:hover:bg-primary-hover wave:not-disabled:not-aria-disabled:active:bg-primary-pressed',
 };
 
 /**
@@ -106,13 +107,13 @@ export const buttonPressedAccessibleClasses: Record<Appearance, string> = {
  * inherited `forced-color-adjust: none` would take its label, icons, child content and focus ring
  * out of forced colors.
  */
-const buttonPressedForcedColors = `${forcedColors.selectedContainer} forced-colors:border-[Highlight]`;
+const buttonPressedForcedColors = `${forcedColors.selectedContainer} wave:forced-colors:border-[Highlight]`;
 
 /**
  * Pressed and disabled: the pressed outline turns GrayText like the disabled text and border (a
  * Highlight indicator next to GrayText would read as available).
  */
-const buttonPressedDisabledForcedColors = 'forced-colors:outline-[GrayText]';
+const buttonPressedDisabledForcedColors = 'wave:forced-colors:outline-[GrayText]';
 
 /**
  * Disabled look (native `disabled`, `aria-disabled` or a non-button `as`), incl. forced colors.
@@ -120,7 +121,7 @@ const buttonPressedDisabledForcedColors = 'forced-colors:outline-[GrayText]';
  * (`disabledFocusable`, a consumer `aria-disabled`) shows at full opacity while its ring is
  * visible: the ring keeps its 3:1 contrast, and `aria-disabled` still reports the state.
  */
-export const buttonDisabledClasses = `cursor-not-allowed opacity-50 aria-disabled:focus-visible:opacity-100 ${forcedColors.disabled}`;
+export const buttonDisabledClasses = `wave:cursor-not-allowed wave:opacity-50 wave:aria-disabled:focus-visible:opacity-100 ${forcedColors.disabled}`;
 
 /** Options of {@link buttonClassName}. */
 export interface ButtonClassNameOptions {
@@ -143,10 +144,10 @@ export interface ButtonClassNameOptions {
 
 /**
  * The complete class string of a button: base, size (or icon-only size), appearance, and the
- * optional pressed and disabled layers. Consumers' `className` goes after it in `cn()`.
+ * optional pressed and disabled layers. Consumers' `className` goes after it in `wcn()`.
  *
  * @example
- * <button className={cn(buttonClassName({ appearance: 'primary', size: 'small' }), className)} />
+ * <button className={wcn(buttonClassName({ appearance: 'primary', size: 'small' }), className)} />
  */
 export function buttonClassName({
   appearance = 'outline',
@@ -156,7 +157,7 @@ export function buttonClassName({
   pressed = false,
   accessible = false,
 }: ButtonClassNameOptions = {}): string {
-  return cn(
+  return wcn(
     buttonBaseClasses,
     iconOnly ? buttonIconOnlySizeClasses[size] : buttonSizeClasses[size],
     buttonAppearanceClasses[appearance],

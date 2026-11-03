@@ -3,22 +3,22 @@
  * `scripts/build-css.mjs` (the precompiled CSS; the library JS build compiles no CSS) and
  * `scripts/verify-dist.mjs`, which asserts every property configured here on the built `dist/`.
  *
- * - One output file per source module (`preserveModules`) in both formats — `dist/<path>.mjs`
- *   and `dist/<path>.cjs` — so, with `"sideEffects": ["*.css"]`, a consumer bundler drops every
- *   module it does not import (repo-level#3).
+ * - ES modules only (1.0, spec R4): one output file per source module (`preserveModules`),
+ *   `dist/<path>.mjs`, so, with `"sideEffects": ["*.css"]`, a consumer bundler drops every module
+ *   it does not import (repo-level#3). There is no CommonJS output: Node.js 22.12 and later
+ *   loads the ES entry through `require()` too.
  * - Every dependency and peer dependency of package.json is external, subpaths included
  *   (repo-level#4).
  * - `"use client"` heads every component and hook module, never the `index` barrels or
  *   `src/lib`, so Server Components can import `cn` and the flat sub-component names
  *   (repo-level#2).
- * - Declarations are rolled up into `dist/index.d.ts` and copied to `dist/index.d.cts` for the
- *   `require` condition (repo-level#5).
+ * - Declarations are rolled up into `dist/index.d.ts` (repo-level#5), which every condition
+ *   resolves.
  *
  * Storybook reuses this file's plugins, never its `build` block; `.storybook/main.ts` removes
  * `vite:dts` and adds the Tailwind plugin.
  */
-import { copyFileSync, existsSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -27,7 +27,6 @@ import pkg from './package.json' with { type: 'json' };
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const srcDir = resolve(root, 'src');
-const outDir = resolve(root, 'dist');
 
 const externalPackages = [
   ...Object.keys(pkg.dependencies ?? {}),
@@ -58,44 +57,22 @@ export function useClient(chunk: { facadeModuleId: string | null }): string {
   return /^index\.tsx?$/.test(rest[rest.length - 1]) ? '' : '"use client";';
 }
 
-/**
- * Copies the rolled-up `index.d.ts` to `index.d.cts`, the declaration of the `require` condition
- * (a `.d.ts` file of a `"type": "module"` package describes an ES module, so CommonJS consumers
- * need their own). Throws when the rolled-up declaration is missing, failing the build.
- */
-export function copyIndexDtsToDcts(dir: string = outDir): void {
-  const source = join(dir, 'index.d.ts');
-  if (!existsSync(source)) {
-    throw new Error(`copyIndexDtsToDcts: ${source} was not emitted`);
-  }
-  copyFileSync(source, join(dir, 'index.d.cts'));
-}
-
-const perModule = {
-  preserveModules: true,
-  preserveModulesRoot: 'src',
-  banner: useClient,
-} as const;
-
 export default defineConfig({
-  plugins: [
-    react(),
-    dts({
-      rollupTypes: true,
-      tsconfigPath: './tsconfig.json',
-      afterBuild: () => copyIndexDtsToDcts(),
-    }),
-  ],
+  plugins: [react(), dts({ rollupTypes: true, tsconfigPath: './tsconfig.json' })],
   build: {
-    // No `formats`: Vite ignores it (and warns) when `output` is an array.
-    lib: { entry: resolve(srcDir, 'index.ts') },
+    // `formats: ['es']`: without it Vite 8 builds its default `['es', 'umd']`, and a UMD build
+    // of a library with preserved modules fails.
+    lib: { entry: resolve(srcDir, 'index.ts'), formats: ['es'] },
     sourcemap: true,
     rolldownOptions: {
       external,
-      output: [
-        { ...perModule, format: 'es', entryFileNames: '[name].mjs' },
-        { ...perModule, format: 'cjs', entryFileNames: '[name].cjs', exports: 'named' },
-      ],
+      output: {
+        format: 'es',
+        entryFileNames: '[name].mjs',
+        preserveModules: true,
+        preserveModulesRoot: 'src',
+        banner: useClient,
+      },
     },
   },
   resolve: {

@@ -251,13 +251,13 @@ describe('Overflow', () => {
     // It sticks at the row's clipping edge, past the row's padding (-end-1 offsets p-1), and
     // keeps room inside for its own focus indicator while pinned.
     expect(wrapper).toHaveClass(
-      'sticky',
-      '-end-1',
-      'shrink-0',
-      'data-[overflow-pinned]:bg-background',
-      'data-[overflow-pinned]:pe-1',
+      'wave:sticky',
+      'wave:-end-1',
+      'wave:shrink-0',
+      'wave:data-[overflow-pinned]:bg-background',
+      'wave:data-[overflow-pinned]:pe-1',
     );
-    expect(wrapper).not.toHaveClass('absolute');
+    expect(wrapper).not.toHaveClass('wave:absolute');
     expect(wrapper).toHaveAttribute('data-overflow-pinned');
   });
 
@@ -268,10 +268,10 @@ describe('Overflow', () => {
     // a ring drawn 4px outside an item (focusRing: 2px offset + 2px width) stays inside the clipped
     // box on every side.
     const row = screen.getByTestId('overflow');
-    expect(row).toHaveClass('flex', 'overflow-hidden', 'p-1', 'gap-1');
+    expect(row).toHaveClass('wave:flex', 'wave:overflow-hidden', 'wave:p-1', 'gap-1');
     // No negative margin: it would make the row's box reach past its container, which a scroll
     // container around an edge-to-edge row (or the page) counts as overflow and scrolls by 4px.
-    expect(row.className).not.toMatch(/(^|\s)-m[xysetblr]?-/);
+    expect(row.className).not.toMatch(/(^|\s)wave:-m[xysetblr]?-/);
   });
 
   it('measures the room for the items without the row padding', () => {
@@ -1227,8 +1227,8 @@ describe('Overflow - priority, pinned items, direction and orientation (P9-01)',
     const row = screen.getByTestId('overflow');
     expect(hiddenItems()).toEqual(['c', 'd']);
     expect(row).toHaveAttribute('data-orientation', 'vertical');
-    expect(row).toHaveClass('flex-col');
-    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-bottom-1');
+    expect(row).toHaveClass('wave:flex-col');
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('wave:-bottom-1');
     unmount();
 
     // The row gap counts between items and before the button: 3 x 30 + 2 x 10 = 110 > 100.
@@ -1242,7 +1242,7 @@ describe('Overflow - priority, pinned items, direction and orientation (P9-01)',
     layoutWith({ ...FOUR });
     render(<Row />);
     expect(screen.getByTestId('overflow')).toHaveAttribute('data-orientation', 'horizontal');
-    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-end-1');
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('wave:-end-1');
   });
 
   it('renders the resolved overflow direction as data-overflow-direction', () => {
@@ -1305,7 +1305,7 @@ describe('Overflow - priority, pinned items, direction and orientation (P9-01)',
     renderWithProviders(<Row overflowDirection="start" items={samePriority()} />, { dir: 'rtl' });
     expect(hiddenItems()).toEqual(['a', 'b']);
     // The button keeps the logical inline end, which flips with the direction.
-    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('-end-1');
+    expect(screen.getByRole('button', { name: '+2' }).parentElement).toHaveClass('wave:-end-1');
   });
 
   it('accepts priority or pinned, never both', () => {
@@ -1331,16 +1331,22 @@ describe('Overflow - priority, pinned items, direction and orientation (P9-01)',
     expectTypeOf<OverflowDirection>().toEqualTypeOf<'end' | 'start'>();
     expectTypeOf<OverflowProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
     expectTypeOf<OverflowGroupVisibility>().toEqualTypeOf<'visible' | 'hidden' | 'overflow'>();
-    // `details` is optional until 1.0 (C-NAMING), as for the other callbacks of the phase.
+    // `details` is required (1.0, C-NAMING): a handler of the ids alone still fits, but code
+    // that calls the prop passes `details`.
     expectTypeOf<OverflowProps['onOverflowChange']>().toEqualTypeOf<
-      ((hiddenItems: string[], details?: OverflowChangeDetails) => void) | undefined
+      ((hiddenItems: string[], details: OverflowChangeDetails) => void) | undefined
     >();
     type OnOverflowChange = NonNullable<OverflowProps['onOverflowChange']>;
-    const withDetails = (hidden: string[], details?: OverflowChangeDetails) =>
-      void [hidden, details?.visibleItems];
+    const withDetails = (hidden: string[], details: OverflowChangeDetails) =>
+      void [hidden, details.visibleItems];
     const hiddenOnly = (hidden: string[]) => void hidden;
     expectTypeOf(withDetails).toExtend<OnOverflowChange>();
     expectTypeOf(hiddenOnly).toExtend<OnOverflowChange>();
+    expectTypeOf<OnOverflowChange>().toBeCallableWith(['a'], {
+      visibleItems: [],
+      groupVisibility: {},
+    });
+    // @ts-expect-error `details` is required (1.0)
     expectTypeOf<OnOverflowChange>().toBeCallableWith(['a']);
   });
 
@@ -2549,7 +2555,7 @@ describe('Overflow - button position (P9-02)', () => {
     expect(row).toHaveAttribute('data-button-position', 'end');
     expect(hiddenItems()).toEqual(['c', 'd']);
     expect(row.lastElementChild).toBe(buttonWrapper());
-    expect(buttonWrapper()).toHaveClass('ps-1');
+    expect(buttonWrapper()).toHaveClass('wave:ps-1');
   });
 
   it('"before-hidden" renders the button just before the first hidden item', () => {
@@ -2561,7 +2567,7 @@ describe('Overflow - button position (P9-02)', () => {
     expect(buttonWrapper()?.previousElementSibling).toBe(screen.getByTestId('item-b'));
     expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
     // Between items it takes the row's gap, as they do.
-    expect(buttonWrapper()).not.toHaveClass('ps-1');
+    expect(buttonWrapper()).not.toHaveClass('wave:ps-1');
     unmount();
 
     layoutWith({ ...FOUR });
@@ -2618,7 +2624,7 @@ describe('Overflow - button position (P9-02)', () => {
     expect(hiddenItems()).toEqual(['c', 'd']);
     expect(buttonWrapper()?.nextElementSibling).toBe(screen.getByTestId('item-c'));
     // It keeps the logical inline end to stick to, which flips with the direction.
-    expect(buttonWrapper()).toHaveClass('-end-1');
+    expect(buttonWrapper()).toHaveClass('wave:-end-1');
   });
 
   it('has no axe violations with the button between the list items of a list row', async () => {
@@ -2738,12 +2744,12 @@ describe('Overflow - the divider stretches across the row (browser pass M3)', ()
     const divider = screen.getByTestId('divider');
     expect(divider).toHaveClass(
       overflowDividerClassNames.root,
-      'flex',
-      'shrink-0',
-      'items-center',
-      'self-stretch',
+      'wave:flex',
+      'wave:shrink-0',
+      'wave:items-center',
+      'wave:self-stretch',
     );
-    expect(divider).not.toHaveClass('flex-col');
+    expect(divider).not.toHaveClass('wave:flex-col');
     expect(divider).not.toHaveAttribute('data-overflow-hidden');
     expect(divider.style.display).toBe('');
   });
@@ -2753,11 +2759,11 @@ describe('Overflow - the divider stretches across the row (browser pass M3)', ()
     render(<Divided orientation="vertical" />);
     expect(screen.getByTestId('divider')).toHaveClass(
       overflowDividerClassNames.root,
-      'flex',
-      'flex-col',
-      'shrink-0',
-      'items-start',
-      'self-stretch',
+      'wave:flex',
+      'wave:flex-col',
+      'wave:shrink-0',
+      'wave:items-start',
+      'wave:self-stretch',
     );
   });
 
@@ -2779,7 +2785,7 @@ describe('Overflow - the divider stretches across the row (browser pass M3)', ()
     );
     const divider = screen.getByTestId('divider');
     expect(hiddenItems()).toEqual(['b']);
-    expect(divider).toHaveClass('flex', 'self-stretch');
+    expect(divider).toHaveClass('flex', 'wave:self-stretch');
     expect(divider).toHaveAttribute('data-overflow-hidden');
     expect(divider).toHaveAttribute('aria-hidden', 'true');
     expect(divider).toHaveAttribute('inert');
@@ -2804,8 +2810,8 @@ describe('Overflow - the divider stretches across the row (browser pass M3)', ()
       </Toolbar>,
     );
     const divider = screen.getByTestId('divider');
-    expect(divider).toHaveClass('flex', 'items-center', 'self-stretch');
-    expect(within(divider).getByRole('separator')).toHaveClass('self-stretch');
+    expect(divider).toHaveClass('wave:flex', 'wave:items-center', 'wave:self-stretch');
+    expect(within(divider).getByRole('separator')).toHaveClass('wave:self-stretch');
   });
 });
 
@@ -2962,11 +2968,11 @@ describe('Overflow — slotProps', () => {
 
   // Captured from 414fe7d's dist (client and server agree).
   const BASE_SERVER =
-    '<div class="wave-overflow__overflow-button sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1" data-overflow-button="">';
+    '<div class="wave-overflow__overflow-button wave:sticky wave:-end-1 wave:flex wave:shrink-0 wave:items-center wave:self-stretch wave:ps-1 wave:data-[overflow-pinned]:bg-background wave:data-[overflow-pinned]:pe-1" data-overflow-button="">';
   const BASE_SERVER_LIST =
-    '<div class="wave-overflow__overflow-button sticky -end-1 flex shrink-0 items-center self-stretch ps-1 data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1" data-overflow-button="" role="listitem">';
+    '<div class="wave-overflow__overflow-button wave:sticky wave:-end-1 wave:flex wave:shrink-0 wave:items-center wave:self-stretch wave:ps-1 wave:data-[overflow-pinned]:bg-background wave:data-[overflow-pinned]:pe-1" data-overflow-button="" role="listitem">';
   const BASE_PINNED =
-    '<div class="wave-overflow__overflow-button sticky -end-1 flex shrink-0 items-center self-stretch data-[overflow-pinned]:bg-background data-[overflow-pinned]:pe-1" data-overflow-button="" data-overflow-pinned="">';
+    '<div class="wave-overflow__overflow-button wave:sticky wave:-end-1 wave:flex wave:shrink-0 wave:items-center wave:self-stretch wave:data-[overflow-pinned]:bg-background wave:data-[overflow-pinned]:pe-1" data-overflow-button="" data-overflow-pinned="">';
 
   it('renders the wrapper of 414fe7d (attributes sorted), on the server and the client', () => {
     for (const slotProps of [undefined, { overflowButton: {} }]) {
@@ -3021,9 +3027,9 @@ describe('Overflow — slotProps', () => {
     expect(element).toContainElement(screen.getByRole('button', { name: '+2' }));
     expect(element.classList[0]).toBe(overflowClassNames.overflowButton);
     expect(element.classList[element.classList.length - 1]).toBe('ps-3');
-    expect(element).toHaveClass('my-wrapper', 'sticky', '-end-1');
+    expect(element).toHaveClass('my-wrapper', 'wave:sticky', 'wave:-end-1');
     // Your class replaces a conflicting one of the wrapper.
-    expect(element).not.toHaveClass('ps-1');
+    expect(element).not.toHaveClass('wave:ps-1');
     expect(element).toHaveStyle({ opacity: '0.5' });
     expect(element).toHaveAttribute('data-part', 'wrapper');
     expect(ref.current).toBe(element);
@@ -3173,7 +3179,7 @@ describe('Overflow — slotProps', () => {
     renderWithProviders(<Tools slotProps={{ overflowButton: { className: 'my-wrapper' } }} />, {
       dir: 'rtl',
     });
-    expect(shownWrapper()).toHaveClass('my-wrapper', '-end-1', 'ps-1');
+    expect(shownWrapper()).toHaveClass('my-wrapper', 'wave:-end-1', 'wave:ps-1');
   });
 
   it('has no accessibility violations with the part customised', async () => {
@@ -3193,5 +3199,93 @@ describe('Overflow — slotProps', () => {
         <Overflow slotProps={{ overflowButton: { children: 'More' } }}>{null}</Overflow>
       )
     );
+  });
+});
+
+describe('Overflow - nested in a hidden item (Phase 14, Task 17)', () => {
+  /**
+   * Widths as a browser reports them: an element inside a hidden item (`display: none`) measures
+   * 0, whether it carries the marker itself or sits inside an element that does.
+   */
+  function stubNestedLayout(widths: Widths): Widths {
+    layoutWith(widths);
+    const width = (el: Element): number => {
+      if (el.closest('[data-overflow-hidden]')) return 0;
+      const key = keyOf(el);
+      return key !== null && key in widths ? widths[key] : 0;
+    };
+    for (const [proto, name] of [
+      [HTMLElement.prototype, 'offsetWidth'],
+      [Element.prototype, 'clientWidth'],
+      [Element.prototype, 'scrollWidth'],
+    ] as const) {
+      Object.defineProperty(proto, name, {
+        configurable: true,
+        get(this: Element) {
+          return width(this);
+        },
+      });
+    }
+    return widths;
+  }
+
+  it('an Overflow inside a hidden item keeps its items’ last sizes, and fits them again when shown', () => {
+    const resize = withResizeObserver();
+    const widths = stubNestedLayout({
+      outer: 150,
+      first: 100,
+      nested: 100,
+      inner: 100,
+      x: 40,
+      y: 40,
+      button: 20,
+    });
+    const onInnerChange = vi.fn();
+    render(
+      <Overflow data-testid="outer" overflowButton={moreButton}>
+        <OverflowItem itemId="first" data-testid="first">
+          First
+        </OverflowItem>
+        <OverflowItem itemId="nested" data-testid="nested">
+          <Overflow data-testid="inner" onOverflowChange={onInnerChange}>
+            <OverflowItem itemId="x" data-testid="x">
+              X
+            </OverflowItem>
+            <OverflowItem itemId="y" data-testid="y">
+              Y
+            </OverflowItem>
+          </Overflow>
+        </OverflowItem>
+      </Overflow>,
+    );
+    // The inner row measured its items while it showed (40 and 40 in 100): both fit. The outer row
+    // then hid the item that holds it (100 + 100 in 150).
+    expect(screen.getByTestId('nested')).toHaveAttribute('data-overflow-hidden');
+    expect(screen.getByTestId('x')).not.toHaveAttribute('data-overflow-hidden');
+    expect(screen.getByTestId('y')).not.toHaveAttribute('data-overflow-hidden');
+    expect(onInnerChange).not.toHaveBeenCalled();
+
+    // Hidden, its items and row measure 0. The store keeps the items' last sizes (their marker
+    // sits on an element around them): a 0-wide row cannot hold two 40-wide items, so it hides
+    // the second (the first stays: no priority is set). Read as 0 wide, both would fit.
+    resize.trigger(screen.getByTestId('x'));
+    resize.trigger(screen.getByTestId('inner'));
+    expect(screen.getByTestId('y')).toHaveAttribute('data-overflow-hidden');
+    expect(onInnerChange).toHaveBeenLastCalledWith(['y'], {
+      visibleItems: ['x'],
+      groupVisibility: {},
+    });
+
+    // Shown again, it measures its items and fits both.
+    widths.outer = 250;
+    resize.trigger(screen.getByTestId('outer'));
+    expect(screen.getByTestId('nested')).not.toHaveAttribute('data-overflow-hidden');
+    resize.trigger(screen.getByTestId('inner'));
+    expect(screen.getByTestId('x')).not.toHaveAttribute('data-overflow-hidden');
+    expect(screen.getByTestId('y')).not.toHaveAttribute('data-overflow-hidden');
+    expect(onInnerChange).toHaveBeenLastCalledWith([], {
+      visibleItems: ['x', 'y'],
+      groupVisibility: {},
+    });
   });
 });

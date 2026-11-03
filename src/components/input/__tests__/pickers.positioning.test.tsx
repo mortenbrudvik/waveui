@@ -81,6 +81,89 @@ describe.each(PICKERS)('%s positioning', (_name, ui) => {
   });
 });
 
+// 1.0 (Phase 14, R5): `ref` reaches the control and joins its merged ref, beside the positioning
+// reference of Combobox and Dropdown. An inline ref that changes on every render is swapped alone,
+// as an inline `controlRef` was in 0.18: the reference is attached once and never detached while
+// the picker is mounted. TimePicker and DatePicker place their popup against the row around the
+// input, which `ref` does not reach.
+const INLINE_REF_PICKERS: [
+  string,
+  (pass: number, ref: (node: HTMLElement | null) => void) => React.ReactElement,
+  (container: HTMLElement) => Element,
+][] = [
+  [
+    'Combobox',
+    (pass, ref) => (
+      <Combobox aria-label="Fruit" data-pass={pass} ref={ref}>
+        <Option value="a">Apple</Option>
+      </Combobox>
+    ),
+    (container) => container.querySelector('[role="combobox"]')!,
+  ],
+  [
+    'Dropdown',
+    (pass, ref) => (
+      <Dropdown aria-label="Fruit" data-pass={pass} ref={ref}>
+        <Option value="a">Apple</Option>
+      </Dropdown>
+    ),
+    (container) => container.querySelector('[role="combobox"]')!,
+  ],
+  [
+    'TimePicker',
+    (pass, ref) => <TimePicker aria-label="Time" data-pass={pass} ref={ref} />,
+    (container) => container.querySelector('[role="combobox"]')!.parentElement!,
+  ],
+  [
+    'DatePicker',
+    (pass, ref) => <DatePicker aria-label="Date" data-pass={pass} ref={ref} />,
+    (container) => container.querySelector('input')!.parentElement!,
+  ],
+];
+
+describe.each(INLINE_REF_PICKERS)(
+  '%s positioning reference with an inline ref',
+  (_name, ui, reference) => {
+    it('attaches the reference once and keeps it while an inline ref changes on every render', async () => {
+      const actual = (
+        await vi.importActual<typeof import('../../../hooks/usePopupPosition')>(
+          '../../../hooks/usePopupPosition',
+        )
+      ).usePopupPosition;
+      const calls: unknown[] = [];
+      let recording: ((el: HTMLElement | null) => void) | undefined;
+      spy.mockImplementation((options) => {
+        const result = actual(options);
+        // One stable wrapper per picker, as the hook's own setter is stable.
+        recording ??= (el) => {
+          calls.push(el);
+          result.setReference(el);
+        };
+        return { ...result, setReference: recording };
+      });
+      try {
+        const nodes: (HTMLElement | null)[] = [];
+        const inline = () => (node: HTMLElement | null) => {
+          nodes.push(node);
+        };
+        const { container, rerender, unmount } = render(ui(0, inline()));
+        rerender(ui(1, inline()));
+        rerender(ui(2, inline()));
+        const anchor = reference(container);
+        expect(calls).toEqual([anchor]);
+        // The inline ref itself is swapped on every render: the old one detached, the new one
+        // attached to the control.
+        expect(nodes.filter((node) => node !== null)).toHaveLength(3);
+        expect(nodes.at(-1)).not.toBeNull();
+        unmount();
+        expect(calls).toEqual([anchor, null]);
+      } finally {
+        spy.mockImplementation(actual);
+      }
+    });
+  },
+);
+
 describe('DatePicker positioning', () => {
   it('keeps the calendar defaults without positioning', () => {
     spy.mockClear();

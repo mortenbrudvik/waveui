@@ -1,6 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
-import { warnDeprecated } from '../../lib/dev';
+import { wcn } from '../../lib/cn';
 import { textClassNames } from '../../lib/classNames';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TextWeight, TypographyVariant } from '../../lib/types';
@@ -18,10 +17,9 @@ export interface TextOwnProps {
    * Font weight: `'regular'`, `'medium'`, `'semibold'` or `'bold'`. Unset, the variant's own
    * weight applies: semibold for `'subtitle-2'` and every larger variant (`'subtitle-1'`, the
    * titles, `'large-title'`, `'display'`), inherited for the caption and body variants. Pass
-   * `'regular'` for a title at regular weight. The numeric 0.4 values `400`, `600` and `700` still
-   * work but are deprecated.
+   * `'regular'` for a title at regular weight.
    */
-  weight?: TextWeight | 400 | 600 | 700;
+  weight?: TextWeight;
   /**
    * Font family: `'base'` keeps the inherited family (the Wave sans-serif), `'monospace'` sets the
    * Wave monospace stack for code and identifiers, `'numeric'` the stack for figures that should
@@ -30,12 +28,6 @@ export interface TextOwnProps {
    */
   font?: 'base' | 'monospace' | 'numeric';
 }
-
-/**
- * The 0.4 numeric weights, kept as deprecated aliases of {@link TextWeight} (written out in
- * {@link TextOwnProps}, not a public name).
- */
-type DeprecatedNumericWeight = Exclude<NonNullable<TextOwnProps['weight']>, TextWeight>;
 
 /**
  * Props of {@link Text} rendered as `C` (default `'span'`). `TextProps` without a type argument
@@ -50,35 +42,29 @@ type TextImplProps = TextOwnProps & {
 };
 
 const variantClasses: Record<TypographyVariant, string> = {
-  'caption-2': 'text-caption-2',
-  'caption-1': 'text-caption-1',
-  'body-1': 'text-body-1',
-  'body-2': 'text-body-2',
-  'subtitle-2': 'text-subtitle-2',
-  'subtitle-1': 'text-subtitle-1',
-  'title-3': 'text-title-3',
-  'title-2': 'text-title-2',
-  'title-1': 'text-title-1',
-  'large-title': 'text-large-title',
-  display: 'text-display',
+  'caption-2': 'wave:text-caption-2',
+  'caption-1': 'wave:text-caption-1',
+  'body-1': 'wave:text-body-1',
+  'body-2': 'wave:text-body-2',
+  'subtitle-2': 'wave:text-subtitle-2',
+  'subtitle-1': 'wave:text-subtitle-1',
+  'title-3': 'wave:text-title-3',
+  'title-2': 'wave:text-title-2',
+  'title-1': 'wave:text-title-1',
+  'large-title': 'wave:text-large-title',
+  display: 'wave:text-display',
 };
 
 const weightClasses: Record<TextWeight, string> = {
-  regular: 'font-normal',
-  medium: 'font-medium',
-  semibold: 'font-semibold',
-  bold: 'font-bold',
+  regular: 'wave:font-normal',
+  medium: 'wave:font-medium',
+  semibold: 'wave:font-semibold',
+  bold: 'wave:font-bold',
 };
 
 const fontClasses: Record<Exclude<NonNullable<TextOwnProps['font']>, 'base'>, string> = {
-  monospace: 'font-wave-mono',
-  numeric: 'font-wave-numeric',
-};
-
-const numericWeights: Record<DeprecatedNumericWeight, TextWeight> = {
-  400: 'regular',
-  600: 'semibold',
-  700: 'bold',
+  monospace: 'wave:font-wave-mono',
+  numeric: 'wave:font-wave-numeric',
 };
 
 /**
@@ -97,23 +83,14 @@ const numericWeights: Record<DeprecatedNumericWeight, TextWeight> = {
 export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
   const { as, variant = 'body-1', weight, font, className, ...rest } = props as TextImplProps;
 
-  let resolvedWeight: TextWeight | undefined;
-  if (typeof weight === 'number') {
-    resolvedWeight = Object.hasOwn(numericWeights, weight) ? numericWeights[weight] : undefined;
-    // Warn-once during render is the sanctioned alias pattern (C-DEV).
-    if (resolvedWeight) warnDeprecated('Text', `weight={${weight}}`, `weight="${resolvedWeight}"`);
-  } else if (weight !== undefined && Object.hasOwn(weightClasses, weight)) {
-    resolvedWeight = weight;
-  }
-
   const Component: React.ElementType = as ?? 'span';
   return (
     <Component
       {...rest}
-      className={cn(
+      className={wcn(
         textClassNames.root,
         variantClasses[variant],
-        resolvedWeight && weightClasses[resolvedWeight],
+        weight !== undefined && Object.hasOwn(weightClasses, weight) && weightClasses[weight],
         font && font !== 'base' && Object.hasOwn(fontClasses, font) && fontClasses[font],
         className,
       )}

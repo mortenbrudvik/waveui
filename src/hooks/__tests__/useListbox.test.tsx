@@ -96,8 +96,8 @@ interface PickerProps extends HarnessOptions {
   filterByText?: boolean;
   /** While open, render the list in a portal (remounts the options). */
   portal?: boolean;
-  onSelectSpy?: (value: string, details?: ListboxSelectDetails) => void;
-  onOpenChangeSpy?: (open: boolean, details?: OpenChangeDetails<ListboxOpenChangeReason>) => void;
+  onSelectSpy?: (value: string, details: ListboxSelectDetails) => void;
+  onOpenChangeSpy?: (open: boolean, details: OpenChangeDetails<ListboxOpenChangeReason>) => void;
   onRootRender?: () => void;
   resultRef?: React.RefObject<UseListboxResult | null>;
 }
@@ -1310,7 +1310,7 @@ interface DataPickerProps extends HarnessOptions {
   items: readonly ListboxItem[];
   defaultOpen?: boolean;
   onRowRender?: (value: string) => void;
-  onSelectSpy?: (value: string, details?: ListboxSelectDetails) => void;
+  onSelectSpy?: (value: string, details: ListboxSelectDetails) => void;
   /** React key of a row. @default the item value */
   rowKey?: (item: ListboxItem, index: number) => string;
 }
@@ -2598,8 +2598,8 @@ interface StandaloneListProps extends Omit<HarnessOptions, 'mode'> {
   defaultValues?: string[];
   /** A fixed selection, as from a parent that ignores `onSelect`. */
   values?: readonly string[];
-  onSelectSpy?: (value: string, details?: ListboxSelectDetails) => void;
-  onOpenChangeSpy?: (open: boolean, details?: OpenChangeDetails<ListboxOpenChangeReason>) => void;
+  onSelectSpy?: (value: string, details: ListboxSelectDetails) => void;
+  onOpenChangeSpy?: (open: boolean, details: OpenChangeDetails<ListboxOpenChangeReason>) => void;
   resultRef?: React.RefObject<UseListboxResult | null>;
 }
 

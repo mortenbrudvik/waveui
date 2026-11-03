@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, getElementType, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   drawerBodyClassNames,
   drawerClassNames,
@@ -72,15 +72,14 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * `close` (a `.Close` part), `close-button` (the built-in Close button), `escape` or
    * `outside-press` (the backdrop) — so a controlled drawer can refuse only some ways of closing
    * (for example keep a form with unsaved changes open on `outside-press`); `details.event` is the
-   * DOM event behind the request. WaveUI always passes `details`; it is typed optional until 1.0
-   * so that code which calls this prop itself keeps compiling. An inline drawer asks only with
+   * DOM event behind the request. WaveUI always passes `details`. An inline drawer asks only with
    * `trigger` (its `Drawer.Trigger` toggles it), `close` and `close-button`: Escape and presses
    * outside it never close it.
    *
    * Fires only when the value changes; a controlled drawer stays as it is until the parent updates
    * `open`.
    */
-  onOpenChange?: (open: boolean, details?: DrawerOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: DrawerOpenChangeDetails) => void;
   /**
    * How the drawer sits on the page (Fluent's `type`).
    * - `overlay`: a panel over the page, rendered in a portal while open: modal by default (focus
@@ -175,12 +174,10 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * end at once); a class string or `{ className }` replaces the default classes with yours (see
    * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
    * default off. They go on the overlay panel, or on the element around an inline drawer's
-   * `<aside>` (`wave-drawer__collapse`), whose phases the drawer waits for. A `className` that
-   * holds `data-[presence=…]` classes while `motion` is unset keeps 0.14's behaviour: no default
-   * motion, your classes animate the panel, and the drawer waits for the panel's motion (an
-   * inline one's `<aside>`, not the element around it); development builds log a warning once,
-   * and the rule is removed in 1.0, so pass `motion` instead. Fluent's `OverlayDrawer` and
-   * `InlineDrawer` `surfaceMotion`.
+   * `<aside>` (`wave-drawer__collapse`), whose phases the drawer waits for. `className` is a
+   * plain class list on the panel: `data-[presence=…]` classes there apply next to the default
+   * motion, and the drawer still waits for the motion above, so pass a motion of your own here.
+   * Fluent's `OverlayDrawer` and `InlineDrawer` `surfaceMotion`.
    * @default the slide (overlay) or the collapse (inline) above
    */
   motion?: MotionSlot | null;
@@ -444,9 +441,9 @@ function DrawerBuiltInHeader({
   return (
     <div
       {...mergeSlotProps(part, {
-        className: cn(
+        className: wcn(
           drawerClassNames.header,
-          'flex shrink-0 items-center justify-between gap-2 p-4',
+          'wave:flex wave:shrink-0 wave:items-center wave:justify-between wave:gap-2 wave:p-4',
           scrollSeparatorClasses.header,
         ),
         locked: { ...HIDDEN_PART_LOCKS, 'data-scroll-state': scrollState },
@@ -455,7 +452,7 @@ function DrawerBuiltInHeader({
       {hasTitle && (
         <h2
           id={titleId}
-          className={cn(drawerTitleClassNames.root, 'text-subtitle-1 font-semibold')}
+          className={wcn(drawerTitleClassNames.root, 'wave:text-subtitle-1 wave:font-semibold')}
         >
           {title}
         </h2>
@@ -464,14 +461,17 @@ function DrawerBuiltInHeader({
         ? renderSlot(
             titleAction,
             'span',
-            cn(drawerClassNames.titleAction, 'ms-auto flex shrink-0 items-center gap-1'),
+            wcn(
+              drawerClassNames.titleAction,
+              'wave:ms-auto wave:flex wave:shrink-0 wave:items-center wave:gap-1',
+            ),
           )
         : null}
       <DrawerCloseButton
         requestOpen={requestOpen}
         label={closeLabel}
         closeButton={closeButton}
-        className={cn(!hasTitleAction && 'ms-auto', 'text-muted-foreground')}
+        className={wcn(!hasTitleAction && 'wave:ms-auto', 'wave:text-muted-foreground')}
       />
     </div>
   );
@@ -509,10 +509,10 @@ function DrawerLayout({ header, bodyProps, content, footers }: DrawerLayoutProps
           data-scroll-state={scrollState}
           {...bodyRest}
           ref={bodyRef}
-          className={cn(
+          className={wcn(
             drawerClassNames.body,
             bodyProps && drawerBodyClassNames.root,
-            'min-h-0 flex-1 overflow-y-auto p-4',
+            'wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:p-4',
             focusRingInset,
             className,
           )}

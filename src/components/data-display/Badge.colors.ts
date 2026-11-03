@@ -1,4 +1,3 @@
-import { warnOnce } from '../../lib/dev';
 import type { BadgeColor } from '../../lib/types';
 
 /** Theme-token classes of one Badge color. */
@@ -19,92 +18,76 @@ export interface BadgeColorClasses {
   dotBorder: string;
 }
 
-/** The dark orange `severe` colors, which `important` also renders through 0.x. */
-const severeClasses: BadgeColorClasses = {
-  filled: 'bg-severe text-severe-foreground',
-  tint: 'bg-severe-tint text-severe-tint-foreground',
-  border: 'border-severe',
-  dot: 'bg-severe',
-  dotBorder: 'border-severe',
-};
-
 /**
  * Theme-token classes per color, shared by Badge and CounterBadge so a color means the same in
  * both. The foreground tokens keep text readable in every theme, and every dot color keeps 3:1
  * against the page background except `subtle` (the page color, for colored surfaces); each pair is
- * asserted in `src/styles/__tests__/tokens.test.ts`. `important` renders the severe colors
- * through 0.x.
+ * asserted in `src/styles/__tests__/tokens.test.ts`.
+ *
+ * `important` is Fluent's neutral high-emphasis color (1.0): the page's text color as the fill
+ * with the page color as its text (near black with white text in the light theme, inverted in the
+ * dark one), and for the tint the secondary text color as the fill. Contrast is symmetric, so these
+ * are the asserted pairs `foreground` and `muted-foreground` on `background`. `severe` is the dark
+ * orange that `important` rendered through 0.x.
  */
 export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   brand: {
-    filled: 'bg-primary text-primary-foreground',
-    tint: 'bg-info-tint text-info-tint-foreground',
-    border: 'border-primary',
-    dot: 'bg-primary',
-    dotBorder: 'border-primary',
+    filled: 'wave:bg-primary wave:text-primary-foreground',
+    tint: 'wave:bg-info-tint wave:text-info-tint-foreground',
+    border: 'wave:border-primary',
+    dot: 'wave:bg-primary',
+    dotBorder: 'wave:border-primary',
   },
   success: {
-    filled: 'bg-success text-success-foreground',
-    tint: 'bg-success-tint text-success-tint-foreground',
-    border: 'border-success',
-    dot: 'bg-success',
-    dotBorder: 'border-success',
+    filled: 'wave:bg-success wave:text-success-foreground',
+    tint: 'wave:bg-success-tint wave:text-success-tint-foreground',
+    border: 'wave:border-success',
+    dot: 'wave:bg-success',
+    dotBorder: 'wave:border-success',
   },
   warning: {
-    filled: 'bg-warning text-warning-foreground',
-    tint: 'bg-warning-tint text-warning-tint-foreground',
-    border: 'border-warning',
+    filled: 'wave:bg-warning wave:text-warning-foreground',
+    tint: 'wave:bg-warning-tint wave:text-warning-tint-foreground',
+    border: 'wave:border-warning',
     // The warning fill is 1.30:1 on the light page; warning's text token keeps 4.5:1 everywhere.
-    dot: 'bg-warning-tint-foreground',
-    dotBorder: 'border-warning-tint-foreground',
+    dot: 'wave:bg-warning-tint-foreground',
+    dotBorder: 'wave:border-warning-tint-foreground',
   },
   danger: {
-    filled: 'bg-destructive text-destructive-foreground',
-    tint: 'bg-error-tint text-error-tint-foreground',
-    border: 'border-destructive',
-    dot: 'bg-destructive',
-    dotBorder: 'border-destructive',
+    filled: 'wave:bg-destructive wave:text-destructive-foreground',
+    tint: 'wave:bg-error-tint wave:text-error-tint-foreground',
+    border: 'wave:border-destructive',
+    dot: 'wave:bg-destructive',
+    dotBorder: 'wave:border-destructive',
   },
-  // `important` gets its own (neutral) entry in 1.0; until then it is the severe look.
-  important: severeClasses,
+  important: {
+    filled: 'wave:bg-foreground wave:text-background',
+    tint: 'wave:bg-muted-foreground wave:text-background',
+    // Fluent's accessible neutral stroke (3:1 on the page).
+    border: 'wave:border-stroke-accessible',
+    dot: 'wave:bg-foreground',
+    dotBorder: 'wave:border-foreground',
+  },
   informative: {
-    filled: 'bg-muted text-foreground',
-    tint: 'bg-muted text-foreground',
-    border: 'border-border',
+    filled: 'wave:bg-muted wave:text-foreground',
+    tint: 'wave:bg-muted wave:text-foreground',
+    border: 'wave:border-border',
     // The muted fill and the border are about 1.2:1 on the page in every theme.
-    dot: 'bg-muted-foreground',
-    dotBorder: 'border-muted-foreground',
+    dot: 'wave:bg-muted-foreground',
+    dotBorder: 'wave:border-muted-foreground',
   },
-  severe: severeClasses,
+  severe: {
+    filled: 'wave:bg-severe wave:text-severe-foreground',
+    tint: 'wave:bg-severe-tint wave:text-severe-tint-foreground',
+    border: 'wave:border-severe',
+    dot: 'wave:bg-severe',
+    dotBorder: 'wave:border-severe',
+  },
   subtle: {
-    filled: 'bg-background text-foreground',
-    tint: 'bg-background text-muted-foreground border border-border',
-    border: 'border-border',
-    dot: 'bg-background',
-    dotBorder: 'border-border',
+    filled: 'wave:bg-background wave:text-foreground',
+    tint: 'wave:bg-background wave:text-muted-foreground wave:border wave:border-border',
+    border: 'wave:border-border',
+    dot: 'wave:bg-background',
+    dotBorder: 'wave:border-border',
   },
 };
-
-/**
- * The development warning for `color="important"`, whose meaning changes in 1.0 (neutral, high
- * emphasis). It is a change of meaning, not a removal, so it has its own message instead of
- * `warnDeprecated`'s. Call it from an effect (C-DEV); it warns once per component. A production
- * bundle drops its body (the mode check is written out for the bundler to replace).
- *
- * @param name - The component that was given the color.
- */
-export function warnImportantColor(name: 'Badge' | 'CounterBadge'): void {
-  // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
-  // production bundle then drops the warning, its text and the `lib/dev` import. Without a bundler
-  // and without `process` (an unbundled import in a browser), the read throws and it is skipped.
-  try {
-    if (process.env.NODE_ENV !== 'production') {
-      warnOnce(
-        `${name}:color:important`,
-        `${name}: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.`,
-      );
-    }
-  } catch {
-    // No `process`: see above.
-  }
-}

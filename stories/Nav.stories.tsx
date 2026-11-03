@@ -6,7 +6,7 @@ import { motionCases } from './_motion';
 
 /** A locally drawn app logo (tokens only: it takes the text colour). */
 const AppLogo = () => (
-  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" className="text-primary">
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" className="text-wave-primary">
     <path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 3.5a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
   </svg>
 );

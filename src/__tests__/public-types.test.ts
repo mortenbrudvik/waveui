@@ -44,6 +44,9 @@ import type {
   addMonths,
   AlphaSliderLabels,
   AlphaSliderProps,
+  AvatarGroupOpenChangeDetails,
+  AvatarGroupPopoverProps,
+  AvatarGroupProps,
   BackdropAppearance,
   BadgeColor,
   BrandRamp,
@@ -310,6 +313,7 @@ import type {
   TableCellLayoutProps,
   TableColumnWidthsChangeDetails,
   TableHeaderCellProps,
+  TableResizeHandleBindings,
   TableResizeHandleProps,
   TableSelectionCellCheckedChangeDetails,
   TableSelectionCellProps,
@@ -405,6 +409,8 @@ import type {
   UseSelectionChangeDetails,
   UseSelectionOptions,
   UseSelectionResult,
+  UseTableColumnSizingOptions,
+  UseTableSortOptions,
   UseVirtualWindowOptions,
   ValidationState,
   VirtualElement,
@@ -583,8 +589,6 @@ const INTERNAL_HELPERS: Record<string, string> = {
     'mask: link-only attributes are a type error on items without `href`',
   'components/navigation/Nav.context.ts#NoAnchorOnlyAttributes':
     'mask: link-only attributes are a type error on items without `href`',
-  'components/table/DataGrid.tsx#NoDeprecatedSortProps':
-    'mask: the 0.4 sort props are a type error next to the 0.5 sort API',
   'lib/slotProps.ts#SlotPartProps':
     'member: the props half of the `SlotPart` union, named only so that a call infers the part element',
   'lib/tokens.ts#TokenVariable':
@@ -873,15 +877,20 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<DrawerOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<DrawerOpenChangeDetails>().toEqualTypeOf<DialogOpenChangeDetails>();
 
-    // A 0.5 handler still fits, and code that calls the prop may pass the value only.
+    // A 0.5 handler still fits; code that calls the prop passes `details` (required in 1.0).
     const handler = (open: boolean) => void open;
     expectTypeOf(handler).toExtend<NonNullable<DialogProps['onOpenChange']>>();
     expectTypeOf(handler).toExtend<NonNullable<DrawerProps['onOpenChange']>>();
+    const details: DialogOpenChangeDetails = { reason: 'escape', event: new Event('keydown') };
+    expectTypeOf<NonNullable<DialogProps['onOpenChange']>>().toBeCallableWith(false, details);
+    expectTypeOf<NonNullable<DrawerProps['onOpenChange']>>().toBeCallableWith(false, details);
+    // @ts-expect-error `details` is required (1.0)
     expectTypeOf<NonNullable<DialogProps['onOpenChange']>>().toBeCallableWith(false);
+    // @ts-expect-error `details` is required (1.0)
     expectTypeOf<NonNullable<DrawerProps['onOpenChange']>>().toBeCallableWith(false);
     expectTypeOf<NonNullable<DialogProps['onOpenChange']>>()
       .parameter(1)
-      .toEqualTypeOf<DialogOpenChangeDetails | undefined>();
+      .toEqualTypeOf<DialogOpenChangeDetails>();
 
     expectTypeOf<TooltipProps['open']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<TooltipProps['defaultOpen']>().toEqualTypeOf<boolean | undefined>();
@@ -928,15 +937,22 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
       event: Event;
     }>();
 
-    // `details` is optional until 1.0: a handler of the values alone fits, a state setter too,
-    // and code that calls the prop may pass the values only.
+    // `details` is required (1.0): a handler of the values alone still fits, a state setter too,
+    // but code that calls the prop passes `details`.
     type Handler = NonNullable<MenuProps['onCheckedValuesChange']>;
     const valuesOnly = (values: Record<string, string[]>) => void values;
     expectTypeOf(valuesOnly).toExtend<Handler>();
     expectTypeOf<Dispatch<SetStateAction<CheckedValues>>>().toExtend<Handler>();
     expectTypeOf<Dispatch<SetStateAction<Record<string, string[]>>>>().toExtend<Handler>();
+    const details: CheckedValuesChangeDetails = {
+      name: 'view',
+      checkedItems: ['grid'],
+      event: new Event('click'),
+    };
+    expectTypeOf<Handler>().toBeCallableWith({ view: ['grid'] }, details);
+    // @ts-expect-error `details` is required (1.0)
     expectTypeOf<Handler>().toBeCallableWith({ view: ['grid'] });
-    expectTypeOf<Handler>().parameter(1).toEqualTypeOf<CheckedValuesChangeDetails | undefined>();
+    expectTypeOf<Handler>().parameter(1).toEqualTypeOf<CheckedValuesChangeDetails>();
     expectTypeOf<NonNullable<ToolbarProps['onCheckedValuesChange']>>().toEqualTypeOf<Handler>();
     // A readonly literal is a valid controlled value.
     expectTypeOf<{ readonly view: readonly ['grid'] }>().toExtend<CheckedValues>();
@@ -1024,11 +1040,12 @@ describe('0.7 menus, popovers and toolbars from the package entry', () => {
       }
     >();
 
-    expectTypeOf<Pick<TooltipProps, 'openDelay' | 'closeDelay' | 'delay'>>().toEqualTypeOf<{
+    expectTypeOf<Pick<TooltipProps, 'openDelay' | 'closeDelay'>>().toEqualTypeOf<{
       openDelay?: number;
       closeDelay?: number;
-      delay?: number;
     }>();
+    // The deprecated `delay` is removed in 1.0.
+    expectTypeOf<TooltipProps>().not.toHaveProperty('delay');
   });
 
   it('Toolbar and ToggleButton: size, the bound parts and isAccessible', () => {
@@ -1084,12 +1101,17 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     expectTypeOf<ListboxOpenChangeReason>().toEqualTypeOf<
       'keyboard' | 'select' | 'escape' | 'tab'
     >();
+    // `details` is required (1.0).
     expectTypeOf<NonNullable<UseListboxOptions['onOpenChange']>>()
       .parameter(1)
-      .toEqualTypeOf<OpenChangeDetails<ListboxOpenChangeReason> | undefined>();
+      .toEqualTypeOf<OpenChangeDetails<ListboxOpenChangeReason>>();
     expectTypeOf<UseListboxOptions['onSelect']>()
       .parameter(1)
-      .toEqualTypeOf<ListboxSelectDetails | undefined>();
+      .toEqualTypeOf<ListboxSelectDetails>();
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<UseListboxOptions['onSelect']>().toBeCallableWith('a');
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<NonNullable<UseListboxOptions['onOpenChange']>>().toBeCallableWith(true);
     expectTypeOf<ListboxSelectDetails['item']>().toEqualTypeOf<ListboxItem>();
     expectTypeOf<
       ReturnType<UseListboxResult['getComboboxProps']>
@@ -1212,9 +1234,12 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
   });
 
   it('Calendar: the value callback, the labels DatePicker extends and the selection range', () => {
+    // `details` is required (1.0).
     expectTypeOf<NonNullable<CalendarProps['onValueChange']>>().parameters.toEqualTypeOf<
-      [date: Date | null, details?: CalendarValueChangeDetails]
+      [date: Date | null, details: CalendarValueChangeDetails]
     >();
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<NonNullable<CalendarProps['onValueChange']>>().toBeCallableWith(null);
     expectTypeOf<DatePickerLabels>().toExtend<CalendarLabels>();
     expectTypeOf<CalendarProps['firstDayOfWeek']>().toEqualTypeOf<DayOfWeek | undefined>();
     expectTypeOf<
@@ -1258,9 +1283,9 @@ describe('0.9 input defaults from the package entry (Phase 4 D7)', () => {
 // imported from the package entry (compile-time, tsconfig.dev.json).
 describe('Phase 4 public types', () => {
   it('sizes and appearances', () => {
-    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    expectTypeOf<InputProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     expectTypeOf<InputProps['htmlSize']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | number | undefined>();
+    expectTypeOf<SelectProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     expectTypeOf<TextareaProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     for (const appearance of [
       {} as InputProps['appearance'],
@@ -1280,7 +1305,7 @@ describe('Phase 4 public types', () => {
     expectTypeOf<CheckboxProps['size']>().toEqualTypeOf<CheckboxSize | undefined>();
     expectTypeOf<CheckboxProps['shape']>().toEqualTypeOf<CheckboxShape | undefined>();
     expectTypeOf<SwitchProps['size']>().toEqualTypeOf<SwitchSize | undefined>();
-    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | number | undefined>();
+    expectTypeOf<SliderProps['size']>().toEqualTypeOf<SliderSize | undefined>();
     expectTypeOf<FieldProps['size']>().toEqualTypeOf<CoreSize | undefined>();
     expectTypeOf<FieldContextValue['size']>().toEqualTypeOf<CoreSize | undefined>();
   });
@@ -1300,20 +1325,17 @@ describe('Phase 4 public types', () => {
     expectTypeOf<InfoLabelProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<InfoButtonProps['openOnHover']>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<LabelProps['required']>().toEqualTypeOf<boolean | ReactNode | undefined>();
-    expectTypeOf<InfoLabelProps['label']>().toEqualTypeOf<ReactNode>();
-    // Optional (the deprecated alias of `children`): a label-less pick accepts `{}`.
-    expectTypeOf<{}>().toExtend<Pick<InfoLabelProps, 'label'>>(); // eslint-disable-line @typescript-eslint/no-empty-object-type -- the empty object is the point
+    // The deprecated `label` alias of `children` is removed in 1.0.
+    expectTypeOf<InfoLabelProps>().not.toHaveProperty('label');
     expectTypeOf<InfoLabelProps['htmlFor']>().toEqualTypeOf<LabelProps['htmlFor']>();
     expectTypeOf<InfoLabelProps['required']>().toEqualTypeOf<LabelProps['required']>();
     expectTypeOf<InfoLabelProps['size']>().toEqualTypeOf<LabelProps['size']>();
     expectTypeOf<InfoLabelProps['weight']>().toEqualTypeOf<LabelProps['weight']>();
     expectTypeOf<InfoLabelProps['disabled']>().toEqualTypeOf<LabelProps['disabled']>();
-    // `never` on an optional member reads as `undefined`: the deprecated alias is unavailable
-    // with `allowEmpty`, and still readable on the component's union of props.
-    expectTypeOf<SpinButtonAllowEmptyProps['onChange']>().toEqualTypeOf<undefined>();
-    expectTypeOf<ComponentProps<typeof SpinButton>['onChange']>().toEqualTypeOf<
-      ((value: number) => void) | undefined
-    >();
+    // The 0.4 `onChange(value)` alias is removed in 1.0, from both members of the union.
+    expectTypeOf<SpinButtonProps>().not.toHaveProperty('onChange');
+    expectTypeOf<SpinButtonAllowEmptyProps>().not.toHaveProperty('onChange');
+    expectTypeOf<ComponentProps<typeof SpinButton>>().not.toHaveProperty('onChange');
   });
 
   it('rejects invalid values', () => {
@@ -1477,9 +1499,11 @@ describe('0.8 notifications, color, trees and class names from the package entry
     expectTypeOf<ColorPickerLabels['valueText']>().toEqualTypeOf<
       ((color: HsvColor, channel: 'hue' | 'saturation' | 'value' | 'alpha') => string) | undefined
     >();
-    expectTypeOf<ColorPickerHexFieldProps['controlRef']>().toEqualTypeOf<
+    // 1.0 (R5): `ref` reaches the hex input, and `controlRef` is gone.
+    expectTypeOf<ColorPickerHexFieldProps['ref']>().toEqualTypeOf<
       Ref<HTMLInputElement> | undefined
     >();
+    expectTypeOf<ColorPickerHexFieldProps>().not.toHaveProperty('controlRef');
     expectTypeOf<ColorPickerSwatchesProps>().not.toHaveProperty('items');
     expectTypeOf<ColorPickerPreviewProps>().toExtend<HTMLAttributes<HTMLDivElement>>();
     expectTypeOf<Entry['ColorPicker']['HexField']>().toEqualTypeOf<Entry['ColorPickerHexField']>();
@@ -1496,15 +1520,22 @@ describe('0.8 notifications, color, trees and class names from the package entry
       checked: boolean;
       event: Event;
     }>();
-    // `details` is optional until 1.0: a handler of the items alone fits, a state setter too,
-    // and code that calls the prop may pass the items only.
+    // `details` is required (1.0): a handler of the items alone still fits, a state setter too,
+    // but code that calls the prop passes `details`.
     type Handler = NonNullable<TreeProps['onCheckedItemsChange']>;
     const itemsOnly = (items: string[]) => void items;
     expectTypeOf(itemsOnly).toExtend<Handler>();
     expectTypeOf<Dispatch<SetStateAction<string[]>>>().toExtend<Handler>();
     expectTypeOf<Dispatch<SetStateAction<readonly string[]>>>().toExtend<Handler>();
+    const details: TreeCheckedItemsChangeDetails = {
+      value: 'docs',
+      checked: true,
+      event: new Event('click'),
+    };
+    expectTypeOf<Handler>().toBeCallableWith(['docs'], details);
+    // @ts-expect-error `details` is required (1.0)
     expectTypeOf<Handler>().toBeCallableWith(['docs']);
-    expectTypeOf<Handler>().parameter(1).toEqualTypeOf<TreeCheckedItemsChangeDetails | undefined>();
+    expectTypeOf<Handler>().parameter(1).toEqualTypeOf<TreeCheckedItemsChangeDetails>();
 
     expectTypeOf<TreeProps['navigationMode']>().toEqualTypeOf<'tree' | 'treegrid' | undefined>();
     expectTypeOf<TreeItemProps['actions']>().toEqualTypeOf<ReactNode>();
@@ -1717,18 +1748,21 @@ describe('0.14 collections, data grids and tours from the package entry', () => 
       visibleItems: string[];
       groupVisibility: Record<string, OverflowGroupVisibility>;
     }>();
-    // `details` is optional until 1.0: a handler of the hidden ids alone fits, one that takes the
-    // details as optional too, and code that calls the prop may pass the ids only.
+    // `details` is required (1.0): a handler of the hidden ids alone still fits, one that takes
+    // the details too, but code that calls the prop passes `details`.
     type OnOverflowChange = NonNullable<OverflowProps['onOverflowChange']>;
     expectTypeOf<OnOverflowChange>().parameter(0).toEqualTypeOf<string[]>();
-    expectTypeOf<OnOverflowChange>()
-      .parameter(1)
-      .toEqualTypeOf<OverflowChangeDetails | undefined>();
+    expectTypeOf<OnOverflowChange>().parameter(1).toEqualTypeOf<OverflowChangeDetails>();
     const hiddenOnly = (hiddenItems: string[]) => void hiddenItems;
-    const withDetails = (hiddenItems: string[], details?: OverflowChangeDetails) =>
-      void [hiddenItems, details?.groupVisibility];
+    const withDetails = (hiddenItems: string[], details: OverflowChangeDetails) =>
+      void [hiddenItems, details.groupVisibility];
     expectTypeOf(hiddenOnly).toExtend<OnOverflowChange>();
     expectTypeOf(withDetails).toExtend<OnOverflowChange>();
+    expectTypeOf<OnOverflowChange>().toBeCallableWith(['a'], {
+      visibleItems: [],
+      groupVisibility: {},
+    });
+    // @ts-expect-error `details` is required (1.0)
     expectTypeOf<OnOverflowChange>().toBeCallableWith(['a']);
 
     expectTypeOf<OverflowItemProps>().toEqualTypeOf<
@@ -1819,11 +1853,12 @@ describe('0.14 collections, data grids and tours from the package entry', () => 
     expectTypeOf<DataGridSelectionAppearance>().toEqualTypeOf<'brand' | 'neutral' | 'none'>();
     expectTypeOf<DataGridSortChangeDetails>().toEqualTypeOf<{ event: Event }>();
     expectTypeOf<DataGridSelectedItemsChangeDetails>().toEqualTypeOf<{ event: Event }>();
+    // `details` is required (1.0).
     expectTypeOf<NonNullable<DataGridItemsSortProps['onSortChange']>>().toEqualTypeOf<
-      (sort: DataGridSort, details?: DataGridSortChangeDetails) => void
+      (sort: DataGridSort, details: DataGridSortChangeDetails) => void
     >();
     expectTypeOf<NonNullable<DataGridBaseProps['onSelectedItemsChange']>>().toEqualTypeOf<
-      (selectedItems: string[], details?: DataGridSelectedItemsChangeDetails) => void
+      (selectedItems: string[], details: DataGridSelectedItemsChangeDetails) => void
     >();
 
     expectTypeOf<DataGridRowProps['selectionCellProps']>().toEqualTypeOf<
@@ -1856,8 +1891,9 @@ describe('0.14 collections, data grids and tours from the package entry', () => 
     expectTypeOf<TableSelectionCellProps['checked']>().toEqualTypeOf<
       boolean | 'mixed' | undefined
     >();
+    // `details` is required (1.0), a form reset included.
     expectTypeOf<NonNullable<TableSelectionCellProps['onCheckedChange']>>().toEqualTypeOf<
-      (checked: boolean, details?: TableSelectionCellCheckedChangeDetails) => void
+      (checked: boolean, details: TableSelectionCellCheckedChangeDetails) => void
     >();
     expectTypeOf<TableSelectionCellCheckedChangeDetails>().toEqualTypeOf<{ event: Event }>();
     expectTypeOf<TableSelectionCellProps['controlRef']>().toEqualTypeOf<
@@ -1872,8 +1908,9 @@ describe('0.14 collections, data grids and tours from the package entry', () => 
     expectTypeOf<Entry['Table']['CellActions']>().toEqualTypeOf<Entry['TableCellActions']>();
     expectTypeOf<Entry['Table']['ResizeHandle']>().toEqualTypeOf<Entry['TableResizeHandle']>();
     expectTypeOf<TableResizeHandleProps['width']>().toEqualTypeOf<number>();
+    // `details` is required (1.0).
     expectTypeOf<TableResizeHandleProps['onResize']>().toEqualTypeOf<
-      (width: number, details?: { event: Event }) => void
+      (width: number, details: { event: Event }) => void
     >();
 
     // @ts-expect-error a sortable header is sorted ascending or descending, or not at all (absent)
@@ -2086,8 +2123,9 @@ describe('0.16 data at scale from the package entry', () => {
     expectTypeOf<UseSelectionOptions['selectedItems']>().toEqualTypeOf<
       readonly string[] | undefined
     >();
+    // `details` is required (1.0); its fields stay optional.
     expectTypeOf<NonNullable<UseSelectionOptions['onSelectedItemsChange']>>().toEqualTypeOf<
-      (selectedItems: string[], details?: UseSelectionChangeDetails) => void
+      (selectedItems: string[], details: UseSelectionChangeDetails) => void
     >();
     expectTypeOf<UseSelectionChangeDetails>().toEqualTypeOf<{ event?: Event; id?: string }>();
     expectTypeOf<UseSelectionResult['selectedItems']>().toEqualTypeOf<ReadonlySet<string>>();
@@ -2119,8 +2157,9 @@ describe('0.16 data at scale from the package entry', () => {
     expectTypeOf<DataGridBaseProps['defaultColumnWidths']>().toEqualTypeOf<
       Record<string, number> | undefined
     >();
+    // `details` is required (1.0).
     expectTypeOf<NonNullable<DataGridBaseProps['onColumnWidthsChange']>>().toEqualTypeOf<
-      (widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void
+      (widths: Record<string, number>, details: TableColumnWidthsChangeDetails) => void
     >();
     expectTypeOf<TableColumnWidthsChangeDetails>().toEqualTypeOf<{
       columnId: string;
@@ -2161,8 +2200,9 @@ describe('0.16 data at scale from the package entry', () => {
       disabled?: boolean;
     }>();
     expectTypeOf<CheckState>().toEqualTypeOf<'checked' | 'mixed' | 'unchecked'>();
+    // `details` is required (1.0), also when `setChecked` gets no event.
     expectTypeOf<NonNullable<UseFlatTreeOptions['onCheckedItemsChange']>>().toEqualTypeOf<
-      (checkedItems: string[], details?: TreeCheckedItemsChangeDetails) => void
+      (checkedItems: string[], details: TreeCheckedItemsChangeDetails) => void
     >();
     expectTypeOf<UseFlatTreeOptions['selectionMode']>().toEqualTypeOf<
       'none' | SelectionMode | undefined
@@ -2403,6 +2443,7 @@ describe('0.18 customization surface from the package entry', () => {
       secondaryText?: SlotPart<'span'>;
     }>();
     expectTypeOf<NonNullable<SwitchProps['slotProps']>>().toEqualTypeOf<{
+      root?: SlotPart<'label'>;
       track?: SlotPart<'button'>;
       thumb?: SlotPart<'span'>;
       label?: SlotPart<'span'>;
@@ -2439,5 +2480,252 @@ describe('0.18 customization surface from the package entry', () => {
     // @ts-expect-error a part takes no children
     const parts: NonNullable<SwitchProps['slotProps']> = { track: { children: 'x' } };
     expect(parts).toBeDefined();
+  });
+});
+
+// 1.0 (Phase 14, the inventory rows `details-*`): the second `details` argument of every change
+// callback that had an optional one is required. WaveUI passes it on every change; a handler that
+// takes fewer parameters still fits, but code that calls the prop itself must pass it.
+describe('1.0: the details argument of the change callbacks is required', () => {
+  const event = new Event('click');
+
+  it('the announced-before rows: Dialog, Drawer, NavDrawer, Menu, Toolbar, Tree, Calendar, useListbox, Overflow, DataGrid, Table.SelectionCell', () => {
+    type DialogChange = NonNullable<DialogProps['onOpenChange']>;
+    type DrawerChange = NonNullable<DrawerProps['onOpenChange']>;
+    type NavDrawerChange = NonNullable<NavDrawerProps['onOpenChange']>;
+    type MenuChange = NonNullable<MenuProps['onCheckedValuesChange']>;
+    type ToolbarChange = NonNullable<ToolbarProps['onCheckedValuesChange']>;
+    type TreeChange = NonNullable<TreeProps['onCheckedItemsChange']>;
+    type CalendarChange = NonNullable<CalendarProps['onValueChange']>;
+    type ListboxOpen = NonNullable<UseListboxOptions['onOpenChange']>;
+    type ListboxSelect = UseListboxOptions['onSelect'];
+    type OverflowChange = NonNullable<OverflowProps['onOverflowChange']>;
+    type GridSort = NonNullable<DataGridItemsSortProps['onSortChange']>;
+    type GridSelection = NonNullable<DataGridBaseProps['onSelectedItemsChange']>;
+    type CellChange = NonNullable<TableSelectionCellProps['onCheckedChange']>;
+
+    expectTypeOf<DialogChange>().parameter(1).toEqualTypeOf<DialogOpenChangeDetails>();
+    expectTypeOf<DrawerChange>().parameter(1).toEqualTypeOf<DrawerOpenChangeDetails>();
+    expectTypeOf<NavDrawerChange>().parameter(1).toEqualTypeOf<DrawerOpenChangeDetails>();
+    expectTypeOf<MenuChange>().parameter(1).toEqualTypeOf<CheckedValuesChangeDetails>();
+    expectTypeOf<ToolbarChange>().parameter(1).toEqualTypeOf<CheckedValuesChangeDetails>();
+    expectTypeOf<TreeChange>().parameter(1).toEqualTypeOf<TreeCheckedItemsChangeDetails>();
+    expectTypeOf<CalendarChange>().parameter(1).toEqualTypeOf<CalendarValueChangeDetails>();
+    expectTypeOf<ListboxOpen>()
+      .parameter(1)
+      .toEqualTypeOf<OpenChangeDetails<ListboxOpenChangeReason>>();
+    expectTypeOf<ListboxSelect>().parameter(1).toEqualTypeOf<ListboxSelectDetails>();
+    expectTypeOf<OverflowChange>().parameter(1).toEqualTypeOf<OverflowChangeDetails>();
+    expectTypeOf<GridSort>().parameter(1).toEqualTypeOf<DataGridSortChangeDetails>();
+    expectTypeOf<GridSelection>().parameter(1).toEqualTypeOf<DataGridSelectedItemsChangeDetails>();
+    expectTypeOf<CellChange>().parameter(1).toEqualTypeOf<TableSelectionCellCheckedChangeDetails>();
+
+    // A handler of the value alone still fits.
+    expectTypeOf((open: boolean) => void open).toExtend<DialogChange>();
+    expectTypeOf((open: boolean) => void open).toExtend<NavDrawerChange>();
+    expectTypeOf((items: string[]) => void items).toExtend<GridSelection>();
+
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<DialogChange>().toBeCallableWith(false);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<DrawerChange>().toBeCallableWith(false);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<NavDrawerChange>().toBeCallableWith(false);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<MenuChange>().toBeCallableWith({});
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<ToolbarChange>().toBeCallableWith({});
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<TreeChange>().toBeCallableWith([]);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<CalendarChange>().toBeCallableWith(null);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<ListboxOpen>().toBeCallableWith(true);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<ListboxSelect>().toBeCallableWith('a');
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<OverflowChange>().toBeCallableWith([]);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<GridSort>().toBeCallableWith({ columnId: 'name', direction: 'ascending' });
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<GridSelection>().toBeCallableWith([]);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<CellChange>().toBeCallableWith(true);
+
+    // The same calls with `details` compile, so each error above is about `details` alone.
+    const sort: DataGridSort = { columnId: 'name', direction: 'ascending' };
+    const tree = { value: 'docs', checked: true, event };
+    const values = { name: 'view', checkedItems: [], event };
+    expectTypeOf<DialogChange>().toBeCallableWith(false, { reason: 'escape', event });
+    expectTypeOf<DrawerChange>().toBeCallableWith(false, { reason: 'escape', event });
+    expectTypeOf<NavDrawerChange>().toBeCallableWith(false, { reason: 'escape', event });
+    expectTypeOf<MenuChange>().toBeCallableWith({}, values);
+    expectTypeOf<ToolbarChange>().toBeCallableWith({}, values);
+    expectTypeOf<TreeChange>().toBeCallableWith([], tree);
+    expectTypeOf<CalendarChange>().toBeCallableWith(null, { range: [] });
+    expectTypeOf<ListboxOpen>().toBeCallableWith(true, { reason: 'keyboard', event });
+    expectTypeOf<ListboxSelect>().toBeCallableWith('a', {
+      item: { value: 'a', label: 'A' },
+      event,
+    });
+    expectTypeOf<OverflowChange>().toBeCallableWith([], { visibleItems: [], groupVisibility: {} });
+    expectTypeOf<GridSort>().toBeCallableWith(
+      { columnId: 'name', direction: 'ascending' },
+      { event },
+    );
+    expectTypeOf<GridSort>().toBeCallableWith(sort, { event });
+    expectTypeOf<GridSelection>().toBeCallableWith([], { event });
+    expectTypeOf<CellChange>().toBeCallableWith(true, { event });
+  });
+
+  it('the announced-now rows: AvatarGroup, the column widths, Table.ResizeHandle, useTableSort, useSelection, useFlatTree', () => {
+    type AvatarGroupChange = NonNullable<AvatarGroupProps['onOpenChange']>;
+    type AvatarGroupPopoverChange = NonNullable<AvatarGroupPopoverProps['onOpenChange']>;
+    type GridWidths = NonNullable<DataGridBaseProps['onColumnWidthsChange']>;
+    type HookWidths = NonNullable<UseTableColumnSizingOptions['onColumnWidthsChange']>;
+    type HandleResize = TableResizeHandleProps['onResize'];
+    type HookSort = NonNullable<UseTableSortOptions['onSortChange']>;
+    type SelectionChange = NonNullable<UseSelectionOptions['onSelectedItemsChange']>;
+    type FlatTreeChange = NonNullable<UseFlatTreeOptions['onCheckedItemsChange']>;
+
+    expectTypeOf<AvatarGroupChange>().parameter(1).toEqualTypeOf<AvatarGroupOpenChangeDetails>();
+    expectTypeOf<AvatarGroupPopoverChange>()
+      .parameter(1)
+      .toEqualTypeOf<AvatarGroupOpenChangeDetails>();
+    expectTypeOf<GridWidths>().parameter(1).toEqualTypeOf<TableColumnWidthsChangeDetails>();
+    expectTypeOf<HookWidths>().parameter(1).toEqualTypeOf<TableColumnWidthsChangeDetails>();
+    expectTypeOf<HandleResize>().parameter(1).toEqualTypeOf<{ event: Event }>();
+    expectTypeOf<HookSort>().parameter(1).toEqualTypeOf<DataGridSortChangeDetails>();
+    expectTypeOf<SelectionChange>().parameter(1).toEqualTypeOf<UseSelectionChangeDetails>();
+    expectTypeOf<FlatTreeChange>().parameter(1).toEqualTypeOf<TreeCheckedItemsChangeDetails>();
+
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<AvatarGroupChange>().toBeCallableWith(true);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<AvatarGroupPopoverChange>().toBeCallableWith(true);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<GridWidths>().toBeCallableWith({});
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<HookWidths>().toBeCallableWith({});
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<HandleResize>().toBeCallableWith(120);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<HookSort>().toBeCallableWith({ columnId: 'name', direction: 'ascending' });
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<SelectionChange>().toBeCallableWith([]);
+    // @ts-expect-error `details` is required (1.0)
+    expectTypeOf<FlatTreeChange>().toBeCallableWith([]);
+
+    // The same calls with `details` compile, so each error above is about `details` alone.
+    const widths = { columnId: 'name', width: 120, event };
+    expectTypeOf<AvatarGroupChange>().toBeCallableWith(true, { reason: 'trigger', event });
+    expectTypeOf<AvatarGroupPopoverChange>().toBeCallableWith(true, { reason: 'escape', event });
+    expectTypeOf<GridWidths>().toBeCallableWith({}, widths);
+    expectTypeOf<HookWidths>().toBeCallableWith({}, widths);
+    expectTypeOf<HandleResize>().toBeCallableWith(120, { event });
+    expectTypeOf<HookSort>().toBeCallableWith(
+      { columnId: 'name', direction: 'ascending' },
+      { event },
+    );
+    expectTypeOf<FlatTreeChange>().toBeCallableWith([], { value: 'docs', checked: true, event });
+    // `useSelection`'s details have optional fields (an action may get no event): `{}` is details.
+    expectTypeOf<SelectionChange>().toBeCallableWith([], {});
+    // The resize bindings of `useTableColumnSizing` are an input that the handle calls: they still
+    // take no details, and fit the handle's `onResize`.
+    expectTypeOf<TableResizeHandleBindings['onResize']>().toBeCallableWith(120);
+    expectTypeOf<TableResizeHandleBindings['onResize']>().toExtend<HandleResize>();
+  });
+});
+
+// 1.0 (Phase 14, R5): the `ref` of the twelve composite controls reaches their focusable control,
+// `controlRef` is gone from them, and each of them (with `RadioGroup.Item`, whose `ref` already
+// reached its radio) takes its wrapper's props and ref through `slotProps.root`. Only what other
+// cases of this file do not pin yet: `ColorPickerHexFieldProps['ref']` and Switch's whole
+// `slotProps` are above.
+describe('1.0: ref reaches the control, slotProps.root the wrapper (R5)', () => {
+  /** The `root` part a component's `slotProps` takes. */
+  type RootOf<P extends { slotProps?: unknown }> = NonNullable<
+    NonNullable<P['slotProps']> extends { root?: infer R } ? R : never
+  >;
+
+  it('ref is typed for the focusable control', () => {
+    expectTypeOf<CheckboxProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<SwitchProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<RadioItemProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<SearchBoxProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<SpinButtonProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<ComboboxProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<ComboboxProps<true>['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<DropdownProps['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<DropdownProps<true>['ref']>().toEqualTypeOf<Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<TimePickerProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<DatePickerProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    // The trigger that renders: TagPicker's Input, or TagPicker.Button.
+    expectTypeOf<TagPickerProps['ref']>().toEqualTypeOf<
+      Ref<HTMLInputElement | HTMLButtonElement> | undefined
+    >();
+    expectTypeOf<ColorSliderProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+    expectTypeOf<AlphaSliderProps['ref']>().toEqualTypeOf<Ref<HTMLInputElement> | undefined>();
+  });
+
+  it('controlRef is gone from the twelve, and stays on ColorArea and the selection cells', () => {
+    expectTypeOf<CheckboxProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<SwitchProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<SearchBoxProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<SpinButtonProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<ComboboxProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<DropdownProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<TimePickerProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<DatePickerProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<TagPickerProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<ColorSliderProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<AlphaSliderProps>().not.toHaveProperty('controlRef');
+    expectTypeOf<ColorAreaProps>().toHaveProperty('controlRef');
+    expectTypeOf<TableSelectionCellProps>().toHaveProperty('controlRef');
+    expectTypeOf<DataGridSelectionCellProps>().toHaveProperty('controlRef');
+  });
+
+  it('slotProps.root is a part of the wrapper element, its ref typed for it', () => {
+    expectTypeOf<RootOf<CheckboxProps>>().toEqualTypeOf<SlotPart<'label'>>();
+    expectTypeOf<RootOf<RadioItemProps>>().toEqualTypeOf<SlotPart<'label'>>();
+    expectTypeOf<RootOf<ColorPickerHexFieldProps>>().toEqualTypeOf<SlotPart<'label'>>();
+    expectTypeOf<RootOf<SearchBoxProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<SpinButtonProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<ComboboxProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<DropdownProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<TimePickerProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<DatePickerProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<TagPickerProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<ColorSliderProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<RootOf<AlphaSliderProps>>().toEqualTypeOf<SlotPart<'div'>>();
+    expectTypeOf<SlotPart<'label'>['ref']>().toEqualTypeOf<Ref<HTMLLabelElement> | undefined>();
+    expectTypeOf<SlotPart<'div'>['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
+  });
+
+  it('a ref object typed for the wrapper no longer compiles as ref', () => {
+    const label = { current: null } as RefObject<HTMLLabelElement | null>;
+    const div = { current: null } as RefObject<HTMLDivElement | null>;
+    // @ts-expect-error Checkbox's ref reaches its <button>, not its root <label> (1.0)
+    const checkbox: CheckboxProps['ref'] = label;
+    // @ts-expect-error the hex field's ref reaches its <input>, not its root <label> (1.0)
+    const hexField: ColorPickerHexFieldProps['ref'] = label;
+    // @ts-expect-error Dropdown's ref reaches its <button>, not its root <div> (1.0)
+    const dropdown: DropdownProps['ref'] = div;
+    // @ts-expect-error Combobox's ref reaches its <input>, not its root <div> (1.0)
+    const combobox: ComboboxProps['ref'] = div;
+    // @ts-expect-error TagPicker's ref reaches its trigger, not its root <div> (1.0)
+    const tagPicker: TagPickerProps['ref'] = div;
+    // The wrapper's ref object fits its root part.
+    const checkboxRoot: RootOf<CheckboxProps>['ref'] = label;
+    const comboboxRoot: RootOf<ComboboxProps>['ref'] = div;
+    expect([
+      checkbox,
+      hexField,
+      dropdown,
+      combobox,
+      tagPicker,
+      checkboxRoot,
+      comboboxRoot,
+    ]).toHaveLength(7);
   });
 });

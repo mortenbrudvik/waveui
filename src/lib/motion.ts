@@ -150,17 +150,17 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   keyframes, mirrored by the right-to-left counterpart on the same value. Under reduced motion
  *   it becomes a full-width fill that pulses in place instead, in either direction.
  *
- * The resolver below picks the classes of a part: its motion slot, the provider's preference and
- * the className rule of the parts that keep 0.14's own motion.
+ * The resolver below picks the classes of a part from its motion slot and the provider's
+ * preference.
  */
 
 /** The Dialog surface's default motion: scale and fade, 250 ms in and 200 ms out. */
 export const dialogMotion =
-  'transition-[opacity,scale] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:scale-85 data-[presence=exiting]:opacity-0 data-[presence=exiting]:scale-85';
+  'wave:transition-[opacity,scale] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:scale-85 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=exiting]:scale-85';
 
 /** The Dialog backdrop's default motion: a fade, 250 ms in and 200 ms out (the surface's exit). */
 export const dialogBackdropMotion =
-  'transition-opacity duration-wave-gentle ease-wave-easy-ease data-[presence=exiting]:duration-wave-normal motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+  'wave:transition-opacity wave:duration-wave-gentle wave:ease-wave-easy-ease wave:data-[presence=exiting]:duration-wave-normal wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0';
 
 /**
  * An edge a drawer is attached to (Drawer's `DrawerPosition`, which lives in a client component
@@ -174,32 +174,32 @@ type DrawerEdge = 'start' | 'end' | 'left' | 'right' | 'bottom';
  */
 export const drawerMotion: Readonly<Record<DrawerEdge, string>> = {
   start:
-    'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:-translate-x-full data-[presence=exiting]:-translate-x-full wave-rtl:data-[presence=entering]:starting:translate-x-full wave-rtl:data-[presence=exiting]:translate-x-full',
-  end: 'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-x-full data-[presence=exiting]:translate-x-full wave-rtl:data-[presence=entering]:starting:-translate-x-full wave-rtl:data-[presence=exiting]:-translate-x-full',
-  left: 'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:-translate-x-full data-[presence=exiting]:-translate-x-full', // wave-allow-physical: left and right drawers do not mirror
+    'wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:-translate-x-full wave:data-[presence=exiting]:-translate-x-full wave:wave-rtl:data-[presence=entering]:starting:translate-x-full wave:wave-rtl:data-[presence=exiting]:translate-x-full',
+  end: 'wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:translate-x-full wave:data-[presence=exiting]:translate-x-full wave:wave-rtl:data-[presence=entering]:starting:-translate-x-full wave:wave-rtl:data-[presence=exiting]:-translate-x-full',
+  left: 'wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:-translate-x-full wave:data-[presence=exiting]:-translate-x-full', // wave-allow-physical: left and right drawers do not mirror
   right:
-    'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-x-full data-[presence=exiting]:translate-x-full', // wave-allow-physical: left and right drawers do not mirror
+    'wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:translate-x-full wave:data-[presence=exiting]:translate-x-full', // wave-allow-physical: left and right drawers do not mirror
   bottom:
-    'transition-[opacity,translate] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[presence=entering]:starting:translate-y-full data-[presence=exiting]:translate-y-full',
+    'wave:transition-[opacity,translate] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[presence=entering]:starting:translate-y-full wave:data-[presence=exiting]:translate-y-full',
 };
 
 /** The overlay drawer panel's duration per size: 250, 300, 400 and 500 ms, both ways. */
 export const drawerDurations: Readonly<Record<SurfaceSize, string>> = {
-  small: 'duration-wave-gentle',
-  medium: 'duration-wave-slow',
-  large: 'duration-wave-slower',
-  full: 'duration-wave-ultra-slow',
+  small: 'wave:duration-wave-gentle',
+  medium: 'wave:duration-wave-slow',
+  large: 'wave:duration-wave-slower',
+  full: 'wave:duration-wave-ultra-slow',
 };
 
 /** The overlay drawer backdrop's default motion per size: a linear fade over its size's duration. */
 export const drawerBackdropMotion: Readonly<Record<SurfaceSize, string>> = {
   small:
-    'transition-opacity duration-wave-gentle ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+    'wave:transition-opacity wave:duration-wave-gentle wave:ease-wave-linear wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0',
   medium:
-    'transition-opacity duration-wave-slow ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+    'wave:transition-opacity wave:duration-wave-slow wave:ease-wave-linear wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0',
   large:
-    'transition-opacity duration-wave-slower ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
-  full: 'transition-opacity duration-wave-ultra-slow ease-wave-linear motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0',
+    'wave:transition-opacity wave:duration-wave-slower wave:ease-wave-linear wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0',
+  full: 'wave:transition-opacity wave:duration-wave-ultra-slow wave:ease-wave-linear wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0',
 };
 
 /**
@@ -211,13 +211,13 @@ export const drawerBackdropMotion: Readonly<Record<SurfaceSize, string>> = {
  */
 export const inlineDrawerStructure: Readonly<Record<DrawerEdge, string>> = {
   start:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] justify-items-end justify-end overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
-  end: 'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] justify-items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none',
-  left: 'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [justify-items:right] [justify-content:right] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical left edge
+    'wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:justify-items-end wave:justify-end wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-w-none',
+  end: 'wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:justify-items-start wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-w-none',
+  left: 'wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:[justify-items:right] wave:[justify-content:right] wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical left edge
   right:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [justify-items:left] [justify-content:left] overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical right edge
+    'wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:[justify-items:left] wave:[justify-content:left] wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-w-none', // wave-allow-physical: the consumer asked for the physical right edge
   bottom:
-    'grid shrink-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents not-data-[presence=entered]:*:max-h-none',
+    'wave:grid wave:shrink-0 wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-start wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-h-none',
 };
 
 /**
@@ -226,9 +226,9 @@ export const inlineDrawerStructure: Readonly<Record<DrawerEdge, string>> = {
  */
 export const inlineDrawerMotion: Readonly<Record<'width' | 'height', string>> = {
   width:
-    'transition-[grid-template-columns,opacity] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:grid-cols-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-cols-[minmax(0,0fr)] data-[presence=exiting]:opacity-0',
+    'wave:transition-[grid-template-columns,opacity] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-cols-[minmax(0,0fr)] wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:grid-cols-[minmax(0,0fr)] wave:data-[presence=exiting]:opacity-0',
   height:
-    'transition-[grid-template-rows,opacity] ease-wave-decelerate-mid data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:opacity-0',
+    'wave:transition-[grid-template-rows,opacity] wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:opacity-0',
 };
 
 /**
@@ -237,11 +237,11 @@ export const inlineDrawerMotion: Readonly<Record<'width' | 'height', string>> = 
  * by the side it opened on, 200 ms in and 100 ms out; only the fade without a side.
  */
 export const popupMotion =
-  'transition-[opacity,translate] duration-wave-normal ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-faster data-[presence=exiting]:ease-wave-accelerate-min motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0 data-[side=top]:data-[presence=entering]:starting:translate-y-1 data-[side=top]:data-[presence=exiting]:translate-y-1 data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 data-[side=bottom]:data-[presence=exiting]:-translate-y-1 data-[side=left]:data-[presence=entering]:starting:translate-x-1 data-[side=left]:data-[presence=exiting]:translate-x-1 data-[side=right]:data-[presence=entering]:starting:-translate-x-1 data-[side=right]:data-[presence=exiting]:-translate-x-1'; // wave-allow-physical: data-side is the resolved physical side
+  'wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1'; // wave-allow-physical: data-side is the resolved physical side
 
 /** The Tooltip surface's default motion: a fade, 100 ms both ways, without a slide. */
 export const tooltipMotion =
-  'transition-opacity duration-wave-faster ease-wave-easy-ease motion-reduce:transition-none data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:opacity-0';
+  'wave:transition-opacity wave:duration-wave-faster wave:ease-wave-easy-ease wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0';
 
 /**
  * The structure of the element around a disclosure's collapsing part (Accordion's region, a Tree
@@ -250,25 +250,25 @@ export const tooltipMotion =
  * squeezed) and in a whole column with a zero minimum (the width it has once entered).
  */
 export const collapseStructure =
-  'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start overflow-hidden data-[presence=entered]:contents';
+  'wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-start wave:overflow-hidden wave:data-[presence=entered]:contents';
 
 /**
  * A disclosure's default collapse, on the element around its part: the row track opens from zero
  * and closes back with a fade, 200 ms both ways.
  */
 export const collapseMotion =
-  'transition-[grid-template-rows,opacity] duration-wave-normal ease-wave-easy-ease-max motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:opacity-0';
+  'wave:transition-[grid-template-rows,opacity] wave:duration-wave-normal wave:ease-wave-easy-ease-max wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:opacity-0';
 
 /** The default motion of a Nav category's expand icon: its turn is animated, 150 ms both ways. */
 export const expandIconMotion =
-  'transition-transform duration-wave-fast ease-wave-easy-ease motion-reduce:transition-none';
+  'wave:transition-transform wave:duration-wave-fast wave:ease-wave-easy-ease wave:motion-reduce:transition-none';
 
 /**
  * The default reveal of a Nav item's actions, on their group: each action fades in and out as
  * its row is hovered or takes focus, 150 ms both ways.
  */
 export const navActionsRevealMotion =
-  '*:transition *:duration-wave-fast *:ease-wave-easy-ease motion-reduce:*:transition-none';
+  'wave:*:transition wave:*:duration-wave-fast wave:*:ease-wave-easy-ease wave:motion-reduce:*:transition-none';
 
 /**
  * The structure of a toast's container: a one-cell grid around the toast's content element, its
@@ -276,16 +276,16 @@ export const navActionsRevealMotion =
  * container enters or exits.
  */
 export const toastStructure =
-  'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] not-data-[presence=entered]:overflow-hidden';
+  'wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:not-data-[presence=entered]:overflow-hidden';
 
 /**
  * A toast container's default motion per edge of its stack: it opens, fades in and slides from
  * that edge together, 250 ms; it fades out over 200 ms, then closes over 200 ms more.
  */
 export const toastMotion: Readonly<Record<'top' | 'bottom', string>> = {
-  top: 'transition-[grid-template-rows,margin-bottom,opacity,translate] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-easy-ease data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:-translate-y-2 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0',
+  top: 'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:-translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
   bottom:
-    'transition-[grid-template-rows,margin-bottom,opacity,translate] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-easy-ease data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:translate-y-2 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0',
+    'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
 };
 
 /**
@@ -295,86 +295,65 @@ export const toastMotion: Readonly<Record<'top' | 'bottom', string>> = {
  * opens under the bar), in a whole column with a zero minimum (the width it has once shown).
  */
 export const messageBarGroupItemStructure =
-  'grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-end content-end overflow-hidden data-[presence=entered]:contents';
+  'wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-end wave:content-end wave:overflow-hidden wave:data-[presence=entered]:contents';
 
 /**
  * A MessageBarGroup bar's default exit, on the element around it: its row track and its bottom
  * margin close while it fades out, 250 ms.
  */
 export const messageBarGroupExitMotion =
-  'transition-[grid-template-rows,margin-bottom,opacity] duration-wave-gentle ease-wave-linear motion-reduce:transition-none data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0';
+  'wave:transition-[grid-template-rows,margin-bottom,opacity] wave:duration-wave-gentle wave:ease-wave-linear wave:motion-reduce:transition-none wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0';
 
 /**
  * The enter a MessageBarGroup adds to the exit with `animate="both"`: an added bar's row track and
  * bottom margin open from closed while it fades in, on the exit's transition.
  */
 export const messageBarGroupEnterMotion =
-  'data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0';
+  'wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0';
 
 /** A sliding Carousel track's motion: its transform glides to the new page, 300 ms. */
 export const carouselSlideMotion =
-  'transition-transform duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none';
+  'wave:transition-transform wave:duration-wave-slow wave:ease-wave-easy-ease wave:motion-reduce:transition-none';
 
 /** A fading Carousel slide's motion: it fades in or out in place, 300 ms. */
 export const carouselFadeMotion =
-  'transition-opacity duration-wave-slow ease-wave-easy-ease motion-reduce:transition-none';
+  'wave:transition-opacity wave:duration-wave-slow wave:ease-wave-easy-ease wave:motion-reduce:transition-none';
 
 /**
  * The default slide of a TabList's selection line, on the selected tab's after pseudo-element: it
  * moves and stretches from the tab selected before, 300 ms.
  */
 export const tabIndicatorMotion =
-  'after:transition-[translate,scale] after:duration-wave-slow after:ease-wave-decelerate-max motion-reduce:after:transition-none';
+  'wave:after:transition-[translate,scale] wave:after:duration-wave-slow wave:after:ease-wave-decelerate-max wave:motion-reduce:after:transition-none';
 
 /**
  * An indeterminate ProgressBar fill's default motion: it sweeps across the track, mirrored in
  * right-to-left, and pulses at full width under reduced motion.
  */
 export const progressIndeterminateMotion =
-  'w-2/5 animate-wave-indeterminate wave-rtl:animate-wave-indeterminate-rtl motion-reduce:w-full motion-reduce:translate-x-0 motion-reduce:animate-wave-pulse wave-rtl:motion-reduce:animate-wave-pulse';
-
-/** The text of a class list that marks a presence variant written for 0.14's own motion. */
-const PRESENCE_VARIANT = '[presence=';
+  'wave:w-2/5 wave:animate-wave-indeterminate wave:wave-rtl:animate-wave-indeterminate-rtl wave:motion-reduce:w-full wave:motion-reduce:translate-x-0 wave:motion-reduce:animate-wave-pulse wave:wave-rtl:motion-reduce:animate-wave-pulse';
 
 function slotClassName(slot: MotionSlot): string {
   return typeof slot === 'string' ? slot : slot.className;
 }
 
 /**
- * Whether a part keeps 0.14's own motion: no slot, and a `className` that holds a presence
- * variant, which the consumer wrote to animate the surface themselves. That `className` then
- * turns the default motion off, as it did before the default existed.
- *
- * @param slot - The part's `motion` prop.
- * @param legacyClassName - The part's `className`; omit it for a part without that rule.
- */
-export function usesLegacyMotion(
-  slot: MotionSlot | null | undefined,
-  legacyClassName?: string,
-): boolean {
-  return slot === undefined && (legacyClassName?.includes(PRESENCE_VARIANT) ?? false);
-}
-
-/**
  * The motion classes of an animated part: `null` none; a string or `{ className }` the
- * consumer's classes; `undefined` none under the provider's `'none'`, else `recipe`.
- * `legacyClassName` (the parts that keep 0.14's behaviour): a value containing a presence variant
- * gives no default motion.
+ * consumer's classes; `undefined` none under the provider's `'none'`, else `recipe`. The part's
+ * `className` does not enter into it: the part composes it after these classes, as a plain class
+ * list.
  *
  * @param slot - The part's `motion` prop: `undefined` the default, `null` none, a value replaces it.
  * @param recipe - The part's default motion classes.
  * @param preference - The `motion` of the nearest `WaveProvider`.
- * @param legacyClassName - The part's `className`, for the parts that keep 0.14's behaviour.
  */
 export function resolveMotion(
   slot: MotionSlot | null | undefined,
   recipe: string,
   preference: MotionPreference,
-  legacyClassName?: string,
 ): string {
   if (slot === null) return '';
   if (slot !== undefined) return slotClassName(slot);
   if (preference === 'none') return '';
-  if (usesLegacyMotion(slot, legacyClassName)) return '';
   return recipe;
 }

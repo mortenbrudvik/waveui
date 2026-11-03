@@ -180,7 +180,7 @@ describe('the toast container (§7 markup)', () => {
     expect(content).toHaveClass(toasterClassNames.toastContent);
     const [statusText, paragraph, ...others] = Array.from(content.children);
     expect(others).toEqual([]);
-    expect(statusText).toHaveClass('sr-only');
+    expect(statusText).toHaveClass('wave:sr-only');
     expect(statusText).toHaveTextContent('Warning:');
     expect(paragraph).toHaveTextContent('Connection lost');
     expect(container).toHaveAccessibleName('Warning:');
@@ -446,11 +446,11 @@ describe('Toaster — slotProps', () => {
       ),
     ).toBe(
       [
-        '<div aria-describedby="wave-toast-body-_id0_" aria-labelledby="wave-toast-status-_id1_ wave-toast-title-_id2_" class="wave-toaster__toast rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] not-data-[presence=entered]:overflow-hidden transition-[grid-template-rows,margin-bottom,opacity,translate] duration-wave-gentle ease-wave-decelerate-mid data-[presence=exiting]:duration-wave-normal data-[presence=exiting]:ease-wave-easy-ease data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] motion-reduce:transition-none data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] data-[presence=entering]:starting:-mb-2 data-[presence=entering]:starting:opacity-0 data-[presence=entering]:starting:translate-y-2 data-[presence=exiting]:grid-rows-[minmax(0,0fr)] data-[presence=exiting]:-mb-2 data-[presence=exiting]:opacity-0" data-presence="entered" data-wave-toast="" role="group" tabindex="-1">',
-        '<div class="wave-toast__content min-w-0 flex-1">',
-        '<button aria-label="Dismiss" class="wave-toast__dismiss-button inline-flex shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent p-1 text-muted-foreground not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:hover:text-foreground not-disabled:not-aria-disabled:active:bg-subtle-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" type="button">',
-        '<span class="wave-toast-title__label min-w-0 flex-1 text-body-2 font-semibold text-foreground" id="wave-toast-title-_id2_">',
-        '<div class="wave-toast-body__subtitle mt-1 text-caption-1 text-muted-foreground">',
+        '<div aria-describedby="wave-toast-body-_id0_" aria-labelledby="wave-toast-status-_id1_ wave-toast-title-_id2_" class="wave-toaster__toast wave:rounded wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:not-data-[presence=entered]:overflow-hidden wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0" data-presence="entered" data-wave-toast="" role="group" tabindex="-1">',
+        '<div class="wave-toast__content wave:min-w-0 wave:flex-1">',
+        '<button aria-label="Dismiss" class="wave-toast__dismiss-button wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded wave:border-none wave:bg-transparent wave:p-1 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring" type="button">',
+        '<span class="wave-toast-title__label wave:min-w-0 wave:flex-1 wave:text-body-2 wave:font-semibold wave:text-foreground" id="wave-toast-title-_id2_">',
+        '<div class="wave-toast-body__subtitle wave:mt-1 wave:text-caption-1 wave:text-muted-foreground">',
       ].join('\n'),
     );
   });
@@ -515,7 +515,7 @@ describe('Toaster — slotProps', () => {
     dispatch({ title: 'One', timeout: 0 });
     const [container] = getToasts();
     expect(container).toHaveClass('rounded-lg');
-    expect(container).not.toHaveClass('rounded');
+    expect(container).not.toHaveClass('wave:rounded');
   });
 
   it('locks the container’s role, tab stop, marker, phase, name, description and hidden state', () => {

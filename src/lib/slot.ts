@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { isElementOfType } from './children';
-import { cn } from './cn';
+import { wcn } from './cn';
 import { warnOnce } from './dev';
 
 /**
@@ -333,8 +333,12 @@ export function slotWrapsDefaultContent(
  * resolved it to; any other `resolved` is returned as given:
  * - when `isButton` accepts the element type the function receives (the object's `as` names a
  *   button), the triple has that type, the object's attributes and, as its children, what the
- *   function returns for `'span'` and no props: the component merges it into its own button as it
- *   merges such an object with content, so nothing nests a button;
+ *   function returns for `'span'` and no props, and the component treats it as it treats such an
+ *   object with content, so nothing nests a button: the close slots (`closeButton` of Dialog,
+ *   Drawer and NavDrawer, TeachingPopover's `dismissButton`) merge it into their own button, while
+ *   the `dismiss` slots of MessageBar and SearchBox unwrap it (the children are the content, the
+ *   attributes are dropped, with one development warning), as Tag's `dismissIcon` unwraps such an
+ *   object through its own path;
  * - when the function renders nothing (called with the type and the object's attributes), the
  *   triple has the type and the attributes and no children: the object without the function,
  *   which keeps the default glyph inside its element;
@@ -357,9 +361,9 @@ export function resolveWiredSlot(
     : { Component: type, props, children: undefined };
 }
 
-/** `cn(base, own)`, or `undefined` when there are no classes, so no empty `class=""` renders. */
+/** `wcn(base, own)`, or `undefined` when there are no classes, so no empty `class=""` renders. */
 function mergeClassName(baseClassName: string | undefined, className: unknown): string | undefined {
-  return cn(baseClassName, className as string | undefined) || undefined;
+  return wcn(baseClassName, className as string | undefined) || undefined;
 }
 
 /**
@@ -367,7 +371,8 @@ function mergeClassName(baseClassName: string | undefined, className: unknown): 
  *
  * - `null`, `undefined`, `false` and `true` resolve to `null` (render nothing).
  * - A slot object resolves to `Component = as ?? defaultAs`,
- *   `props = { ...defaultProps, ...attributes, className: cn(baseClassName, className) }` and its
+ *   `props = { ...defaultProps, ...attributes, className }`, where `className` is `baseClassName`
+ *   and the slot's own `className` merged as the components merge them (the slot's last), and its
  *   `children` (a generator materialised into an array once, as for shorthand content). When the
  *   element is void its `children` are always dropped, with a development warning only if they
  *   would have rendered (not for `null`, `undefined`, booleans or `''`, nor for a Fragment,

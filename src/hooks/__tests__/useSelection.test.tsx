@@ -286,9 +286,14 @@ describe('useSelection', () => {
       expectTypeOf<UseSelectionOptions['selectedItems']>().toEqualTypeOf<
         readonly string[] | undefined
       >();
+      // `details` is required (1.0); its fields stay optional.
       expectTypeOf<NonNullable<UseSelectionOptions['onSelectedItemsChange']>>().toEqualTypeOf<
-        (selectedItems: string[], details?: UseSelectionChangeDetails) => void
+        (selectedItems: string[], details: UseSelectionChangeDetails) => void
       >();
+      type OnSelectedItemsChange = NonNullable<UseSelectionOptions['onSelectedItemsChange']>;
+      // @ts-expect-error `details` is required (1.0)
+      expectTypeOf<OnSelectedItemsChange>().toBeCallableWith([]);
+      expectTypeOf<OnSelectedItemsChange>().toBeCallableWith([], {});
       expectTypeOf<UseSelectionChangeDetails>().toEqualTypeOf<{ event?: Event; id?: string }>();
     });
 

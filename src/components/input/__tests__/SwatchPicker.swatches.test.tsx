@@ -253,7 +253,7 @@ describe('ColorSwatch options (D21, D22)', () => {
     );
     const b = screen.getByRole('radio', { name: 'B' });
     expect(b).toBeDisabled();
-    expect(b.className).toContain('disabled:opacity-50');
+    expect(b.className).toContain('wave:disabled:opacity-50');
     expect(b.querySelector('svg[data-wave-swatch-slash]')).not.toBeNull();
     expect(
       screen.getByRole('radio', { name: 'C' }).querySelector('[data-wave-swatch-slash]'),
@@ -314,9 +314,13 @@ describe('ColorSwatch options (D21, D22)', () => {
       </SwatchPicker>,
     );
     const a = screen.getByRole('radio', { name: 'A' });
-    expect(a).toHaveClass('w-5', 'h-5', 'rounded');
-    expect(a).not.toHaveClass('w-10', 'rounded-none');
-    expect(screen.getByRole('radio', { name: 'B' })).toHaveClass('w-10', 'h-10', 'rounded-none');
+    expect(a).toHaveClass('wave:w-5', 'wave:h-5', 'wave:rounded');
+    expect(a).not.toHaveClass('wave:w-10', 'wave:rounded-none');
+    expect(screen.getByRole('radio', { name: 'B' })).toHaveClass(
+      'wave:w-10',
+      'wave:h-10',
+      'wave:rounded-none',
+    );
   });
 
   it('carries the forced-colors classes, with a Highlight ring while selected', () => {
@@ -327,15 +331,15 @@ describe('ColorSwatch options (D21, D22)', () => {
       </SwatchPicker>,
     );
     expect(screen.getByRole('radio', { name: 'A' })).toHaveClass(
-      'forced-colors:forced-color-adjust-none',
-      'forced-colors:focus-visible:outline-[Highlight]',
-      'forced-colors:ring-[Highlight]',
+      'wave:forced-colors:forced-color-adjust-none',
+      'wave:forced-colors:focus-visible:outline-[Highlight]',
+      'wave:forced-colors:ring-[Highlight]',
     );
     expect(screen.getByRole('radio', { name: 'B' })).toHaveClass(
-      'forced-colors:focus-visible:outline-[Highlight]',
+      'wave:forced-colors:focus-visible:outline-[Highlight]',
     );
     expect(screen.getByRole('radio', { name: 'B' })).not.toHaveClass(
-      'forced-colors:ring-[Highlight]',
+      'wave:forced-colors:ring-[Highlight]',
     );
   });
 
@@ -346,11 +350,15 @@ describe('ColorSwatch options (D21, D22)', () => {
       </SwatchPicker>
     );
     const { rerender } = render(picker('small'));
-    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass('focus-visible:outline-offset-2');
-    expect(screen.getByRole('radiogroup')).toHaveClass('gap-1');
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass(
+      'wave:focus-visible:outline-offset-2',
+    );
+    expect(screen.getByRole('radiogroup')).toHaveClass('wave:gap-1');
     rerender(picker());
-    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass('focus-visible:outline-offset-4');
-    expect(screen.getByRole('radiogroup')).toHaveClass('gap-2');
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass(
+      'wave:focus-visible:outline-offset-4',
+    );
+    expect(screen.getByRole('radiogroup')).toHaveClass('wave:gap-2');
   });
 });
 
@@ -367,12 +375,12 @@ describe('ImageSwatch', () => {
     );
     const swatch = screen.getByRole('radio', { name: 'Dots' });
     expect(swatch.style.backgroundImage).toContain('/dots.png');
-    expect(swatch).toHaveClass('bg-cover');
+    expect(swatch).toHaveClass('wave:bg-cover');
     expect(swatch).toHaveAttribute('aria-checked', 'true');
     expect(swatch.querySelector('svg')).not.toBeNull();
-    expect(swatch.innerHTML).toContain('text-foreground');
-    expect(swatch.innerHTML).toContain('text-background');
-    expect(swatch).not.toHaveClass('forced-colors:forced-color-adjust-none');
+    expect(swatch.innerHTML).toContain('wave:text-foreground');
+    expect(swatch.innerHTML).toContain('wave:text-background');
+    expect(swatch).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
   });
 
   it('is named by its value and warns once per kind when unnamed', () => {
@@ -426,9 +434,9 @@ describe('EmptySwatch', () => {
     expect(add).not.toHaveAttribute('role');
     expect(add).not.toHaveAttribute('data-roving-value');
     expect(add).toHaveClass(
-      'border-dashed',
-      'border-stroke-accessible',
-      'forced-colors:border-[ButtonText]',
+      'wave:border-dashed',
+      'wave:border-stroke-accessible',
+      'wave:forced-colors:border-[ButtonText]',
     );
     expect(add.querySelector('svg')).not.toBeNull();
     await user.click(add);
@@ -460,11 +468,14 @@ describe('EmptySwatch', () => {
       </SwatchPicker>,
     );
     const custom = screen.getByRole('button', { name: 'New' });
-    expect(custom).toHaveClass('w-5', 'h-5', 'rounded-full');
+    expect(custom).toHaveClass('wave:w-5', 'wave:h-5', 'wave:rounded-full');
     expect(screen.getByTestId('p').parentElement).toHaveAttribute('aria-hidden', 'true');
     expect(screen.getByRole('button', { name: 'Bare' }).querySelector('svg')).toBeNull();
     expect(screen.getByRole('button', { name: 'Default' }).querySelector('svg')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Default' })).toHaveClass('w-10', 'rounded-none');
+    expect(screen.getByRole('button', { name: 'Default' })).toHaveClass(
+      'wave:w-10',
+      'wave:rounded-none',
+    );
   });
 
   it('unwraps a button passed as icon, warning once', () => {
@@ -584,7 +595,7 @@ describe('swatch fix round 1', () => {
     const b = screen.getByRole('radio', { name: 'B' });
     expect(b).toHaveAttribute('aria-checked', 'true');
     expect(b).toHaveAttribute('data-selected');
-    expect(b).toHaveClass('ring-2');
+    expect(b).toHaveClass('wave:ring-2');
     // The check (a halo and a glyph) and the slash.
     expect(b.querySelectorAll('svg')).toHaveLength(3);
     expect(b.querySelector('svg[data-wave-swatch-slash]')).not.toBeNull();
@@ -629,10 +640,10 @@ describe('swatch fix round 1', () => {
       </SwatchPicker>,
     );
     expect(screen.getByRole('radio', { name: 'A' })).toHaveClass(
-      'forced-colors:border-[Highlight]',
+      'wave:forced-colors:border-[Highlight]',
     );
     expect(screen.getByRole('radio', { name: 'B' })).not.toHaveClass(
-      'forced-colors:border-[Highlight]',
+      'wave:forced-colors:border-[Highlight]',
     );
   });
 
@@ -646,7 +657,7 @@ describe('swatch fix round 1', () => {
     const white = screen.getByRole('radio', { name: 'White' });
     expect(white.style.getPropertyValue('--wave-swatch-border')).toBe('#808080');
     expect(white.style.borderColor).toBe('');
-    expect(white).toHaveClass('forced-colors:border-[CanvasText]');
+    expect(white).toHaveClass('wave:forced-colors:border-[CanvasText]');
     expect(
       screen.getByRole('radio', { name: 'Black' }).style.getPropertyValue('--wave-swatch-border'),
     ).toBe('');

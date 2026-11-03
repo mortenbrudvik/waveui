@@ -328,7 +328,7 @@ describe('Listbox windowed options (virtualWindow)', () => {
       expect(option).toHaveStyle({ height: '32px', boxSizing: 'border-box', flexShrink: '0' });
     }
     // Without its block padding, so the options start at the top of the scroller.
-    expect(list()).toHaveClass('py-0');
+    expect(list()).toHaveClass('wave:py-0');
     scrollList(list(), 5000 * ITEM_SIZE);
     expect(order(list())).toEqual(['spacer', ...range(4993, 5017), 'spacer']);
     expect(screen.getAllByRole('option').length).toBeLessThanOrEqual(30);
@@ -336,10 +336,10 @@ describe('Listbox windowed options (virtualWindow)', () => {
 
   it('turns the browser’s scroll anchoring off on the list only while windowed', () => {
     const { unmount } = render(<WindowedListbox />);
-    expect(list()).toHaveClass('[overflow-anchor:none]');
+    expect(list()).toHaveClass('wave:[overflow-anchor:none]');
     unmount();
     render(<Listbox aria-label="Items" items={MANY_ITEMS.slice(0, 20)} />);
-    expect(list()).not.toHaveClass('[overflow-anchor:none]');
+    expect(list()).not.toHaveClass('wave:[overflow-anchor:none]');
   });
 
   it('renders the first window on the server, with no dangling id', () => {
@@ -495,7 +495,7 @@ describe('Listbox windowed options (virtualWindow)', () => {
       'Banana',
     ]);
     expect(spacers(list())).toEqual([]);
-    expect(list()).not.toHaveClass('py-0');
+    expect(list()).not.toHaveClass('wave:py-0');
     expect(warn.mock.calls).toEqual([[WINDOW_WITHOUT_ITEMS]]);
   });
 

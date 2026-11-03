@@ -1,14 +1,5 @@
 import * as React from 'react';
-import {
-  describe,
-  it,
-  expect,
-  expectTypeOf,
-  vi,
-  afterEach,
-  beforeEach,
-  onTestFinished,
-} from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { composeStories } from '@storybook/react';
@@ -75,6 +66,7 @@ import {
   testSystemProps,
   expectThrows,
 } from '../../../test-utils';
+import type * as Wave from '../../../index';
 
 interface Person {
   id: string;
@@ -169,38 +161,23 @@ function cell(text: string, index?: number): HTMLElement {
   return el;
 }
 
-/** DataGrid's deprecation warning for the prop `name`, replaced by `replacement`. */
-const deprecated = (name: string, replacement: string) =>
-  `[WaveUI] DataGrid: \`${name}\` is deprecated and will be removed in 1.0. Use \`${replacement}\` instead.`;
-
-const DEPRECATED_COLUMN_ID = deprecated('columns[].id', 'columns[].columnId');
-
 const COLUMN_WITHOUT_ID =
-  '[WaveUI] DataGrid: a column in `columns` has no `columnId` (nor the deprecated `id`), so its header cannot sort. Give every column a unique `columnId`.';
+  '[WaveUI] DataGrid: a column in `columns` has no `columnId`, so its header cannot sort. Give every column a unique `columnId`.';
 
 const BODY_WITHOUT_ITEMS =
   "[WaveUI] DataGrid.Body: a render function child renders one row per item of the DataGrid's `items`, which is not set, so the body has no rows.";
 
-const MIXED_SORT_COLUMN =
-  '[WaveUI] DataGrid: `sortColumn` is controlled but `sortDirection` is not (mixed control). The direction is kept internally and toggles on repeated clicks, as in 0.4. Pass `sort` (`{ columnId, direction }`) to control both.';
-
-const MIXED_SORT_DIRECTION =
-  '[WaveUI] DataGrid: `sortDirection` is controlled but `sortColumn` is not (mixed control). The column is kept internally and follows the clicked header, as in 0.4. Pass `sort` (`{ columnId, direction }`) to control both.';
-
-/** The warning of the 0.4 positional `onSortChange(columnId, direction)` (P13-03). */
-const POSITIONAL_SORT =
-  '[WaveUI] DataGrid: `onSortChange(columnId, direction)` is deprecated and will be removed in 1.0. Use `onSortChange(sort, details?)` instead. Pass `items`, `sort` or `defaultSort` to receive the sort object.';
-
 /**
- * For a test that uses the 0.4 positional `onSortChange` only as its means: spies on `console.warn`
- * and, when the test is over, asserts that the positional warning was the only message.
+ * React's development error for an unknown prop on a DOM element (a 0.4 name that reaches the
+ * `<table>`), logged once per name and test file.
  */
-function expectOnlyPositionalSortWarning() {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  onTestFinished(() => {
-    expect(warn.mock.calls).toEqual([[POSITIONAL_SORT]]);
-  });
-}
+const unknownProp = (name: string) => [
+  'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+    'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+    'accidentally passed it from a parent component, remove it from the DOM element.',
+  name,
+  name.toLowerCase(),
+];
 
 /** The `details` argument of `onSortChange` (object form) and `onSelectedItemsChange`. */
 const DETAILS = { event: expect.any(Event) };
@@ -224,7 +201,7 @@ describe('DataGrid', () => {
     expectedTag: 'table',
     displayName: 'DataGrid',
     defaultProps: { 'aria-label': 'People', children: gridContent() },
-    conflictingClass: { className: 'border-collapse', overrides: 'border-separate' },
+    conflictingClass: { className: 'border-collapse', overrides: 'wave:border-separate' },
     a11yVariants: [
       {
         name: 'multiple selection',
@@ -272,7 +249,7 @@ describe('DataGrid', () => {
 
   it('merges custom className', () => {
     renderGrid({ className: 'my-custom' });
-    expect(screen.getByRole('grid')).toHaveClass('my-custom', 'w-full');
+    expect(screen.getByRole('grid')).toHaveClass('my-custom', 'wave:w-full');
   });
 
   describe('aria-multiselectable', () => {
@@ -291,9 +268,14 @@ describe('DataGrid', () => {
     it('wraps the grid in a horizontally scrollable container that is not a tab stop', () => {
       renderGrid();
       const wrapper = screen.getByRole('grid').parentElement!;
-      expect(wrapper).toHaveClass('overflow-x-auto', 'rounded-md', 'border', 'border-border');
-      expect(wrapper).not.toHaveClass('overflow-hidden');
-      expect(wrapper).not.toHaveClass('rounded-lg');
+      expect(wrapper).toHaveClass(
+        'wave:overflow-x-auto',
+        'wave:rounded-md',
+        'wave:border',
+        'wave:border-border',
+      );
+      expect(wrapper).not.toHaveClass('wave:overflow-hidden');
+      expect(wrapper).not.toHaveClass('wave:rounded-lg');
       expect(wrapper).not.toHaveAttribute('tabindex');
       expect(wrapper).not.toHaveAttribute('role');
     });
@@ -311,8 +293,8 @@ describe('DataGrid', () => {
       const wrapper = screen.getByTestId('wrapper');
       expect(wrapper).toBe(screen.getByRole('grid').parentElement);
       expect(ref.current).toBe(wrapper);
-      expect(wrapper).toHaveClass('max-w-md', 'rounded-none', 'overflow-x-auto');
-      expect(wrapper).not.toHaveClass('rounded-md');
+      expect(wrapper).toHaveClass('max-w-md', 'rounded-none', 'wave:overflow-x-auto');
+      expect(wrapper).not.toHaveClass('wave:rounded-md');
       expect(wrapper).toHaveStyle({ maxHeight: '200px' });
     });
 
@@ -434,7 +416,7 @@ describe('DataGrid parts written in a Server Component (lazy element types)', ()
         aria-label="People"
         selectionMode="multiple"
         defaultSelectedItems={['2']}
-        columns={[{ id: 'generated', label: 'Generated' }]}
+        columns={[{ columnId: 'generated', label: 'Generated' }]}
         {...props}
       >
         <Header>
@@ -497,7 +479,7 @@ describe('DataGrid sorting', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const onSortChange = vi.fn();
     render(
-      <DataGrid aria-label="People" onSortChange={onSortChange}>
+      <DataGrid aria-label="People" defaultSort={null} onSortChange={onSortChange}>
         <DataGrid.Header>
           <tr>
             <DataGrid.HeaderCell sortable>Name</DataGrid.HeaderCell>
@@ -519,7 +501,6 @@ describe('DataGrid sorting', () => {
       [
         '[WaveUI] DataGrid.HeaderCell: `sortable` needs a `columnId`; the header is rendered as not sortable.',
       ],
-      [POSITIONAL_SORT],
     ]);
   });
 
@@ -529,23 +510,25 @@ describe('DataGrid sorting', () => {
     expect(header('Role')).toHaveAttribute('aria-sort', 'none');
   });
 
-  it('applies aria-sort from the deprecated defaultSortColumn/defaultSortDirection and warns', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderGrid({ defaultSortColumn: 'name', defaultSortDirection: 'ascending' });
-    expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
-    expect(warn.mock.calls).toEqual([
-      [deprecated('defaultSortColumn', 'defaultSort')],
-      [deprecated('defaultSortDirection', 'defaultSort')],
-    ]);
-  });
-
-  it('calls onSortChange with the 0.4 arguments (columnId, direction) without sort/defaultSort', async () => {
-    expectOnlyPositionalSortWarning();
+  // The 0.4 positional `onSortChange(columnId, direction)` of a grid without `items`, `sort` and
+  // `defaultSort` is removed in 1.0: the types offer no `onSortChange` there (see `DataGrid
+  // types`), and untyped code that still passes one gets the sort object, with no warning.
+  it('has no positional onSortChange (removed in 1.0): untyped code gets the sort object and details', async () => {
     const user = userEvent.setup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const onSortChange = vi.fn();
     renderGrid({ onSortChange });
+    expect(header('Name')).toHaveAttribute('aria-sort', 'none');
     await user.click(sortButton('Name'));
-    expect(onSortChange).toHaveBeenCalledWith('name', 'ascending');
+    await user.click(sortButton('Name'));
+    expect(onSortChange.mock.calls).toEqual([
+      [{ columnId: 'name', direction: 'ascending' }, DETAILS],
+      [{ columnId: 'name', direction: 'descending' }, DETAILS],
+    ]);
+    expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('calls onSortChange with a DataGridSort object when sort or defaultSort is given', async () => {
@@ -561,10 +544,9 @@ describe('DataGrid sorting', () => {
   });
 
   it('toggles the direction on repeated clicks and updates aria-sort', async () => {
-    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
-    renderGrid({ onSortChange });
+    renderGrid({ defaultSort: null, onSortChange });
 
     await user.click(sortButton('Name'));
     expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
@@ -573,9 +555,9 @@ describe('DataGrid sorting', () => {
     await user.click(sortButton('Name'));
     expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
     expect(onSortChange.mock.calls).toEqual([
-      ['name', 'ascending'],
-      ['name', 'descending'],
-      ['name', 'ascending'],
+      [{ columnId: 'name', direction: 'ascending' }, DETAILS],
+      [{ columnId: 'name', direction: 'descending' }, DETAILS],
+      [{ columnId: 'name', direction: 'ascending' }, DETAILS],
     ]);
   });
 
@@ -596,16 +578,21 @@ describe('DataGrid sorting', () => {
   });
 
   it('sorts with Enter and Space on the sort button', async () => {
-    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
-    renderGrid({ onSortChange });
+    renderGrid({ defaultSort: null, onSortChange });
 
     sortButton('Name').focus();
     await user.keyboard('{Enter}');
-    expect(onSortChange).toHaveBeenLastCalledWith('name', 'ascending');
+    expect(onSortChange).toHaveBeenLastCalledWith(
+      { columnId: 'name', direction: 'ascending' },
+      DETAILS,
+    );
     await user.keyboard(' ');
-    expect(onSortChange).toHaveBeenLastCalledWith('name', 'descending');
+    expect(onSortChange).toHaveBeenLastCalledWith(
+      { columnId: 'name', direction: 'descending' },
+      DETAILS,
+    );
     expect(onSortChange).toHaveBeenCalledTimes(2);
   });
 
@@ -655,21 +642,17 @@ describe('DataGrid sorting', () => {
     expect(header('Role')).toHaveAttribute('aria-sort', 'descending');
   });
 
-  it('clears a controlled sort that becomes undefined (deprecated sortColumn alias)', () => {
+  it('clears a controlled sort that becomes undefined', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { rerender } = renderGrid({ sortColumn: 'name', sortDirection: 'descending' });
+    const { rerender } = renderGrid({ sort: { columnId: 'name', direction: 'descending' } });
     expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
     rerender(
-      <DataGrid aria-label="People" sortColumn={undefined} sortDirection={undefined}>
+      <DataGrid aria-label="People" sort={undefined}>
         {gridContent()}
       </DataGrid>,
     );
     expect(header('Name')).toHaveAttribute('aria-sort', 'none');
-    expect(warn.mock.calls).toEqual([
-      [deprecated('sortColumn', 'sort')],
-      [deprecated('sortDirection', 'sort')],
-      [switchWarning('controlled', 'uncontrolled')],
-    ]);
+    expect(warn.mock.calls).toEqual([[switchWarning('controlled', 'uncontrolled')]]);
   });
 
   it('honours a controlled sort that arrives after mount', () => {
@@ -686,163 +669,77 @@ describe('DataGrid sorting', () => {
     expect(warn.mock.calls).toEqual([[switchWarning('uncontrolled', 'controlled')]]);
   });
 
-  describe('deprecated sortColumn/sortDirection controlled one at a time (0.4 mixed control)', () => {
-    it('keeps the direction internal when only sortColumn is controlled, and warns', async () => {
+  // Untyped code that still passes a 0.4 sort prop: it lands on the `<table>` as an unknown prop,
+  // which React reports in development, and the grid keeps its own sort, unsorted at first.
+  describe('the 0.4 sort props are removed in 1.0', () => {
+    it('has no sortColumn alias of sort: the grid is unsorted and sorts itself', async () => {
       const user = userEvent.setup();
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const calls: [string, SortDirection][] = [];
-      function Parent() {
-        const [column, setColumn] = React.useState('name');
-        return (
-          <DataGrid
-            aria-label="People"
-            sortColumn={column}
-            onSortChange={(columnId, direction) => {
-              calls.push([columnId, direction]);
-              setColumn(columnId);
-            }}
-          >
-            {gridContent()}
-          </DataGrid>
-        );
-      }
-      render(<Parent />);
-      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
-
-      await user.click(sortButton('Name'));
-      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
-      await user.click(sortButton('Name'));
-      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
-      await user.click(sortButton('Name'));
-      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
-      await user.click(sortButton('Role'));
-      expect(header('Role')).toHaveAttribute('aria-sort', 'ascending');
-      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
-
-      // Every reported sort is the one aria-sort shows.
-      expect(calls).toEqual([
-        ['name', 'descending'],
-        ['name', 'ascending'],
-        ['name', 'descending'],
-        ['role', 'ascending'],
-      ]);
-      expect(warn.mock.calls).toEqual([
-        [deprecated('sortColumn', 'sort')],
-        [POSITIONAL_SORT],
-        [MIXED_SORT_COLUMN],
-      ]);
-    });
-
-    it('keeps the column internal when only sortDirection is controlled, and warns', async () => {
-      const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const calls: [string, SortDirection][] = [];
-      function Parent() {
-        const [direction, setDirection] = React.useState<SortDirection>('ascending');
-        return (
-          <DataGrid
-            aria-label="People"
-            sortDirection={direction}
-            onSortChange={(columnId, next) => {
-              calls.push([columnId, next]);
-              setDirection(next);
-            }}
-          >
-            {gridContent()}
-          </DataGrid>
-        );
-      }
-      render(<Parent />);
-      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
-
-      await user.click(sortButton('Name'));
-      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
-      await user.click(sortButton('Name'));
-      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
-      await user.click(sortButton('Role'));
-      expect(header('Role')).toHaveAttribute('aria-sort', 'ascending');
-      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
-
-      expect(calls).toEqual([
-        ['name', 'ascending'],
-        ['name', 'descending'],
-        ['role', 'ascending'],
-      ]);
-      expect(warn.mock.calls).toEqual([
-        [deprecated('sortDirection', 'sort')],
-        [POSITIONAL_SORT],
-        [MIXED_SORT_DIRECTION],
-      ]);
-    });
-
-    it('starts the internal column from defaultSortColumn and follows a direction the parent keeps', async () => {
-      const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const onSortChange = vi.fn();
-      renderGrid({ sortDirection: 'descending', defaultSortColumn: 'role', onSortChange });
-      expect(warn.mock.calls).toEqual([
-        [deprecated('sortDirection', 'sort')],
-        [deprecated('defaultSortColumn', 'defaultSort')],
-        [POSITIONAL_SORT],
-        [MIXED_SORT_DIRECTION],
-      ]);
-      expect(header('Role')).toHaveAttribute('aria-sort', 'descending');
-      // The parent does not accept the new direction: the controlled half stays.
-      await user.click(sortButton('Role'));
-      expect(onSortChange).toHaveBeenLastCalledWith('role', 'ascending');
-      expect(header('Role')).toHaveAttribute('aria-sort', 'descending');
-      // The internal half (the column) follows the click.
-      await user.click(sortButton('Name'));
-      expect(onSortChange).toHaveBeenLastCalledWith('name', 'ascending');
-      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
-      expect(header('Role')).toHaveAttribute('aria-sort', 'none');
-    });
-
-    it('calls onSortChange once per click in StrictMode', async () => {
-      const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const onSortChange = vi.fn();
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
       render(
-        <React.StrictMode>
-          <DataGrid aria-label="People" sortColumn="name" onSortChange={onSortChange}>
-            {gridContent()}
-          </DataGrid>
-        </React.StrictMode>,
+        // @ts-expect-error -- `sortColumn` is removed in 1.0: use `sort`
+        <DataGrid aria-label="People" sortColumn="name">
+          {gridContent()}
+        </DataGrid>,
+      );
+      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+      expect(screen.getByRole('grid')).toHaveAttribute('sortcolumn', 'name');
+      await user.click(sortButton('Role'));
+      expect(header('Role')).toHaveAttribute('aria-sort', 'ascending');
+      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+      expect(error.mock.calls).toEqual([unknownProp('sortColumn')]);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('has no sortDirection alias of sort: a click sorts ascending', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        // @ts-expect-error -- `sortDirection` is removed in 1.0: use `sort`
+        <DataGrid aria-label="People" sortDirection="descending">
+          {gridContent()}
+        </DataGrid>,
+      );
+      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+      await user.click(sortButton('Name'));
+      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+      expect(screen.getByRole('grid')).toHaveAttribute('sortdirection', 'descending');
+      expect(error.mock.calls).toEqual([unknownProp('sortDirection')]);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('has no defaultSortColumn alias of defaultSort: the grid starts unsorted', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        // @ts-expect-error -- `defaultSortColumn` is removed in 1.0: use `defaultSort`
+        <DataGrid aria-label="People" defaultSortColumn="name">
+          {gridContent()}
+        </DataGrid>,
+      );
+      expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+      expect(screen.getByRole('grid')).toHaveAttribute('defaultsortcolumn', 'name');
+      expect(error.mock.calls).toEqual([unknownProp('defaultSortColumn')]);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('has no defaultSortDirection alias of defaultSort: a click sorts ascending', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        // @ts-expect-error -- `defaultSortDirection` is removed in 1.0: use `defaultSort`
+        <DataGrid aria-label="People" defaultSortDirection="descending">
+          {gridContent()}
+        </DataGrid>,
       );
       await user.click(sortButton('Name'));
-      expect(onSortChange).toHaveBeenCalledTimes(1);
-      expect(onSortChange).toHaveBeenCalledWith('name', 'descending');
-      expect(header('Name')).toHaveAttribute('aria-sort', 'descending');
-      expect(warn.mock.calls).toEqual([
-        [deprecated('sortColumn', 'sort')],
-        [POSITIONAL_SORT],
-        [MIXED_SORT_COLUMN],
-      ]);
+      expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
+      expect(screen.getByRole('grid')).toHaveAttribute('defaultsortdirection', 'descending');
+      expect(error.mock.calls).toEqual([unknownProp('defaultSortDirection')]);
+      expect(warn).not.toHaveBeenCalled();
     });
-
-    it('does not warn about mixed control when both or neither are controlled', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      renderGrid({ sortColumn: 'name', sortDirection: 'descending' });
-      renderGrid({ defaultSortColumn: 'name' });
-      // Only the deprecations: no mixed-control warning.
-      expect(warn.mock.calls).toEqual([
-        [deprecated('sortColumn', 'sort')],
-        [deprecated('sortDirection', 'sort')],
-        [deprecated('defaultSortColumn', 'defaultSort')],
-      ]);
-    });
-  });
-
-  it('warns when the sort API and the deprecated sortColumn/sortDirection are mixed', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderGrid({ sort: { columnId: 'name', direction: 'ascending' }, sortColumn: 'role' });
-    expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
-    expect(warn.mock.calls).toEqual([
-      [deprecated('sortColumn', 'sort')],
-      [
-        '[WaveUI] DataGrid: do not mix `sort`/`defaultSort` with the deprecated `sortColumn`/`sortDirection`/`defaultSortColumn`/`defaultSortDirection`. `sort`/`defaultSort` win.',
-      ],
-    ]);
   });
 
   it('calls onSortChange once per click in StrictMode', async () => {
@@ -912,11 +809,15 @@ describe('DataGrid header from columns', () => {
   }
 
   it('renders the header from `columns` when no DataGrid.Header child is given', async () => {
-    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onSortChange = vi.fn();
     render(
-      <DataGrid aria-label="People" columns={columns} onSortChange={onSortChange}>
+      <DataGrid
+        aria-label="People"
+        columns={columns}
+        defaultSort={null}
+        onSortChange={onSortChange}
+      >
         {rows()}
       </DataGrid>,
     );
@@ -927,7 +828,10 @@ describe('DataGrid header from columns', () => {
     expect(header('Name')).toHaveAttribute('aria-sort', 'none');
     expect(within(header('Role')).queryByRole('button')).toBeNull();
     await user.click(sortButton('Name'));
-    expect(onSortChange).toHaveBeenCalledWith('name', 'ascending');
+    expect(onSortChange).toHaveBeenCalledWith(
+      { columnId: 'name', direction: 'ascending' },
+      DETAILS,
+    );
   });
 
   it('includes the selection header cell', () => {
@@ -990,59 +894,41 @@ describe('DataGrid header from columns', () => {
     ]);
   });
 
-  describe('the deprecated column `id` (0.13 columns)', () => {
-    it('names the column as `columnId` does, and warns once', async () => {
-      const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const onSortChange = vi.fn();
-      const legacy: DataGridColumn[] = [
-        { id: 'name', label: 'Name', sortable: true },
-        { id: 'role', label: 'Role' },
-      ];
-      render(
-        <DataGrid aria-label="People" columns={legacy} onSortChange={onSortChange}>
-          {rows()}
-        </DataGrid>,
-      );
-      expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
-        'Name',
-        'Role',
-      ]);
-      await user.click(sortButton('Name'));
-      await user.click(sortButton('Name'));
-      expect(onSortChange.mock.calls).toEqual([
-        ['name', 'ascending'],
-        ['name', 'descending'],
-      ]);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_COLUMN_ID], [POSITIONAL_SORT]]);
-    });
-
-    it('loses to `columnId` when a column has both, and still warns', async () => {
-      const user = userEvent.setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const onSortChange = vi.fn();
-      render(
-        <DataGrid
-          aria-label="People"
-          columns={[{ columnId: 'fullName', id: 'name', label: 'Name', sortable: true }]}
-          defaultSort={null}
-          onSortChange={onSortChange}
-        >
-          {rows()}
-        </DataGrid>,
-      );
-      await user.click(sortButton('Name'));
-      expect(onSortChange).toHaveBeenCalledWith(
-        { columnId: 'fullName', direction: 'ascending' },
-        DETAILS,
-      );
-      expect(warn.mock.calls).toEqual([[DEPRECATED_COLUMN_ID]]);
-    });
+  it('has no column `id` alias of `columnId` (removed in 1.0): the column has no id', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const legacy: DataGridColumn[] = [
+      // @ts-expect-error -- `id` is removed in 1.0: use `columnId`
+      { id: 'name', label: 'Name', sortable: true },
+      // @ts-expect-error -- `id` is removed in 1.0: use `columnId`
+      { id: 'role', label: 'Role' },
+    ];
+    render(
+      <DataGrid aria-label="People" columns={legacy}>
+        {rows()}
+      </DataGrid>,
+    );
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      'Name',
+      'Role',
+    ]);
+    // Without a `columnId` the sortable column cannot sort: no sort button, no `aria-sort`, and
+    // the warnings of a column without an id (the header cell's runs first).
+    expect(header('Name')).not.toHaveAttribute('aria-sort');
+    expect(within(header('Name')).queryByRole('button')).toBeNull();
+    expect(warn.mock.calls).toEqual([
+      [
+        '[WaveUI] DataGrid.HeaderCell: `sortable` needs a `columnId`; the header is rendered as not sortable.',
+      ],
+      [COLUMN_WITHOUT_ID],
+    ]);
+    expect(error).not.toHaveBeenCalled();
+    expectTypeOf<DataGridColumn>().not.toHaveProperty('id');
   });
 
-  it('warns once for a column with neither `columnId` nor `id`', () => {
+  it('warns once for a column without `columnId`', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    // A column without an id compiles (both names are optional while `id` is deprecated).
+    // A column without an id compiles (`columnId` is optional).
     const { rerender } = render(
       <DataGrid aria-label="People" columns={[{ label: 'Name', sortable: true }]}>
         {rows()}
@@ -1953,7 +1839,7 @@ describe('DataGrid built-in sorting (items and compare)', () => {
     ]);
   });
 
-  it('keeps the DataGridSort callback when `items` becomes undefined, and the 0.4 one without it', async () => {
+  it('keeps the DataGridSort callback when `items` becomes undefined (the only form in 1.0)', async () => {
     const user = userEvent.setup();
     const onSortChange = vi.fn();
     const { rerender } = render(
@@ -1964,42 +1850,13 @@ describe('DataGrid built-in sorting (items and compare)', () => {
         onSortChange={onSortChange}
       />,
     );
-    // The callback form never changes under the consumer (a list that reloads).
+    // The callback form never changes under the consumer (a list that reloads). Typed code gives
+    // such a grid `items={data ?? []}` or a sort; untyped code still gets the same form.
+    // @ts-expect-error -- no `onSortChange` without `items`, `sort` or `defaultSort`
     rerender(<DataGrid aria-label="Members" columns={COLUMNS} onSortChange={onSortChange} />);
     await user.click(sortButton('Name'));
     expect(onSortChange.mock.calls).toEqual([
       [{ columnId: 'name', direction: 'ascending' }, DETAILS],
-    ]);
-  });
-
-  it('ignores the deprecated sort props with `items`, and warns', async () => {
-    const user = userEvent.setup();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const onSortChange = vi.fn();
-    // Rejected by the types; a JavaScript caller can still pass them.
-    const legacy = { sortColumn: 'team', defaultSortDirection: 'descending' } as object;
-    render(
-      <DataGrid
-        aria-label="Members"
-        items={MEMBERS}
-        columns={COLUMNS}
-        onSortChange={onSortChange}
-        {...legacy}
-      />,
-    );
-    expect(header('Team')).toHaveAttribute('aria-sort', 'none');
-    expect(names()).toEqual(['Alice', 'Bob', 'Carol', 'Dan']);
-    await user.click(sortButton('Team'));
-    expect(names()).toEqual(['Bob', 'Dan', 'Alice', 'Carol']);
-    expect(onSortChange.mock.calls).toEqual([
-      [{ columnId: 'team', direction: 'ascending' }, DETAILS],
-    ]);
-    expect(warn.mock.calls).toEqual([
-      [deprecated('sortColumn', 'sort')],
-      [deprecated('defaultSortDirection', 'defaultSort')],
-      [
-        '[WaveUI] DataGrid: the deprecated `sortColumn`/`sortDirection`/`defaultSortColumn`/`defaultSortDirection` do not apply to a grid with `items` and are ignored. Pass `sort` or `defaultSort`.',
-      ],
     ]);
   });
 });
@@ -2156,7 +2013,7 @@ describe('DataGrid.HeaderCell sortIcon', () => {
 describe('DataGrid callback details', () => {
   it('passes the click to onSortChange, also for Enter on the sort button', async () => {
     const user = userEvent.setup();
-    const onSortChange = vi.fn<(sort: DataGridSort, details?: DataGridSortChangeDetails) => void>();
+    const onSortChange = vi.fn<(sort: DataGridSort, details: DataGridSortChangeDetails) => void>();
     renderGrid({ defaultSort: null, onSortChange });
     await user.click(sortButton('Name'));
     const [, clickDetails] = onSortChange.mock.calls[0];
@@ -2175,7 +2032,7 @@ describe('DataGrid callback details', () => {
   it('passes the event to onSelectedItemsChange: a control’s click, Space on a row, select-all', async () => {
     const user = userEvent.setup();
     const onSelectedItemsChange =
-      vi.fn<(items: string[], details?: DataGridSelectedItemsChangeDetails) => void>();
+      vi.fn<(items: string[], details: DataGridSelectedItemsChangeDetails) => void>();
     renderGrid({ selectionMode: 'multiple', onSelectedItemsChange });
 
     await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
@@ -2224,22 +2081,6 @@ describe('DataGrid callback details', () => {
       [{ columnId: 'name', direction: 'ascending' }, DETAILS],
     ]);
     expect(onSelectedItemsChange.mock.calls).toEqual([[['2'], DETAILS]]);
-  });
-
-  it('keeps the 0.4 callbacks’ arguments: (columnId, direction) and a Set', async () => {
-    const user = userEvent.setup();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const onSortChange = vi.fn();
-    const onSelectionChange = vi.fn();
-    renderGrid({ selectionMode: 'multiple', onSortChange, onSelectionChange });
-    await user.click(sortButton('Name'));
-    await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
-    expect(onSortChange.mock.calls).toEqual([['name', 'ascending']]);
-    expect(onSelectionChange.mock.calls).toEqual([[new Set(['1'])]]);
-    expect(warn.mock.calls).toEqual([
-      [deprecated('onSelectionChange', 'onSelectedItemsChange')],
-      [POSITIONAL_SORT],
-    ]);
   });
 });
 
@@ -2313,7 +2154,7 @@ describe('DataGrid selection', () => {
       renderGrid({ selectionMode: 'single', labels });
       const [selectionHeader] = screen.getAllByRole('columnheader');
       expect(selectionHeader).toHaveAccessibleName('Utvalg');
-      expect(within(selectionHeader).getByText('Utvalg')).toHaveClass('sr-only');
+      expect(within(selectionHeader).getByText('Utvalg')).toHaveClass('wave:sr-only');
     });
 
     it('keeps the English text for the members labels leaves out', () => {
@@ -2705,7 +2546,7 @@ describe('DataGrid selection', () => {
     renderGrid({ selectionMode: 'single' });
     const th = screen.getAllByRole('columnheader')[0];
     expect(th).toHaveTextContent('Selection');
-    expect(within(th).getByText('Selection')).toHaveClass('sr-only');
+    expect(within(th).getByText('Selection')).toHaveClass('wave:sr-only');
   });
 
   it('names each row checkbox after the row’s first cell', () => {
@@ -2891,7 +2732,7 @@ describe('DataGrid selection', () => {
   it('uses the theme accent color for the native controls', () => {
     renderGrid({ selectionMode: 'multiple' });
     for (const checkbox of screen.getAllByRole('checkbox')) {
-      expect(checkbox).toHaveClass('accent-primary');
+      expect(checkbox).toHaveClass('wave:accent-primary');
     }
   });
 
@@ -2907,46 +2748,80 @@ describe('DataGrid selection', () => {
     expect(bodyRows()[1]).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('still calls the deprecated onSelectionChange with a Set, and warns', async () => {
-    const user = userEvent.setup();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const onSelectionChange = vi.fn();
-    const onSelectedItemsChange = vi.fn();
-    renderGrid({ selectionMode: 'multiple', onSelectionChange, onSelectedItemsChange });
-    await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
-    expect(onSelectedItemsChange).toHaveBeenCalledWith(['2'], DETAILS);
-    expect(onSelectionChange).toHaveBeenCalledTimes(1);
-    expect(onSelectionChange.mock.calls[0][0]).toEqual(new Set(['2']));
-    expect(warn.mock.calls).toEqual([[deprecated('onSelectionChange', 'onSelectedItemsChange')]]);
-  });
+  // Untyped code that still passes a 0.4 selection prop: it lands on the `<table>` as an unknown
+  // prop or event handler, which React reports in development, and selects nothing.
+  describe('the 0.4 selection props are removed in 1.0', () => {
+    it('has no onSelectionChange alias of onSelectedItemsChange: it is never called', async () => {
+      const user = userEvent.setup();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const onSelectionChange = vi.fn();
+      const onSelectedItemsChange = vi.fn();
+      render(
+        <DataGrid
+          aria-label="People"
+          selectionMode="multiple"
+          // @ts-expect-error -- `onSelectionChange` is removed in 1.0: use `onSelectedItemsChange`
+          onSelectionChange={onSelectionChange}
+          onSelectedItemsChange={onSelectedItemsChange}
+        >
+          {gridContent()}
+        </DataGrid>,
+      );
+      await user.click(screen.getByRole('checkbox', { name: 'Bob' }));
+      expect(onSelectedItemsChange.mock.calls).toEqual([[['2'], DETAILS]]);
+      expect(onSelectionChange).not.toHaveBeenCalled();
+      expect(screen.getByRole('grid')).not.toHaveAttribute('onselectionchange');
+      expect(error.mock.calls).toEqual([
+        ['Unknown event handler property `%s`. It will be ignored.', 'onSelectionChange'],
+      ]);
+      expect(warn).not.toHaveBeenCalled();
+    });
 
-  it.each([
-    ['a Set', new Set(['1'])],
-    ['an array', ['1']],
-  ])('accepts the deprecated selectedKeys as %s', (_label, selectedKeys) => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderGrid({ selectionMode: 'multiple', selectedKeys });
-    expect(bodyRows()[0]).toHaveAttribute('aria-selected', 'true');
-    expect(bodyRows()[1]).toHaveAttribute('aria-selected', 'false');
-    expect(warn.mock.calls).toEqual([
-      [
-        '[WaveUI] DataGrid: `selectedKeys` is deprecated and will be removed in 1.0. Use `selectedItems` instead.',
-      ],
-    ]);
-  });
+    it('has no selectedKeys alias of selectedItems: no row is selected', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        <DataGrid
+          aria-label="People"
+          selectionMode="multiple"
+          // @ts-expect-error -- `selectedKeys` is removed in 1.0: use `selectedItems` (an array)
+          selectedKeys={['1']}
+        >
+          {gridContent()}
+        </DataGrid>,
+      );
+      for (const row of bodyRows()) expect(row).toHaveAttribute('aria-selected', 'false');
+      expect(screen.getByRole('grid')).toHaveAttribute('selectedkeys', '1');
+      expect(error.mock.calls).toEqual([unknownProp('selectedKeys')]);
+      expect(warn).not.toHaveBeenCalled();
+    });
 
-  it('accepts the deprecated defaultSelectedKeys and warns about the deprecated names', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    renderGrid({ selectionMode: 'multiple', defaultSelectedKeys: new Set(['3']) });
-    expect(bodyRows()[2]).toHaveAttribute('aria-selected', 'true');
-    expect(warn.mock.calls).toEqual([[deprecated('defaultSelectedKeys', 'defaultSelectedItems')]]);
+    it('has no defaultSelectedKeys alias of defaultSelectedItems: no row is selected', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        <DataGrid
+          aria-label="People"
+          selectionMode="multiple"
+          // @ts-expect-error -- `defaultSelectedKeys` is removed in 1.0: use `defaultSelectedItems`
+          defaultSelectedKeys={new Set(['3'])}
+        >
+          {gridContent()}
+        </DataGrid>,
+      );
+      for (const row of bodyRows()) expect(row).toHaveAttribute('aria-selected', 'false');
+      expect(screen.getByRole('grid')).toHaveAttribute('defaultselectedkeys', '[object Set]');
+      expect(error.mock.calls).toEqual([unknownProp('defaultSelectedKeys')]);
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 
   it('marks the selected row with data-selected and the selected token', () => {
     renderGrid({ selectionMode: 'multiple', defaultSelectedItems: ['2'] });
     const row = bodyRows()[1];
     expect(row).toHaveAttribute('data-selected');
-    expect(row).toHaveClass('data-[selected]:bg-selected');
+    expect(row).toHaveClass('wave:data-[selected]:bg-selected');
     expect(bodyRows()[0]).not.toHaveAttribute('data-selected');
   });
 
@@ -4595,7 +4470,7 @@ describe('DataGrid handler composition', () => {
   const onHeaderSort = vi.fn();
   function SortableHeader(props: Omit<DataGridHeaderCellProps, 'children'>) {
     return (
-      <DataGrid aria-label="People" onSortChange={onHeaderSort}>
+      <DataGrid aria-label="People" defaultSort={null} onSortChange={onHeaderSort}>
         <DataGrid.Header>
           <tr>
             <DataGrid.HeaderCell columnId="name" sortable {...props}>
@@ -4609,8 +4484,6 @@ describe('DataGrid handler composition', () => {
   SortableHeader.displayName = 'SortableHeader';
 
   describe('sortable header onClick', () => {
-    beforeEach(expectOnlyPositionalSortWarning);
-
     testComposedHandler(SortableHeader, {
       handler: 'onClick',
       act: async ({ user }) => {
@@ -4619,7 +4492,10 @@ describe('DataGrid handler composition', () => {
       },
       assertInternal: () => {
         expect(onHeaderSort).toHaveBeenCalledTimes(1);
-        expect(onHeaderSort).toHaveBeenCalledWith('name', 'ascending');
+        expect(onHeaderSort).toHaveBeenCalledWith(
+          { columnId: 'name', direction: 'ascending' },
+          DETAILS,
+        );
         expect(header('Name')).toHaveAttribute('aria-sort', 'ascending');
       },
       assertInternalSuppressed: () => {
@@ -4672,12 +4548,11 @@ describe('DataGrid handler composition', () => {
   });
 
   it('calls a consumer onClick on a sortable header next to sorting', async () => {
-    expectOnlyPositionalSortWarning();
     const user = userEvent.setup();
     const onClick = vi.fn();
     const onSortChange = vi.fn();
     render(
-      <DataGrid aria-label="People" onSortChange={onSortChange}>
+      <DataGrid aria-label="People" defaultSort={null} onSortChange={onSortChange}>
         <DataGrid.Header>
           <tr>
             <DataGrid.HeaderCell columnId="name" sortable onClick={onClick}>
@@ -4689,7 +4564,10 @@ describe('DataGrid handler composition', () => {
     );
     await user.click(sortButton('Name'));
     expect(onClick).toHaveBeenCalledTimes(1);
-    expect(onSortChange).toHaveBeenCalledWith('name', 'ascending');
+    expect(onSortChange).toHaveBeenCalledWith(
+      { columnId: 'name', direction: 'ascending' },
+      DETAILS,
+    );
   });
 });
 
@@ -5121,8 +4999,8 @@ describe('DataGrid selectionAppearance', () => {
     renderGrid({ selectionMode: 'multiple', defaultSelectedItems: ['2'] });
     expect(screen.getByRole('grid')).toHaveAttribute('data-selection-appearance', 'brand');
     const row = bodyRows()[1];
-    expect(row).toHaveClass('data-[selected]:bg-selected', 'hover:bg-subtle-hover');
-    expect(row).not.toHaveClass('data-[selected]:bg-subtle-selected');
+    expect(row).toHaveClass('wave:data-[selected]:bg-selected', 'wave:hover:bg-subtle-hover');
+    expect(row).not.toHaveClass('wave:data-[selected]:bg-subtle-selected');
   });
 
   it('renders the attribute in every selection mode, none included', () => {
@@ -5139,8 +5017,11 @@ describe('DataGrid selectionAppearance', () => {
     expect(screen.getByRole('grid')).toHaveAttribute('data-selection-appearance', 'neutral');
     const row = bodyRows()[1];
     expect(row).toHaveAttribute('data-selected');
-    expect(row).toHaveClass('data-[selected]:bg-subtle-selected', 'hover:bg-subtle-hover');
-    expect(row).not.toHaveClass('data-[selected]:bg-selected');
+    expect(row).toHaveClass(
+      'wave:data-[selected]:bg-subtle-selected',
+      'wave:hover:bg-subtle-hover',
+    );
+    expect(row).not.toHaveClass('wave:data-[selected]:bg-selected');
   });
 
   it('gives a selected row no fill for none; aria-selected, the control and the forced-colors outline stay', () => {
@@ -5153,10 +5034,10 @@ describe('DataGrid selectionAppearance', () => {
     const row = bodyRows()[1];
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(row).toHaveAttribute('data-selected');
-    expect(row).not.toHaveClass('data-[selected]:bg-selected');
-    expect(row).not.toHaveClass('data-[selected]:bg-subtle-selected');
-    expect(row.className).not.toMatch(/(^|\s)data-\[selected\]:bg-/);
-    expect(row).toHaveClass('forced-colors:outline-[Highlight]', 'hover:bg-subtle-hover');
+    expect(row).not.toHaveClass('wave:data-[selected]:bg-selected');
+    expect(row).not.toHaveClass('wave:data-[selected]:bg-subtle-selected');
+    expect(row.className).not.toMatch(/(^|\s)wave:data-\[selected\]:bg-/);
+    expect(row).toHaveClass('wave:forced-colors:outline-[Highlight]', 'wave:hover:bg-subtle-hover');
     expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
   });
 
@@ -5171,22 +5052,22 @@ describe('DataGrid selectionAppearance', () => {
 
 describe('DataGrid subtleSelection', () => {
   const SUBTLE_ROW = [
-    'opacity-0',
-    'group-hover/table-row:opacity-100',
-    'group-focus-within/table-row:opacity-100',
-    'forced-colors:opacity-100',
-    'pointer-coarse:opacity-100',
-    'transition-opacity',
-    'motion-reduce:transition-none',
+    'wave:opacity-0',
+    'wave:group-hover/table-row:opacity-100',
+    'wave:group-focus-within/table-row:opacity-100',
+    'wave:forced-colors:opacity-100',
+    'wave:pointer-coarse:opacity-100',
+    'wave:transition-opacity',
+    'wave:motion-reduce:transition-none',
   ];
   const SUBTLE_GRID = [
-    'opacity-0',
-    'group-hover/grid:opacity-100',
-    'group-focus-within/grid:opacity-100',
-    'forced-colors:opacity-100',
-    'pointer-coarse:opacity-100',
-    'transition-opacity',
-    'motion-reduce:transition-none',
+    'wave:opacity-0',
+    'wave:group-hover/grid:opacity-100',
+    'wave:group-focus-within/grid:opacity-100',
+    'wave:forced-colors:opacity-100',
+    'wave:pointer-coarse:opacity-100',
+    'wave:transition-opacity',
+    'wave:motion-reduce:transition-none',
   ];
 
   it('names every row’s group table-row, never row (a Tree’s rows use that name)', () => {
@@ -5205,8 +5086,8 @@ describe('DataGrid subtleSelection', () => {
       </DataGrid>,
     );
     for (const row of screen.getAllByRole('row')) {
-      expect(row).toHaveClass('group/table-row');
-      expect(row).not.toHaveClass('group/row');
+      expect(row).toHaveClass('wave:group/table-row');
+      expect(row).not.toHaveClass('wave:group/row');
     }
   });
 
@@ -5232,67 +5113,67 @@ describe('DataGrid subtleSelection', () => {
     );
     const actions = screen.getByRole('toolbar', { name: 'Documents', hidden: true });
     // The Tree's own classes, keyed on its rows' group.
-    expect(actions).toHaveClass('invisible', 'group-hover/row:visible');
+    expect(actions).toHaveClass('wave:invisible', 'wave:group-hover/row:visible');
     // The only element of that group around the actions is the Tree's own row.
     const groups = [];
     for (let el = actions.parentElement; el; el = el.parentElement) {
-      if (el.classList.contains('group/row')) groups.push(el);
+      if (el.classList.contains('wave:group/row')) groups.push(el);
     }
     expect(groups).toHaveLength(1);
     expect(screen.getByRole('tree')).toContainElement(groups[0]);
-    expect(bodyRows()[0]).toHaveClass('group/table-row');
+    expect(bodyRows()[0]).toHaveClass('wave:group/table-row');
   });
 
   it('is off by default: no data-subtle-selection and every control drawn (0.13)', () => {
     renderGrid({ selectionMode: 'multiple' });
     expect(screen.getByRole('grid')).not.toHaveAttribute('data-subtle-selection');
     for (const checkbox of screen.getAllByRole('checkbox')) {
-      expect(checkbox).not.toHaveClass('opacity-0');
+      expect(checkbox).not.toHaveClass('wave:opacity-0');
     }
   });
 
   it('hides an unchecked row control until its row is hovered or holds focus; forced colors and a coarse pointer always draw it', () => {
     renderGrid({ selectionMode: 'multiple', subtleSelection: true, defaultSelectedItems: ['2'] });
     expect(screen.getByRole('grid')).toHaveAttribute('data-subtle-selection', '');
-    expect(bodyRows()[0]).toHaveClass('group/table-row');
+    expect(bodyRows()[0]).toHaveClass('wave:group/table-row');
     expect(screen.getByRole('checkbox', { name: 'Alice' })).toHaveClass(...SUBTLE_ROW);
     // A checked control is always drawn.
     const bob = screen.getByRole('checkbox', { name: 'Bob' });
     expect(bob).toBeChecked();
-    expect(bob).not.toHaveClass('opacity-0');
+    expect(bob).not.toHaveClass('wave:opacity-0');
   });
 
   it('hides the select-all checkbox while nothing is selected, until the grid is hovered or holds focus', async () => {
     const user = userEvent.setup();
     renderGrid({ selectionMode: 'multiple', subtleSelection: true });
     const grid = screen.getByRole('grid');
-    expect(grid).toHaveClass('group/grid');
+    expect(grid).toHaveClass('wave:group/grid');
     const selectAll = screen.getByRole('checkbox', { name: 'Select all rows' });
     expect(selectAll).toHaveClass(...SUBTLE_GRID);
     await user.click(screen.getByRole('checkbox', { name: 'Alice' }));
     expect(selectAll).toBePartiallyChecked();
-    expect(selectAll).not.toHaveClass('opacity-0');
+    expect(selectAll).not.toHaveClass('wave:opacity-0');
     await user.click(selectAll);
     expect(selectAll).toBeChecked();
-    expect(selectAll).not.toHaveClass('opacity-0');
+    expect(selectAll).not.toHaveClass('wave:opacity-0');
   });
 
   it('draws a subtle control while it has keyboard focus', () => {
     renderGrid({ selectionMode: 'multiple', subtleSelection: true });
     expect(screen.getByRole('checkbox', { name: 'Alice' })).toHaveClass(
-      'opacity-0',
-      'focus-visible:opacity-100',
+      'wave:opacity-0',
+      'wave:focus-visible:opacity-100',
     );
     expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toHaveClass(
-      'opacity-0',
-      'focus-visible:opacity-100',
+      'wave:opacity-0',
+      'wave:focus-visible:opacity-100',
     );
   });
 
   it('applies to the radios of single mode', () => {
     renderGrid({ selectionMode: 'single', subtleSelection: true, defaultSelectedItems: ['1'] });
     expect(screen.getByRole('radio', { name: 'Bob' })).toHaveClass(...SUBTLE_ROW);
-    expect(screen.getByRole('radio', { name: 'Alice' })).not.toHaveClass('opacity-0');
+    expect(screen.getByRole('radio', { name: 'Alice' })).not.toHaveClass('wave:opacity-0');
   });
 
   it('keeps a transparent control named and focusable: the grid focuses it', async () => {
@@ -5319,7 +5200,7 @@ describe('DataGrid subtleSelection', () => {
     await user.click(cell('Alice'));
     expect(onSelectedItemsChange).toHaveBeenCalledWith(['1'], CLICK_DETAILS);
     expect(alice).toBeChecked();
-    expect(alice).not.toHaveClass('opacity-0');
+    expect(alice).not.toHaveClass('wave:opacity-0');
     await user.click(cell('Alice'));
     expect(alice).not.toBeChecked();
     expect(alice).toHaveClass(...SUBTLE_ROW);
@@ -5438,8 +5319,8 @@ describe('DataGrid.Row selectionCellProps', () => {
       children: contentWithRowProps({ '1': { selectionCellProps: { invisible: true } } }),
     });
     const control = within(bodyRows()[0]).getByRole('checkbox', { hidden: true });
-    expect(control).toHaveClass('invisible');
-    expect(screen.getByRole('checkbox', { name: 'Bob' })).not.toHaveClass('invisible');
+    expect(control).toHaveClass('wave:invisible');
+    expect(screen.getByRole('checkbox', { name: 'Bob' })).not.toHaveClass('wave:invisible');
     await user.click(cell('Alice'));
     expect(onSelectedItemsChange).toHaveBeenCalledWith(['1'], CLICK_DETAILS);
   });
@@ -5454,7 +5335,7 @@ describe('DataGrid.Row selectionCellProps', () => {
     });
     const alice = screen.getByRole('checkbox', { name: 'Choose Alice' });
     expect(alice).not.toHaveAttribute('aria-labelledby');
-    expect(cellOf(alice)).toHaveClass('bg-muted', dataGridRowClassNames.selectionCell, 'w-10');
+    expect(cellOf(alice)).toHaveClass('bg-muted', dataGridRowClassNames.selectionCell, 'wave:w-10');
     expect(alice).not.toHaveClass('bg-muted');
     expect(screen.getByRole('checkbox', { name: 'Choose Bob' })).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: 'Bob row' })).toBeNull();
@@ -5512,7 +5393,7 @@ describe('DataGrid.SelectionCell', () => {
     expectedTag: 'td',
     displayName: 'DataGridSelectionCell',
     control: { role: 'checkbox' },
-    conflictingClass: { className: 'w-12', overrides: 'w-10' },
+    conflictingClass: { className: 'w-12', overrides: 'wave:w-10' },
     wrapper: SelectionCellRow,
   });
 
@@ -5595,17 +5476,17 @@ describe('DataGrid.SelectionCell', () => {
     await user.keyboard('{ArrowRight}');
     const bob = screen.getByRole('checkbox', { name: 'Bob' });
     expect(bob).toHaveFocus();
-    expect(bob).toHaveClass('opacity-0', 'group-focus-within/table-row:opacity-100');
+    expect(bob).toHaveClass('wave:opacity-0', 'wave:group-focus-within/table-row:opacity-100');
     await user.click(cell('Carol'));
     expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['3'], CLICK_DETAILS);
-    expect(screen.getByRole('checkbox', { name: 'Carol' })).not.toHaveClass('opacity-0');
+    expect(screen.getByRole('checkbox', { name: 'Carol' })).not.toHaveClass('wave:opacity-0');
   });
 
   it('is the hidden "Selection" header text in a single-mode header row, and a radio in a body row', () => {
     render(<TrailingCells selectionMode="single" defaultSelectedItems={['2']} />);
     const [headerRow] = screen.getAllByRole('row') as HTMLTableRowElement[];
     expect(headerRow.cells).toHaveLength(2);
-    expect(within(headerRow.cells[1]).getByText('Selection')).toHaveClass('sr-only');
+    expect(within(headerRow.cells[1]).getByText('Selection')).toHaveClass('wave:sr-only');
     expect(screen.getByRole('radio', { name: 'Bob' })).toBeChecked();
   });
 
@@ -5644,7 +5525,9 @@ describe('DataGrid.SelectionCell', () => {
     expect(alice).toBeEnabled();
     expect(cellOf(alice)).toHaveClass('from-row', 'own');
     expect(screen.getByRole('checkbox', { name: 'Bob' })).toBeDisabled();
-    expect(within(bodyRows()[2]).getByRole('checkbox', { hidden: true })).toHaveClass('invisible');
+    expect(within(bodyRows()[2]).getByRole('checkbox', { hidden: true })).toHaveClass(
+      'wave:invisible',
+    );
     await user.click(screen.getByRole('checkbox', { name: 'Choose all' }));
     expect(onSelectedItemsChange).toHaveBeenLastCalledWith(['1', '3'], DETAILS);
   });
@@ -5853,7 +5736,7 @@ describe('DataGrid.SelectionCell', () => {
     expect(headerCell.tagName.toLowerCase()).toBe('th');
     expect(ref.current).toBe(headerCell);
     expect(headerCell).toHaveClass('w-12', dataGridSelectionCellClassNames.root);
-    expect(headerCell).not.toHaveClass('w-10');
+    expect(headerCell).not.toHaveClass('wave:w-10');
     expect(controlRef.current).toBe(screen.getByRole('checkbox', { name: 'Select all rows' }));
   });
 
@@ -5895,9 +5778,10 @@ describe('DataGrid selection types (P9-04)', () => {
 });
 
 describe('DataGrid types', () => {
-  it('discriminates the sort API from the deprecated sort props', () => {
+  it('discriminates the sort API, with no positional callback (removed in 1.0)', () => {
     const setSort = (sort: DataGridSort | null) => void sort;
     const setColumn = (column: string) => void column;
+    const positional = (columnId: string, direction: SortDirection) => void [columnId, direction];
     const elements = [
       <DataGrid
         key="new"
@@ -5912,32 +5796,37 @@ describe('DataGrid types', () => {
       <DataGrid key="setter" defaultSort={null} onSortChange={setSort}>
         {null}
       </DataGrid>,
-      <DataGrid
-        key="legacy"
-        onSortChange={(columnId, direction) => {
-          expectTypeOf(columnId).toEqualTypeOf<string>();
-          expectTypeOf(direction).toEqualTypeOf<SortDirection>();
-          setColumn(columnId);
-        }}
-      >
+      // @ts-expect-error — the 0.4 positional `onSortChange(columnId, direction)` is removed in 1.0.
+      <DataGrid key="positional" onSortChange={positional}>
         {null}
       </DataGrid>,
-      <DataGrid key="legacy-one-arg" onSortChange={(columnId) => setColumn(columnId)}>
+      // @ts-expect-error — a one-argument callback of the column is removed with it.
+      <DataGrid key="positional-one-arg" onSortChange={setColumn}>
         {null}
       </DataGrid>,
-      // @ts-expect-error — the sort API and the deprecated sortColumn cannot be mixed.
+      // @ts-expect-error — the positional callback fits no grid with `sort` either.
+      <DataGrid key="positional-with-sort" sort={null} onSortChange={positional}>
+        {null}
+      </DataGrid>,
+      // @ts-expect-error — `sortColumn` is removed in 1.0, next to the sort API too.
       <DataGrid key="mixed" sort={null} sortColumn="name">
         {null}
       </DataGrid>,
-      // @ts-expect-error — the DataGridSort callback needs `sort` or `defaultSort`.
+      // @ts-expect-error — no `onSortChange` without `items`, `sort` or `defaultSort`.
       <DataGrid key="object-without-sort" onSortChange={(sort: DataGridSort) => setSort(sort)}>
         {null}
       </DataGrid>,
     ];
-    expect(elements).toHaveLength(6);
+    expect(elements).toHaveLength(7);
+    // Every member of the union takes the object form, or no callback at all.
+    expectTypeOf<NonNullable<DataGridProps['onSortChange']>>().toEqualTypeOf<
+      (sort: DataGridSort, details: DataGridSortChangeDetails) => void
+    >();
+    // @ts-expect-error -- `DataGridLegacySortProps` (the positional form's props) is removed in 1.0
+    expectTypeOf<Wave.DataGridLegacySortProps>().toBeAny();
   });
 
-  it('gives a grid with `items` the DataGridSort callback with details, never the 0.4 sort props', () => {
+  it('gives a grid with `items` the DataGridSort callback with details, never the 0.4 callback', () => {
     const setSort = (sort: DataGridSort | null) => void sort;
     const positional = (columnId: string, direction: SortDirection) => void [columnId, direction];
     const loadingSort = undefined as DataGridSort | null | undefined;
@@ -5948,14 +5837,14 @@ describe('DataGrid types', () => {
         items={PEOPLE}
         onSortChange={(sort, details) => {
           expectTypeOf(sort).toEqualTypeOf<DataGridSort>();
-          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails | undefined>();
-          expectTypeOf<NonNullable<typeof details>['event']>().toEqualTypeOf<Event>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails>();
+          expectTypeOf(details.event).toEqualTypeOf<Event>();
           setSort(sort);
         }}
         onSelectedItemsChange={(items, details) => {
           expectTypeOf(items).toEqualTypeOf<string[]>();
-          expectTypeOf(details).toEqualTypeOf<DataGridSelectedItemsChangeDetails | undefined>();
-          expectTypeOf<NonNullable<typeof details>['event']>().toEqualTypeOf<Event>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSelectedItemsChangeDetails>();
+          expectTypeOf(details.event).toEqualTypeOf<Event>();
         }}
       />,
       <DataGrid key="items-setter" aria-label="People" items={PEOPLE} onSortChange={setSort} />,
@@ -5972,28 +5861,65 @@ describe('DataGrid types', () => {
         aria-label="People"
         defaultSort={null}
         onSortChange={(sort, details) => {
-          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails | undefined>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails>();
           setSort(sort);
         }}
       >
         {null}
       </DataGrid>,
-      // The 0.4 positional callback keeps its two arguments without `items`.
+      // @ts-expect-error — the 0.4 positional callback is removed in 1.0, without `items` too.
       <DataGrid key="legacy" aria-label="People" onSortChange={positional}>
         {null}
       </DataGrid>,
       // @ts-expect-error — the 0.4 positional callback does not apply to a grid with `items`.
       <DataGrid key="items-positional" items={PEOPLE} onSortChange={positional} />,
-      // @ts-expect-error — nor does the deprecated sortColumn.
+      // @ts-expect-error — `sortColumn` is removed in 1.0, next to `items` too.
       <DataGrid key="items-sortColumn" items={PEOPLE} sortColumn="name" />,
-      // @ts-expect-error — nor does the deprecated defaultSortDirection.
+      // @ts-expect-error — `defaultSortDirection` is removed in 1.0, next to `items` too.
       <DataGrid key="items-defaultSortDirection" items={PEOPLE} defaultSortDirection="ascending" />,
-      // @ts-expect-error — nor with `sort` next to `items`.
+      // @ts-expect-error — `sortDirection` is removed in 1.0, with `sort` next to `items` too.
       <DataGrid key="sort-dir" items={PEOPLE} sort={null} sortDirection="ascending" />,
     ];
     expect(elements).toHaveLength(9);
     expectTypeOf<DataGridSortChangeDetails>().toEqualTypeOf<{ event: Event }>();
     expectTypeOf<DataGridSelectedItemsChangeDetails>().toEqualTypeOf<{ event: Event }>();
+  });
+
+  it('has none of the 0.4 selection and sort props (removed in 1.0)', () => {
+    expectTypeOf<DataGridBaseProps>().not.toHaveProperty('selectedKeys');
+    expectTypeOf<DataGridBaseProps>().not.toHaveProperty('defaultSelectedKeys');
+    expectTypeOf<DataGridBaseProps>().not.toHaveProperty('onSelectionChange');
+    const elements = [
+      // @ts-expect-error — `selectedKeys` is removed in 1.0: use `selectedItems` (an array).
+      <DataGrid key="selectedKeys" selectionMode="multiple" selectedKeys={['1']}>
+        {null}
+      </DataGrid>,
+      // @ts-expect-error — `defaultSelectedKeys` is removed in 1.0: use `defaultSelectedItems`.
+      <DataGrid key="defaultSelectedKeys" defaultSelectedKeys={new Set(['1'])}>
+        {null}
+      </DataGrid>,
+      // @ts-expect-error — `onSelectionChange` is removed in 1.0: use `onSelectedItemsChange`.
+      <DataGrid key="onSelectionChange" onSelectionChange={(keys: Set<string>) => void keys}>
+        {null}
+      </DataGrid>,
+      // @ts-expect-error — `sortColumn` is removed in 1.0: use `sort`.
+      <DataGrid key="sortColumn" sortColumn="name">
+        {null}
+      </DataGrid>,
+      // @ts-expect-error — `sortDirection` is removed in 1.0: use `sort`.
+      <DataGrid key="sortDirection" sortDirection="descending">
+        {null}
+      </DataGrid>,
+      // @ts-expect-error — `defaultSortColumn` is removed in 1.0: use `defaultSort`.
+      <DataGrid key="defaultSortColumn" defaultSortColumn="name">
+        {null}
+      </DataGrid>,
+      // @ts-expect-error — `defaultSortDirection` is removed in 1.0: use `defaultSort`.
+      <DataGrid key="defaultSortDirection" defaultSortDirection="descending">
+        {null}
+      </DataGrid>,
+    ];
+    expect(elements).toHaveLength(7);
   });
 
   it('types the HeaderCell `sortIcon` as a span slot', () => {
@@ -6012,18 +5938,22 @@ describe('DataGrid types', () => {
       <DataGrid className={className} {...props} />
     );
     const setSort = (sort: DataGridSort | null) => void sort;
+    const positional = (columnId: string, direction: SortDirection) => void [columnId, direction];
     const elements = [
       <Spread key="spread" aria-label="People" items={PEOPLE} getRowId={(person) => person.id} />,
       <SpreadWithClass
-        key="legacy"
+        key="uncontrolled"
         aria-label="People"
-        onSortChange={(columnId, direction) => {
-          expectTypeOf(columnId).toEqualTypeOf<string>();
-          expectTypeOf(direction).toEqualTypeOf<SortDirection>();
+        defaultSort={null}
+        onSortChange={(sort, details) => {
+          expectTypeOf(sort).toEqualTypeOf<DataGridSort>();
+          expectTypeOf(details).toEqualTypeOf<DataGridSortChangeDetails>();
         }}
       >
         {null}
       </SpreadWithClass>,
+      // @ts-expect-error — the 0.4 positional callback is removed in 1.0, through a wrapper too.
+      <SpreadWithClass key="positional" aria-label="People" onSortChange={positional} />,
       <Destructured
         key="destructured"
         aria-label="People"
@@ -6032,7 +5962,7 @@ describe('DataGrid types', () => {
         onSortChange={(sort) => setSort(sort)}
       />,
     ];
-    expect(elements).toHaveLength(3);
+    expect(elements).toHaveLength(4);
 
     const onSortChange = vi.fn();
     render(
@@ -6063,8 +5993,8 @@ describe('DataGrid types', () => {
 
   it('accepts readonly arrays (`as const`) for columns and the selection, and emits a mutable array', () => {
     const COLUMNS = [
-      { id: 'name', label: 'Name', sortable: true },
-      { id: 'role', label: 'Role' },
+      { columnId: 'name', label: 'Name', sortable: true },
+      { columnId: 'role', label: 'Role' },
     ] as const;
     const IDS = ['1', '2'] as const;
     const element = (
@@ -6155,16 +6085,19 @@ describe('DataGrid types', () => {
     expect(elements).toHaveLength(3);
   });
 
-  it('keeps 0.13 columns compiling: an untyped `DataGridColumn[]` with `id`, also extended', () => {
+  it('keeps untyped columns compiling: a `DataGridColumn[]`, also extended; no `id` (removed in 1.0)', () => {
     expectTypeOf<DataGridColumn>().toEqualTypeOf<DataGridColumn<unknown>>();
     const columns: DataGridColumn[] = [
-      { id: 'name', label: 'Name', sortable: true },
-      { id: 'role', label: 'Role' },
+      { columnId: 'name', label: 'Name', sortable: true },
+      { columnId: 'role', label: 'Role' },
     ];
     interface WidthColumn extends DataGridColumn {
       width: number;
     }
-    const sized: WidthColumn[] = [{ id: 'name', label: 'Name', width: 120 }];
+    const sized: WidthColumn[] = [{ columnId: 'name', label: 'Name', width: 120 }];
+    // @ts-expect-error -- `id` is removed in 1.0: use `columnId`
+    const legacy: WidthColumn[] = [{ id: 'name', label: 'Name', width: 120 }];
+    expect(legacy).toHaveLength(1);
     const elements = [
       <DataGrid key="untyped" aria-label="People" columns={columns}>
         {null}
@@ -6244,9 +6177,9 @@ describe('DataGrid parts — slotProps', () => {
   // Captured from 6f6b500's dist: the server markup, and the client one after the grid's
   // navigation wrote its tab stops.
   const FOCUS =
-    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
-  const CONTROL = `accent-primary cursor-pointer disabled:cursor-not-allowed ${FOCUS}`;
-  const BUTTON = `inline-flex w-full cursor-pointer select-none items-center gap-1 border-0 bg-transparent px-4 py-3 text-start text-inherit [font:inherit] uppercase tracking-wider ${FOCUS}`;
+    'wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring';
+  const CONTROL = `wave:accent-primary wave:cursor-pointer wave:disabled:cursor-not-allowed ${FOCUS}`;
+  const BUTTON = `wave:inline-flex wave:w-full wave:cursor-pointer wave:select-none wave:items-center wave:gap-1 wave:border-0 wave:bg-transparent wave:px-4 wave:py-3 wave:text-start wave:text-inherit wave:[font:inherit] wave:uppercase wave:tracking-wider ${FOCUS}`;
   const pins = (stamps: boolean) =>
     [
       `<input aria-label="Select all rows" class="wave-data-grid-header__select-all-checkbox ${CONTROL}"${stamps ? ' tabindex="0"' : ''} type="checkbox">`,
@@ -6378,9 +6311,9 @@ describe('DataGrid parts — slotProps', () => {
       </DataGrid>,
     );
     for (const [cls, name, conflict, count] of [
-      [dataGridHeaderClassNames.selectAllCheckbox, 'select-all', 'cursor-pointer', 1],
-      [dataGridHeaderCellClassNames.button, 'button', 'px-4', 1],
-      [dataGridRowClassNames.selectionControl, 'control', 'cursor-pointer', 2],
+      [dataGridHeaderClassNames.selectAllCheckbox, 'select-all', 'wave:cursor-pointer', 1],
+      [dataGridHeaderCellClassNames.button, 'button', 'wave:px-4', 1],
+      [dataGridRowClassNames.selectionControl, 'control', 'wave:cursor-pointer', 2],
     ] as const) {
       const elements = all(document, cls);
       expect(elements).toHaveLength(count);

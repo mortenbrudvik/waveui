@@ -47,7 +47,7 @@ interface HandleState {
   queue: QueuedDispatch[];
 }
 
-/** Shared by the ESM and CJS copies of the library, so either copy's Toaster binds either's handle. */
+/** Shared by every copy of the package an app loads, so either copy's Toaster binds either's handle. */
 const handleRegistry = getGlobalRegistry('toasterHandles', () => ({
   states: new WeakMap<object, HandleState>(),
   count: 0,

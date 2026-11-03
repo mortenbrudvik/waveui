@@ -29,10 +29,11 @@ function findForm(control: HTMLElement, formId: string | undefined): HTMLFormEle
  *
  * The listener sits on the control's root node (document or shadow root) and runs in the bubble
  * phase, after the form's own and React's `onReset` handlers, so a reset they cancel is ignored.
- * `onReset` runs synchronously in the `reset` event; the latest callback is always used.
+ * `onReset` runs synchronously in the `reset` event, which it receives (a change callback that
+ * reports its event, such as `Table.SelectionCell`'s); the latest callback is always used.
  *
  * @param controlRef The focusable control element (or the component root inside the form).
- * @param onReset    Restores the default value.
+ * @param onReset    Restores the default value; called with the form's `reset` event.
  * @param form       The component's `form` prop (id of a form elsewhere in the document).
  *
  * @example
@@ -40,7 +41,7 @@ function findForm(control: HTMLElement, formId: string | undefined): HTMLFormEle
  */
 export function useFormReset(
   controlRef: React.RefObject<HTMLElement | null>,
-  onReset: () => void,
+  onReset: (event: Event) => void,
   form?: string,
 ): void {
   const handleReset = useEventCallback(onReset);
@@ -54,7 +55,7 @@ export function useFormReset(
       if (event.defaultPrevented) return;
       const current = controlRef.current;
       if (!current || event.target !== findForm(current, form)) return;
-      handleReset();
+      handleReset(event);
     };
     root.addEventListener('reset', listener);
     return () => root.removeEventListener('reset', listener);

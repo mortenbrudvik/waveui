@@ -230,12 +230,36 @@ export const SLOT_PROPS_KEYS = {
 } as const satisfies SlotPartLists;
 
 /**
- * The constants whose component's `slotProps` also declares `root`, which is no part key: Input
- * alone (R6), whose `root` and `input` are one `<input>` without content slots and the wrapper
- * and the input with them. The owners' type test allows `root` exactly for these.
+ * The constants whose component's `slotProps` also declares `root`, which is no part key. The
+ * rule (Phase 14, R5): a component is an owner when its `ref` reaches a focusable element inside
+ * its root, so `ref` no longer names the wrapper and `slotProps.root.ref` is the way to reach it
+ * (Input, whose `root` and `input` are one `<input>` without content slots, and the wrapper and
+ * the input with them, is the first; Checkbox, Switch and `RadioGroup.Item`, whose roots are
+ * `<label>`s around a `role` button, follow, and so do SearchBox, SpinButton,
+ * `ColorPicker.HexField`, ColorSlider and AlphaSlider, whose roots hold one `<input>`,
+ * Combobox, Dropdown, TimePicker and DatePicker, whose roots hold the combobox or the date input
+ * with its buttons, and TagPicker, whose root holds the field with its one trigger,
+ * `TagPicker.Input` or `TagPicker.Button`, which `ref` follows). A component whose `ref` is its
+ * root has no need of the part and is no owner, so it declares no `root` (the owners' type test
+ * requires `root` exactly for the owners listed here). Each rollout task that moves a `ref` adds
+ * its component, in the change that gives it the part: the type test forces an owner to declare
+ * `root`, so none is listed earlier.
  */
 export const SLOT_PROPS_ROOT_OWNERS = [
   'inputClassNames',
+  'checkboxClassNames',
+  'switchClassNames',
+  'radioGroupItemClassNames',
+  'searchBoxClassNames',
+  'spinButtonClassNames',
+  'colorPickerHexFieldClassNames',
+  'colorSliderClassNames',
+  'alphaSliderClassNames',
+  'comboboxClassNames',
+  'dropdownClassNames',
+  'timePickerClassNames',
+  'datePickerClassNames',
+  'tagPickerClassNames',
 ] as const satisfies readonly ClassNameConstant[];
 
 /** The parts that a named slot prop already fills (R2); see the module's JSDoc for the rule. */
@@ -370,16 +394,6 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
     key: 'spacer',
     reason:
       'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
-  },
-  {
-    component: 'tagPickerClassNames',
-    key: 'control',
-    reason: 'the root of TagPicker.Control, which takes its props directly in the parts form (R3)',
-  },
-  {
-    component: 'tagPickerClassNames',
-    key: 'group',
-    reason: 'the root of TagPicker.Group, which takes its props directly in the parts form (R3)',
   },
   {
     component: 'tagPickerClassNames',

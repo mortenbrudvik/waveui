@@ -141,7 +141,7 @@ describe('Popover', () => {
       displayName: 'PopoverContent',
       wrapper: createOverlayTestWrapper(Popover, { open: true }),
       defaultProps: { 'aria-label': 'Details', children: 'Popover body' },
-      conflictingClass: { className: 'w-96', overrides: 'w-64' },
+      conflictingClass: { className: 'w-96', overrides: 'wave:w-64' },
     });
   });
 
@@ -1261,7 +1261,7 @@ describe('Popover', () => {
     });
 
     it('with popovers of two copies of the library open, Shift+Tab from outside the page reaches the page (global registry)', async () => {
-      // A second evaluation of the module, as when an app loads both the ESM and the CJS build.
+      // A second evaluation of the module, as when an app loads two copies of the package.
       vi.resetModules();
       const copy = await import('../Popover');
       expect(copy.Popover).not.toBe(Popover);
@@ -3178,11 +3178,13 @@ describe('Popover', () => {
       mockLayout(boxes);
       render(<WithPositioning positioning={{ fitViewport: true }} />);
       const surface = screen.getByRole('dialog', { name: 'Toggle' });
-      const scroller = within(surface).getByText('Body').closest<HTMLElement>('.overflow-y-auto');
+      const scroller = within(surface)
+        .getByText('Body')
+        .closest<HTMLElement>('.wave\\:overflow-y-auto');
       expect(scroller).not.toBeNull();
       expect(surface.contains(scroller)).toBe(true);
       expect(
-        surface.querySelector('[data-wave-popover-arrow]')?.closest('.overflow-y-auto'),
+        surface.querySelector('[data-wave-popover-arrow]')?.closest('.wave\\:overflow-y-auto'),
       ).toBeNull();
       expect(scroller!.className).toContain('--wave-popup-available-height');
     });
@@ -3191,7 +3193,7 @@ describe('Popover', () => {
       mockLayout(boxes);
       render(<WithPositioning />);
       const surface = screen.getByRole('dialog', { name: 'Toggle' });
-      expect(within(surface).getByText('Body').closest('.overflow-y-auto')).toBeNull();
+      expect(within(surface).getByText('Body').closest('.wave\\:overflow-y-auto')).toBeNull();
     });
 
     it('positioning.fitViewport limits the surface to the available space', async () => {
@@ -3478,7 +3480,7 @@ describe('Popover', () => {
       render(<Basic defaultOpen />);
       const arrow = screen.getByRole('dialog').querySelector('[data-wave-popover-arrow]');
       expect(arrow).toHaveAttribute('aria-hidden', 'true');
-      expect(arrow).toHaveClass('border-t', 'border-l');
+      expect(arrow).toHaveClass('wave:border-t', 'wave:border-l');
     });
 
     it('the beak inherits the surface colors, so a className override reaches it (button-provider#3)', () => {
@@ -3493,9 +3495,9 @@ describe('Popover', () => {
       const surface = screen.getByRole('dialog');
       expect(surface).toHaveClass('bg-card', 'border-primary');
       const arrow = surface.querySelector('[data-wave-popover-arrow]');
-      expect(arrow).toHaveClass('bg-inherit', 'border-inherit');
-      expect(arrow).not.toHaveClass('bg-background');
-      expect(arrow).not.toHaveClass('border-border');
+      expect(arrow).toHaveClass('wave:bg-inherit', 'wave:border-inherit');
+      expect(arrow).not.toHaveClass('wave:bg-background');
+      expect(arrow).not.toHaveClass('wave:border-border');
     });
 
     it('resolves side="start" to the right in RTL and mirrors the beak (feedback-navigation#34)', async () => {
@@ -3518,8 +3520,8 @@ describe('Popover', () => {
       await waitFor(() => expect(surface).toHaveAttribute('data-side', 'right'));
       expect(surface.closest('[data-wave-portal]')).toHaveAttribute('dir', 'rtl');
       expect(surface.querySelector('[data-wave-popover-arrow]')).toHaveClass(
-        'border-b',
-        'border-l',
+        'wave:border-b',
+        'wave:border-l',
       );
     });
   });
@@ -3529,16 +3531,16 @@ describe('Popover', () => {
       render(<Basic defaultOpen />);
       const surface = screen.getByRole('dialog');
       expect(surface).toHaveClass(
-        'bg-background',
-        'text-foreground',
-        'border-border',
-        'rounded-md',
-        'normal-case',
-        'tracking-normal',
-        'font-normal',
-        'text-start',
+        'wave:bg-background',
+        'wave:text-foreground',
+        'wave:border-border',
+        'wave:rounded-md',
+        'wave:normal-case',
+        'wave:tracking-normal',
+        'wave:font-normal',
+        'wave:text-start',
       );
-      expect(surface).not.toHaveClass('rounded-lg');
+      expect(surface).not.toHaveClass('wave:rounded-lg');
     });
   });
 
@@ -3682,8 +3684,8 @@ describe('Popover.Content — slotProps', () => {
     render(<Open data-testid={undefined} />);
     expect(openingTags(beak(), title())).toBe(
       [
-        '<div aria-hidden="true" class="size-2 rotate-45 border-inherit bg-inherit border-t border-l wave-popover-content__beak" data-wave-popover-arrow="" style="position: absolute; top: calc(var(--wave-popup-arrow-size, 8px) / -2);">',
-        '<h2 class="wave-popover-content__title mb-2 text-subtitle-2 font-semibold" id="popover-title-_id0_">',
+        '<div aria-hidden="true" class="wave:size-2 wave:rotate-45 wave:border-inherit wave:bg-inherit wave:border-t wave:border-l wave-popover-content__beak" data-wave-popover-arrow="" style="position: absolute; top: calc(var(--wave-popup-arrow-size, 8px) / -2);">',
+        '<h2 class="wave-popover-content__title wave:mb-2 wave:text-subtitle-2 wave:font-semibold" id="popover-title-_id0_">',
       ].join('\n'),
     );
   });
@@ -3710,8 +3712,8 @@ describe('Popover.Content — slotProps', () => {
       />,
     );
     for (const [element, stable, own, mine, data, opacity] of [
-      [beak(), popoverContentClassNames.beak, 'rotate-45', 'my-beak', 'beak', '0.5'],
-      [title(), popoverContentClassNames.title, 'mb-2', 'my-title', 'title', '0.25'],
+      [beak(), popoverContentClassNames.beak, 'wave:rotate-45', 'my-beak', 'beak', '0.5'],
+      [title(), popoverContentClassNames.title, 'wave:mb-2', 'my-title', 'title', '0.25'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[element.classList.length - 1]).toBe(mine);
@@ -3724,9 +3726,9 @@ describe('Popover.Content — slotProps', () => {
   it('lets your class replace a conflicting class of a part', () => {
     render(<Open slotProps={{ beak: { className: 'size-3' }, title: { className: 'mb-4' } }} />);
     expect(beak()).toHaveClass('size-3');
-    expect(beak()).not.toHaveClass('size-2');
+    expect(beak()).not.toHaveClass('wave:size-2');
     expect(title()).toHaveClass('mb-4');
-    expect(title()).not.toHaveClass('mb-2');
+    expect(title()).not.toHaveClass('wave:mb-2');
   });
 
   it('locks the beak’s hidden state, its marker and the position keys of its style', () => {
@@ -3835,7 +3837,7 @@ describe('Popover.Content — slotProps', () => {
       { dir: 'rtl' },
     );
     await waitFor(() => expect(screen.getByRole('dialog')).toHaveAttribute('data-side', 'right'));
-    expect(beak()).toHaveClass('border-b', 'border-l', 'my-beak');
+    expect(beak()).toHaveClass('wave:border-b', 'wave:border-l', 'my-beak');
   });
 
   it('ignores the title part without a title', () => {

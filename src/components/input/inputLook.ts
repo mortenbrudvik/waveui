@@ -59,16 +59,3 @@ export function useInputLook<S extends Size = CoreSize>(
     'outline';
   return { size: resolvedSize, appearance: resolvedAppearance };
 }
-
-/**
- * The numeric legacy form of `size` on Input and Select (the native attribute, deprecated in
- * favour of `htmlSize`): a number, or a string of digits only, which untyped code wrote HTML style
- * before 0.9 (`size="20"`). `undefined` for anything else, which `useInputLook` then resolves as a
- * design size.
- *
- * @internal Not exported from the package.
- */
-export function legacyNativeSize(size: unknown): number | undefined {
-  if (typeof size === 'number') return size;
-  return typeof size === 'string' && /^\d+$/.test(size) ? Number(size) : undefined;
-}

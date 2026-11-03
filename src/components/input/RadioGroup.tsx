@@ -1,11 +1,16 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
 import { radioGroupClassNames, radioGroupItemClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { isDev, warnDeprecated, warnOnce } from '../../lib/dev';
+import { isDev, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import {
+  HIDDEN_PART_LOCKS,
+  mergeSlotProps,
+  ROVING_PART_LOCKS,
+  type SlotPart,
+} from '../../lib/slotProps';
 import { focusRing, forcedColors } from '../../lib/styles';
 import type { Orientation } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -44,12 +49,6 @@ export interface RadioGroupProps extends Omit<
   /** Called with the newly selected value when the selection changes (not when re-selecting). */
   onValueChange?: (value: string) => void;
   /**
-   * Called with the newly selected value, exactly like `onValueChange`: only when the selection
-   * changes (0.4 also called it when the selected item was chosen again).
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (value: string) => void;
-  /**
    * Layout of the radio items (also `aria-orientation`). Arrow keys follow the APG radio pattern
    * in both layouts: Down/Right select the next item, Up/Left the previous one (Left/Right
    * mirrored under `dir="rtl"`).
@@ -76,7 +75,6 @@ const RadioGroupRoot = ({
   value: valueProp,
   defaultValue,
   onValueChange,
-  onChange,
   orientation = 'vertical',
   disabled = false,
   name,
@@ -95,12 +93,8 @@ const RadioGroupRoot = ({
   ref,
   ...rest
 }: RadioGroupProps) => {
-  if (onChange !== undefined) warnDeprecated('RadioGroup', 'onChange', 'onValueChange');
   const initialValue = defaultValue ?? '';
-  const [value, setValue] = useControllable(valueProp, initialValue, (next: string) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [value, setValue] = useControllable(valueProp, initialValue, onValueChange);
 
   const { containerProps, getTabIndex } = useRovingTabIndex({
     activeValue: value,
@@ -173,10 +167,10 @@ const RadioGroupRoot = ({
         {...fieldProps}
         aria-orientation={orientation}
         aria-disabled={disabled || undefined}
-        className={cn(
+        className={wcn(
           radioGroupClassNames.root,
-          'relative flex',
-          orientation === 'vertical' ? 'flex-col gap-2' : 'flex-row gap-4',
+          'wave:relative wave:flex',
+          orientation === 'vertical' ? 'wave:flex-col wave:gap-2' : 'wave:flex-row wave:gap-4',
           className,
         )}
         {...rest}
@@ -206,7 +200,7 @@ RadioGroupRoot.displayName = 'RadioGroup';
 
 /* ---- RadioItem ---- */
 /** Forced-colors look of the dot of a disabled selected radio: GrayText, no Highlight fill. */
-const disabledDot = 'forced-colors:bg-[GrayText] forced-colors:forced-color-adjust-none';
+const disabledDot = 'wave:forced-colors:bg-[GrayText] wave:forced-colors:forced-color-adjust-none';
 
 /** The handlers the label part drops while the radio is disabled: it does not select then. */
 const BLOCK_CLICK = ['onClick'] as const;
@@ -240,14 +234,32 @@ export interface RadioItemProps extends Omit<
   ref?: React.Ref<HTMLButtonElement>;
   /**
    * Props for the elements the item draws, by part, merged into each part's own (Fluent UI's
-   * `indicator` and `label` slot props): your classes after the part's (yours win a conflict),
-   * your styles over its styles, your handlers before its handlers (`preventDefault()` in yours
-   * skips the item's handling of the event, its own `on…` prop included), your ref beside its
-   * ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every attribute the
-   * item sets on a part is locked and keeps the item's value (set it through the item's own
-   * props); you add the attributes it does not set. A part takes no `children`.
+   * `root`, `indicator` and `label` slot props): your classes after the part's (yours win a
+   * conflict), your styles over its styles, your handlers before its handlers (`preventDefault()`
+   * in yours skips the item's handling of the event, its own `on…` prop included), your ref
+   * beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every
+   * attribute the item sets on a part is locked and keeps the item's value (set it through the
+   * item's own props); you add the attributes it does not set. A part takes no `children`.
    */
   slotProps?: {
+    /**
+     * The root `<label>` around the radio and the label text (stable class
+     * `wave-radio-group-item`), which the item's `className` reaches as well; its `ref` is the
+     * one way to the label, since the item's `ref` and other props reach the radio. Your
+     * classes come after the item's `className`. Locked: `htmlFor`, unset (the label labels the
+     * radio it holds, and a `for` would send its clicks to another element), `hidden`, `inert`
+     * and `aria-hidden`, unset (the root holds the radio, which only the item's own props hide),
+     * and `role`, `tabIndex` and the roving markers the group reads (`data-roving-container`,
+     * `data-roving-disabled`, `data-roving-value`, `aria-disabled`), unset (the root sits in the
+     * group's arrow order: it is no composite that hides the radio, no item and no second tab
+     * stop). Your `onClick` sees every click inside the root as it bubbles: a click on the
+     * radio after the radio is selected, and a click on the label text first, before the
+     * `<label>` passes it on to the radio, so the text's click reaches your `onClick` twice (the
+     * text's own, then the radio's), as on any `<label>`; `preventDefault()` on the text's click
+     * keeps the label from passing it on (no selection). It is not called while the radio is
+     * disabled (its own `disabled` or the group's), as the radio is not selected then.
+     */
+    root?: SlotPart<'label'>;
     /**
      * The `role="radio"` `<button>` that draws the circle: the element the item's own props
      * and `ref` reach, but for `className` (stable class `wave-radio-group-item__indicator`).
@@ -264,11 +276,14 @@ export interface RadioItemProps extends Omit<
     /**
      * The `<span>` around the `label` text, rendered only with a `label` (stable class
      * `wave-radio-group-item__label`). Its classes come in the order: the element's own, then
-     * `labelClassName`, then this part's `className`. Locked: `id`, which names the radio, and
-     * `aria-label` unset (it would replace the text in the name). `hidden`, `inert` and
-     * `aria-hidden` stay yours: the radio's `aria-labelledby` still reads hidden text. Your
-     * `onClick` is not called while the radio is disabled (its own `disabled` or the group's),
-     * as the radio is not selected then.
+     * `labelClassName`, then this part's `className`. Locked: `id`, which names the radio,
+     * `aria-label` unset (it would replace the text in the name), and `role`, `tabIndex` and the
+     * roving markers the group reads (`data-roving-container`, `data-roving-disabled`,
+     * `data-roving-value`, `aria-disabled`), unset (the text sits in the group's roving
+     * container: it is no item, composite or tab stop; a link inside it keeps its own). `hidden`,
+     * `inert` and `aria-hidden` stay yours: the radio's `aria-labelledby` still reads hidden text.
+     * Your `onClick` is not called while the radio is disabled (its own `disabled` or the
+     * group's), as the radio is not selected then.
      */
     label?: SlotPart<'span'>;
   };
@@ -278,11 +293,11 @@ export interface RadioItemProps extends Omit<
  * One option of a {@link RadioGroup}: a `role="radio"` button inside a `<label>`.
  *
  * Native button props (`id`, `aria-*`, `data-*`, handlers, `style`) and `ref` go to the radio
- * button; `className` stays on the root `<label>` and `labelClassName` styles the label text. A
- * consumer `onClick` runs before the selection; `preventDefault()` in it cancels the selection.
- * Must be rendered inside a RadioGroup (also inside Fragments or wrapper elements). `label` takes
- * rich content (a second line of subtext, a link); `children` are not rendered (a development
- * warning says so).
+ * button; `className` stays on the root `<label>` (which `slotProps.root` and its `ref` reach)
+ * and `labelClassName` styles the label text. A consumer `onClick` runs before the selection;
+ * `preventDefault()` in it cancels the selection. Must be rendered inside a RadioGroup (also
+ * inside Fragments or wrapper elements). `label` takes rich content (a second line of subtext,
+ * a link); `children` are not rendered (a development warning says so).
  */
 export function RadioItem({
   value,
@@ -329,21 +344,21 @@ export function RadioItem({
   // The item's `style` is the part's own style, which a part style is merged over.
   const { style, ...restWithoutStyle } = rest;
   const indicatorProps = mergeSlotProps(slotProps?.indicator, {
-    className: cn(
+    className: wcn(
       radioGroupItemClassNames.indicator,
       // p-0 and bg-transparent are set here, not left to the native reset, which any app button
       // style overrides (C-NATIVE).
-      'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-transparent p-0 transition-colors motion-reduce:transition-none',
+      'wave:flex wave:h-[18px] wave:w-[18px] wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border wave:bg-transparent wave:p-0 wave:transition-colors wave:motion-reduce:transition-none',
       // Centred on the 20px first line of the label text.
-      hasLabel && 'mt-px',
+      hasLabel && 'wave:mt-px',
       focusRing,
-      selected ? 'border-2 border-primary' : 'border-stroke-accessible',
+      selected ? 'wave:border-2 wave:border-primary' : 'wave:border-stroke-accessible',
       // Forced colors: the focusable circle keeps system colors (its focus outline stays
       // forced); only the dot opts out. A disabled radio draws GrayText, never Highlight.
       isDisabled
         ? forcedColors.disabled
         : selected
-          ? 'forced-colors:border-[Highlight]'
+          ? 'wave:forced-colors:border-[Highlight]'
           : forcedColors.control,
     ),
     style,
@@ -371,27 +386,39 @@ export function RadioItem({
     },
   });
   const labelProps = mergeSlotProps(slotProps?.label, {
-    className: cn(radioGroupItemClassNames.label, 'text-body-1 text-foreground', labelClassName),
-    // The text names the control through aria-labelledby: an aria-label would replace it.
-    locked: { id: labelTextId, 'aria-label': undefined },
+    className: wcn(
+      radioGroupItemClassNames.label,
+      'wave:text-body-1 wave:text-foreground',
+      labelClassName,
+    ),
+    // The text names the control through aria-labelledby: an aria-label would replace it. The
+    // text sits in the group's roving container: a part makes it no item, tab stop or composite.
+    locked: { id: labelTextId, 'aria-label': undefined, ...ROVING_PART_LOCKS },
+    blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
+  });
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      radioGroupItemClassNames.root,
+      // items-start: the radio lines up with the first line of a label that wraps or has a
+      // second line, not with its middle.
+      'wave:inline-flex wave:items-start wave:gap-2 wave:select-none',
+      // The dimmed look lifts while a focus ring shows inside the root (a link's in the label; a
+      // disabled radio never takes focus): opacity would dim the ring below 3:1.
+      isDisabled
+        ? 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100'
+        : 'wave:cursor-pointer',
+      className,
+    ),
+    // The root holds the radio: a part neither hides it nor takes it out of reach, nor sends the
+    // label's clicks to another element through a `for`, nor makes it a composite that hides the
+    // radio from the group's arrow order, an item or a second tab stop.
+    locked: { htmlFor: undefined, ...HIDDEN_PART_LOCKS, ...ROVING_PART_LOCKS },
+    // The label passes a click to the radio, which is not selected while disabled.
     blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
   });
 
   return (
-    <label
-      className={cn(
-        radioGroupItemClassNames.root,
-        // items-start: the radio lines up with the first line of a label that wraps or has a
-        // second line, not with its middle.
-        'inline-flex items-start gap-2 select-none',
-        // The dimmed look lifts while a focus ring shows inside the root (a link's in the label; a
-        // disabled radio never takes focus): opacity would dim the ring below 3:1.
-        isDisabled
-          ? 'cursor-not-allowed opacity-50 has-focus-visible:opacity-100'
-          : 'cursor-pointer',
-        className,
-      )}
-    >
+    <label {...rootProps}>
       <button
         // The literal marks C-BUTTON-TYPE; the merged props hold the type (the item's props may
         // replace it, a part cannot).
@@ -402,8 +429,8 @@ export function RadioItem({
         {selected && (
           <span
             aria-hidden="true"
-            className={cn(
-              'block h-2 w-2 rounded-full bg-primary',
+            className={wcn(
+              'wave:block wave:h-2 wave:w-2 wave:rounded-full wave:bg-primary',
               isDisabled ? disabledDot : forcedColors.selectedLeaf,
             )}
           />

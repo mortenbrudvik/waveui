@@ -185,13 +185,13 @@ export const InteractiveCells: Story = {
               <input
                 aria-label={`Notes for ${member.name}`}
                 defaultValue=""
-                className="h-8 w-full rounded border border-input bg-background px-2 text-body-1 text-foreground focus:border-b-2 focus:border-b-primary focus:outline-hidden"
+                className="h-8 w-full rounded border border-wave-input bg-wave-background px-2 text-wave-body-1 text-wave-foreground focus:border-b-2 focus:border-b-wave-primary focus:outline-hidden"
               />
             </DataGrid.Cell>
             <DataGrid.Cell>
               <button
                 type="button"
-                className="rounded border border-stroke bg-background px-3 py-1 text-body-1 text-foreground hover:bg-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="rounded border border-wave-stroke bg-wave-background px-3 py-1 text-wave-body-1 text-wave-foreground hover:bg-wave-subtle-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wave-ring"
               >
                 Edit {member.name}
               </button>
@@ -403,8 +403,8 @@ function SummaryRow({ columnCount }: { columnCount: number }) {
   const { selectedItems } = useDataGridSelection();
   return (
     <tr>
-      <td colSpan={columnCount} className="border-t border-border px-3 py-2">
-        <span className="flex flex-wrap items-center gap-3 text-body-1 text-foreground">
+      <td colSpan={columnCount} className="border-t border-wave-border px-3 py-2">
+        <span className="flex flex-wrap items-center gap-3 text-wave-body-1 text-wave-foreground">
           <span>{selectedItems.length} selected</span>
           <span>{sort ? `Sorted by ${sort.columnId}, ${sort.direction}` : 'Not sorted'}</span>
           {sort && (
@@ -513,13 +513,13 @@ function PagedGrid({ onSelectedItemsChange, ...args }: MemberGridProps) {
         <Button disabledFocusable={page === 0} onClick={() => setPage(page - 1)}>
           Previous page
         </Button>
-        <span className="text-body-1 text-foreground">
+        <span className="text-wave-body-1 text-wave-foreground">
           Page {page + 1} of {pageCount}
         </span>
         <Button disabledFocusable={page === pageCount - 1} onClick={() => setPage(page + 1)}>
           Next page
         </Button>
-        <span role="status" className="text-body-1 text-foreground">
+        <span role="status" className="text-wave-body-1 text-wave-foreground">
           {selected.length} selected
         </span>
       </div>
@@ -588,7 +588,7 @@ function ControlledWidthsGrid({ onColumnWidthsChange, ...args }: MemberGridProps
   return (
     <div className="flex flex-col gap-3">
       <MemberGrid {...args} columnWidths={widths} onColumnWidthsChange={handleColumnWidthsChange} />
-      <p className="text-body-1 text-foreground">
+      <p className="text-wave-body-1 text-wave-foreground">
         Widths:{' '}
         {MEMBER_COLUMNS.map(({ columnId = '' }) => `${columnId} ${widths[columnId]}`).join(', ')}
       </p>
@@ -683,7 +683,7 @@ function MountedRows({ container, total }: { container: HTMLElement | null; tota
     () => 0,
   );
   return (
-    <p className="text-body-1 text-foreground">
+    <p className="text-wave-body-1 text-wave-foreground">
       Mounted rows: {mounted} of {total.toLocaleString('en')}
     </p>
   );

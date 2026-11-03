@@ -1137,7 +1137,7 @@ describe('mergeSlotProps on the server', () => {
     const statements = importStatements(slotPropsSource);
     expect(statements.filter(({ typeOnly }) => !typeOnly).map(({ text }) => text)).toEqual([
       "import { joinIds } from './aria'",
-      "import { cn } from './cn'",
+      "import { wcn } from './cn'",
       "import { composeEventHandlers } from './composeEventHandlers'",
       "import { ID_LIST_KEYS } from './mergeProps'",
       "import { mergeRefs } from './mergeRefs'",

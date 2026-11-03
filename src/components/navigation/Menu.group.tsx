@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { menuGroupClassNames, menuGroupHeaderClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
@@ -95,7 +95,7 @@ export const MenuGroup = ({ children, className, ref, ...rest }: MenuGroupProps)
         {...rest}
         ref={ref}
         aria-labelledby={labelledBy}
-        className={cn(menuGroupClassNames.root, className)}
+        className={wcn(menuGroupClassNames.root, className)}
       >
         {children}
       </div>
@@ -150,9 +150,9 @@ export const MenuGroupHeader = (props: MenuGroupHeaderProps) => {
       {...rest}
       ref={ref}
       id={(scanned ? group.headerId : id) || undefined}
-      className={cn(
+      className={wcn(
         menuGroupHeaderClassNames.root,
-        'flex items-center gap-2 px-3 pb-1 pt-2 text-caption-1 font-semibold text-muted-foreground',
+        'wave:flex wave:items-center wave:gap-2 wave:px-3 wave:pb-1 wave:pt-2 wave:text-caption-1 wave:font-semibold wave:text-muted-foreground',
         className,
       )}
     >

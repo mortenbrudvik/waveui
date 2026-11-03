@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { spinButtonClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { AddIcon, SubtractIcon } from '../../lib/icons';
-import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import { mergeSlotProps, ROVING_PART_LOCKS, type SlotPart } from '../../lib/slotProps';
 import {
   inputAppearanceClasses,
   inputFocusWithin,
@@ -136,22 +136,37 @@ export interface SpinButtonBaseProps
    * appearances have none.
    */
   appearance?: InputAppearance;
-  /** Ref to the root `<div>`. */
-  ref?: React.Ref<HTMLDivElement>;
-  /** Ref to the `<input role="spinbutton">` (the focusable control). */
-  controlRef?: React.Ref<HTMLInputElement>;
   /**
-   * Props for the elements the SpinButton draws inside its root, by part, merged into each
-   * part's own (Fluent UI's `decrementButton`, `input` and `incrementButton` slot props): your
-   * classes after the part's (yours win a conflict), your styles over its styles, your handlers
-   * before its handlers (`preventDefault()` in yours skips the SpinButton's handling of the
-   * event, its own `on…` prop included, but never the work that ends a hold or tracks focus),
-   * your ref beside its ref, and your ids added to its `aria-labelledby` and `aria-describedby`.
-   * Every attribute the SpinButton sets on a part is locked and keeps the SpinButton's value
-   * (set it through its own props); you add the attributes it does not set. A part takes no
-   * `children`.
+   * Ref to the `<input role="spinbutton">`, the focusable control (Fluent UI's `ref`, on its
+   * primary element). The root `<div>` is `slotProps.root.ref`.
+   */
+  ref?: React.Ref<HTMLInputElement>;
+  /**
+   * Props for the elements the SpinButton draws, by part, merged into each part's own (Fluent
+   * UI's `root`, `decrementButton`, `input` and `incrementButton` slot props): your classes after
+   * the part's (yours win a conflict), your styles over its styles, your handlers before its
+   * handlers (`preventDefault()` in yours skips the SpinButton's handling of the event, its own
+   * `on…` prop included, but never the work that ends a hold or tracks focus), your ref beside
+   * its ref, and your ids added to its `aria-labelledby` and `aria-describedby`. Every attribute
+   * the SpinButton sets on a part is locked and keeps the SpinButton's value (set it through its
+   * own props); you add the attributes it does not set. A part takes no `children`.
    */
   slotProps?: {
+    /**
+     * The root `<div>` that draws the field around the step buttons and the input (stable class
+     * `wave-spin-button`), which the SpinButton's `className`, `style`, `data-*` and other root
+     * props reach as well; its `ref` is the way to the root, since the SpinButton's `ref` reaches
+     * the input. Your classes come after the SpinButton's `className`, your style over its `style`.
+     * Locked: every prop you give the SpinButton itself that reaches the root, `data-size`,
+     * `data-appearance`, and `hidden`, `inert` and `aria-hidden` (the SpinButton's own: the root
+     * holds the input). Also locked, unset: `role`, `tabIndex` and the roving markers
+     * (`data-roving-container`, `data-roving-disabled`, `data-roving-value`, `aria-disabled`), so
+     * in a toolbar or another roving container the root is never a control of its own and never
+     * hides the control from the arrow order. Your handlers run before the SpinButton's own root
+     * handlers (`preventDefault()` in yours skips them). The root passes no click to the input, so
+     * your `onClick` is called in every state, as the SpinButton's own `onClick` is.
+     */
+    root?: SlotPart<'div'>;
     /**
      * The − `<button>` (stable class `wave-spin-button__decrement-button`). Locked: `type`,
      * `tabIndex` (never a tab stop), `disabled` and `aria-label` (`labels.decrement`). Your
@@ -162,16 +177,16 @@ export interface SpinButtonBaseProps
     decrementButton?: SlotPart<'button'>;
     /**
      * The `<input role="spinbutton">`, the focusable control (stable class
-     * `wave-spin-button__input`; `controlRef` reaches it as well). Locked: `type`, `role`,
-     * `value` (and, unset, `defaultValue`: the SpinButton controls the text), `disabled`,
+     * `wave-spin-button__input`; the SpinButton's `ref` reaches it as well). Locked: `type`,
+     * `role`, `value` (and, unset, `defaultValue`: the SpinButton controls the text), `disabled`,
      * `readOnly`, `form`, the `aria-value*` attributes, `id`, the naming and Field attributes and
      * every other input prop routed to it (`placeholder`, `tabIndex`, `inputMode`, …), `name`
      * (the form submits the committed value under the SpinButton's own `name`, on its hidden
      * input, never the shown text), `hidden`, `inert` and `aria-hidden` (a focusable control is
      * never hidden). Your handlers run before the SpinButton's and `preventDefault()` in them
-     * skips its handling, its own `onChange`, `onKeyDown`, `onFocus` and `onBlur` props included
-     * (a typed character or a step key is ignored); its focus and blur work (the shown text,
-     * committing typed text) runs after them, also when they prevent the default.
+     * skips its handling, its own `onKeyDown`, `onFocus` and `onBlur` props included (a typed
+     * character or a step key is ignored); its focus and blur work (the shown text, committing
+     * typed text) runs after them, also when they prevent the default.
      */
     input?: SlotPart<'input'>;
     /**
@@ -202,11 +217,6 @@ export interface SpinButtonProps extends SpinButtonBaseProps {
    * nor when the value stays the same.
    */
   onValueChange?: (value: number) => void;
-  /**
-   * Called with the new value when it changes.
-   * @deprecated Use `onValueChange`. (`onChange` is reserved for native change events.)
-   */
-  onChange?: (value: number) => void;
 }
 
 /** SpinButton props with `allowEmpty`: the value may be `null` (an empty field). */
@@ -221,8 +231,6 @@ export interface SpinButtonAllowEmptyProps extends SpinButtonBaseProps {
   defaultValue?: number | null;
   /** Called with the new value when it changes, `null` when the field is emptied. */
   onValueChange?: (value: number | null) => void;
-  /** Not available with `allowEmpty` (the deprecated alias of `onValueChange`). */
-  onChange?: never;
 }
 
 /** Decimal numbers as a user types them: `12`, `-3`, `1.5`, `.5`, `2.`, `1e3`. */
@@ -282,19 +290,19 @@ function startSpin(step: () => boolean): () => void {
 
 /** Per-size widths of the step buttons and the input's flex basis, and the glyph size. */
 const SPIN_SIZE: Readonly<Record<CoreSize, { button: string; input: string; glyph: number }>> = {
-  small: { button: 'w-6', input: 'w-10', glyph: 12 },
-  medium: { button: 'w-8', input: 'w-12', glyph: 12 },
-  large: { button: 'w-10', input: 'w-14', glyph: 16 },
+  small: { button: 'wave:w-6', input: 'wave:w-10', glyph: 12 },
+  medium: { button: 'wave:w-8', input: 'wave:w-12', glyph: 12 },
+  large: { button: 'wave:w-10', input: 'wave:w-14', glyph: 16 },
 };
 
-const stepButtonClass = cn(
+const stepButtonClass = wcn(
   // Padding and background set here (C-NATIVE): an app-wide `button` rule cannot fill them. The
   // size and, in `outline`, the separator are added per render (SPIN_SIZE, D13).
-  'flex h-full shrink-0 items-center justify-center bg-transparent p-0 text-foreground',
-  'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-  'disabled:pointer-events-none',
+  'wave:flex wave:h-full wave:shrink-0 wave:items-center wave:justify-center wave:bg-transparent wave:p-0 wave:text-foreground',
+  'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+  'wave:disabled:pointer-events-none',
   // A finger holding a button (D18): no double-tap zoom, text selection or iOS callout.
-  'touch-manipulation select-none [-webkit-touch-callout:none]',
+  'wave:touch-manipulation wave:select-none wave:[-webkit-touch-callout:none]',
 );
 
 /**
@@ -321,9 +329,9 @@ const stepButtonClass = cn(
  *   when that number is at `min`/`max`. Steps are rounded to the precision of `step` and of the
  *   value, so `0.1 + 0.2` is `0.3`; `precision` rounds every committed value, typed or stepped,
  *   to a fixed number of decimals instead, without padding it (pad with `displayValue`).
- * - **Routing**: `id`, ARIA, native input attributes and focus/keyboard handlers go to the
- *   `<input role="spinbutton">`; `className`, `style`, `data-*`, other handlers and `ref` stay on
- *   the root (`controlRef` reaches the input). Inside a `Field` it picks up the label, hint, error
+ * - **Routing**: `ref`, `id`, ARIA, native input attributes and focus/keyboard handlers go to the
+ *   `<input role="spinbutton">`; `className`, `style`, `data-*` and other handlers stay on the
+ *   root (`slotProps.root.ref` reaches it). Inside a `Field` it picks up the label, hint, error
  *   and required state automatically. It has no built-in name: pass `aria-label`/`aria-labelledby`
  *   or use a label (development warning otherwise).
  * - **Forms**: with `name` the committed value is submitted; `required` makes the input natively
@@ -358,14 +366,12 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     value: valueProp,
     defaultValue,
     onValueChange,
-    onChange,
     ...baseProps
   } = props as SpinButtonBaseProps & {
     allowEmpty?: boolean;
     value?: number | null;
     defaultValue?: number | null;
     onValueChange?: (value: number | null) => void;
-    onChange?: (value: number) => void;
   };
   const {
     min = -Infinity,
@@ -381,9 +387,9 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     size: sizeProp,
     appearance: appearanceProp,
     className,
+    style,
     hidden,
     ref,
-    controlRef,
     slotProps,
     // Routed to the input (C-ROUTING)
     id,
@@ -412,15 +418,11 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     ...rest
   } = baseProps;
 
-  if (onChange !== undefined) warnDeprecated('SpinButton', 'onChange', 'onValueChange');
   const initialValue = defaultValue !== undefined ? defaultValue : allowEmpty ? null : 0;
   const [value, setValue, isControlled] = useControllable<number | null>(
     valueProp,
     initialValue,
-    (next) => {
-      onValueChange?.(next);
-      if (next !== null) onChange?.(next);
-    },
+    onValueChange,
   );
 
   // The text is a draft while the user types (null = show the value).
@@ -605,7 +607,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
   };
 
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const mergedInputRef = useMergedRefs(inputRef, controlRef, slotProps?.input?.ref);
+  const mergedInputRef = useMergedRefs(inputRef, ref, slotProps?.input?.ref);
 
   const field = useFieldContext();
   const isRequired = required ?? field?.required ?? false;
@@ -778,9 +780,9 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     };
   };
   const inputProps = mergeSlotProps(slotProps?.input, {
-    className: cn(
+    className: wcn(
       spinButtonClassNames.input,
-      'h-full min-w-0 flex-auto border-none bg-transparent text-center text-foreground focus:outline-hidden disabled:cursor-not-allowed [appearance:textfield]',
+      'wave:h-full wave:min-w-0 wave:flex-auto wave:border-none wave:bg-transparent wave:text-center wave:text-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed wave:[appearance:textfield]',
       SPIN_SIZE[size].input,
       inputTextClasses[size],
     ),
@@ -831,25 +833,36 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
     },
   });
 
+  const rootProps = mergeSlotProps(slotProps?.root, {
+    className: wcn(
+      spinButtonClassNames.root,
+      'wave:relative wave:inline-flex wave:items-center',
+      inputHeightClasses[size],
+      inputTextClasses[size],
+      inputAppearanceClasses[appearance],
+      inputFocusWithin,
+      invalidLook && inputInvalidWithin,
+      disabled && 'wave:cursor-not-allowed wave:opacity-50',
+      className,
+    ),
+    style,
+    locked: {
+      'data-size': size,
+      'data-appearance': appearance,
+      // In a toolbar or another roving container the root holds a control of its arrow order: a
+      // part makes it no composite that hides the control, no item and no second tab stop.
+      ...ROVING_PART_LOCKS,
+      // The SpinButton's own root props, after the data attributes as in 0.18, and over the
+      // part's; the root holds the input, so only they hide it or take it out of reach.
+      ...rest,
+      hidden,
+      inert: rest.inert,
+      'aria-hidden': rest['aria-hidden'],
+    },
+  });
+
   return (
-    <div
-      ref={ref}
-      data-size={size}
-      data-appearance={appearance}
-      className={cn(
-        spinButtonClassNames.root,
-        'relative inline-flex items-center',
-        inputHeightClasses[size],
-        inputTextClasses[size],
-        inputAppearanceClasses[appearance],
-        inputFocusWithin,
-        invalidLook && inputInvalidWithin,
-        disabled && 'cursor-not-allowed opacity-50',
-        className,
-      )}
-      hidden={hidden}
-      {...rest}
-    >
+    <div {...rootProps}>
       <button
         // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
         type="button"
@@ -858,14 +871,14 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
           -1,
           !interactive || (current !== null && current <= min),
           labels?.decrement ?? 'Decrement',
-          cn(
+          wcn(
             spinButtonClassNames.decrementButton,
             stepButtonClass,
             SPIN_SIZE[size].button,
-            appearance === 'outline' && 'border-e border-input',
+            appearance === 'outline' && 'wave:border-e wave:border-input',
             appearance === 'filled-darker' &&
-              'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
-            !disabled && 'disabled:opacity-50',
+              'wave:not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+            !disabled && 'wave:disabled:opacity-50',
           ),
         )}
       >
@@ -896,14 +909,14 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
           1,
           !interactive || (current !== null && current >= max),
           labels?.increment ?? 'Increment',
-          cn(
+          wcn(
             spinButtonClassNames.incrementButton,
             stepButtonClass,
             SPIN_SIZE[size].button,
-            appearance === 'outline' && 'border-s border-input',
+            appearance === 'outline' && 'wave:border-s wave:border-input',
             appearance === 'filled-darker' &&
-              'not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
-            !disabled && 'disabled:opacity-50',
+              'wave:not-disabled:not-aria-disabled:hover:bg-subtle-pressed',
+            !disabled && 'wave:disabled:opacity-50',
           ),
         )}
       >

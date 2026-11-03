@@ -152,7 +152,7 @@ describe('MenuButton', () => {
         </MenuButton>,
       );
       const wrapper = screen.getByTestId('slot-menu-icon').parentElement;
-      expect(wrapper).toHaveClass('custom', 'shrink-0');
+      expect(wrapper).toHaveClass('custom', 'wave:shrink-0');
       expect(wrapper).toHaveAttribute('aria-hidden', 'true');
       expect(screen.getByRole('button', { name: 'Actions' }).querySelector('svg')).toBeNull();
     });
@@ -282,7 +282,7 @@ describe('MenuButton', () => {
       render(<MenuButton icon={<GearIcon />}>Options</MenuButton>);
       const icon = screen.getByTestId('gear-icon');
       expect(icon.parentElement).toHaveAttribute('aria-hidden', 'true');
-      expect(icon.parentElement).toHaveClass('inline-flex', 'shrink-0');
+      expect(icon.parentElement).toHaveClass('wave:inline-flex', 'wave:shrink-0');
     });
 
     it('renders icon as SlotObject', () => {
@@ -293,7 +293,7 @@ describe('MenuButton', () => {
           Options
         </MenuButton>,
       );
-      expect(screen.getByTestId('slot-icon').parentElement).toHaveClass('custom', 'shrink-0');
+      expect(screen.getByTestId('slot-icon').parentElement).toHaveClass('custom', 'wave:shrink-0');
     });
 
     it('keeps icon text and emoji out of the accessible name', () => {
@@ -359,7 +359,7 @@ describe('MenuButton', () => {
         yield <b key="actions">actions</b>;
       }
       render(<MenuButton icon={<GearIcon />}>{label()}</MenuButton>);
-      expect(screen.getByRole('button', { name: 'More actions' })).toHaveClass('gap-1.5');
+      expect(screen.getByRole('button', { name: 'More actions' })).toHaveClass('wave:gap-1.5');
       expect(warn).not.toHaveBeenCalled();
       expect(error).not.toHaveBeenCalled();
     });
@@ -540,7 +540,7 @@ describe('MenuButton', () => {
       const button = screen.getByRole('button', { name: 'Actions' });
       const expected = [
         ...buttonClassName({ appearance }).split(/\s+/),
-        'gap-1.5',
+        'wave:gap-1.5',
         buttonClassNames.root,
         menuButtonClassNames.root,
       ].sort();
@@ -550,10 +550,10 @@ describe('MenuButton', () => {
     it('primary uses the primary tokens with gated hover and pressed colors', () => {
       render(<MenuButton appearance="primary">Actions</MenuButton>);
       expect(screen.getByRole('button', { name: 'Actions' })).toHaveClass(
-        'bg-primary',
-        'text-primary-foreground',
-        'not-disabled:not-aria-disabled:hover:bg-primary-hover',
-        'not-disabled:not-aria-disabled:active:bg-primary-pressed',
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+        'wave:not-disabled:not-aria-disabled:hover:bg-primary-hover',
+        'wave:not-disabled:not-aria-disabled:active:bg-primary-pressed',
       );
     });
 
@@ -570,20 +570,20 @@ describe('MenuButton', () => {
           <MenuButton size="extra-large">Extra large</MenuButton>
         </>,
       );
-      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('text-body-2');
+      expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('wave:text-body-2');
       const xl = screen.getByRole('button', { name: 'Extra large' });
-      expect(xl).toHaveClass('text-[18px]/[24px]');
-      expect(xl).not.toHaveClass('text-sm');
+      expect(xl).toHaveClass('wave:text-[18px]/[24px]');
+      expect(xl).not.toHaveClass('wave:text-sm');
     });
 
     describe('without a label', () => {
       /** The padding of a menu button without a label: that of SplitButton's menu half. */
       const compactPadding: Record<Size, string> = {
-        'extra-small': 'px-1.5',
-        small: 'px-1.5',
-        medium: 'px-2',
-        large: 'px-2',
-        'extra-large': 'px-3',
+        'extra-small': 'wave:px-1.5',
+        small: 'wave:px-1.5',
+        medium: 'wave:px-2',
+        large: 'wave:px-2',
+        'extra-large': 'wave:px-3',
       };
       /** The labelled size classes Button would use (height, 96px minimum width, padding, font). */
       const labelled = (size: Size) => buttonSizeClasses[size].split(' ');
@@ -595,10 +595,10 @@ describe('MenuButton', () => {
           render(<MenuButton size={size} icon={<GearIcon />} aria-label="Settings" />);
           const button = screen.getByRole('button', { name: 'Settings' });
           const [height, minWidth, , font] = labelled(size);
-          expect(button).toHaveClass(height, font, 'min-w-0');
+          expect(button).toHaveClass(height, font, 'wave:min-w-0');
           expect(button).not.toHaveClass(minWidth);
           // The compact padding replaces the labelled one (no second `px-*` class is left).
-          const padding = Array.from(button.classList).filter((cls) => cls.startsWith('px-'));
+          const padding = Array.from(button.classList).filter((cls) => cls.startsWith('wave:px-'));
           expect(padding).toEqual([compactPadding[size]]);
           expect(button.querySelector('[data-wave-icon]')).toHaveAttribute(
             'data-wave-icon',
@@ -610,18 +610,18 @@ describe('MenuButton', () => {
       it.each(SIZES)('a chevron-only %s menu button is sized the same way', (size) => {
         render(<MenuButton size={size} aria-label="More actions" />);
         const button = screen.getByRole('button', { name: 'More actions' });
-        expect(button).toHaveClass('min-w-0');
-        expect(button).not.toHaveClass('min-w-24');
-        const padding = Array.from(button.classList).filter((cls) => cls.startsWith('px-'));
+        expect(button).toHaveClass('wave:min-w-0');
+        expect(button).not.toHaveClass('wave:min-w-24');
+        const padding = Array.from(button.classList).filter((cls) => cls.startsWith('wave:px-'));
         expect(padding).toEqual([compactPadding[size]]);
       });
 
       it('menuIcon={false} leaves an icon-only menu button to Button: square, no padding', () => {
         render(<MenuButton icon={<GearIcon />} menuIcon={false} aria-label="Settings" />);
         const button = screen.getByRole('button', { name: 'Settings' });
-        expect(button).toHaveClass('h-8', 'w-8', 'px-0');
-        expect(button).not.toHaveClass('min-w-24');
-        expect(button).not.toHaveClass('min-w-0');
+        expect(button).toHaveClass('wave:h-8', 'wave:w-8', 'wave:px-0');
+        expect(button).not.toHaveClass('wave:min-w-24');
+        expect(button).not.toHaveClass('wave:min-w-0');
       });
 
       it('a labelled menu button keeps the labelled sizing', () => {
@@ -632,8 +632,8 @@ describe('MenuButton', () => {
       it('a consumer className still wins over the compact padding', () => {
         render(<MenuButton icon={<GearIcon />} aria-label="Settings" className="px-4" />);
         const button = screen.getByRole('button', { name: 'Settings' });
-        expect(button).toHaveClass('px-4', 'min-w-0');
-        expect(button).not.toHaveClass('px-2');
+        expect(button).toHaveClass('px-4', 'wave:min-w-0');
+        expect(button).not.toHaveClass('wave:px-2');
       });
     });
 
@@ -652,7 +652,7 @@ describe('MenuButton', () => {
       expect(button).toHaveAttribute('data-disabled', '');
       expect(button).toHaveAttribute('data-disabled-focusable', '');
       expect(button).toHaveAttribute('aria-haspopup', 'menu');
-      expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(button).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
 
       await user.tab();
       expect(button).toHaveFocus();
@@ -676,7 +676,7 @@ describe('MenuButton', () => {
       );
       const button = screen.getByRole('button', { name: 'Actions' });
       expect(button).toBeDisabled();
-      expect(button).toHaveClass('opacity-50', 'cursor-not-allowed');
+      expect(button).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
       await user.click(button);
       expect(onClick).not.toHaveBeenCalled();
     });

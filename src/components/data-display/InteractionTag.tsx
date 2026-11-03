@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   interactionTagClassNames,
   interactionTagPrimaryClassNames,
@@ -331,7 +331,7 @@ function isKeyOf<K extends string>(
 
 /** The classes of a button's disabled states: dimmed, unless the host dims the tags itself. */
 function disabledClasses(disabled: boolean, dimDisabled: boolean): string {
-  return cn(
+  return wcn(
     dimDisabled
       ? [INTERACTION_TAG_DISABLED_CLASSES, mergedAriaDisabledClasses]
       : INTERACTION_TAG_UNDIMMED_DISABLED_CLASSES,
@@ -469,9 +469,9 @@ const InteractionTagRoot = ({
         hidden={hiddenByHost || hidden}
         {...rest}
         ref={mergedRef}
-        className={cn(
+        className={wcn(
           interactionTagClassNames.root,
-          'group/interaction-tag inline-flex items-stretch',
+          'wave:group/interaction-tag wave:inline-flex wave:items-stretch',
           className,
         )}
       >
@@ -557,12 +557,12 @@ export const InteractionTagPrimary = ({
   const secondaryTextPart = slotProps?.secondaryText;
   const textBlock = disabled ? BLOCK_CLICK : undefined;
   const primaryTextId = tag.primaryTextId || undefined;
-  const primaryTextClassName = cn(
+  const primaryTextClassName = wcn(
     interactionTagPrimaryClassNames.primaryText,
     hasSecondary && TAG_PRIMARY_TEXT_TWO_LINE_CLASSES,
   );
   const secondaryTextClassName = hasSecondary
-    ? cn(interactionTagPrimaryClassNames.secondaryText, TAG_SECONDARY_TEXT_CLASSES)
+    ? wcn(interactionTagPrimaryClassNames.secondaryText, TAG_SECONDARY_TEXT_CLASSES)
     : undefined;
   const primaryText = (
     <span
@@ -594,7 +594,7 @@ export const InteractionTagPrimary = ({
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       onFocus={composeEventHandlers(onFocus, hold.onFocus, { checkDefaultPrevented: false })}
       onBlur={composeEventHandlers(onBlur, hold.onBlur, { checkDefaultPrevented: false })}
-      className={cn(
+      className={wcn(
         interactionTagPrimaryClassNames.root,
         INTERACTION_TAG_BUTTON_BASE_CLASSES,
         INTERACTION_TAG_PRIMARY_BASE_CLASSES,
@@ -620,13 +620,13 @@ export const InteractionTagPrimary = ({
           {renderSlot(
             media,
             'span',
-            cn(interactionTagPrimaryClassNames.media, tagMediaClasses[size]),
+            wcn(interactionTagPrimaryClassNames.media, tagMediaClasses[size]),
             { 'aria-hidden': true },
           )}
         </AvatarSizeContext.Provider>
       )}
       {hasIcon &&
-        renderSlot(icon, 'span', cn(interactionTagPrimaryClassNames.icon, tagIconClasses[size]), {
+        renderSlot(icon, 'span', wcn(interactionTagPrimaryClassNames.icon, tagIconClasses[size]), {
           'aria-hidden': true,
         })}
       {hasSecondary ? (
@@ -766,9 +766,9 @@ export const InteractionTagSecondary = ({
   const part = slotProps?.dismissIcon as SlotPart<'span'> | undefined;
   const glyphBlock = disabled ? BLOCK_CLICK : undefined;
   const contentClassName = hasContent
-    ? cn(
+    ? wcn(
         interactionTagSecondaryClassNames.dismissIcon,
-        'inline-flex items-center justify-center',
+        'wave:inline-flex wave:items-center wave:justify-center',
         // A text label keeps clear of the divider and the tag's end; a glyph needs no room.
         hasLabel && INTERACTION_TAG_SECONDARY_LABEL_CLASSES,
       )
@@ -788,7 +788,7 @@ export const InteractionTagSecondary = ({
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       onFocus={composeEventHandlers(onFocus, hold.onFocus, { checkDefaultPrevented: false })}
       onBlur={composeEventHandlers(onBlur, hold.onBlur, { checkDefaultPrevented: false })}
-      className={cn(
+      className={wcn(
         interactionTagSecondaryClassNames.root,
         INTERACTION_TAG_BUTTON_BASE_CLASSES,
         INTERACTION_TAG_SECONDARY_BASE_CLASSES,
@@ -807,7 +807,7 @@ export const InteractionTagSecondary = ({
       )}
     >
       {!namedByConsumer && (
-        <span id={dismissLabelId} className="sr-only">
+        <span id={dismissLabelId} className="wave:sr-only">
           {dismissLabel}
         </span>
       )}

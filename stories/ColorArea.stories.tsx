@@ -37,7 +37,7 @@ export const Controlled: Story = {
           }}
         />
         <ColorSlider value={color} onValueChange={setColor} />
-        <p className="text-body-1 text-foreground">{hsvToHex(color)}</p>
+        <p className="text-wave-body-1 text-wave-foreground">{hsvToHex(color)}</p>
       </div>
     );
   },

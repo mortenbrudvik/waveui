@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { dividerClassNames } from '../../lib/classNames';
 import { joinIds } from '../../lib/aria';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
@@ -70,7 +70,7 @@ type DividerImplProps = DividerOwnProps &
     as?: React.ElementType;
   };
 
-const labelClassName = 'shrink-0 text-caption-1 text-muted-foreground';
+const labelClassName = 'wave:shrink-0 wave:text-caption-1 wave:text-muted-foreground';
 
 /**
  * A line that separates content, horizontally or vertically, optionally with a label in the middle.
@@ -109,16 +109,16 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
     const Wrapper: React.ElementType = as ?? 'div';
     // A consumer aria-label names the separator; aria-labelledby would take precedence over it.
     const labelledBy = rest['aria-label'] ? ariaLabelledBy : joinIds(ariaLabelledBy, labelId);
-    const lineClassName = cn(
+    const lineClassName = wcn(
       dividerClassNames.line,
       vertical
-        ? 'w-0 min-h-2 flex-1 border-s border-border'
-        : 'h-0 min-w-2 flex-1 border-t border-border',
+        ? 'wave:w-0 wave:min-h-2 wave:flex-1 wave:border-s wave:border-border'
+        : 'wave:h-0 wave:min-w-2 wave:flex-1 wave:border-t wave:border-border',
     );
     const lineProps =
       slotProps?.line &&
       mergeSlotProps(slotProps.line, { className: lineClassName, locked: LINE_PART_LOCKS });
-    const labelClasses = cn(dividerClassNames.label, labelClassName);
+    const labelClasses = wcn(dividerClassNames.label, labelClassName);
     // The label's props are the slot's defaults, its class the slot's base: a part's merged in,
     // after the id (which keeps its place in the markup).
     const labelProps = slotProps?.label
@@ -135,11 +135,11 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         ref={ref}
         role="separator"
         aria-orientation={vertical ? 'vertical' : undefined}
-        className={cn(
+        className={wcn(
           dividerClassNames.root,
           vertical
-            ? 'inline-flex min-h-12 flex-col items-center gap-1 self-stretch'
-            : 'flex items-center gap-3',
+            ? 'wave:inline-flex wave:min-h-12 wave:flex-col wave:items-center wave:gap-1 wave:self-stretch'
+            : 'wave:flex wave:items-center wave:gap-3',
           className,
         )}
         {...rest}
@@ -162,7 +162,11 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         role="separator"
         aria-orientation="vertical"
         aria-labelledby={ariaLabelledBy}
-        className={cn(dividerClassNames.root, 'inline-block h-6 border-s border-border', className)}
+        className={wcn(
+          dividerClassNames.root,
+          'wave:inline-block wave:h-6 wave:border-s wave:border-border',
+          className,
+        )}
         {...rest}
       />
     );
@@ -174,9 +178,9 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
       ref={ref}
       role="separator"
       aria-labelledby={ariaLabelledBy}
-      className={cn(
+      className={wcn(
         dividerClassNames.root,
-        'm-0 h-0 w-full border-0 border-t border-solid border-border',
+        'wave:m-0 wave:h-0 wave:w-full wave:border-0 wave:border-t wave:border-solid wave:border-border',
         className,
       )}
       {...rest}

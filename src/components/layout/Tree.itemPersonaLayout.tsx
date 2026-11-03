@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { treeItemPersonaLayoutClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useId } from '../../hooks/useId';
@@ -83,22 +83,22 @@ export const TreeItemPersonaLayout = ({
 
   // The parts are merged only when given: a tree renders many items.
   const mediaClasses = hasMedia
-    ? cn(treeItemPersonaLayoutClassNames.media, 'inline-flex shrink-0')
+    ? wcn(treeItemPersonaLayoutClassNames.media, 'wave:inline-flex wave:shrink-0')
     : undefined;
-  const mainClasses = cn(treeItemPersonaLayoutClassNames.main, 'truncate');
+  const mainClasses = wcn(treeItemPersonaLayoutClassNames.main, 'wave:truncate');
   const descriptionClasses = hasDescription
-    ? cn(
+    ? wcn(
         treeItemPersonaLayoutClassNames.description,
-        'truncate text-caption-1 text-muted-foreground',
+        'wave:truncate wave:text-caption-1 wave:text-muted-foreground',
       )
     : undefined;
 
   return (
     <span
       ref={ref}
-      className={cn(
+      className={wcn(
         treeItemPersonaLayoutClassNames.root,
-        'flex min-w-0 items-center gap-2',
+        'wave:flex wave:min-w-0 wave:items-center wave:gap-2',
         className,
       )}
       {...rest}
@@ -112,7 +112,7 @@ export const TreeItemPersonaLayout = ({
           {materialiseSlotContent(media)}
         </span>
       )}
-      <span className="flex min-w-0 flex-col">
+      <span className="wave:flex wave:min-w-0 wave:flex-col">
         <span
           id={nameId}
           data-tree-persona-name=""

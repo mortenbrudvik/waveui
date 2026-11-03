@@ -449,12 +449,12 @@ describe('FlatTree virtualWindow', () => {
       unmount();
       render(<SmallTree items={[{ value: 'a', label: 'A' }]} windowed={false} />);
       expect(treeRoot()).not.toHaveAttribute('tabindex');
-      expect(treeRoot()).not.toHaveClass('[overflow-anchor:none]');
+      expect(treeRoot()).not.toHaveClass('wave:[overflow-anchor:none]');
     });
 
     it('turns the browser’s scroll anchoring off while windowed (the window lays the items out)', () => {
       render(<WindowedTree />);
-      expect(treeRoot()).toHaveClass('[overflow-anchor:none]');
+      expect(treeRoot()).toHaveClass('wave:[overflow-anchor:none]');
     });
   });
 

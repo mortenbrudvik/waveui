@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hamburgerClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -152,7 +152,7 @@ export const Hamburger = ({
         hamburgerClassNames.icon,
       )}
       onClick={composeEventHandlers(onClick, toggle)}
-      className={cn(hamburgerClassNames.root, className)}
+      className={wcn(hamburgerClassNames.root, className)}
     >
       {label}
     </Button>

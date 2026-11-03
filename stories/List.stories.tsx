@@ -21,7 +21,7 @@ function SelectionDemo(props: ListProps) {
   const [selected, setSelected] = React.useState<readonly string[]>(defaultSelectedItems ?? []);
   return (
     <div>
-      <p className="mb-2 text-body-1">Selected: {selected.join(', ') || 'none'}</p>
+      <p className="mb-2 text-wave-body-1">Selected: {selected.join(', ') || 'none'}</p>
       <List
         {...rest}
         selectedItems={selected}
@@ -53,7 +53,7 @@ export const WithActions: Story = {
         <List.Item
           key={name}
           action={
-            <Button appearance="subtle" size="small" className="text-error">
+            <Button appearance="subtle" size="small" className="text-wave-error">
               Delete {name}
             </Button>
           }
@@ -116,7 +116,7 @@ export const SelectableWithActions: Story = {
           key={name}
           value={name}
           action={
-            <Button appearance="subtle" size="small" className="text-error">
+            <Button appearance="subtle" size="small" className="text-wave-error">
               Delete {name}
             </Button>
           }
@@ -142,7 +142,7 @@ export const NavigationModes: Story = {
     <div className="flex flex-col gap-6">
       {(['none', 'items', 'composite'] as const).map((mode) => (
         <div key={mode}>
-          <p className="mb-2 text-body-1 font-semibold">{`navigationMode="${mode}"`}</p>
+          <p className="mb-2 text-wave-body-1 font-semibold">{`navigationMode="${mode}"`}</p>
           <List {...args} navigationMode={mode} aria-label={`Documents, ${mode} navigation`}>
             {['Document A', 'Document B', 'Document C'].map((name) => (
               <List.Item
@@ -177,7 +177,7 @@ export const OnAction: Story = {
     const [last, setLast] = React.useState<string | null>(null);
     return (
       <div>
-        <p className="mb-2 text-body-1">Opened: {last ?? 'nothing yet'}</p>
+        <p className="mb-2 text-wave-body-1">Opened: {last ?? 'nothing yet'}</p>
         <List {...args} navigationMode={navigationMode}>
           {['Budget.xlsx', 'Roadmap.pptx', 'Notes.docx'].map((name) => (
             <List.Item
@@ -234,7 +234,7 @@ function WindowedDemo(props: ListProps) {
   const shown = selected.slice(0, 5).join(', ');
   return (
     <div>
-      <p className="mb-2 text-body-1">
+      <p className="mb-2 text-wave-body-1">
         {`Selected: ${selected.length} of ${FILE_COUNT.toLocaleString('en-US')}`}
         {selected.length > 0 && ` (${shown}${selected.length > 5 ? ', …' : ''})`}
       </p>

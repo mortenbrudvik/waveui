@@ -4,6 +4,8 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Checkbox } from '../Checkbox';
+import { Button } from '../../button/Button';
+import { Toolbar } from '../../button/Toolbar';
 import type { CheckboxLabelPosition, CheckboxProps } from '../Checkbox';
 import { checkboxClassNames } from '../../../lib/classNames';
 import {
@@ -14,6 +16,8 @@ import {
   testSystemProps,
   testComposedHandler,
   testNoImplicitSubmit,
+  testRootPartRef,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -24,7 +28,8 @@ describe('Checkbox', () => {
   testSystemProps(Checkbox, {
     expectedTag: 'label',
     displayName: 'Checkbox',
-    control: { role: 'checkbox' },
+    ref: 'control',
+    control: { role: 'checkbox', tag: 'button' },
     defaultProps: { label: 'Accept' },
     a11yVariants: [
       { name: 'checked', props: { defaultChecked: true } },
@@ -34,6 +39,8 @@ describe('Checkbox', () => {
       { name: 'label before', props: { labelPosition: 'before' } },
     ],
   });
+
+  testRootPartRef(Checkbox, { props: { label: 'Accept' } });
 
   testNoImplicitSubmit(Checkbox, { defaultProps: { label: 'Accept' } });
 
@@ -121,25 +128,24 @@ describe('Checkbox', () => {
     expect(onCheckedChange).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
+  it('has no onChange alias of onCheckedChange: the 0.4 name is removed in 1.0', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
       const onCheckedChange = vi.fn();
-      const { rerender } = render(
-        <Checkbox label="Accept" onChange={onChange} onCheckedChange={onCheckedChange} />,
+      render(
+        <Checkbox
+          label="Accept"
+          // @ts-expect-error -- `onChange(checked)` is removed in 1.0: use `onCheckedChange`
+          onChange={onChange}
+          onCheckedChange={onCheckedChange}
+        />,
       );
-      rerender(<Checkbox label="Accept" onChange={onChange} onCheckedChange={onCheckedChange} />);
       await user.click(screen.getByRole('checkbox', { name: 'Accept' }));
-      expect(onChange).toHaveBeenCalledWith(true);
-      expect(onCheckedChange).toHaveBeenCalledWith(true);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Checkbox: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onCheckedChange` instead.',
-        ],
-      ]);
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -252,12 +258,12 @@ describe('Checkbox — props reach the checkbox control (C-ROUTING)', () => {
     }
   });
 
-  it('keeps ref on the label and exposes the button through controlRef', () => {
-    const ref = React.createRef<HTMLLabelElement>();
-    const controlRef = React.createRef<HTMLButtonElement>();
-    render(<Checkbox ref={ref} controlRef={controlRef} label="Accept" />);
-    expect(ref.current?.tagName).toBe('LABEL');
-    expect(controlRef.current).toBe(screen.getByRole('checkbox', { name: 'Accept' }));
+  it('gives ref the button and slotProps.root.ref the label', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const root = React.createRef<HTMLLabelElement>();
+    render(<Checkbox ref={ref} slotProps={{ root: { ref: root } }} label="Accept" />);
+    expect(root.current?.tagName).toBe('LABEL');
+    expect(ref.current).toBe(screen.getByRole('checkbox', { name: 'Accept' }));
   });
 
   it('routes focus and keyboard handlers to the button', async () => {
@@ -299,6 +305,120 @@ describe('Checkbox — props reach the checkbox control (C-ROUTING)', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(currentTargets).toEqual([screen.getByRole('checkbox')]);
     expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the role="checkbox" button, the focusable control; the root
+// <label> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('Checkbox — ref reaches the control', () => {
+  it('focuses the checkbox through ref', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    render(<Checkbox ref={ref} label="Accept" />);
+    act(() => ref.current?.focus());
+    expect(screen.getByRole('checkbox', { name: 'Accept' })).toHaveFocus();
+  });
+
+  it('gives ref and slotProps.indicator.ref the same button', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const indicator = React.createRef<HTMLButtonElement>();
+    render(<Checkbox ref={ref} label="Accept" slotProps={{ indicator: { ref: indicator } }} />);
+    const control = screen.getByRole('checkbox', { name: 'Accept' });
+    expect(ref.current).toBe(control);
+    expect(indicator.current).toBe(control);
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLButtonElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Form">
+        <Checkbox
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          name="terms"
+          required
+          label="Accept"
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const control = screen.getByRole('checkbox', { name: 'Accept' });
+    expect(nodes.at(-1)).toBe(control);
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the control through the Checkbox's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(control).toHaveFocus();
+    await user.click(control);
+    rerender(ui(3));
+    expect(control).toHaveAttribute('aria-checked', 'true');
+    act(() => form.reset());
+    expect(control).toHaveAttribute('aria-checked', 'false');
+    expect(nodes.at(-1)).toBe(control);
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<Checkbox ref={ref} label="Accept" />);
+    const control = screen.getByRole('checkbox', { name: 'Accept' });
+    rerender(<Checkbox ref={ref} label="Accept" defaultChecked />);
+    expect(ref.mock.calls).toEqual([[control]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[control], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <Checkbox ref={ref} label="Accept" />
+      </React.StrictMode>,
+    );
+    const control = screen.getByRole('checkbox', { name: 'Accept' });
+    rerender(
+      <React.StrictMode>
+        <Checkbox ref={ref} label="Accept" defaultChecked />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[control], [null], [control]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    renderWithFieldContext(<Checkbox ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(screen.getByRole('checkbox', { name: FIELD_TEST_TEXT.label }));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLButtonElement>();
+      render(
+        <Checkbox
+          label="Accept"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the checkbox
+          controlRef={controlRef}
+        />,
+      );
+      const control = screen.getByRole('checkbox', { name: 'Accept' });
+      expect(controlRef.current).toBeNull();
+      expect(control.closest('label')).toHaveAttribute('controlref', '[object Object]');
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });
 
@@ -605,23 +725,105 @@ describe('Checkbox — native forms (C-FORMS)', () => {
   });
 });
 
+// Ruling BQ (the real-browser pass): Firefox and WebKit decide whether a <label> passes a click on
+// to the button it holds after the click's dispatch, from where the click's target is then. A
+// click on the glyph toggled the box, the glyph unmounted, and the label clicked the button again,
+// which toggled the box back. jsdom decides when the dispatch starts, as Chromium does, so these
+// tests play both steps of those engines: the hit test (an element out of pointer events, and its
+// children, pass the pointer to its parent) and the label's late check.
+describe('Checkbox — a click on the glyph toggles the box once (ruling BQ)', () => {
+  const NO_POINTER = '[class~="wave:pointer-events-none"]';
+  /** The element a pointer over `el` hits. */
+  const hitTarget = (el: Element): Element => el.closest(NO_POINTER)?.parentElement ?? el;
+  /** A click on `el` as Firefox and WebKit dispatch it inside a `<label>`. */
+  const clickAsFirefox = (el: Element) => {
+    const target = hitTarget(el);
+    const control = target.closest('label')?.querySelector('button') as HTMLButtonElement;
+    act(() => {
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    });
+    // The label's late check: a click whose target is no longer inside its button goes to it.
+    if (!control.contains(target)) act(() => control.click());
+  };
+  const glyph = () => screen.getByRole('checkbox').querySelector('path') as SVGPathElement;
+
+  it('unchecks on a click on the check glyph, and checks again on the box', () => {
+    const onCheckedChange = vi.fn();
+    render(<Checkbox label="Accept" defaultChecked onCheckedChange={onCheckedChange} />);
+    const states: (string | null)[] = [];
+    clickAsFirefox(glyph());
+    states.push(screen.getByRole('checkbox').getAttribute('aria-checked'));
+    clickAsFirefox(screen.getByRole('checkbox'));
+    states.push(screen.getByRole('checkbox').getAttribute('aria-checked'));
+    clickAsFirefox(glyph());
+    states.push(screen.getByRole('checkbox').getAttribute('aria-checked'));
+    expect(states).toEqual(['false', 'true', 'false']);
+    expect(onCheckedChange.mock.calls).toEqual([[false], [true], [false]]);
+  });
+
+  it('checks once on a click on the mixed glyph, which the check glyph replaces', () => {
+    const onCheckedChange = vi.fn();
+    function SelectAll() {
+      const [mixed, setMixed] = React.useState(true);
+      const [checked, setChecked] = React.useState(false);
+      return (
+        <Checkbox
+          label="All"
+          indeterminate={mixed}
+          checked={checked}
+          onCheckedChange={(next) => {
+            setMixed(false);
+            setChecked(next);
+            onCheckedChange(next);
+          }}
+        />
+      );
+    }
+    render(<SelectAll />);
+    expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'mixed');
+    clickAsFirefox(glyph());
+    expect(onCheckedChange.mock.calls).toEqual([[true]]);
+    expect(screen.getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it.each([
+    ['checked', { defaultChecked: true }],
+    ['mixed', { indeterminate: true }],
+    ['disabled', { defaultChecked: true, disabled: true }],
+    ['disabledFocusable', { defaultChecked: true, disabledFocusable: true }],
+    ['large', { defaultChecked: true, size: 'large' }],
+  ] as const)('takes the %s glyph out of hit testing, in either direction', (_, props) => {
+    for (const dir of ['ltr', 'rtl'] as const) {
+      const { unmount } = renderWithProviders(<Checkbox label="Accept" {...props} />, { dir });
+      const svg = screen.getByRole('checkbox', { hidden: true }).querySelector('svg');
+      expect(svg).toHaveClass('wave:pointer-events-none');
+      expect(hitTarget(glyph())).toBe(screen.getByRole('checkbox', { hidden: true }));
+      unmount();
+    }
+  });
+});
+
 describe('Checkbox — styling tokens', () => {
   it('draws the unchecked box with the accessible stroke and a 2px radius', () => {
     render(<Checkbox label="Accept" />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
     expect(cb).toHaveClass(
-      'border-stroke-accessible',
-      'rounded-xs',
-      'forced-colors:border-[ButtonText]',
+      'wave:border-stroke-accessible',
+      'wave:rounded-xs',
+      'wave:forced-colors:border-[ButtonText]',
     );
-    expect(cb).not.toHaveClass('rounded-sm');
-    expect(cb).not.toHaveClass('border-input');
+    expect(cb).not.toHaveClass('wave:rounded-sm');
+    expect(cb).not.toHaveClass('wave:border-input');
   });
 
   it('draws the checked box with primary and the glyph with primary-foreground (currentColor)', () => {
     render(<Checkbox label="Accept" defaultChecked />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
-    expect(cb).toHaveClass('bg-primary', 'border-primary', 'text-primary-foreground');
+    expect(cb).toHaveClass(
+      'wave:bg-primary',
+      'wave:border-primary',
+      'wave:text-primary-foreground',
+    );
     const glyph = cb.querySelector('svg');
     expect(glyph).toHaveAttribute('stroke', 'currentColor');
     expect(glyph).toHaveAttribute('aria-hidden', 'true');
@@ -631,32 +833,38 @@ describe('Checkbox — styling tokens', () => {
     render(<Checkbox label="Accept" defaultChecked />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
     // The focusable box is not opted out of forced colors, so its focus outline and border are forced.
-    expect(cb).toHaveClass('forced-colors:bg-[Highlight]', 'forced-colors:border-[Highlight]');
-    expect(cb).not.toHaveClass('forced-colors:forced-color-adjust-none');
+    expect(cb).toHaveClass(
+      'wave:forced-colors:bg-[Highlight]',
+      'wave:forced-colors:border-[Highlight]',
+    );
+    expect(cb).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
     expect(cb.querySelector('svg')).toHaveClass(
-      'forced-colors:forced-color-adjust-none',
-      'forced-colors:text-[HighlightText]',
+      'wave:forced-colors:forced-color-adjust-none',
+      'wave:forced-colors:text-[HighlightText]',
     );
   });
 
   it('forced colors: a disabled checked box draws a GrayText glyph and border on Canvas, no Highlight', () => {
     render(<Checkbox label="Accept" defaultChecked disabled />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
-    expect(cb).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
-    expect(cb).not.toHaveClass('forced-colors:bg-[Highlight]');
-    expect(cb).not.toHaveClass('forced-colors:border-[Highlight]');
+    expect(cb).toHaveClass(
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
+    );
+    expect(cb).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
+    expect(cb).not.toHaveClass('wave:forced-colors:border-[Highlight]');
     const glyph = cb.querySelector('svg');
-    expect(glyph).toHaveClass('forced-colors:text-[GrayText]');
-    expect(glyph).not.toHaveClass('forced-colors:bg-[Highlight]');
-    expect(glyph).not.toHaveClass('forced-colors:text-[HighlightText]');
+    expect(glyph).toHaveClass('wave:forced-colors:text-[GrayText]');
+    expect(glyph).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
+    expect(glyph).not.toHaveClass('wave:forced-colors:text-[HighlightText]');
   });
 
   it('forced colors: a disabled indeterminate box has no Highlight fill either', () => {
     render(<Checkbox label="Accept" indeterminate disabled />);
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
-    expect(cb).toHaveClass('forced-colors:bg-[Canvas]');
-    expect(cb).not.toHaveClass('forced-colors:bg-[Highlight]');
-    expect(cb.querySelector('svg')).toHaveClass('forced-colors:text-[GrayText]');
+    expect(cb).toHaveClass('wave:forced-colors:bg-[Canvas]');
+    expect(cb).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
+    expect(cb.querySelector('svg')).toHaveClass('wave:forced-colors:text-[GrayText]');
   });
 
   it('draws the indeterminate glyph with currentColor', () => {
@@ -673,22 +881,25 @@ describe('Checkbox — styling tokens', () => {
         <Checkbox label="Mixed" indeterminate />
       </>,
     );
-    expect(screen.getByRole('checkbox', { name: 'Off' })).toHaveClass('p-0', 'bg-transparent');
+    expect(screen.getByRole('checkbox', { name: 'Off' })).toHaveClass(
+      'wave:p-0',
+      'wave:bg-transparent',
+    );
     for (const name of ['On', 'Mixed']) {
-      expect(screen.getByRole('checkbox', { name })).toHaveClass('p-0', 'bg-primary');
+      expect(screen.getByRole('checkbox', { name })).toHaveClass('wave:p-0', 'wave:bg-primary');
     }
   });
 
   it('draws the label text on the px type ramp like Field and Label (text-body-1)', () => {
     render(<Checkbox label="Accept" />);
-    expect(screen.getByText('Accept')).toHaveClass('text-body-1');
-    expect(screen.getByText('Accept')).not.toHaveClass('text-sm');
+    expect(screen.getByText('Accept')).toHaveClass('wave:text-body-1');
+    expect(screen.getByText('Accept')).not.toHaveClass('wave:text-sm');
   });
 
   it('turns off the color transition for reduced motion', () => {
     render(<Checkbox label="Accept" />);
     expect(screen.getByRole('checkbox', { name: 'Accept' })).toHaveClass(
-      'motion-reduce:transition-none',
+      'wave:motion-reduce:transition-none',
     );
   });
 });
@@ -772,18 +983,18 @@ describe('Checkbox — rich label and labelPosition', () => {
         />,
       );
       const root = screen.getByTestId('root');
-      expect(root).toHaveClass('items-start');
-      expect(root).not.toHaveClass('items-center');
+      expect(root).toHaveClass('wave:items-start');
+      expect(root).not.toHaveClass('wave:items-center');
       // The 18px box sits 1px down, centred on the 20px first line of `text-body-1`.
       expect(screen.getByRole('checkbox', { name: 'Newsletter Once a month' })).toHaveClass(
-        'mt-px',
+        'wave:mt-px',
       );
     },
   );
 
   it('a checkbox without a label text gets no first-line offset', () => {
     render(<Checkbox aria-label="Select row" />);
-    expect(screen.getByRole('checkbox', { name: 'Select row' })).not.toHaveClass('mt-px');
+    expect(screen.getByRole('checkbox', { name: 'Select row' })).not.toHaveClass('wave:mt-px');
   });
 
   it('renders label={0} as content', () => {
@@ -903,10 +1114,13 @@ describe('Checkbox — disabledFocusable', () => {
 
   it('has the disabled look, forced colors included', () => {
     render(<Checkbox label="Accept" disabledFocusable defaultChecked data-testid="root" />);
-    expect(screen.getByTestId('root')).toHaveClass('cursor-not-allowed', 'opacity-50');
+    expect(screen.getByTestId('root')).toHaveClass('wave:cursor-not-allowed', 'wave:opacity-50');
     const cb = screen.getByRole('checkbox', { name: 'Accept' });
-    expect(cb).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
-    expect(cb.querySelector('svg')).toHaveClass('forced-colors:text-[GrayText]');
+    expect(cb).toHaveClass(
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
+    );
+    expect(cb.querySelector('svg')).toHaveClass('wave:forced-colors:text-[GrayText]');
   });
 
   it('keeps its focus ring at full strength: the dimmed look lifts while a focus ring shows inside it', () => {
@@ -919,8 +1133,8 @@ describe('Checkbox — disabledFocusable', () => {
     // The root's opacity dims the checkbox's outline too, which would put the ring below 3:1.
     // tailwind-merge keeps both classes (different variants); the variant wins while it matches.
     expect(screen.getByTestId('focusable')).toHaveClass(
-      'opacity-50',
-      'has-focus-visible:opacity-100',
+      'wave:opacity-50',
+      'wave:has-focus-visible:opacity-100',
     );
     expect(screen.getByTestId('available').className).not.toMatch(/opacity/);
   });
@@ -966,7 +1180,7 @@ describe('size and shape (Phase 4 D14)', () => {
 
   it('medium square is the 0.7 look, with its attributes', () => {
     render(<Checkbox label="Accept" defaultChecked />);
-    expect(box()).toHaveClass('h-[18px]', 'w-[18px]', 'rounded-xs', 'mt-px');
+    expect(box()).toHaveClass('wave:h-[18px]', 'wave:w-[18px]', 'wave:rounded-xs', 'wave:mt-px');
     expect(box().querySelector('svg')).toHaveAttribute('width', '12');
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-shape', 'square');
@@ -974,14 +1188,14 @@ describe('size and shape (Phase 4 D14)', () => {
 
   it('large is a 22px box with a 16px glyph', () => {
     render(<Checkbox label="Accept" size="large" defaultChecked />);
-    expect(box()).toHaveClass('h-[22px]', 'w-[22px]', '-mt-px');
+    expect(box()).toHaveClass('wave:h-[22px]', 'wave:w-[22px]', 'wave:-mt-px');
     expect(box().querySelector('svg')).toHaveAttribute('width', '16');
     expect(root()).toHaveAttribute('data-size', 'large');
   });
 
   it('circular is round', () => {
     render(<Checkbox label="Accept" shape="circular" />);
-    expect(box()).toHaveClass('rounded-full');
+    expect(box()).toHaveClass('wave:rounded-full');
     expect(root()).toHaveAttribute('data-shape', 'circular');
   });
 
@@ -1000,7 +1214,7 @@ describe('size and shape (Phase 4 D14)', () => {
   it('renders and reports the defaults for a size or shape from untyped code', () => {
     // @ts-expect-error Checkbox has no small size
     render(<Checkbox label="Accept" size="small" shape="rounded" />);
-    expect(box()).toHaveClass('h-[18px]', 'w-[18px]', 'rounded-xs');
+    expect(box()).toHaveClass('wave:h-[18px]', 'wave:w-[18px]', 'wave:rounded-xs');
     expect(root()).toHaveAttribute('data-size', 'medium');
     expect(root()).toHaveAttribute('data-shape', 'square');
   });
@@ -1023,11 +1237,12 @@ describe('Checkbox — types', () => {
     void (<Checkbox labelPosition="below" />);
   });
 
-  it('declares ref, controlRef and the routed handlers in CheckboxProps (C-REF, C-ROUTING)', () => {
-    expectTypeOf<CheckboxProps['ref']>().toEqualTypeOf<React.Ref<HTMLLabelElement> | undefined>();
-    expectTypeOf<CheckboxProps['controlRef']>().toEqualTypeOf<
-      React.Ref<HTMLButtonElement> | undefined
-    >();
+  it('declares ref (for the button) and the routed handlers in CheckboxProps, and no controlRef (C-REF, C-ROUTING)', () => {
+    expectTypeOf<CheckboxProps['ref']>().toEqualTypeOf<React.Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<CheckboxProps>().not.toHaveProperty('controlRef');
+    const labelRef = React.createRef<HTMLLabelElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the role="checkbox" button; the label is slotProps.root.ref
+    void (<Checkbox ref={labelRef} />);
     expectTypeOf<CheckboxProps['onClick']>().toEqualTypeOf<
       React.MouseEventHandler<HTMLButtonElement> | undefined
     >();
@@ -1039,20 +1254,22 @@ describe('Checkbox — types', () => {
 
 describe('Checkbox — slotProps', () => {
   type CheckboxSlotProps = NonNullable<CheckboxProps['slotProps']>;
-  const EVERY_PART: CheckboxSlotProps = { indicator: {}, label: {} };
+  const EVERY_PART: CheckboxSlotProps = { root: {}, indicator: {}, label: {} };
 
   it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
     // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    // 1.0 (ruling BQ): the glyph's class list starts with the class that takes it out of hit
+    // testing, an intended markup change.
     expect(sortAttributes(renderToString(<Checkbox label="Accept" indeterminate />))).toBe(
       [
-        '<label class="wave-checkbox relative inline-flex items-start gap-2 select-none cursor-pointer" data-label-position="after" data-shape="square" data-size="medium">',
-        '<button aria-checked="mixed" aria-labelledby="checkbox-label-_R_0H1_" class="wave-checkbox__indicator flex shrink-0 items-center justify-center border p-0 transition-colors motion-reduce:transition-none h-[18px] w-[18px] rounded-xs mt-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-primary bg-primary text-primary-foreground forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" id="checkbox-_R_0_" role="checkbox" type="button">',
-        '<svg aria-hidden="true" class="forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
+        '<label class="wave-checkbox wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer" data-label-position="after" data-shape="square" data-size="medium">',
+        '<button aria-checked="mixed" aria-labelledby="checkbox-label-_R_0H1_" class="wave-checkbox__indicator wave:flex wave:shrink-0 wave:items-center wave:justify-center wave:border wave:p-0 wave:transition-colors wave:motion-reduce:transition-none wave:h-[18px] wave:w-[18px] wave:rounded-xs wave:mt-px wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:border-primary wave:bg-primary wave:text-primary-foreground wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]" id="checkbox-_R_0_" role="checkbox" type="button">',
+        '<svg aria-hidden="true" class="wave:pointer-events-none wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none" data-wave-icon="subtract" fill="none" focusable="false" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M2.5 6h7">',
         '</path>',
         '</svg>',
         '</button>',
-        '<span class="wave-checkbox__label text-body-1 text-foreground" id="checkbox-label-_R_0H1_">Accept',
+        '<span class="wave-checkbox__label wave:text-body-1 wave:text-foreground" id="checkbox-label-_R_0H1_">Accept',
         '</span>',
         '</label>',
       ].join(''),
@@ -1066,6 +1283,17 @@ describe('Checkbox — slotProps', () => {
       { label: 'Accept', indeterminate: true, shape: 'circular', 'aria-describedby': 'd' },
       { label: 'Accept', disabledFocusable: true },
       { 'aria-label': 'Accept', disabled: true, id: 'own', tabIndex: 0 },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        label: 'Accept',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps(
@@ -1088,8 +1316,8 @@ describe('Checkbox — slotProps', () => {
     const indicator = screen.getByRole('checkbox', { name: 'Accept' });
     const label = screen.getByText('Accept');
     for (const [element, stable, own, mine, part] of [
-      [indicator, checkboxClassNames.indicator, 'border', 'my-box', 'indicator'],
-      [label, checkboxClassNames.label, 'text-body-1', 'my-label', 'label'],
+      [indicator, checkboxClassNames.indicator, 'wave:border', 'my-box', 'indicator'],
+      [label, checkboxClassNames.label, 'wave:text-body-1', 'my-label', 'label'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -1100,21 +1328,23 @@ describe('Checkbox — slotProps', () => {
     expect(label).toHaveStyle({ color: 'rgb(255, 0, 0)' });
   });
 
-  it('attaches your refs to the parts, beside controlRef', () => {
+  it('attaches your refs to the parts, beside ref', () => {
+    const root = React.createRef<HTMLLabelElement>();
     const indicator = React.createRef<HTMLButtonElement>();
     const label = React.createRef<HTMLSpanElement>();
-    const controlRef = React.createRef<HTMLButtonElement>();
+    const ref = React.createRef<HTMLButtonElement>();
     render(
       <Checkbox
         label="Accept"
-        controlRef={controlRef}
-        slotProps={{ indicator: { ref: indicator }, label: { ref: label } }}
+        ref={ref}
+        slotProps={{ root: { ref: root }, indicator: { ref: indicator }, label: { ref: label } }}
       />,
     );
     const control = screen.getByRole('checkbox', { name: 'Accept' });
     expect(indicator.current).toBe(control);
-    expect(controlRef.current).toBe(control);
+    expect(ref.current).toBe(control);
     expect(label.current).toBe(screen.getByText('Accept'));
+    expect(root.current).toBe(control.closest('label'));
   });
 
   it("runs your indicator onClick first, then the Checkbox's onClick and the toggle", async () => {
@@ -1319,7 +1549,10 @@ describe('Checkbox — slotProps', () => {
   });
 
   it('types each part for its element, and takes no children', () => {
-    expectTypeOf<keyof CheckboxSlotProps>().toEqualTypeOf<'indicator' | 'label'>();
+    expectTypeOf<keyof CheckboxSlotProps>().toEqualTypeOf<'root' | 'indicator' | 'label'>();
+    expectTypeOf<NonNullable<CheckboxSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLabelElement> | undefined
+    >();
     expectTypeOf<NonNullable<CheckboxSlotProps['indicator']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLButtonElement> | undefined
     >();
@@ -1328,5 +1561,262 @@ describe('Checkbox — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the Checkbox draws its glyph
     void (<Checkbox slotProps={{ indicator: { children: '✓' } }} />);
+    // @ts-expect-error -- a part takes no children: the Checkbox draws its content
+    void (<Checkbox slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const control = () => screen.getByRole('checkbox', { name: 'Accept', hidden: true });
+    const root = () => control().closest('label') as HTMLElement;
+
+    // CLAUDE.md, Testing, "Roving markers" (ruling BO): a toolbar's roving hook takes any element
+    // with a tabindex for a control and reads roles and markers on each, so the root, which holds
+    // the box, tries every one at once; each lock is proven by the attribute it keeps off and by
+    // the arrow order with exactly one tab stop.
+    it('keeps the box one control of a toolbar, with one tab stop, when the root tries every role and roving marker', async () => {
+      const user = userEvent.setup();
+      const ROVING_ATTEMPT = {
+        role: 'radiogroup',
+        tabIndex: 0,
+        'data-roving-container': '',
+        'data-roving-disabled': '',
+        'data-roving-value': 'z',
+        'aria-disabled': true,
+      };
+      render(
+        <Toolbar aria-label="View">
+          <Button appearance="subtle">Bold</Button>
+          <Checkbox label="Grid" slotProps={{ root: ROVING_ATTEMPT }} />
+          <Button appearance="subtle">Italic</Button>
+        </Toolbar>,
+      );
+      const toolbar = screen.getByRole('toolbar', { name: 'View' });
+      const item = screen.getByRole('checkbox', { name: 'Grid' });
+      const bold = screen.getByRole('button', { name: 'Bold' });
+      const italic = screen.getByRole('button', { name: 'Italic' });
+      for (const attribute of [
+        'role',
+        'tabindex',
+        'data-roving-container',
+        'data-roving-disabled',
+        'data-roving-value',
+        'aria-disabled',
+      ]) {
+        expect(item.closest('label'), attribute).not.toHaveAttribute(attribute);
+      }
+      expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      await user.tab();
+      expect(bold).toHaveFocus();
+      const order: Element[] = [];
+      for (let step = 0; step < 3; step++) {
+        await user.keyboard('{ArrowRight}');
+        order.push(document.activeElement as Element);
+        expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      }
+      expect(order).toEqual([item, italic, bold]);
+    });
+
+    it("puts your className, style, data-* and attributes on the root <label>, after the Checkbox's className and style", () => {
+      render(
+        <Checkbox
+          label="Accept"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(checkboxClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(control()).not.toHaveAttribute('data-part');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<Checkbox label="Accept" slotProps={{ root: { className: 'items-center' } }} />);
+      expect(root()).toHaveClass('items-center');
+      expect(root()).not.toHaveClass('wave:items-start');
+    });
+
+    it("keeps the props you give the Checkbox over the part's", () => {
+      render(
+        <Checkbox
+          label="Accept"
+          title="Own"
+          data-x="own"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <Checkbox
+          label="Accept"
+          size="large"
+          shape="circular"
+          labelPosition="before"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-shape': 'square',
+              'data-label-position': 'after',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'large');
+      expect(root()).toHaveAttribute('data-shape', 'circular');
+      expect(root()).toHaveAttribute('data-label-position', 'before');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The Checkbox's own hidden state stays its own.
+      rerender(<Checkbox label="Accept" hidden slotProps={{ root: { hidden: false } }} />);
+      expect(root()).toHaveAttribute('hidden');
+    });
+
+    // State-off lock: the root has no `for` of its own (it labels the box it holds), so a part's
+    // `htmlFor` would be the only one and would send the text's clicks to another element.
+    it('keeps a part from giving the root a for: a click on the text still toggles the box once', async () => {
+      const user = userEvent.setup();
+      const onCheckedChange = vi.fn();
+      const { rerender } = render(
+        <>
+          <input type="checkbox" id="decoy" aria-label="Decoy" />
+          <Checkbox
+            label="Accept"
+            onCheckedChange={onCheckedChange}
+            slotProps={{ root: { htmlFor: 'decoy' } }}
+          />
+        </>,
+      );
+      expect(root()).not.toHaveAttribute('for');
+      await user.click(screen.getByText('Accept'));
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      expect(screen.getByRole('checkbox', { name: 'Decoy' })).not.toBeChecked();
+      // A `for` given to the Checkbox itself (untyped code) still reaches the root, as in 0.18.
+      rerender(
+        <>
+          <input type="checkbox" id="decoy" aria-label="Decoy" />
+          <Checkbox label="Accept" {...({ htmlFor: 'decoy' } as object)} />
+        </>,
+      );
+      expect(root()).toHaveAttribute('for', 'decoy');
+    });
+
+    it("runs your root handlers before the Checkbox's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <Checkbox
+          label="Accept"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <Checkbox
+          label="Accept"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    // A click on the label text reaches the root, then the <label> passes it to the box, whose
+    // own click bubbles to the root again: the browser's label behaviour. The toggle happens once.
+    it('toggles once per click on the text or the box and per Space, your root onClick seeing each click as it bubbles (StrictMode)', async () => {
+      const user = userEvent.setup();
+      const onCheckedChange = vi.fn();
+      const targets: EventTarget[] = [];
+      render(
+        <React.StrictMode>
+          <Checkbox
+            label="Accept"
+            onCheckedChange={onCheckedChange}
+            slotProps={{ root: { onClick: (event) => targets.push(event.target) } }}
+          />
+        </React.StrictMode>,
+      );
+      const text = screen.getByText('Accept');
+      await user.click(text);
+      expect(targets).toEqual([text, control()]);
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      targets.length = 0;
+      await user.click(control());
+      expect(targets).toEqual([control()]);
+      await user.keyboard(' ');
+      expect(targets).toEqual([control(), control()]);
+      expect(onCheckedChange.mock.calls).toEqual([[true], [false], [true]]);
+    });
+
+    it('keeps the label text from toggling when your root onClick prevents the default; the box handles its own click first', async () => {
+      const user = userEvent.setup();
+      const onCheckedChange = vi.fn();
+      render(
+        <Checkbox
+          label="Accept"
+          onCheckedChange={onCheckedChange}
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        />,
+      );
+      await user.click(screen.getByText('Accept'));
+      expect(control()).toHaveAttribute('aria-checked', 'false');
+      expect(onCheckedChange).not.toHaveBeenCalled();
+      await user.click(control());
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+    });
+
+    it.each([
+      ['disabled', { disabled: true }],
+      ['disabledFocusable', { disabledFocusable: true }],
+    ] as const)('neither calls your root onClick nor toggles while %s', async (_, state) => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onCheckedChange = vi.fn();
+      render(
+        <Checkbox
+          label="Accept"
+          {...state}
+          onCheckedChange={onCheckedChange}
+          slotProps={{ root: { onClick } }}
+        />,
+      );
+      await user.click(screen.getByText('Accept'));
+      fireEvent.click(root());
+      fireEvent.click(control());
+      if ('disabledFocusable' in state) {
+        act(() => control().focus());
+        await user.keyboard(' ');
+      }
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onCheckedChange).not.toHaveBeenCalled();
+      expect(control()).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <Checkbox
+          label="Accept"
+          slotProps={{
+            root: { className: 'my-root', title: 'Terms' },
+            indicator: { title: 'Box' },
+          }}
+        />,
+      );
+      await expectNoA11yViolations();
+    });
   });
 });

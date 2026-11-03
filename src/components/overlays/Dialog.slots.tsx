@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { DismissIcon } from '../../lib/icons';
@@ -108,7 +108,7 @@ function mergedParts(
     React.HTMLAttributes<HTMLElement>['dangerouslySetInnerHTML'] | undefined;
   const content =
     markup != null ? (
-      <span className="inline-flex items-center" dangerouslySetInnerHTML={markup} />
+      <span className="wave:inline-flex wave:items-center" dangerouslySetInnerHTML={markup} />
     ) : (
       materialiseSlotContent(children)
     );
@@ -304,7 +304,7 @@ export function ModalCloseButton({
       appearance="subtle"
       size="small"
       {...mergeSlotProps(part, {
-        className: cn(className, slotClassName as string | undefined),
+        className: wcn(className, slotClassName as string | undefined),
         style: slotStyle as React.CSSProperties | undefined,
         defaults,
         locked,
@@ -415,10 +415,10 @@ export function ModalBackdrop({
         slotOnMouseDown as React.MouseEventHandler<HTMLElement> | undefined,
         onMouseDown,
       )}
-      className={cn(
+      className={wcn(
         className,
-        'fixed inset-0',
-        appearance === 'transparent' ? 'bg-transparent' : 'bg-backdrop',
+        'wave:fixed wave:inset-0',
+        appearance === 'transparent' ? 'wave:bg-transparent' : 'wave:bg-backdrop',
         motionClassName,
         slotClassName as string | undefined,
       )}

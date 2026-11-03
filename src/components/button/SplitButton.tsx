@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { splitButtonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
@@ -106,26 +106,26 @@ export interface SplitButtonProps extends Omit<React.HTMLAttributes<HTMLDivEleme
  * apply). Overrides the square icon-only sizing of `Button` (`w-*`, `px-0`).
  */
 const menuButtonSizeClasses: Record<Size, string> = {
-  'extra-small': 'w-auto min-w-6 min-h-6 px-1.5',
-  small: 'w-auto min-w-6 min-h-6 px-1.5',
-  medium: 'w-auto min-w-6 min-h-6 px-2',
-  large: 'w-auto min-w-6 min-h-6 px-2',
-  'extra-large': 'w-auto min-w-6 min-h-6 px-3',
+  'extra-small': 'wave:w-auto wave:min-w-6 wave:min-h-6 wave:px-1.5',
+  small: 'wave:w-auto wave:min-w-6 wave:min-h-6 wave:px-1.5',
+  medium: 'wave:w-auto wave:min-w-6 wave:min-h-6 wave:px-2',
+  large: 'wave:w-auto wave:min-w-6 wave:min-h-6 wave:px-2',
+  'extra-large': 'wave:w-auto wave:min-w-6 wave:min-h-6 wave:px-3',
 };
 
 /** The separator is the menu button's start border (logical, so it mirrors in RTL). */
 const separatorClasses: Record<Appearance, string> = {
-  primary: 'border-s-primary-foreground/30',
-  outline: 'border-s-stroke',
-  subtle: 'border-s-stroke',
-  transparent: 'border-s-stroke',
+  primary: 'wave:border-s-primary-foreground/30',
+  outline: 'wave:border-s-stroke',
+  subtle: 'wave:border-s-stroke',
+  transparent: 'wave:border-s-stroke',
 };
 
 /**
  * Keeps each half's focus ring above its neighbour. `min-h-6` keeps both halves as tall as the
  * 24px menu button target at the extra-small size.
  */
-const halfClasses = 'relative min-h-6 focus-visible:z-10';
+const halfClasses = 'wave:relative wave:min-h-6 wave:focus-visible:z-10';
 
 /**
  * A primary action button joined to a menu button (chevron), e.g. Save + "Save as…" options.
@@ -219,7 +219,7 @@ export const SplitButton = ({
       ref={ref}
       {...props}
       role={role ?? 'group'}
-      className={cn(splitButtonClassNames.root, 'inline-flex items-stretch', className)}
+      className={wcn(splitButtonClassNames.root, 'wave:inline-flex wave:items-stretch', className)}
     >
       <Button
         {...primary}
@@ -229,10 +229,10 @@ export const SplitButton = ({
         disabledFocusable={primaryFocusable}
         icon={withPartClass(icon, splitButtonClassNames.icon)}
         iconPosition={iconPosition}
-        className={cn(
+        className={wcn(
           splitButtonClassNames.primaryActionButton,
           halfClasses,
-          'rounded-e-none border-e-0',
+          'wave:rounded-e-none wave:border-e-0',
           primary.className,
         )}
       >
@@ -248,11 +248,11 @@ export const SplitButton = ({
           menuIconRenders ? menuGlyph : <ChevronDownIcon />,
           splitButtonClassNames.menuIcon,
         )}
-        className={cn(
+        className={wcn(
           splitButtonClassNames.menuButton,
           halfClasses,
           menuButtonSizeClasses[size],
-          'rounded-s-none',
+          'wave:rounded-s-none',
           separatorClasses[appearance],
           menu.className,
         )}

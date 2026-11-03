@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { joinIds } from '../../lib/aria';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { avatarClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -194,14 +194,15 @@ export const avatarSizeClasses: Readonly<Record<Size, string>> = {
   'extra-large': avatarBoxClasses[56],
 };
 
-const IMAGE_CLASS = 'w-full h-full object-cover';
+const IMAGE_CLASS = 'wave:w-full wave:h-full wave:object-cover';
 
 /** How an `active` avatar is marked. Literal strings only. */
 const activeClasses: Readonly<Record<'ring' | 'ring-shadow' | 'shadow' | 'glow', string>> = {
-  ring: 'ring-2 ring-primary ring-offset-2 ring-offset-background',
-  'ring-shadow': 'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-8',
-  shadow: 'shadow-8',
-  glow: 'shadow-[0_0_0.5rem_0.125rem_var(--wave-primary)]',
+  ring: 'wave:ring-2 wave:ring-primary wave:ring-offset-2 wave:ring-offset-background',
+  'ring-shadow':
+    'wave:ring-2 wave:ring-primary wave:ring-offset-2 wave:ring-offset-background wave:shadow-8',
+  shadow: 'wave:shadow-8',
+  glow: 'wave:shadow-[0_0_0.5rem_0.125rem_var(--wave-primary)]',
 };
 
 /** A name with its whitespace collapsed, or `undefined` when it is blank. */
@@ -419,7 +420,7 @@ export const Avatar = ({
           src={imageSlot}
           alt={imageAlt}
           {...imageDescription}
-          className={cn(avatarClassNames.image, IMAGE_CLASS)}
+          className={wcn(avatarClassNames.image, IMAGE_CLASS)}
           onError={handleError}
         />
       );
@@ -447,7 +448,7 @@ export const Avatar = ({
         : imageProps
           ? { ...(imageSlot as object), ...overrides }
           : imageSlot;
-      imageNode = renderSlot(slot as Slot<'img'>, 'img', cn(avatarClassNames.image, IMAGE_CLASS), {
+      imageNode = renderSlot(slot as Slot<'img'>, 'img', wcn(avatarClassNames.image, IMAGE_CLASS), {
         alt: imageAlt,
         ...imageDescription,
       });
@@ -457,7 +458,7 @@ export const Avatar = ({
           src={src}
           alt={imageAlt}
           {...imageDescription}
-          className={cn(avatarClassNames.image, IMAGE_CLASS)}
+          className={wcn(avatarClassNames.image, IMAGE_CLASS)}
           onError={handleError}
         />
       );
@@ -470,12 +471,14 @@ export const Avatar = ({
   // does not consume a generator: renderSlot still renders its items.
   const iconNode =
     imageNode === null && icon && slotRendersContent(icon)
-      ? renderSlot(icon, 'span', cn(avatarClassNames.icon, 'inline-flex'), { 'aria-hidden': true })
+      ? renderSlot(icon, 'span', wcn(avatarClassNames.icon, 'wave:inline-flex'), {
+          'aria-hidden': true,
+        })
       : null;
   const dir = useDirection();
   const group = React.useContext(AvatarGroupContext);
   // The wedges of a pie overlap at its centre: their initials would print over each other.
-  const initialsClass = cn(avatarClassNames.initials, group?.layout === 'pie' && 'invisible');
+  const initialsClass = wcn(avatarClassNames.initials, group?.layout === 'pie' && 'wave:invisible');
   const resolvedColor = resolveAvatarColor(colorProp, idForColor, name);
   const showsInitials = imageNode === null && iconNode === null;
   const computedInitials = showsInitials && name ? getInitials(name, { dir }) : '';
@@ -493,13 +496,13 @@ export const Avatar = ({
     content = imageNode;
   } else if (iconNode !== null) {
     content = iconNode;
-    colorClass = 'bg-muted text-muted-foreground';
+    colorClass = 'wave:bg-muted wave:text-muted-foreground';
   } else if (initialsNode) {
     content = initialsNode;
     colorClass = avatarColorClasses[resolvedColor];
   } else {
     content = <PersonIcon size="60%" className={avatarClassNames.icon} />;
-    colorClass = 'bg-muted text-muted-foreground';
+    colorClass = 'wave:bg-muted wave:text-muted-foreground';
   }
 
   // Accessible name of the avatar visual (data-display#19, #27). With a consumer role and an
@@ -538,7 +541,11 @@ export const Avatar = ({
   // 0.4 and like `icon`: no stray "0" in the corner, and no wrapper taking the root props.
   const badgeNode =
     badge && slotRendersContent(badge)
-      ? renderSlot(badge, 'span', cn(avatarClassNames.badge, 'absolute bottom-0 end-0 inline-flex'))
+      ? renderSlot(
+          badge,
+          'span',
+          wcn(avatarClassNames.badge, 'wave:absolute wave:bottom-0 wave:end-0 wave:inline-flex'),
+        )
       : null;
   const hasBadge = badgeNode !== null;
   // The visual's refs: the avatar's `ref` too without a badge (the visual is the root then), and
@@ -559,19 +566,20 @@ export const Avatar = ({
     'data-active': active,
     'data-active-appearance': activeAppearance,
   };
-  const visualClassName = cn(
+  const visualClassName = wcn(
     avatarClassNames.visual,
-    'inline-flex items-center justify-center overflow-hidden shrink-0 font-bold',
+    'wave:inline-flex wave:items-center wave:justify-center wave:overflow-hidden wave:shrink-0 wave:font-bold',
     avatarShapeClasses(resolvedShape, pixels),
     avatarSizeClassesFor(resolvedSize),
     colorClass,
     active === 'active' && activeClasses[activeAppearance],
-    active === 'inactive' && 'opacity-60 transition-opacity motion-reduce:transition-none',
+    active === 'inactive' &&
+      'wave:opacity-60 wave:transition-opacity wave:motion-reduce:transition-none',
   );
 
   if (!hasBadge) {
     // One element: the root is the visual, so the part applies to it after the avatar's props.
-    const rootClassName = cn(avatarClassNames.root, visualClassName, className);
+    const rootClassName = wcn(avatarClassNames.root, visualClassName, className);
     return (
       <span
         {...a11yProps}
@@ -592,7 +600,11 @@ export const Avatar = ({
       ref={ref}
       {...stateProps}
       {...rest}
-      className={cn(avatarClassNames.root, 'relative inline-flex shrink-0', className)}
+      className={wcn(
+        avatarClassNames.root,
+        'wave:relative wave:inline-flex wave:shrink-0',
+        className,
+      )}
     >
       <span
         {...a11yProps}

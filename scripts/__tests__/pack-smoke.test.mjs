@@ -14,35 +14,41 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  APP_DIRECTION_CLASS,
+  APP_TOKEN_OVERRIDE,
+  checkCodemodRun,
+  checkFloorSmoke,
   checkPackedFiles,
   checkPlainCss,
   checkPlainSmoke,
   checkTailwindCss,
   checkTypeProgram,
+  checkUtilitiesCss,
   checkViteCss,
   EXPORTED_SUBPATHS,
   fixtureManifest,
   pack,
   parseArgs,
   parsePackOutput,
+  resolveFloorNode,
+  SHIPPED_SCRIPTS,
   viteBuildCss,
 } from '../pack-smoke.mjs';
+import { rewriteFile } from '../../codemod/migrate-1.0.mjs';
 import { createWorkDir, removeWorkDir } from '../verify-dist.mjs';
 
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 describe('package.json (spec §3.2)', () => {
-  it('nests the declarations under the import and require conditions (repo-level#5)', () => {
-    expect(pkg.exports['.']).toEqual({
-      import: { types: './dist/index.d.ts', default: './dist/index.mjs' },
-      require: { types: './dist/index.d.cts', default: './dist/index.cjs' },
-    });
-    // `types` must come first inside each condition.
-    expect(Object.keys(pkg.exports['.'].import)[0]).toBe('types');
-    expect(Object.keys(pkg.exports['.'].require)[0]).toBe('types');
-    expect(pkg.main).toBe('./dist/index.cjs');
-    expect(pkg.module).toBe('./dist/index.mjs');
+  it('exports the ES module and its declarations to every condition (repo-level#5, spec R4)', () => {
+    // ES modules only: `require()` loads the same entry on Node.js 22.12 and later.
+    expect(pkg.exports['.']).toEqual({ types: './dist/index.d.ts', default: './dist/index.mjs' });
+    // `types` must come first.
+    expect(Object.keys(pkg.exports['.'])[0]).toBe('types');
+    expect(pkg.main).toBe('./dist/index.mjs');
+    expect(pkg).not.toHaveProperty('module');
+    // Kept for `moduleResolution: node10`, which ignores `exports`.
     expect(pkg.types).toBe('./dist/index.d.ts');
   });
 
@@ -52,21 +58,32 @@ describe('package.json (spec §3.2)', () => {
       './styles': './dist/styles.css',
       './styles.css': './dist/styles.css',
       './preflight.css': './dist/preflight.css',
+      './utilities': './dist/utilities.css',
+      './utilities.css': './dist/utilities.css',
       './tailwind': './src/styles/tailwind.css',
       './tailwind.css': './src/styles/tailwind.css',
       './tokens': './src/styles/tokens.css',
       './tokens.css': './src/styles/tokens.css',
       './variants': './src/styles/variants.css',
       './variants.css': './src/styles/variants.css',
-      './legacy-tokens.css': './src/styles/legacy-tokens.css',
       './package.json': './package.json',
     });
     expect(Object.keys(pkg.exports)).toEqual(['.', ...EXPORTED_SUBPATHS]);
   });
 
+  it('has no ./legacy-tokens.css entry and ships neither removed stylesheet (removed in 1.0)', () => {
+    // An import of the 0.4 compatibility layer fails to resolve (ERR_PACKAGE_PATH_NOT_EXPORTED,
+    // or the bundler's equivalent) instead of loading a file; animations.css was never exported.
+    expect(pkg.exports).not.toHaveProperty(['./legacy-tokens.css']);
+    expect(EXPORTED_SUBPATHS).not.toContain('./legacy-tokens.css');
+    for (const name of ['legacy-tokens.css', 'animations.css']) {
+      expect(existsSync(join(root, 'src/styles', name)), name).toBe(false);
+    }
+  });
+
   it('exports the wave-rtl variant for custom Tailwind setups built on ./tokens', () => {
-    // The dist class strings use `wave-rtl:`; a setup that imports ./tokens instead of ./tailwind
-    // must be able to import the variant, or Tailwind silently drops every such class.
+    // A custom setup imports ./tokens and ./variants for the app's own classes (the components
+    // come from ./styles): without the variant, Tailwind silently drops every `wave-rtl:` class.
     expect(pkg.exports['./variants']).toBe('./src/styles/variants.css');
     expect(pkg.exports['./variants.css']).toBe('./src/styles/variants.css');
     expect(readFileSync(join(root, 'src/styles/variants.css'), 'utf8')).toMatch(
@@ -74,8 +91,26 @@ describe('package.json (spec §3.2)', () => {
     );
   });
 
-  it('publishes dist and the style sources without their tests', () => {
-    expect(pkg.files).toEqual(['dist', 'src/styles', '!src/styles/__tests__']);
+  it('exports the token utilities, and keeps the precompiled utilities of ./tailwind internal (Phase 14 spec R6)', () => {
+    expect(pkg.exports['./utilities']).toBe('./dist/utilities.css');
+    expect(pkg.exports['./utilities.css']).toBe('./dist/utilities.css');
+    // dist/components.css is imported by ./tailwind only, through its relative path.
+    const targets = (value) =>
+      typeof value === 'string' ? [value] : Object.values(value).flatMap(targets);
+    expect(targets(pkg.exports)).not.toContain('./dist/components.css');
+    expect(readFileSync(join(root, 'src/styles/tailwind.css'), 'utf8')).toMatch(
+      /@import '\.\.\/\.\.\/dist\/components\.css' layer\(components\);/,
+    );
+  });
+
+  it('publishes dist, the style sources and the migration codemod without their tests', () => {
+    expect(pkg.files).toEqual([
+      'dist',
+      'src/styles',
+      '!src/styles/__tests__',
+      'codemod',
+      '!codemod/__tests__',
+    ]);
   });
 
   it('marks only CSS as side-effectful, so bundlers drop unused modules (repo-level#3)', () => {
@@ -100,11 +135,12 @@ describe('package.json (spec §3.2)', () => {
 
   it('checks the types of a tarball it packs itself', () => {
     // `attw --pack` would run a nested `npm pack`, which writes nothing under
-    // `npm publish --dry-run`; scripts/attw-pack.mjs packs without the dry run.
+    // `npm publish --dry-run`; scripts/attw-pack.mjs packs without the dry run. The `esm-only`
+    // profile: `node16` and `strict` fail an ES-only package by design (spec R4).
     expect(pkg.scripts['check:package']).toBe(
-      'publint && node scripts/attw-pack.mjs --profile node16 --exclude-entrypoints styles ' +
-        'styles.css preflight.css tailwind tailwind.css tokens tokens.css variants variants.css ' +
-        'legacy-tokens.css',
+      'publint && node scripts/attw-pack.mjs --profile esm-only --exclude-entrypoints styles ' +
+        'styles.css preflight.css utilities utilities.css tailwind tailwind.css tokens tokens.css ' +
+        'variants variants.css',
     );
   });
 
@@ -125,11 +161,9 @@ describe('package.json (spec §3.2)', () => {
       pkg.files
         .filter((entry) => !entry.startsWith('!'))
         .some((entry) => target.startsWith(`./${entry}/`));
-    for (const target of Object.values(pkg.exports).flatMap((value) =>
-      typeof value === 'string'
-        ? [value]
-        : Object.values(value).flatMap((condition) => Object.values(condition)),
-    )) {
+    const targets = (value) =>
+      typeof value === 'string' ? [value] : Object.values(value).flatMap(targets);
+    for (const target of targets(pkg.exports)) {
       expect(published(target), target).toBe(true);
     }
   });
@@ -141,10 +175,10 @@ describe('checkPackedFiles', () => {
     'README.md',
     'LICENSE',
     'dist/index.mjs',
-    'dist/index.cjs',
     'dist/index.d.ts',
-    'dist/index.d.cts',
     'dist/styles.css',
+    'dist/components.css',
+    'dist/utilities.css',
     'dist/preflight.css',
     'dist/lib/cn.mjs',
     'dist/components/button/Button.mjs',
@@ -152,21 +186,41 @@ describe('checkPackedFiles', () => {
     'src/styles/tokens.css',
     'src/styles/base.css',
     'src/styles/variants.css',
-    'src/styles/legacy-tokens.css',
     'src/styles/styles.css',
+    'codemod/migrate-1.0.mjs',
   ];
 
   it('passes a tarball with every export target and nothing else from the sources', () => {
     expect(checkPackedFiles(good, pkg)).toEqual([]);
   });
 
+  it('ships the migration codemod, its only script outside dist, without its tests', () => {
+    expect(SHIPPED_SCRIPTS).toEqual(['codemod/migrate-1.0.mjs']);
+    expect(
+      checkPackedFiles(
+        good.filter((path) => path !== 'codemod/migrate-1.0.mjs'),
+        pkg,
+      ),
+    ).toEqual(['codemod/migrate-1.0.mjs is not in the tarball']);
+    expect(
+      checkPackedFiles(
+        [...good, 'codemod/__tests__/migrate-1.0.test.mjs', 'codemod/helper.mjs', 'tools/x.js'],
+        pkg,
+      ),
+    ).toEqual([
+      'tests are packed: codemod/__tests__/migrate-1.0.test.mjs',
+      'scripts are packed: codemod/helper.mjs (only codemod/migrate-1.0.mjs ships)',
+      'scripts are packed: tools/x.js (only codemod/migrate-1.0.mjs ships)',
+    ]);
+  });
+
   it('reports an export target missing from the tarball', () => {
     const errors = checkPackedFiles(
-      good.filter((path) => path !== 'dist/index.d.cts' && path !== 'dist/styles.css'),
+      good.filter((path) => path !== 'dist/index.d.ts' && path !== 'dist/styles.css'),
       pkg,
     );
     expect(errors).toEqual([
-      expect.stringContaining('./dist/index.d.cts'),
+      expect.stringContaining('./dist/index.d.ts'),
       expect.stringContaining('./dist/styles.css'),
     ]);
   });
@@ -206,6 +260,55 @@ describe('checkPackedFiles', () => {
       'src/styles/tailwind.css @imports src/styles/variants.css, which is not in the tarball',
     ]);
   });
+
+  it('reports a tarball without the precompiled utilities ./tailwind imports, without reading dist', () => {
+    // dist/components.css is no export target: only the import of tailwind.css requires it. The
+    // check reads the style sources only (dist is not built when the unit tests run).
+    const read = vi.fn((path) => readFileSync(join(root, path), 'utf8'));
+    expect(
+      checkPackedFiles(
+        good.filter((path) => path !== 'dist/components.css'),
+        pkg,
+        read,
+      ),
+    ).toEqual([
+      'src/styles/tailwind.css @imports dist/components.css, which is not in the tarball',
+    ]);
+    expect(checkPackedFiles(good, pkg, read)).toEqual([]);
+    expect(
+      read.mock.calls.map(([path]) => path).filter((path) => !path.startsWith('src/styles/')),
+    ).toEqual([]);
+  });
+});
+
+describe('checkCodemodRun (the migration codemod from the installed package)', () => {
+  const fixture = readFileSync(join(root, 'scripts/fixtures/plain/migrate.css'), 'utf8');
+  const report = 'migrate-1.0 (dry run): 2 replacement(s) in 1 of 1 file(s)\n';
+
+  it('the plain fixture holds a file with two rewrites', () => {
+    const stats = { replacements: 0, shared: 0 };
+    const migrated = rewriteFile('migrate.css', fixture, { includeShared: true, stats });
+    expect(stats).toEqual({ replacements: 2, shared: 0 });
+    expect(migrated).toContain('@apply bg-wave-primary text-wave-body-1;');
+  });
+
+  it('passes a dry run that reports the rewrites and changes nothing', () => {
+    const run = { status: 0, stdout: `migrate.css:3\n  - x\n  + y\n${report}`, stderr: '' };
+    expect(checkCodemodRun(run, { before: fixture, after: fixture })).toEqual([]);
+  });
+
+  it('reports a failed run, another report and a changed file', () => {
+    expect(
+      checkCodemodRun(
+        { status: 1, stdout: '', stderr: 'Error: Cannot find module' },
+        { before: fixture, after: `${fixture}x` },
+      ),
+    ).toEqual([
+      'exited with 1: Error: Cannot find module',
+      'unexpected report: (none)',
+      'the dry run changed migrate.css',
+    ]);
+  });
 });
 
 describe('checkPlainCss (repo-level#1)', () => {
@@ -216,9 +319,9 @@ describe('checkPlainCss (repo-level#1)', () => {
     ':root,.wave-light{--wave-primary:#0f6cbd}' +
     '.wave-root,.wave-portal{font-family:var(--wave-font-family)}' +
     reset +
-    '.bg-primary{background-color:var(--wave-primary)}' +
-    '.text-body-1{font-size:14px}' +
-    '.focus-visible\\:outline-ring{outline-color:var(--wave-ring)}.focus-visible\\:-outline-offset-2{outline-offset:-2px}' +
+    '.wave\\:bg-primary{background-color:var(--wave-primary)}' +
+    '.wave\\:text-body-1{font-size:14px}' +
+    '.wave\\:focus-visible\\:outline-ring{outline-color:var(--wave-ring)}.wave\\:focus-visible\\:-outline-offset-2{outline-offset:-2px}' +
     '@keyframes wave-spin{to{transform:rotate(360deg)}}';
 
   it('passes unlayered CSS with the classes, tokens, keyframes and scoped reset', () => {
@@ -231,13 +334,19 @@ describe('checkPlainCss (repo-level#1)', () => {
   });
 
   it.each([
-    ['.bg-primary', good.replace('.bg-primary{', '.bg-secondary{')],
-    ['.text-body-1', good.replace('.text-body-1{', '.text-body-2{')],
+    ['.wave:bg-primary', good.replace('.wave\\:bg-primary{', '.wave\\:bg-secondary{')],
+    ['.wave:text-body-1', good.replace('.wave\\:text-body-1{', '.wave\\:text-body-2{')],
     ['--wave-primary', good.replace('--wave-primary:', '--primary:')],
     ['@keyframes wave-spin', good.replace('@keyframes wave-spin', '@keyframes spin')],
     ['reset', good.replace(reset, '')],
   ])('reports missing %s', (what, css) => {
     expect(checkPlainCss(css).join('\n')).toContain(what === 'reset' ? 'native' : what);
+  });
+
+  it("reports a class without Wave's prefix (it could collide with an app's)", () => {
+    expect(checkPlainCss(`${good}.flex{display:flex}.bg-primary{color:red}`)).toEqual([
+      "holds classes without Wave's prefix wave: (they could collide with an app's): bg-primary flex",
+    ]);
   });
 
   it('reports raw Tailwind source (the 0.4 ./styles entry)', () => {
@@ -247,102 +356,222 @@ describe('checkPlainCss (repo-level#1)', () => {
   });
 });
 
-describe('checkTailwindCss (repo-level#1)', () => {
+describe('checkTailwindCss (repo-level#1; Phase 14 spec R6)', () => {
+  /** A rule of Wave's direction variant for `name`, unminified as the fixture compiles it. */
+  const directional = (name, declaration) =>
+    String.raw`.${name.replaceAll(':', '\\:')}{
+      @supports selector(:nth-child(n of :dir(rtl))){&:where(:nth-child(n of :dir(rtl))){${declaration}}}
+      @supports not selector(:nth-child(n of :dir(rtl))){&:where([dir="rtl"], [dir="rtl"] *){${declaration}}}}`;
+  const COMPONENT_RULES =
+    '.wave\\:bg-primary{background-color:var(--wave-primary)}.wave\\:text-body-1{font-size:14px}' +
+    '.wave\\:focus-visible\\:outline-ring:focus-visible{outline-color:var(--wave-ring)}' +
+    '.wave\\:focus-visible\\:-outline-offset-2:focus-visible{outline-offset:-2px}';
+  const MOTION_RULES =
+    '.duration-wave-normal{--tw-duration:var(--wave-duration-normal);transition-duration:var(--wave-duration-normal)}' +
+    '.ease-wave-decelerate-mid{--tw-ease:var(--wave-curve-decelerate-mid);transition-timing-function:var(--wave-curve-decelerate-mid)}';
+  const APP_RULES =
+    '.p-4{padding:1rem}.bg-wave-primary{background-color:var(--wave-primary)}' +
+    '.text-wave-body-1{font-size:14px}.border-wave-border{border-color:var(--wave-border)}' +
+    '.shadow-wave-4{box-shadow:var(--wave-shadow-4)}.font-wave{font-family:var(--wave-font-family)}' +
+    MOTION_RULES +
+    directional(APP_DIRECTION_CLASS, 'rotate:180deg');
+  const THEME =
+    '@layer theme{:root,:host{--color-red-500:red}:root,.wave-light{--wave-primary:#0f6cbd}}';
+  const BASE =
+    '@layer base{*{box-sizing:border-box}.wave-root,.wave-portal{font-family:var(--wave-font-family)}}';
+  const OVERRIDE = `@layer base{:root,.wave-light{--wave-primary:${APP_TOKEN_OVERRIDE}}}`;
+  /** A `./tailwind` build: the corrected form of the spike (spec §6, Task 1). */
   const good =
     '@layer theme,base,components,utilities;' +
-    '@layer theme{:root,:host{--color-red-500:red}:root,.wave-light{--wave-primary:#0f6cbd}}' +
-    '@layer base{*{box-sizing:border-box}.wave-root,.wave-portal{font-family:var(--wave-font-family)}}' +
-    '@layer utilities{.bg-primary{background-color:var(--color-primary)}.text-body-1{font-size:14px}.focus-visible\\:outline-ring{outline-color:var(--wave-ring)}.focus-visible\\:-outline-offset-2{outline-offset:-2px}.p-4{padding:1rem}' +
-    '.duration-wave-normal{--tw-duration:var(--wave-duration-normal);transition-duration:var(--wave-duration-normal)}' +
-    '.ease-wave-decelerate-mid{--tw-ease:var(--wave-curve-decelerate-mid);transition-timing-function:var(--wave-curve-decelerate-mid)}}';
+    THEME +
+    BASE +
+    `@layer components{${COMPONENT_RULES}}` +
+    OVERRIDE +
+    `@layer utilities{${APP_RULES}}`;
+  const check = (css, options = {}) =>
+    checkTailwindCss(css, { tokenOverride: APP_TOKEN_OVERRIDE, ...options });
 
-  it('passes Wave tokens in theme, base rules in base and the component classes from dist', () => {
-    expect(checkTailwindCss(good)).toEqual([]);
+  it('passes tokens in theme, the base and the override in base, the precompiled component classes in components, and the app classes', () => {
+    expect(check(good)).toEqual([]);
   });
 
-  it('reports component classes that were not generated (dist not scanned)', () => {
-    const css = good.replace('.bg-primary{background-color:var(--color-primary)}', '');
-    expect(checkTailwindCss(css).join('\n')).toMatch(/\.bg-primary/);
+  it("reports a component class generated into @layer utilities (Tailwind scanned the package's dist)", () => {
+    const scanned = good.replace(
+      '@layer utilities{',
+      '@layer utilities{.wave\\:focus-visible\\:-outline-offset-2:focus-visible{outline-offset:-2px}',
+    );
+    expect(check(scanned)).toEqual([
+      'the component class .wave:focus-visible:-outline-offset-2 was generated into @layer utilities: ' +
+        "Tailwind scanned the package's dist (./tailwind has no @source)",
+    ]);
   });
 
-  it('reports Wave base rules outside @layer base', () => {
-    const css = good
+  it('reports a component class that is missing or outside @layer components', () => {
+    expect(
+      check(good.replace('.wave\\:bg-primary{background-color:var(--wave-primary)}', '')),
+    ).toEqual([
+      'the component class .wave:bg-primary is missing (does @mortenbrudvik/waveui/tailwind import dist/components.css?)',
+    ]);
+    const unlayered = good.replace(`@layer components{${COMPONENT_RULES}}`, COMPONENT_RULES);
+    expect(check(unlayered)).toEqual(
+      [
+        'wave:bg-primary',
+        'wave:text-body-1',
+        'wave:focus-visible:outline-ring',
+        'wave:focus-visible:-outline-offset-2',
+      ].map(
+        (name) =>
+          `the component class .${name} must sit in @layer components, found in <unlayered>`,
+      ),
+    );
+  });
+
+  it('reports layers declared in another order (the app utilities would not win)', () => {
+    const css = good.replace(
+      '@layer theme,base,components,utilities;',
+      '@layer theme,base,utilities,components;',
+    );
+    expect(check(css)).toEqual([
+      'the layers must come in the order theme, base, components, utilities (found theme, base, utilities, components)',
+    ]);
+  });
+
+  it("reports the app's token override when it is missing or outside @layer base", () => {
+    expect(check(good.replace(OVERRIDE, ''))).toEqual([
+      "missing the app's token override (--wave-primary: #c4314b)",
+    ]);
+    expect(check(good.replace(OVERRIDE, `:root{--wave-primary:${APP_TOKEN_OVERRIDE}}`))).toEqual([
+      "the app's token override must sit in @layer base, found in <unlayered>",
+    ]);
+    // Without an expected override, an override counts as a Wave token outside the theme layer.
+    expect(checkTailwindCss(good)).toEqual([
+      'Wave tokens (--wave-primary) must sit in @layer theme, found in theme, base',
+    ]);
+  });
+
+  it('reports Wave base rules and tokens outside their layers', () => {
+    const base = good
       .replace('.wave-root,.wave-portal{font-family:var(--wave-font-family)}', '')
       .concat('.wave-root,.wave-portal{font-family:var(--wave-font-family)}');
-    expect(checkTailwindCss(css).join('\n')).toMatch(/@layer base/);
-  });
-
-  it('reports Wave tokens outside @layer theme', () => {
-    const css =
+    expect(check(base)).toEqual([
+      'Wave base rules (.wave-root) must sit in @layer base, found in <unlayered>',
+    ]);
+    const tokens =
       good.replace(':root,.wave-light{--wave-primary:#0f6cbd}', '') +
       ':root,.wave-light{--wave-primary:#0f6cbd}';
-    expect(checkTailwindCss(css).join('\n')).toMatch(/@layer theme/);
+    expect(check(tokens)).toEqual([
+      'Wave tokens (--wave-primary) must sit in @layer theme, found in <unlayered>',
+    ]);
   });
 
   it("reports a missing consumer utility (the fixture's own sources were not scanned)", () => {
-    expect(checkTailwindCss(good.replace('.p-4{padding:1rem}', '')).join('\n')).toMatch(/\.p-4/);
+    expect(check(good.replace('.p-4{padding:1rem}', ''))).toEqual([
+      "the consumer utility .p-4 was not generated (the fixture's own sources were not scanned)",
+    ]);
   });
 
-  it('reports motion utilities the consumer uses that the Wave theme did not generate', () => {
+  it('reports namespaced token utilities and motion utilities the Wave theme did not generate', () => {
+    const withoutTokens = good
+      .replace('.bg-wave-primary{background-color:var(--wave-primary)}', '')
+      .replace('.shadow-wave-4{box-shadow:var(--wave-shadow-4)}', '');
+    expect(check(withoutTokens)).toEqual([
+      'the namespaced token utilities .bg-wave-primary, .shadow-wave-4 were not generated (the ' +
+        'namespaced theme keys of @mortenbrudvik/waveui/tokens are missing)',
+    ]);
     const withoutMotion = good
       .replace(/\.duration-wave-normal\{[^}]*\}/, '')
       .replace(/\.ease-wave-decelerate-mid\{[^}]*\}/, '');
-    expect(checkTailwindCss(withoutMotion)).toEqual([
+    expect(check(withoutMotion)).toEqual([
       "the motion utilities .duration-wave-normal, .ease-wave-decelerate-mid were not generated (the Wave theme's --transition-duration-wave-* and --ease-wave-* mappings are missing)",
     ]);
-    expect(checkTailwindCss(good.replace(/\.ease-wave-decelerate-mid\{[^}]*\}/, ''))).toEqual([
+    expect(check(good.replace(/\.ease-wave-decelerate-mid\{[^}]*\}/, ''))).toEqual([
       "the motion utilities .ease-wave-decelerate-mid were not generated (the Wave theme's --transition-duration-wave-* and --ease-wave-* mappings are missing)",
     ]);
   });
 
-  describe("the wave-rtl classes of the package's dist (C-LOGICAL)", () => {
-    const directionClasses = ['wave-rtl:-scale-x-100'];
-    // Unminified, as the fixture compiles it: nested rules inside the utilities layer.
-    const compiled = String.raw`@layer utilities{.wave-rtl\:-scale-x-100{
-      @supports selector(:nth-child(n of :dir(rtl))){&:where(:nth-child(n of :dir(rtl))){scale:-1 1}}
-      @supports not selector(:nth-child(n of :dir(rtl))){&:where([dir="rtl"], [dir="rtl"] *){scale:-1 1}}}}`;
+  it("checks the app's own classes with its prefix (an app built with prefix(tw))", () => {
+    /** The app's rules of {@link good}, each class with the app's `tw:` prefix. */
+    const prefixedApp = APP_RULES.replaceAll(/\.(?=[a-z])/g, '.tw\\:');
+    const prefixed = good.replace(APP_RULES, prefixedApp);
+    expect(check(prefixed, { appPrefix: 'tw' })).toEqual([]);
+    // Unprefixed, the app's classes are no classes of a prefix(tw) build.
+    expect(check(good, { appPrefix: 'tw' })).toEqual([
+      'the namespaced token utilities .tw:bg-wave-primary, .tw:text-wave-body-1, ' +
+        '.tw:border-wave-border, .tw:shadow-wave-4, .tw:font-wave were not generated (the ' +
+        'namespaced theme keys of @mortenbrudvik/waveui/tokens are missing)',
+      "the motion utilities .tw:duration-wave-normal, .tw:ease-wave-decelerate-mid were not generated (the Wave theme's --transition-duration-wave-* and --ease-wave-* mappings are missing)",
+      "the app's class tw:wave-rtl:rotate-180 was not compiled with Wave's wave-rtl variant " +
+        '(does @mortenbrudvik/waveui/tailwind import variants.css?)',
+      "the consumer utility .tw:p-4 was not generated (the fixture's own sources were not scanned)",
+    ]);
+  });
 
-    it('passes when each is compiled with the variant of @mortenbrudvik/waveui/tailwind', () => {
-      expect(checkTailwindCss(good + compiled, { directionClasses })).toEqual([]);
+  describe('the wave-rtl classes (C-LOGICAL)', () => {
+    const directionClasses = ['wave:wave-rtl:-scale-x-100'];
+    const compiled = `@layer components{${directional('wave:wave-rtl:-scale-x-100', 'scale:-1 1')}}`;
+
+    it("passes the dist's classes compiled with the variant in dist/components.css", () => {
+      expect(check(good + compiled, { directionClasses })).toEqual([]);
     });
 
-    it('reports one that was not compiled (the entry does not define wave-rtl)', () => {
-      expect(checkTailwindCss(good, { directionClasses })).toEqual([
-        "the dist classes wave-rtl:-scale-x-100 were not compiled with Wave's wave-rtl variant " +
+    it('reports a dist class that was not compiled with the variant', () => {
+      expect(check(good, { directionClasses })).toEqual([
+        "the dist classes wave:wave-rtl:-scale-x-100 were not compiled with Wave's wave-rtl variant " +
+          '(is dist/components.css compiled with src/styles/variants.css?)',
+      ]);
+    });
+
+    it("reports the app's own class that was not compiled (the entry does not define wave-rtl)", () => {
+      const css = good.replace(directional(APP_DIRECTION_CLASS, 'rotate:180deg'), '');
+      expect(check(css)).toEqual([
+        "the app's class wave-rtl:rotate-180 was not compiled with Wave's wave-rtl variant " +
           '(does @mortenbrudvik/waveui/tailwind import variants.css?)',
       ]);
     });
   });
 
-  describe('a custom setup on ./tokens (setup: "tokens")', () => {
-    const directionClasses = ['wave-rtl:-scale-x-100'];
-    const compiled = String.raw`@layer utilities{.wave-rtl\:-scale-x-100{
-      @supports selector(:nth-child(n of :dir(rtl))){&:where(:nth-child(n of :dir(rtl))){scale:-1 1}}
-      @supports not selector(:nth-child(n of :dir(rtl))){&:where([dir="rtl"], [dir="rtl"] *){scale:-1 1}}}}`;
-    // The setup brings its own base styles: no Wave base rules.
-    const withoutBase = good.replace(
-      '.wave-root,.wave-portal{font-family:var(--wave-font-family)}',
-      '',
-    );
+  describe('the custom setup on ./tokens and ./variants.css (setup: "tokens")', () => {
+    /** The app's classes on Wave's theme keys; no component class, no Wave base. */
+    const tokens =
+      '@layer theme,base,components,utilities;' + THEME + `@layer utilities{${APP_RULES}}`;
 
-    it('passes tokens in theme and the compiled dist classes, without Wave base rules', () => {
+    it("passes tokens in theme and the app's classes, without a component class", () => {
+      expect(checkTailwindCss(tokens, { setup: 'tokens' })).toEqual([]);
+      // The dist's direction classes are not the setup's: the components come from ./styles.
       expect(
-        checkTailwindCss(withoutBase + compiled, { directionClasses, setup: 'tokens' }),
+        checkTailwindCss(tokens, {
+          setup: 'tokens',
+          directionClasses: ['wave:wave-rtl:-scale-x-100'],
+        }),
       ).toEqual([]);
     });
 
-    it('reports wave-rtl classes that were not compiled (./variants.css not imported)', () => {
-      expect(checkTailwindCss(withoutBase, { directionClasses, setup: 'tokens' })).toEqual([
-        "the dist classes wave-rtl:-scale-x-100 were not compiled with Wave's wave-rtl variant " +
+    it('reports component classes (the setup compiled the components or ./tokens holds unnamespaced keys)', () => {
+      const css = tokens.replace(
+        '@layer utilities{',
+        '@layer utilities{.wave\\:bg-primary{color:red}',
+      );
+      expect(checkTailwindCss(css, { setup: 'tokens' })).toEqual([
+        'the component classes .wave:bg-primary are in the custom setup (its components come from ' +
+          "./styles: ./tokens must hold no unnamespaced theme key, and the setup must not scan the package's dist)",
+      ]);
+    });
+
+    it("reports the app's wave-rtl class that was not compiled (./variants.css not imported)", () => {
+      const css = tokens.replace(directional(APP_DIRECTION_CLASS, 'rotate:180deg'), '');
+      expect(checkTailwindCss(css, { setup: 'tokens' })).toEqual([
+        "the app's class wave-rtl:rotate-180 was not compiled with Wave's wave-rtl variant " +
           '(does the setup import @mortenbrudvik/waveui/variants.css?)',
       ]);
     });
 
     it('still reports Wave tokens outside @layer theme', () => {
       const css =
-        withoutBase.replace(':root,.wave-light{--wave-primary:#0f6cbd}', '') +
+        tokens.replace(':root,.wave-light{--wave-primary:#0f6cbd}', '') +
         ':root,.wave-light{--wave-primary:#0f6cbd}';
-      expect(checkTailwindCss(css, { setup: 'tokens' }).join('\n')).toMatch(/@layer theme/);
+      expect(checkTailwindCss(css, { setup: 'tokens' })).toEqual([
+        'Wave tokens (--wave-primary) must sit in @layer theme, found in <unlayered>',
+      ]);
     });
   });
 
@@ -353,27 +582,119 @@ describe('checkTailwindCss (repo-level#1)', () => {
   });
 });
 
+describe('checkUtilitiesCss (Phase 14 spec R6, ruling BL)', () => {
+  const SAMPLE = [
+    'bg-wave-primary',
+    'text-wave-foreground',
+    'border-wave-border',
+    'ring-wave-ring',
+    'fill-wave-palette-red',
+    'stroke-wave-brand-80',
+    'text-wave-body-1',
+    'shadow-wave-4',
+    'font-wave',
+    'font-wave-mono',
+    'animate-wave-spin',
+  ];
+  const good =
+    '@layer properties{@supports ((-webkit-hyphens:none)){*,:before,:after{--tw-ring-color:initial}}}' +
+    SAMPLE.map((name) => `.${name}{color:var(--wave-primary)}`).join('') +
+    '@property --tw-ring-color{syntax:"*";inherits:false}' +
+    '@keyframes wave-spin{to{transform:rotate(360deg)}}';
+
+  it('passes the namespaced token utilities, unlayered, with the keyframes', () => {
+    expect(checkUtilitiesCss(good)).toEqual([]);
+  });
+
+  it('reports a missing utility and another class', () => {
+    expect(
+      checkUtilitiesCss(good.replace('.ring-wave-ring{color:var(--wave-primary)}', '')),
+    ).toEqual(['missing the token utilities .ring-wave-ring']);
+    const other = good.replace(
+      '.bg-wave-primary{',
+      String.raw`.bg-primary{color:red}.hover\:bg-wave-primary:hover{color:red}.bg-wave-primary{`,
+    );
+    expect(checkUtilitiesCss(other)).toEqual([
+      'holds classes other than the namespaced token utilities: bg-primary hover:bg-wave-primary',
+    ]);
+  });
+
+  it('reports a layer, and a class inside one, the properties fallback included', () => {
+    // The layered sheet of the first 1.0 build: inside the root, the base styles of ./styles
+    // (zero specificity, but unlayered) beat its classes.
+    const layered = good.replace(
+      /\.bg-wave-primary\{[^}]*\}/,
+      (rule) => `@layer utilities{${rule}}`,
+    );
+    expect(checkUtilitiesCss(layered)).toEqual([
+      'layered output: @layer utilities (./utilities must be unlayered, or the base styles of ' +
+        './styles beat its classes)',
+      'classes inside a @layer: .bg-wave-primary',
+    ]);
+    expect(checkUtilitiesCss(`${good}@layer properties{.bg-wave-primary{color:red}}`)).toEqual([
+      'classes inside a @layer: .bg-wave-primary',
+    ]);
+  });
+
+  it('reports tokens, raw Tailwind source and missing keyframes', () => {
+    expect(checkUtilitiesCss(`:root{--wave-primary:#0f6cbd}${good}`)).toEqual([
+      'declares Wave tokens (they come from ./styles)',
+    ]);
+    expect(checkUtilitiesCss(`@import 'tailwindcss';${good}`)).toEqual([
+      `raw Tailwind source, not compiled CSS: "@import 'tailwindcss'"`,
+    ]);
+    expect(checkUtilitiesCss(good.replace('@keyframes wave-spin', '@keyframes spin'))).toEqual([
+      'missing @keyframes wave-spin',
+    ]);
+  });
+});
+
 describe('the Tailwind fixture', () => {
   const fixture = join(root, 'scripts/fixtures/tailwind');
 
-  it('compiles the documented ./tailwind entry', () => {
+  it('compiles the documented ./tailwind entry and an app token override in its base layer', () => {
     const css = readFileSync(join(fixture, 'input.css'), 'utf8');
     expect(css).toMatch(/@import 'tailwindcss';\s*@import '@mortenbrudvik\/waveui\/tailwind';/);
+    expect(css).toMatch(
+      new RegExp(
+        String.raw`@layer base \{\s*:root,\s*\.wave-light \{\s*--wave-primary: ${APP_TOKEN_OVERRIDE};\s*\}\s*\}`,
+      ),
+    );
+    expect(css).not.toMatch(/@source/);
   });
 
-  it('compiles a custom setup on ./tokens with ./variants.css and its own @source', () => {
+  it('compiles the custom setup on ./tokens with ./variants.css and no @source of the package', () => {
     const css = readFileSync(join(fixture, 'tokens-input.css'), 'utf8');
     expect(css).toMatch(/@import 'tailwindcss';/);
     expect(css).toMatch(/@import '@mortenbrudvik\/waveui\/tokens' layer\(theme\);/);
     expect(css).toMatch(/@import '@mortenbrudvik\/waveui\/variants\.css';/);
-    expect(css).toMatch(/@source '\.\/node_modules\/@mortenbrudvik\/waveui\/dist';/);
+    expect(css).not.toMatch(/@source/);
     expect(css).not.toMatch(/waveui\/tailwind/);
   });
 
-  it("uses Wave's motion utilities in its own source (the Tailwind path exposes them)", () => {
+  it('compiles the same entry in an app with its own prefix (prefix(tw))', () => {
+    const css = readFileSync(join(fixture, 'prefixed-input.css'), 'utf8');
+    expect(css).toMatch(
+      /@import 'tailwindcss' prefix\(tw\);\s*@import '@mortenbrudvik\/waveui\/tailwind';/,
+    );
+    expect(css).toContain(`--wave-primary: ${APP_TOKEN_OVERRIDE};`);
+    expect(css).not.toMatch(/@source/);
+    const html = readFileSync(join(fixture, 'src/prefixed-app.html'), 'utf8');
+    expect(html).toMatch(
+      /<p\s+class="tw:bg-wave-primary tw:text-wave-body-1 tw:border-wave-border tw:shadow-wave-4 tw:font-wave tw:wave-rtl:rotate-180"\s*>/,
+    );
+    expect(html).toMatch(
+      /<main class="tw:p-4 tw:duration-wave-normal tw:ease-wave-decelerate-mid">/,
+    );
+  });
+
+  it("uses Wave's namespaced token, motion and direction utilities in its own source", () => {
     const html = readFileSync(join(fixture, 'src/app.html'), 'utf8');
     expect(html).toMatch(
       /<main class="[^"]*\bduration-wave-normal ease-wave-decelerate-mid\b[^"]*">/,
+    );
+    expect(html).toMatch(
+      /<p\s+class="bg-wave-primary text-wave-body-1 border-wave-border shadow-wave-4 font-wave wave-rtl:rotate-180"\s*>/,
     );
   });
 });
@@ -382,6 +703,11 @@ describe('the plain fixture', () => {
   it('has a Vite entry that imports the precompiled stylesheet as documented', () => {
     const entry = readFileSync(join(root, 'scripts/fixtures/plain/vite-entry.js'), 'utf8');
     expect(entry).toMatch(/^import '@mortenbrudvik\/waveui\/styles';$/m);
+  });
+
+  it('has a Vite entry that imports the token utilities', () => {
+    const entry = readFileSync(join(root, 'scripts/fixtures/plain/utilities-entry.js'), 'utf8');
+    expect(entry).toMatch(/^import '@mortenbrudvik\/waveui\/utilities\.css';$/m);
   });
 });
 
@@ -491,26 +817,34 @@ describe('checkPlainSmoke', () => {
   const side = { names: ['Button', 'WaveProvider', 'cn', 'CardHeader'], cn: 'a b', resolved };
   const good = { esm: side, cjs: side };
 
-  it('passes when ESM and CJS load the same names and every subpath resolves', () => {
+  it('passes when import() and require() load the same names and every subpath resolves', () => {
     expect(checkPlainSmoke(good)).toEqual([]);
   });
 
-  it('reports a format that fails to load or lacks names', () => {
+  it('reports a way in that fails to load or lacks names', () => {
     const errors = checkPlainSmoke({
-      cjs: { error: "Cannot find module './dist/index.cjs'", resolved },
+      cjs: { error: 'require() cannot be used on an ESM graph with top-level await', resolved },
       esm: { ...side, names: ['cn'] },
     });
-    expect(errors.join('\n')).toMatch(/require.*Cannot find module/);
+    expect(errors.join('\n')).toMatch(/require failed: require\(\) cannot be used/);
     expect(errors.join('\n')).toMatch(/Button/);
   });
 
-  it('reports a wrong cn result and names that differ between the formats', () => {
+  it('reports a wrong cn result and names that differ between import() and require()', () => {
     const errors = checkPlainSmoke({
       esm: { ...side, cn: 'a false b' },
       cjs: { ...side, names: [...side.names, 'Extra'] },
     });
     expect(errors.join('\n')).toMatch(/cn/);
-    expect(errors.join('\n')).toMatch(/Extra/);
+    expect(errors).toContain('only require() exposes Extra');
+  });
+
+  it('reports a name only import() exposes', () => {
+    const errors = checkPlainSmoke({
+      esm: { ...side, names: [...side.names, 'Extra'] },
+      cjs: side,
+    });
+    expect(errors).toEqual(['only import() exposes Extra (require() lacks them)']);
   });
 
   it('reports a subpath that does not resolve and aliases that resolve apart', () => {
@@ -534,18 +868,89 @@ describe('checkPlainSmoke', () => {
   });
 });
 
+describe('the Node floor step (spec R4)', () => {
+  const resolved = Object.fromEntries(
+    EXPORTED_SUBPATHS.map((subpath) => [subpath, `/app/${subpath.replace(/\.css$/, '')}`]),
+  );
+  const side = { names: ['Button', 'WaveProvider', 'cn'], cn: 'a b', resolved };
+
+  it('passes when require() on Node 22.12 exposes the names import() does', () => {
+    expect(checkFloorSmoke({ esm: side, floor: side })).toEqual([]);
+  });
+
+  it('reports a require() that fails on the floor, such as a top-level await', () => {
+    const errors = checkFloorSmoke({
+      esm: side,
+      floor: { error: 'require() cannot be used on an ESM graph with top-level await', resolved },
+    });
+    expect(errors).toEqual([
+      'require (Node 22.12) failed: require() cannot be used on an ESM graph with top-level await',
+    ]);
+  });
+
+  it('reports names that differ from import()', () => {
+    const errors = checkFloorSmoke({ esm: side, floor: { ...side, names: ['cn'] } });
+    expect(errors).toEqual([
+      'require (Node 22.12) lacks Button, WaveProvider',
+      'only import() exposes Button, WaveProvider (require() on Node 22.12 lacks them)',
+    ]);
+  });
+
+  it('skips the step, with the reason, unless WAVE_NODE_FLOOR is a Node.js 22.12 binary', () => {
+    const versionOf = (path) => ({ '/n/22.12': 'v22.12.0\n', '/n/24': 'v24.15.0\n' })[path];
+    expect(resolveFloorNode({}, versionOf)).toEqual({
+      skip: 'WAVE_NODE_FLOOR is not set (the path of a Node.js 22.12 binary)',
+    });
+    expect(resolveFloorNode({ WAVE_NODE_FLOOR: '/n/missing' }, versionOf)).toEqual({
+      skip: 'WAVE_NODE_FLOOR (/n/missing) could not be run',
+    });
+    expect(resolveFloorNode({ WAVE_NODE_FLOOR: '/n/24' }, versionOf)).toEqual({
+      skip: 'WAVE_NODE_FLOOR (/n/24) is v24.15.0, not Node.js 22.12',
+    });
+    expect(resolveFloorNode({ WAVE_NODE_FLOOR: '/n/22.12' }, versionOf)).toEqual({
+      path: '/n/22.12',
+    });
+  });
+
+  it('runs no binary when the variable is not set', () => {
+    const versionOf = vi.fn();
+    resolveFloorNode({}, versionOf);
+    expect(versionOf).not.toHaveBeenCalled();
+  });
+});
+
+describe('the plain fixture type programs (spec R4)', () => {
+  const fixture = join(root, 'scripts/fixtures/plain');
+  const read = (name) => JSON.parse(readFileSync(join(fixture, name), 'utf8'));
+
+  it('checks the .mts file under module node16', () => {
+    expect(read('tsconfig.json').files).toEqual(['types-esm.mts']);
+    expect(read('tsconfig.json').compilerOptions.module).toBe('node16');
+  });
+
+  it('checks the .cts file under module node20 (node16 reports TS1479 for a require of an ES module)', () => {
+    expect(read('tsconfig.cjs.json').files).toEqual(['types-cjs.cts']);
+    expect(read('tsconfig.cjs.json').compilerOptions.module).toBe('node20');
+  });
+
+  it('keeps smoke.cjs as the require(esm) consumer', () => {
+    const smoke = readFileSync(join(fixture, 'smoke.cjs'), 'utf8');
+    expect(smoke).toMatch(/require\(name\)/);
+    expect(smoke).toMatch(/require\(esm\)/);
+  });
+});
+
 describe('checkTypeProgram (repo-level#5)', () => {
-  it('passes when the ESM file got index.d.ts and the CommonJS file index.d.cts', () => {
+  it('passes when the program loaded index.d.ts', () => {
     expect(
       checkTypeProgram({
         status: 0,
-        output:
-          '/f/node_modules/@mortenbrudvik/waveui/dist/index.d.ts\n/f/node_modules/@mortenbrudvik/waveui/dist/index.d.cts\n',
+        output: '/f/node_modules/@mortenbrudvik/waveui/dist/index.d.ts\n',
       }),
     ).toEqual([]);
   });
 
-  it('reports type errors such as TS1479 (ESM-typed declarations for require)', () => {
+  it('reports type errors such as TS1479 (a CommonJS file that cannot require the ES entry)', () => {
     const errors = checkTypeProgram({
       status: 2,
       output:
@@ -554,13 +959,10 @@ describe('checkTypeProgram (repo-level#5)', () => {
     expect(errors.join('\n')).toMatch(/TS1479/);
   });
 
-  it('reports a program that never loaded the CommonJS declaration', () => {
-    expect(
-      checkTypeProgram({
-        status: 0,
-        output: '/f/node_modules/@mortenbrudvik/waveui/dist/index.d.ts\n',
-      }),
-    ).toEqual([expect.stringContaining('index.d.cts')]);
+  it('reports a program that never loaded the declarations', () => {
+    expect(checkTypeProgram({ status: 0, output: '/f/types-esm.mts\n' })).toEqual([
+      expect.stringContaining('index.d.ts'),
+    ]);
   });
 
   it("counts only this package's declarations, not another dependency's dist/index.d.*", () => {
@@ -569,23 +971,18 @@ describe('checkTypeProgram (repo-level#5)', () => {
         status: 0,
         output: [
           '/f/node_modules/other-lib/dist/index.d.ts',
-          '/f/node_modules/@mortenbrudvik/waveui-extra/dist/index.d.cts',
-          '/f/node_modules/@scope/lib/node_modules/@mortenbrudvik/waveuix/dist/index.d.cts',
+          '/f/node_modules/@mortenbrudvik/waveui-extra/dist/index.d.ts',
+          '/f/node_modules/@scope/lib/node_modules/@mortenbrudvik/waveuix/dist/index.d.ts',
         ].join('\n'),
       }),
-    ).toEqual([
-      expect.stringMatching(/ES module consumer did not load .*dist\/index\.d\.ts/),
-      expect.stringMatching(/CommonJS consumer did not load .*dist\/index\.d\.cts/),
-    ]);
+    ).toEqual([expect.stringMatching(/consumers did not load .*dist\/index\.d\.ts/)]);
   });
 
   it('reads Windows paths from tsc --listFiles', () => {
     expect(
       checkTypeProgram({
         status: 0,
-        output:
-          'C:\\w\\plain\\node_modules\\@mortenbrudvik\\waveui\\dist\\index.d.ts\r\n' +
-          'C:\\w\\plain\\node_modules\\@mortenbrudvik\\waveui\\dist\\index.d.cts\r\n',
+        output: 'C:\\w\\plain\\node_modules\\@mortenbrudvik\\waveui\\dist\\index.d.ts\r\n',
       }),
     ).toEqual([]);
   });

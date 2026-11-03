@@ -27,7 +27,9 @@ import {
   expectThrows,
   openingTags,
   testCompoundExposure,
+  testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 
 function inPicker(props: { disabled?: boolean } = {}) {
@@ -172,12 +174,15 @@ describe('ColorPicker parts (D21)', () => {
     testSystemProps(ColorPicker.HexField, {
       expectedTag: 'label',
       displayName: 'ColorPickerHexField',
-      control: { role: 'textbox' },
+      ref: 'control',
+      control: { role: 'textbox', tag: 'input' },
       wrapper: InPicker,
     });
 
-    it('routes id, the labelling aria-*, autoFocus, tabIndex, focus handlers and controlRef to the input', () => {
-      const controlRef = React.createRef<HTMLInputElement>();
+    testRootPartRef(ColorPicker.HexField, { wrapper: InPicker });
+
+    it('routes id, the labelling aria-*, autoFocus, tabIndex, focus handlers and ref to the input', () => {
+      const ref = React.createRef<HTMLInputElement>();
       const onFocus = vi.fn();
       render(
         <>
@@ -188,7 +193,7 @@ describe('ColorPicker parts (D21)', () => {
               tabIndex={-1}
               autoFocus
               onFocus={onFocus}
-              controlRef={controlRef}
+              ref={ref}
               className="custom-field"
               data-testid="field"
             />
@@ -197,7 +202,7 @@ describe('ColorPicker parts (D21)', () => {
         </>,
       );
       const input = hexInput();
-      expect(controlRef.current).toBe(input);
+      expect(ref.current).toBe(input);
       expect(input).toHaveAttribute('id', 'accent-hex');
       expect(input).toHaveAttribute('tabindex', '-1');
       expect(input).toHaveAccessibleDescription('Six digits');
@@ -317,7 +322,7 @@ describe('ColorPicker parts (D21)', () => {
         </ColorPicker>,
       );
       const swatches = screen.getByRole('radiogroup', { name: 'Brand colors' });
-      expect(swatches.querySelector('[role="radio"]')).toHaveClass('w-10', 'h-10');
+      expect(swatches.querySelector('[role="radio"]')).toHaveClass('wave:w-10', 'wave:h-10');
       rerender(
         <ColorPicker aria-label="Accent" presets={[]}>
           <ColorPicker.Swatches />
@@ -343,8 +348,8 @@ describe('ColorPicker parts (D21)', () => {
       const preview = container.querySelector<HTMLElement>('[data-color-preview]') as HTMLElement;
       expect(preview).toHaveClass(
         colorPickerPreviewClassNames.root,
-        'rounded-none',
-        'forced-colors:forced-color-adjust-none',
+        'wave:rounded-none',
+        'wave:forced-colors:forced-color-adjust-none',
       );
       expect(preview).toHaveAttribute('aria-hidden', 'true');
       expect(preview).toHaveStyle({ backgroundColor: 'rgba(15, 108, 189, 0.5)' });
@@ -354,7 +359,7 @@ describe('ColorPicker parts (D21)', () => {
 
 describe('ColorPicker.HexField — slotProps', () => {
   type HexFieldSlotProps = NonNullable<ColorPickerHexFieldProps['slotProps']>;
-  const EVERY_PART: HexFieldSlotProps = { label: {}, input: {}, errorMessage: {} };
+  const EVERY_PART: HexFieldSlotProps = { root: {}, label: {}, input: {}, errorMessage: {} };
   const ERROR_TEXT = 'Enter a hex color such as #0f6cbd.';
   const parts = (root: ParentNode) =>
     [
@@ -379,9 +384,9 @@ describe('ColorPicker.HexField — slotProps', () => {
     };
     expect(tagsOf(inPicker(<ColorPicker.HexField />))).toBe(
       [
-        '<label class="wave-color-picker-hex-field flex min-w-0 flex-col gap-1">',
-        '<span class="wave-color-picker-hex-field__label text-caption-1 text-muted-foreground">',
-        '<input aria-label="Hex color value" autocomplete="off" class="wave-color-picker-hex-field__input w-24 rounded border border-input border-b-stroke-accessible bg-background px-2 py-1 text-body-1 text-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary" maxlength="9" spellcheck="false" type="text" value="#0f6cbd">',
+        '<label class="wave-color-picker-hex-field wave:flex wave:min-w-0 wave:flex-col wave:gap-1">',
+        '<span class="wave-color-picker-hex-field__label wave:text-caption-1 wave:text-muted-foreground">',
+        '<input aria-label="Hex color value" autocomplete="off" class="wave-color-picker-hex-field__input wave:w-24 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:px-2 wave:py-1 wave:text-body-1 wave:text-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary" maxlength="9" spellcheck="false" type="text" value="#0f6cbd">',
       ].join('\n'),
     );
     expect(
@@ -406,9 +411,9 @@ describe('ColorPicker.HexField — slotProps', () => {
       ),
     ).toBe(
       [
-        '<label class="wave-color-picker-hex-field flex min-w-0 flex-col gap-1">',
-        '<span class="wave-color-picker-hex-field__label text-caption-1 text-muted-foreground">',
-        '<input aria-describedby="err own-hint" aria-details="details" aria-errormessage="err" aria-invalid="true" aria-labelledby="own-label" aria-required="true" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" class="wave-color-picker-hex-field__input w-24 rounded border bg-background px-2 py-1 text-body-1 text-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary border-destructive" enterkeyhint="done" id="hex" inputmode="text" maxlength="9" spellcheck="true" tabindex="2" type="text" value="#0f6cbd">',
+        '<label class="wave-color-picker-hex-field wave:flex wave:min-w-0 wave:flex-col wave:gap-1">',
+        '<span class="wave-color-picker-hex-field__label wave:text-caption-1 wave:text-muted-foreground">',
+        '<input aria-describedby="err own-hint" aria-details="details" aria-errormessage="err" aria-invalid="true" aria-labelledby="own-label" aria-required="true" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" class="wave-color-picker-hex-field__input wave:w-24 wave:rounded wave:border wave:bg-background wave:px-2 wave:py-1 wave:text-body-1 wave:text-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:border-destructive" enterkeyhint="done" id="hex" inputmode="text" maxlength="9" spellcheck="true" tabindex="2" type="text" value="#0f6cbd">',
       ].join('\n'),
     );
   });
@@ -419,10 +424,10 @@ describe('ColorPicker.HexField — slotProps', () => {
     fireEvent.change(hexInput(), { target: { value: 'zz' } });
     expect(openingTags(...parts(document))).toBe(
       [
-        '<label class="wave-color-picker-hex-field flex min-w-0 flex-col gap-1">',
-        '<span class="wave-color-picker-hex-field__label text-caption-1 text-muted-foreground">',
-        '<input aria-describedby="wave-color-picker-error-_id0_" aria-invalid="true" aria-label="Hex color value" autocomplete="off" class="wave-color-picker-hex-field__input w-24 rounded border bg-background px-2 py-1 text-body-1 text-foreground focus:outline-hidden focus:border-b-2 focus:border-b-primary border-destructive" maxlength="9" spellcheck="false" type="text" value="#zz">',
-        '<span class="wave-color-picker-hex-field__error-message text-caption-1 text-error" id="wave-color-picker-error-_id0_">',
+        '<label class="wave-color-picker-hex-field wave:flex wave:min-w-0 wave:flex-col wave:gap-1">',
+        '<span class="wave-color-picker-hex-field__label wave:text-caption-1 wave:text-muted-foreground">',
+        '<input aria-describedby="wave-color-picker-error-_id0_" aria-invalid="true" aria-label="Hex color value" autocomplete="off" class="wave-color-picker-hex-field__input wave:w-24 wave:rounded wave:border wave:bg-background wave:px-2 wave:py-1 wave:text-body-1 wave:text-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:border-destructive" maxlength="9" spellcheck="false" type="text" value="#zz">',
+        '<span class="wave-color-picker-hex-field__error-message wave:text-caption-1 wave:text-error" id="wave-color-picker-error-_id0_">',
       ].join('\n'),
     );
   });
@@ -437,6 +442,17 @@ describe('ColorPicker.HexField — slotProps', () => {
         tabIndex={0}
         inputMode="text"
         className="my-field"
+      />,
+      // The root's own props: the rest, the style and the hidden state.
+      <ColorPicker.HexField
+        key="root"
+        className="c"
+        style={{ color: 'red' }}
+        title="t"
+        hidden
+        inert
+        aria-hidden
+        onPointerDown={() => {}}
       />,
     ];
     for (const field of fields) {
@@ -479,7 +495,7 @@ describe('ColorPicker.HexField — slotProps', () => {
       [
         screen.getByText('Hex'),
         colorPickerHexFieldClassNames.label,
-        'text-caption-1',
+        'wave:text-caption-1',
         'my-label',
         'label',
         'rgb(255, 0, 0)',
@@ -487,7 +503,7 @@ describe('ColorPicker.HexField — slotProps', () => {
       [
         hexInput(),
         colorPickerHexFieldClassNames.input,
-        'w-24',
+        'wave:w-24',
         'my-input',
         'input',
         'rgb(0, 128, 0)',
@@ -495,7 +511,7 @@ describe('ColorPicker.HexField — slotProps', () => {
       [
         screen.getByText(ERROR_TEXT),
         colorPickerHexFieldClassNames.errorMessage,
-        'text-error',
+        'wave:text-error',
         'my-error',
         'error',
         'rgb(0, 0, 255)',
@@ -512,21 +528,21 @@ describe('ColorPicker.HexField — slotProps', () => {
   it('lets your class replace a conflicting class of the part', () => {
     render(inPicker(<ColorPicker.HexField slotProps={{ input: { className: 'w-32' } }} />));
     expect(hexInput()).toHaveClass('w-32');
-    expect(hexInput()).not.toHaveClass('w-24');
+    expect(hexInput()).not.toHaveClass('wave:w-24');
   });
 
-  it('attaches your refs to the parts, beside controlRef and ref', () => {
+  it('attaches your refs to the parts, beside ref', () => {
+    const root = React.createRef<HTMLLabelElement>();
     const label = React.createRef<HTMLSpanElement>();
     const input = React.createRef<HTMLInputElement>();
     const errorMessage = React.createRef<HTMLSpanElement>();
-    const controlRef = React.createRef<HTMLInputElement>();
-    const ref = React.createRef<HTMLLabelElement>();
+    const ref = React.createRef<HTMLInputElement>();
     render(
       inPicker(
         <ColorPicker.HexField
           ref={ref}
-          controlRef={controlRef}
           slotProps={{
+            root: { ref: root },
             label: { ref: label },
             input: { ref: input },
             errorMessage: { ref: errorMessage },
@@ -538,9 +554,9 @@ describe('ColorPicker.HexField — slotProps', () => {
     fireEvent.change(hexInput(), { target: { value: 'zz' } });
     expect(label.current).toBe(screen.getByText('Hex'));
     expect(input.current).toBe(hexInput());
-    expect(controlRef.current).toBe(hexInput());
+    expect(ref.current).toBe(hexInput());
     expect(errorMessage.current).toBe(screen.getByText(ERROR_TEXT));
-    expect(ref.current).toBe(hexInput().closest('label'));
+    expect(root.current).toBe(hexInput().closest('label'));
   });
 
   it('runs your input handlers first, then the field’s own and its handling', async () => {
@@ -865,7 +881,12 @@ describe('ColorPicker.HexField — slotProps', () => {
   });
 
   it('types each part for its element, and takes no children', () => {
-    expectTypeOf<keyof HexFieldSlotProps>().toEqualTypeOf<'label' | 'input' | 'errorMessage'>();
+    expectTypeOf<keyof HexFieldSlotProps>().toEqualTypeOf<
+      'root' | 'label' | 'input' | 'errorMessage'
+    >();
+    expectTypeOf<NonNullable<HexFieldSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLabelElement> | undefined
+    >();
     expectTypeOf<NonNullable<HexFieldSlotProps['label']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLSpanElement> | undefined
     >();
@@ -877,5 +898,308 @@ describe('ColorPicker.HexField — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: `labels.hexError` gives the error its text
     void (<ColorPicker.HexField slotProps={{ errorMessage: { children: 'Bad' } }} />);
+    // @ts-expect-error -- a part takes no children: the field draws its content
+    void (<ColorPicker.HexField slotProps={{ root: { children: 'x' } }} />);
+  });
+
+  describe('the root part', () => {
+    const root = () => hexInput().closest('label') as HTMLElement;
+
+    it("puts your className, style, data-* and attributes on the root <label>, after the field's className and style", () => {
+      render(
+        inPicker(
+          <ColorPicker.HexField
+            className="mine"
+            style={{ color: 'red', width: 10 }}
+            slotProps={{
+              root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+            }}
+          />,
+        ),
+      );
+      expect(root().classList[0]).toBe(colorPickerHexFieldClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(hexInput()).not.toHaveAttribute('data-part');
+      expect(hexInput()).not.toHaveAttribute('title');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(inPicker(<ColorPicker.HexField slotProps={{ root: { className: 'gap-2' } }} />));
+      expect(root()).toHaveClass('gap-2');
+      expect(root()).not.toHaveClass('wave:gap-1');
+    });
+
+    it("keeps the props you give the field over the part's", () => {
+      render(
+        inPicker(
+          <ColorPicker.HexField
+            title="Own"
+            data-x="own"
+            slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+          />,
+        ),
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+    });
+
+    it('keeps its hidden state: a part changes none of it', () => {
+      const { rerender } = render(
+        inPicker(
+          <ColorPicker.HexField
+            slotProps={{ root: { hidden: true, inert: true, 'aria-hidden': true } }}
+          />,
+        ),
+      );
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The field's own hidden state stays its own.
+      rerender(
+        inPicker(
+          <ColorPicker.HexField
+            hidden
+            inert
+            aria-hidden
+            slotProps={{ root: { hidden: false, inert: false, 'aria-hidden': false } }}
+          />,
+        ),
+      );
+      const hiddenRoot = screen
+        .getByRole('textbox', { name: 'Hex color value', hidden: true })
+        .closest('label');
+      expect(hiddenRoot).toHaveAttribute('hidden');
+      expect(hiddenRoot).toHaveAttribute('inert');
+      expect(hiddenRoot).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    // State-off lock: the root has no `for` of its own (it labels the input it holds), so a
+    // part's `htmlFor` would send the caption's clicks to another element.
+    it('keeps a part from giving the root a for: a click on the caption still focuses the hex input', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <>
+          <input id="decoy" aria-label="Decoy" />
+          {inPicker(<ColorPicker.HexField slotProps={{ root: { htmlFor: 'decoy' } }} />)}
+        </>,
+      );
+      expect(root()).not.toHaveAttribute('for');
+      await user.click(screen.getByText('Hex'));
+      expect(hexInput()).toHaveFocus();
+      // A `for` given to the field itself (untyped code) still reaches the root, as in 0.18.
+      rerender(
+        <>
+          <input id="decoy" aria-label="Decoy" />
+          {inPicker(<ColorPicker.HexField {...({ htmlFor: 'decoy' } as object)} />)}
+        </>,
+      );
+      expect(root()).toHaveAttribute('for', 'decoy');
+    });
+
+    it("runs your root handlers before the field's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        inPicker(
+          <ColorPicker.HexField
+            onPointerDown={() => order.push('own')}
+            slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+          />,
+        ),
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        inPicker(
+          <ColorPicker.HexField
+            onPointerDown={() => order.push('own')}
+            slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+          />,
+        ),
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    // A click on the caption reaches the root, then the <label> passes it to the input, whose own
+    // click bubbles to the root again: the browser's label behaviour.
+    it('sees a click on the caption as it bubbles, before and after the label passes it to the input', async () => {
+      const user = userEvent.setup();
+      const targets: EventTarget[] = [];
+      render(
+        inPicker(
+          <ColorPicker.HexField
+            slotProps={{ root: { onClick: (event) => targets.push(event.target) } }}
+          />,
+        ),
+      );
+      const caption = screen.getByText('Hex');
+      await user.click(caption);
+      expect(targets).toEqual([caption, hexInput()]);
+      expect(hexInput()).toHaveFocus();
+      targets.length = 0;
+      await user.click(hexInput());
+      expect(targets).toEqual([hexInput()]);
+    });
+
+    it('keeps the caption from passing its click on when your root onClick prevents the default', () => {
+      const onInputClick = vi.fn();
+      render(
+        inPicker(
+          <ColorPicker.HexField
+            slotProps={{
+              root: { onClick: (event) => event.preventDefault() },
+              input: { onClick: onInputClick },
+            }}
+          />,
+        ),
+      );
+      fireEvent.click(screen.getByText('Hex'));
+      expect(onInputClick).not.toHaveBeenCalled();
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        inPicker(
+          <ColorPicker.HexField slotProps={{ root: { className: 'my-root', title: 'Hex' } }} />,
+        ),
+      );
+      await expectNoA11yViolations();
+    });
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the hex <input>, the focusable control; the root <label> is
+// `slotProps.root.ref`, and `controlRef` is gone. The field takes no part in a Field of its own
+// (the picker's parts render in a `null` Field context: a Field names the picker's group).
+describe('ColorPicker.HexField — ref reaches the control', () => {
+  it('focuses the hex input through ref', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    render(
+      <InPicker>
+        <ColorPicker.HexField ref={ref} />
+      </InPicker>,
+    );
+    act(() => ref.current?.focus());
+    expect(hexInput()).toHaveFocus();
+  });
+
+  it('gives ref and slotProps.input.ref the same input', () => {
+    const ref = React.createRef<HTMLInputElement>();
+    const input = React.createRef<HTMLInputElement>();
+    render(
+      <InPicker>
+        <ColorPicker.HexField ref={ref} slotProps={{ input: { ref: input } }} />
+      </InPicker>,
+    );
+    expect(ref.current).toBe(hexInput());
+    expect(input.current).toBe(hexInput());
+  });
+
+  it("keeps the picker's invalid focus and form reset working with an inline ref that changes on every render", async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLInputElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Form">
+        <ColorPicker aria-label="Accent" name="accent" required defaultValue="#0f6cbd">
+          <ColorPicker.HexField
+            ref={(node) => {
+              nodes.push(node);
+            }}
+            data-pass={pass}
+          />
+        </ColorPicker>
+      </form>
+    );
+    const { container, rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const input = hexInput();
+    expect(nodes.at(-1)).toBe(input);
+    // The picker's hidden input focuses the hex field it registered, through the field's own ref.
+    fireEvent.invalid(container.querySelector('input[required]') as HTMLInputElement);
+    expect(input).toHaveFocus();
+    await user.tripleClick(input);
+    await user.keyboard('#zzz');
+    rerender(ui(3));
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    act(() => (screen.getByRole('form', { name: 'Form' }) as HTMLFormElement).reset());
+    expect(input).toHaveValue('#0f6cbd');
+    expect(nodes.at(-1)).toBe(input);
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <InPicker>
+        <ColorPicker.HexField ref={ref} />
+      </InPicker>,
+    );
+    const input = hexInput();
+    rerender(
+      <InPicker>
+        <ColorPicker.HexField ref={ref} className="again" />
+      </InPicker>,
+    );
+    expect(ref.mock.calls).toEqual([[input]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[input], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <InPicker>
+          <ColorPicker.HexField ref={ref} />
+        </InPicker>
+      </React.StrictMode>,
+    );
+    const input = hexInput();
+    rerender(
+      <React.StrictMode>
+        <InPicker>
+          <ColorPicker.HexField ref={ref} className="again" />
+        </InPicker>
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[input], [null], [input]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('declares ref for the input, and no controlRef', () => {
+    expectTypeOf<ColorPickerHexFieldProps['ref']>().toEqualTypeOf<
+      React.Ref<HTMLInputElement> | undefined
+    >();
+    expectTypeOf<ColorPickerHexFieldProps>().not.toHaveProperty('controlRef');
+    const labelRef = React.createRef<HTMLLabelElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the input; the root <label> is slotProps.root.ref
+    void (<ColorPicker.HexField ref={labelRef} />);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLInputElement>();
+      render(
+        <InPicker>
+          <ColorPicker.HexField
+            // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the input
+            controlRef={controlRef}
+          />
+        </InPicker>,
+      );
+      expect(controlRef.current).toBeNull();
+      expect(hexInput().closest('label')).toHaveAttribute('controlref', '[object Object]');
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

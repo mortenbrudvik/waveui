@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { carouselClassNames, carouselItemClassNames } from '../../lib/classNames';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { getArrowIntent } from '../../lib/direction';
@@ -756,7 +756,7 @@ const CarouselRoot = ({
         data-controls-layout={controlsLayout}
         data-appearance={appearance}
         data-motion={resolvedMotion}
-        className={cn(carouselClassNames.root, 'relative', className)}
+        className={wcn(carouselClassNames.root, 'wave:relative', className)}
         {...rootHandlers}
         {...rest}
       />
@@ -792,12 +792,12 @@ const CarouselRoot = ({
   // A slide is as wide as its content (`auto`), the viewport (one per page) or its share of it;
   // under the fade it fills the track's one cell, which every slide shares.
   const slideLayout = fading
-    ? 'col-start-1 row-start-1'
+    ? 'wave:col-start-1 wave:row-start-1'
     : auto
-      ? 'w-auto shrink-0'
+      ? 'wave:w-auto wave:shrink-0'
       : size === 1
-        ? 'w-full shrink-0'
-        : 'shrink-0';
+        ? 'wave:w-full wave:shrink-0'
+        : 'wave:shrink-0';
   const slideWidth = !auto && size > 1 ? { width: `calc(100% / ${size})` } : undefined;
   const slidesLabel = labels?.slides ?? defaultSlidesLabel;
   /** The name of the page that starts at `start`: its slides, or the one slide it holds. */
@@ -807,7 +807,7 @@ const CarouselRoot = ({
   };
   // The chevrons mirror by the same resolved direction as the track. A CSS `rtl:` variant would
   // also match `[dir=rtl] *`, so an LTR carousel inside an RTL ancestor got mirrored chevrons.
-  const chevronClass = dir === 'rtl' ? '-scale-x-100' : undefined;
+  const chevronClass = dir === 'rtl' ? 'wave:-scale-x-100' : undefined;
   const pauseLabel = autoPlayLabels?.pause ?? DEFAULT_PAUSE_LABEL;
   const playLabel = autoPlayLabels?.play ?? DEFAULT_PLAY_LABEL;
   const pickerLabel = labels?.picker ?? DEFAULT_PICKER_LABEL;
@@ -820,32 +820,32 @@ const CarouselRoot = ({
   const layoutClasses = CAROUSEL_CONTROL_LAYOUT[controlsLayout];
   const rotationPart = slotProps?.autoPlayButton;
   const rotationLabel = stopped ? playLabel : pauseLabel;
-  const rotationClassName = cn(
+  const rotationClassName = wcn(
     carouselClassNames.autoPlayButton,
     CAROUSEL_CONTROL_BASE,
     // Above the edge strips of the wide layouts, which would dim and cover it.
-    'absolute z-20 h-8 w-8 rounded-full border border-border bg-background shadow-2 top-2',
+    'wave:absolute wave:z-20 wave:h-8 wave:w-8 wave:rounded-full wave:border wave:border-border wave:bg-background wave:shadow-2 wave:top-2',
     // Over the viewport's corner: past the Previous button of an inline layout.
-    inline ? 'start-12' : 'start-2',
+    inline ? 'wave:start-12' : 'wave:start-2',
   );
   // The pointer over the control does not pause (APG): the user is operating it.
   const enterControl = () => setPointerOnControl(true);
   const leaveControl = () => setPointerOnControl(false);
-  const pickerClassName = cn(
+  const pickerClassName = wcn(
     carouselClassNames.picker,
     hasThumbnails
-      ? 'relative mx-auto flex w-fit flex-wrap justify-center gap-2 p-2'
-      : 'absolute inset-x-0 bottom-1 z-10 mx-auto flex w-fit',
+      ? 'wave:relative wave:mx-auto wave:flex wave:w-fit wave:flex-wrap wave:justify-center wave:gap-2 wave:p-2'
+      : 'wave:absolute wave:inset-x-0 wave:bottom-1 wave:z-10 wave:mx-auto wave:flex wave:w-fit',
   );
   const pickerButtonPart = slotProps?.pickerButton;
   /** The dot of a picker button without a thumbnail, its `slotProps` part merged in when given. */
   const pickerIndicator = (active: boolean) => {
-    const className = cn(
+    const className = wcn(
       carouselClassNames.pickerIndicator,
-      'block h-2 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
+      'wave:block wave:h-2 wave:rounded-full wave:transition-[width,background-color] wave:duration-200 wave:motion-reduce:transition-none',
       active
-        ? cn('w-5 bg-primary', forcedColors.selectedLeaf)
-        : 'w-2 bg-stroke-accessible group-hover:bg-foreground forced-colors:bg-[ButtonText] forced-colors:forced-color-adjust-none',
+        ? wcn('wave:w-5 wave:bg-primary', forcedColors.selectedLeaf)
+        : 'wave:w-2 wave:bg-stroke-accessible wave:group-hover:bg-foreground wave:forced-colors:bg-[ButtonText] wave:forced-colors:forced-color-adjust-none',
     );
     return (
       <span
@@ -865,7 +865,7 @@ const CarouselRoot = ({
     const label = previous ? previousLabel : nextLabel;
     const part = previous ? slotProps?.previousButton : slotProps?.nextButton;
     const onClick = preventIfDisabled(disabled, previous ? goPrev : goNext);
-    const className = cn(
+    const className = wcn(
       previous ? carouselClassNames.previousButton : carouselClassNames.nextButton,
       CAROUSEL_CONTROL_BASE,
       previous ? layoutClasses.previous : layoutClasses.next,
@@ -905,14 +905,14 @@ const CarouselRoot = ({
 
   const trackPart = slotProps?.track;
   const slidePart = slotProps?.slide;
-  const trackClassName = cn(
+  const trackClassName = wcn(
     carouselClassNames.track,
     // One column with a zero minimum: the slides keep the viewport's width, whatever their
     // content's longest line.
-    fading ? 'grid grid-cols-[minmax(0,1fr)]' : 'flex',
+    fading ? 'wave:grid wave:grid-cols-[minmax(0,1fr)]' : 'wave:flex',
     trackMoves && carouselSlideMotion,
     // Horizontal pointer moves belong to the drag; a vertical swipe still scrolls the page.
-    draggable && 'touch-pan-y',
+    draggable && 'wave:touch-pan-y',
   );
   const trackStyle = fading
     ? undefined
@@ -924,7 +924,10 @@ const CarouselRoot = ({
   const viewport = (
     <div
       ref={setViewportEl}
-      className={cn(carouselClassNames.viewport, 'relative min-w-0 flex-1 overflow-hidden')}
+      className={wcn(
+        carouselClassNames.viewport,
+        'wave:relative wave:min-w-0 wave:flex-1 wave:overflow-hidden',
+      )}
     >
       <div
         id={trackId}
@@ -967,13 +970,13 @@ const CarouselRoot = ({
           const label = slideLabel(i, total);
           const rovingValue = grouped && active ? String(i) : undefined;
           const tabIndex = grouped && active ? roving.getTabIndex(String(i)) : undefined;
-          const className = cn(
+          const className = wcn(
             carouselClassNames.slide,
             slideLayout,
             fading && carouselFadeMotion,
-            fading && !active && 'opacity-0',
+            fading && !active && 'wave:opacity-0',
             grouped &&
-              'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+              'wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring',
           );
           return (
             <div
@@ -1033,10 +1036,10 @@ const CarouselRoot = ({
         data-appearance={appearance}
         data-motion={resolvedMotion}
         // A stacking context of its own: the controls' z-index cannot lift them over page headers.
-        className={cn(
+        className={wcn(
           carouselClassNames.root,
-          'relative isolate overflow-hidden',
-          appearance === 'elevated' && 'rounded-md shadow-4',
+          'wave:relative wave:isolate wave:overflow-hidden',
+          appearance === 'elevated' && 'wave:rounded-md wave:shadow-4',
           className,
         )}
         {...rootHandlers}
@@ -1074,7 +1077,7 @@ const CarouselRoot = ({
           </button>
         )}
         {inline ? (
-          <div className="flex items-stretch">
+          <div className="wave:flex wave:items-stretch">
             {previousControl}
             {viewport}
             {nextControl}
@@ -1083,7 +1086,7 @@ const CarouselRoot = ({
           viewport
         )}
         {/* Announces the current slide, except while slides rotate on their own. */}
-        <div aria-live={rotating ? 'off' : 'polite'} aria-atomic="true" className="sr-only">
+        <div aria-live={rotating ? 'off' : 'polite'} aria-atomic="true" className="wave:sr-only">
           {pageLabel(index)}
         </div>
         <div
@@ -1104,10 +1107,10 @@ const CarouselRoot = ({
               const label = pageLabel(start);
               const current = active ? 'true' : undefined;
               const onClick = () => goTo(start);
-              const className = cn(
+              const className = wcn(
                 carouselClassNames.pickerButton,
-                'group inline-flex items-center justify-center',
-                thumbnail !== undefined ? 'rounded-md p-0.5' : 'h-6 min-w-6',
+                'wave:group wave:inline-flex wave:items-center wave:justify-center',
+                thumbnail !== undefined ? 'wave:rounded-md wave:p-0.5' : 'wave:h-6 wave:min-w-6',
                 focusRing,
               );
               return (
@@ -1133,12 +1136,15 @@ const CarouselRoot = ({
                     ? renderSlot(
                         thumbnailSlot(thumbnail),
                         'img',
-                        cn(
+                        wcn(
                           carouselItemClassNames.thumbnail,
-                          'block h-12 w-16 rounded object-cover',
+                          'wave:block wave:h-12 wave:w-16 wave:rounded wave:object-cover',
                           active
-                            ? cn('outline-2 outline-primary', forcedColors.selectedContainer)
-                            : 'opacity-70 group-hover:opacity-100',
+                            ? wcn(
+                                'wave:outline-2 wave:outline-primary',
+                                forcedColors.selectedContainer,
+                              )
+                            : 'wave:opacity-70 wave:group-hover:opacity-100',
                         ),
                         { alt: '', draggable: false },
                       )
@@ -1166,7 +1172,7 @@ export const CarouselItem = ({
   ...rest
 }: CarouselItemProps) => {
   return (
-    <div ref={ref} className={cn(carouselItemClassNames.root, 'p-4', className)} {...rest}>
+    <div ref={ref} className={wcn(carouselItemClassNames.root, 'wave:p-4', className)} {...rest}>
       {children}
     </div>
   );

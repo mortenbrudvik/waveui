@@ -27,7 +27,7 @@ export function SizeAppearanceGrid({
           key={appearance}
           className={
             appearance === 'filled-lighter'
-              ? 'flex flex-wrap items-start gap-3 rounded bg-secondary p-3'
+              ? 'flex flex-wrap items-start gap-3 rounded bg-wave-secondary p-3'
               : 'flex flex-wrap items-start gap-3 p-3'
           }
         >

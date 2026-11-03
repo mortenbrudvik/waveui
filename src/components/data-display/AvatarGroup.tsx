@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { flattenChildren, isElementOfType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { avatarGroupClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -70,9 +70,10 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   defaultOpen?: boolean;
   /**
    * Called when the overflow popup asks to open or close, with the reason: `trigger` (the button),
-   * `escape`, `outside-press` or `focus-outside`.
+   * `escape`, `outside-press` or `focus-outside`, and the event (`details.event`). WaveUI always
+   * passes `details`.
    */
-  onOpenChange?: (open: boolean, details?: AvatarGroupOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: AvatarGroupOpenChangeDetails) => void;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
   /**
@@ -125,11 +126,11 @@ const PIE_ITEM_PART_LOCKS = { ...AVATAR_GROUP_PART_LOCKS, 'aria-hidden': true } 
 /** The clip of each wedge of a pie, by the number of wedges (one wedge is a full circle). Literal strings only. */
 const pieWedgeClasses: ReadonlyArray<ReadonlyArray<string>> = [
   [''],
-  ['[clip-path:inset(0_50%_0_0)]', '[clip-path:inset(0_0_0_50%)]'],
+  ['wave:[clip-path:inset(0_50%_0_0)]', 'wave:[clip-path:inset(0_0_0_50%)]'],
   [
-    '[clip-path:inset(0_50%_0_0)]',
-    '[clip-path:inset(0_0_50%_50%)]',
-    '[clip-path:inset(50%_0_0_50%)]',
+    'wave:[clip-path:inset(0_50%_0_0)]',
+    'wave:[clip-path:inset(0_0_50%_50%)]',
+    'wave:[clip-path:inset(50%_0_0_50%)]',
   ],
 ];
 
@@ -177,9 +178,9 @@ const AvatarGroupRoot = ({
   const piePart = slotProps?.pie;
   const pieClassName =
     layout === 'pie'
-      ? cn(
+      ? wcn(
           avatarGroupClassNames.pie,
-          'relative inline-block shrink-0 overflow-hidden rounded-full',
+          'wave:relative wave:inline-block wave:shrink-0 wave:overflow-hidden wave:rounded-full',
           avatarSizeClassesFor(resolvedSize),
         )
       : undefined;
@@ -202,10 +203,10 @@ const AvatarGroupRoot = ({
       aria-labelledby={ariaLabelledBy}
       data-layout={layout}
       {...props}
-      className={cn(
+      className={wcn(
         avatarGroupClassNames.root,
-        'inline-flex items-center',
-        layout !== 'stack' && 'gap-1',
+        'wave:inline-flex wave:items-center',
+        layout !== 'stack' && 'wave:gap-1',
         className,
       )}
     >
@@ -221,9 +222,9 @@ const AvatarGroupRoot = ({
                   }))}
               >
                 {visible.map(({ key, node }, i) => {
-                  const itemClassName = cn(
+                  const itemClassName = wcn(
                     avatarGroupClassNames.item,
-                    'absolute inset-0 inline-flex',
+                    'wave:absolute wave:inset-0 wave:inline-flex',
                     pieWedgeClasses[visible.length - 1]?.[i],
                   );
                   return (
@@ -244,10 +245,10 @@ const AvatarGroupRoot = ({
               </span>
             )
           : visible.map(({ key, node }, i) => {
-              const itemClassName = cn(
+              const itemClassName = wcn(
                 avatarGroupClassNames.item,
-                'inline-flex rounded-full ring-2 ring-background',
-                layout === 'stack' && i > 0 && '-ms-2',
+                'wave:inline-flex wave:rounded-full wave:ring-2 wave:ring-background',
+                layout === 'stack' && i > 0 && 'wave:-ms-2',
               );
               return (
                 <span

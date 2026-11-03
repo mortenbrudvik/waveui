@@ -121,7 +121,7 @@ describe('hasWarned', () => {
     expect(hasWarned('deprecated:TabList:onTabSelect')).toBe(false);
     expect(warnSpy.mock.calls).toEqual([
       [
-        '[WaveUI] TabList: `vertical` is deprecated and will be removed in 1.0. Use `orientation` instead.',
+        '[WaveUI] TabList: `vertical` is deprecated and will be removed in a future major version. Use `orientation` instead.',
       ],
     ]);
   });
@@ -147,7 +147,7 @@ describe('warnDeprecated', () => {
     warnDeprecated('TabList', 'selectedValue', 'value');
     expect(warnSpy.mock.calls).toEqual([
       [
-        '[WaveUI] TabList: `selectedValue` is deprecated and will be removed in 1.0. Use `value` instead.',
+        '[WaveUI] TabList: `selectedValue` is deprecated and will be removed in a future major version. Use `value` instead.',
       ],
     ]);
   });
@@ -161,7 +161,7 @@ describe('warnDeprecated', () => {
     );
     expect(warnSpy.mock.calls).toEqual([
       [
-        '[WaveUI] Combobox: `onOptionSelect` is deprecated and will be removed in 1.0. Use `onValueChange` instead. It still fires on every option activation.',
+        '[WaveUI] Combobox: `onOptionSelect` is deprecated and will be removed in a future major version. Use `onValueChange` instead. It still fires on every option activation.',
       ],
     ]);
   });
@@ -172,16 +172,16 @@ describe('warnDeprecated', () => {
     warnDeprecated('Stack', 'direction', 'orientation');
     warnDeprecated('TabList', 'onTabSelect', 'onValueChange');
     expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
-      '[WaveUI] TabList: `vertical` is deprecated and will be removed in 1.0. Use `orientation` instead.',
-      '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.',
-      '[WaveUI] TabList: `onTabSelect` is deprecated and will be removed in 1.0. Use `onValueChange` instead.',
+      '[WaveUI] TabList: `vertical` is deprecated and will be removed in a future major version. Use `orientation` instead.',
+      '[WaveUI] Stack: `direction` is deprecated and will be removed in a future major version. Use `orientation` instead.',
+      '[WaveUI] TabList: `onTabSelect` is deprecated and will be removed in a future major version. Use `onValueChange` instead.',
     ]);
   });
 });
 
 describe('resolveDeprecatedProp', () => {
   const directionDeprecated =
-    '[WaveUI] Stack: `direction` is deprecated and will be removed in 1.0. Use `orientation` instead.';
+    '[WaveUI] Stack: `direction` is deprecated and will be removed in a future major version. Use `orientation` instead.';
 
   it('returns the new value without warning when only the new prop is used', () => {
     expect(resolveDeprecatedProp('Stack', 'vertical', undefined, 'direction', 'orientation')).toBe(
@@ -204,7 +204,7 @@ describe('resolveDeprecatedProp', () => {
     );
     expect(warnSpy.mock.calls).toEqual([
       [
-        '[WaveUI] Skeleton: `variant` is deprecated and will be removed in 1.0. Use `shape` instead.',
+        '[WaveUI] Skeleton: `variant` is deprecated and will be removed in a future major version. Use `shape` instead.',
       ],
     ]);
   });
@@ -221,8 +221,12 @@ describe('resolveDeprecatedProp', () => {
     expect(resolveDeprecatedProp('Y', undefined, 0, 'old', 'new')).toBe(0);
     // Both pass the deprecated prop, so both warn.
     expect(warnSpy.mock.calls).toEqual([
-      ['[WaveUI] X: `old` is deprecated and will be removed in 1.0. Use `new` instead.'],
-      ['[WaveUI] Y: `old` is deprecated and will be removed in 1.0. Use `new` instead.'],
+      [
+        '[WaveUI] X: `old` is deprecated and will be removed in a future major version. Use `new` instead.',
+      ],
+      [
+        '[WaveUI] Y: `old` is deprecated and will be removed in a future major version. Use `new` instead.',
+      ],
     ]);
   });
 

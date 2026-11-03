@@ -54,17 +54,6 @@ afterEach(() => {
 const warnings = (warn: { mock: { calls: unknown[][] } }) =>
   warn.mock.calls.map(([message]) => String(message));
 
-/** A TabList deprecation warning (asserted exactly). */
-const deprecated = (oldName: string, newName: string, extra = '') =>
-  `[WaveUI] TabList: \`${oldName}\` is deprecated and will be removed in 1.0. Use \`${newName}\` instead.${extra}`;
-
-/** The deprecation warning of `onTabSelect` (asserted exactly). */
-const ON_TAB_SELECT_DEPRECATED = deprecated(
-  'onTabSelect',
-  'onValueChange',
-  ' `onValueChange` is called only when the selected tab changes.',
-);
-
 /** useControllable's warning when a value switches between controlled and uncontrolled. */
 const modeSwitch = (from: string, to: string) =>
   `[WaveUI] A component is changing from ${from} to ${to}. Components should not switch ` +
@@ -122,8 +111,8 @@ describe('TabList', () => {
 
   it('gates the hover color of tabs (C-TOKENS)', () => {
     render(<TabList>{threeTabs}</TabList>);
-    expect(tab('Tab B')).toHaveClass('not-disabled:not-aria-disabled:hover:text-foreground');
-    expect(tab('Tab B').className).not.toMatch(/(^|\s)enabled:/);
+    expect(tab('Tab B')).toHaveClass('wave:not-disabled:not-aria-disabled:hover:text-foreground');
+    expect(tab('Tab B').className).not.toMatch(/(^|\s)wave:enabled:/);
   });
 
   it('a conflicting className on a tab wins over the default', () => {
@@ -135,7 +124,7 @@ describe('TabList', () => {
       </TabList>,
     );
     expect(tab('Tab A')).toHaveClass('px-8');
-    expect(tab('Tab A')).not.toHaveClass('px-4');
+    expect(tab('Tab A')).not.toHaveClass('wave:px-4');
   });
 
   it('types ref on the Props interfaces (C-REF) and orientation as the shared type', () => {
@@ -597,94 +586,106 @@ describe('TabList - parts that unmount', () => {
   });
 });
 
-describe('TabList - deprecated aliases (feedback-navigation#46, layout#16)', () => {
-  it('selectedValue, defaultSelectedValue, onTabSelect and vertical still work and warn once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onTabSelect = vi.fn();
-    const { rerender } = render(
-      <TabList defaultSelectedValue="b" onTabSelect={onTabSelect} vertical>
-        {threeTabs}
-      </TabList>,
-    );
-    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tablist')).toHaveAttribute('aria-orientation', 'vertical');
-    await user.click(tab('Tab C'));
-    expect(onTabSelect).toHaveBeenCalledWith('c');
+// Untyped code that still passes a 0.4 name: it lands on the tablist element as an unknown prop,
+// which React reports in development (once per name and page load), and changes nothing.
+describe('TabList - the 0.4 names are removed in 1.0 (feedback-navigation#46, layout#16)', () => {
+  const unknownProp = (name: string) => [
+    'React does not recognize the `%s` prop on a DOM element. If you intentionally want it to ' +
+      'appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you ' +
+      'accidentally passed it from a parent component, remove it from the DOM element.',
+    name,
+    name.toLowerCase(),
+  ];
 
-    rerender(
-      <TabList selectedValue="a" onTabSelect={onTabSelect}>
+  it('has no selectedValue alias of value: the first tab stays selected', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <TabList
+        // @ts-expect-error -- `selectedValue` is removed in 1.0: use `value`
+        selectedValue="b"
+      >
         {threeTabs}
       </TabList>,
     );
     expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
-
-    expect(warnings(warn)).toEqual([
-      deprecated('defaultSelectedValue', 'defaultValue'),
-      deprecated('vertical', 'orientation'),
-      ON_TAB_SELECT_DEPRECATED,
-      deprecated('selectedValue', 'value'),
-      // The rerender passes a value where the first render had none.
-      modeSwitch('uncontrolled', 'controlled'),
-    ]);
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tablist')).toHaveAttribute('selectedvalue', 'b');
+    expect(error.mock.calls).toEqual([unknownProp('selectedValue')]);
+    expect(warn).not.toHaveBeenCalled();
   });
 
-  it('the new names win over the deprecated ones', () => {
+  it('has no defaultSelectedValue alias of defaultValue: the first tab is selected', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     render(
-      <TabList value="c" selectedValue="a" orientation="horizontal" vertical>
+      <TabList
+        // @ts-expect-error -- `defaultSelectedValue` is removed in 1.0: use `defaultValue`
+        defaultSelectedValue="b"
+      >
         {threeTabs}
       </TabList>,
     );
-    expect(tab('Tab C')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tablist')).toHaveAttribute('aria-orientation', 'horizontal');
-    expect(warnings(warn)).toEqual([
-      deprecated('selectedValue', 'value'),
-      deprecated('vertical', 'orientation'),
-    ]);
+    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'false');
+    expect(error.mock.calls).toEqual([unknownProp('defaultSelectedValue')]);
+    expect(warn).not.toHaveBeenCalled();
   });
 
-  it('onTabSelect fires when the selected tab is activated again; onValueChange does not', async () => {
+  it('has no vertical alias of orientation="vertical": the TabList stays horizontal', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <TabList
+        // @ts-expect-error -- `vertical` is removed in 1.0: use `orientation="vertical"`
+        vertical
+      >
+        {threeTabs}
+      </TabList>,
+    );
+    const tablist = screen.getByRole('tablist');
+    expect(tablist).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(tablist).toHaveAttribute('data-orientation', 'horizontal');
+    expect(tablist).not.toHaveAttribute('vertical');
+    expect(error.mock.calls).toEqual([
+      [
+        'Received `%s` for a non-boolean attribute `%s`.\n\nIf you want to write it to the DOM, ' +
+          'pass a string instead: %s="%s" or %s={value.toString()}.',
+        true,
+        'vertical',
+        'vertical',
+        true,
+        'vertical',
+      ],
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('has no onTabSelect alias of onValueChange: only onValueChange is called', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const user = userEvent.setup();
     const onTabSelect = vi.fn();
     const onValueChange = vi.fn();
     render(
-      <TabList defaultValue="a" onTabSelect={onTabSelect} onValueChange={onValueChange}>
+      <TabList
+        defaultValue="a"
+        // @ts-expect-error -- `onTabSelect(value)` is removed in 1.0: use `onValueChange`
+        onTabSelect={onTabSelect}
+        onValueChange={onValueChange}
+      >
         {threeTabs}
       </TabList>,
     );
     await user.click(tab('Tab A'));
-    expect(onTabSelect).toHaveBeenCalledTimes(1);
-    expect(onTabSelect).toHaveBeenCalledWith('a');
-    expect(onValueChange).not.toHaveBeenCalled();
     await user.click(tab('Tab B'));
-    expect(onTabSelect).toHaveBeenLastCalledWith('b');
-    expect(onValueChange).toHaveBeenCalledTimes(1);
-    expect(onValueChange).toHaveBeenCalledWith('b');
-    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
-  });
-
-  it('onTabSelect does not fire when a disabled tab is clicked (layout#13)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onTabSelect = vi.fn();
-    render(
-      <TabList defaultValue="a" onTabSelect={onTabSelect}>
-        <TabList.Tab value="a">Tab A</TabList.Tab>
-        <TabList.Tab value="b" disabled>
-          Tab B
-        </TabList.Tab>
-        <TabList.Tab value="c" aria-disabled="true">
-          Tab C
-        </TabList.Tab>
-      </TabList>,
-    );
-    await user.click(tab('Tab B'));
-    await user.click(tab('Tab C'));
+    expect(onValueChange.mock.calls).toEqual([['b']]);
     expect(onTabSelect).not.toHaveBeenCalled();
-    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
-    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
+    expect(screen.getByRole('tablist')).not.toHaveAttribute('ontabselect');
+    expect(error.mock.calls).toEqual([
+      ['Unknown event handler property `%s`. It will be ignored.', 'onTabSelect'],
+    ]);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -1401,23 +1402,6 @@ describe('TabList - manual activation (selectTabOnFocus={false})', () => {
     expect(selected()).toBe(tab('Tab B'));
   });
 
-  it('the deprecated onTabSelect fires on activation only, not on focus moves', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onTabSelect = vi.fn();
-    render(
-      <TabList defaultValue="a" selectTabOnFocus={false} onTabSelect={onTabSelect}>
-        {threeTabs}
-      </TabList>,
-    );
-    act(() => tab('Tab A').focus());
-    await user.keyboard('{ArrowRight}');
-    expect(onTabSelect).not.toHaveBeenCalled();
-    await user.keyboard('{Enter}');
-    expect(onTabSelect.mock.calls).toEqual([['b']]);
-    expect(warnings(warn)).toEqual([ON_TAB_SELECT_DEPRECATED]);
-  });
-
   it('selectTabOnFocus={true} (the default) selects the tab focus moves to', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
@@ -1567,13 +1551,13 @@ describe('TabList - RTL layout (feedback-navigation#34)', () => {
       { dir: 'rtl' },
     );
     const tablist = screen.getByRole('tablist');
-    expect(tablist).toHaveClass('flex-col', 'border-e');
+    expect(tablist).toHaveClass('wave:flex-col', 'wave:border-e');
     expect(tablist.className).not.toMatch(/border-(r|l)\b/);
     expect(tab('Tab A')).toHaveClass(
-      'text-start',
-      'border-s-2',
-      'border-s-transparent',
-      'after:border-s-primary',
+      'wave:text-start',
+      'wave:border-s-2',
+      'wave:border-s-transparent',
+      'wave:after:border-s-primary',
     );
     expect(tab('Tab A').className).not.toMatch(/text-left|border-l/);
   });
@@ -1690,22 +1674,22 @@ describe('TabList - panels still loading inside their own Suspense', () => {
     it('the default look is the 0.12 look', () => {
       render(twoTabs());
       expect(tab('Tab A')).toHaveClass(
-        'px-4',
-        'py-2',
-        'text-body-1',
-        'font-semibold',
-        'text-primary',
-        'border-b-2',
-        'border-b-transparent',
-        'after:border-b-primary',
+        'wave:px-4',
+        'wave:py-2',
+        'wave:text-body-1',
+        'wave:font-semibold',
+        'wave:text-primary',
+        'wave:border-b-2',
+        'wave:border-b-transparent',
+        'wave:after:border-b-primary',
       );
-      expect(tab('Tab B')).toHaveClass('text-muted-foreground');
-      expect(tablist()).toHaveClass('flex', 'border-b', 'border-border');
+      expect(tab('Tab B')).toHaveClass('wave:text-muted-foreground');
+      expect(tablist()).toHaveClass('wave:flex', 'wave:border-b', 'wave:border-border');
     });
 
     it('the transparent selected indicator is kept visible in forced colors', () => {
       render(twoTabs());
-      expect(tab('Tab A')).toHaveClass('forced-colors:after:border-[Highlight]');
+      expect(tab('Tab A')).toHaveClass('wave:forced-colors:after:border-[Highlight]');
     });
 
     it.each(APPEARANCES)('the %s appearance renders data-appearance', (appearance) => {
@@ -1718,36 +1702,44 @@ describe('TabList - panels still loading inside their own Suspense', () => {
       (appearance) => {
         render(twoTabs({ appearance }));
         expect(tab('Tab A')).toHaveClass(
-          'forced-colors:outline-2',
-          'forced-colors:outline-[Highlight]',
+          'wave:forced-colors:outline-2',
+          'wave:forced-colors:outline-[Highlight]',
         );
-        expect(tab('Tab A').className).not.toContain('border-b-2');
-        expect(tablist().className).not.toContain('border-b');
+        expect(tab('Tab A').className).not.toContain('wave:border-b-2');
+        expect(tablist().className).not.toContain('wave:border-b');
       },
     );
 
     it('subtle uses the subtle fills, gated by the hover and pressed rules', () => {
       render(twoTabs({ appearance: 'subtle' }));
-      expect(tab('Tab A')).toHaveClass('bg-subtle-selected', 'rounded-md');
+      expect(tab('Tab A')).toHaveClass('wave:bg-subtle-selected', 'wave:rounded-md');
       expect(tab('Tab B')).toHaveClass(
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover',
-        'not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        'wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
       );
     });
 
     it('the circular appearances are fully rounded', () => {
       const { rerender } = render(twoTabs({ appearance: 'subtle-circular' }));
-      expect(tab('Tab A')).toHaveClass('rounded-full', 'bg-subtle-selected');
+      expect(tab('Tab A')).toHaveClass('wave:rounded-full', 'wave:bg-subtle-selected');
       rerender(twoTabs({ appearance: 'filled-circular' }));
-      expect(tab('Tab A')).toHaveClass('rounded-full', 'bg-primary', 'text-primary-foreground');
-      expect(tab('Tab B')).toHaveClass('rounded-full', 'bg-muted', 'text-muted-foreground');
-      expect(tab('Tab B')).toHaveClass('not-disabled:not-aria-disabled:hover:bg-muted-hover');
+      expect(tab('Tab A')).toHaveClass(
+        'wave:rounded-full',
+        'wave:bg-primary',
+        'wave:text-primary-foreground',
+      );
+      expect(tab('Tab B')).toHaveClass(
+        'wave:rounded-full',
+        'wave:bg-muted',
+        'wave:text-muted-foreground',
+      );
+      expect(tab('Tab B')).toHaveClass('wave:not-disabled:not-aria-disabled:hover:bg-muted-hover');
     });
 
     it.each([
-      ['small', ['px-3', 'py-1.5', 'text-caption-1']],
-      ['medium', ['px-4', 'py-2', 'text-body-1']],
-      ['large', ['px-5', 'py-3', 'text-body-2']],
+      ['small', ['wave:px-3', 'wave:py-1.5', 'wave:text-caption-1']],
+      ['medium', ['wave:px-4', 'wave:py-2', 'wave:text-body-1']],
+      ['large', ['wave:px-5', 'wave:py-3', 'wave:text-body-2']],
     ] as const)('the %s size sets the padding and type', (size, classes) => {
       render(twoTabs({ size }));
       expect(tablist()).toHaveAttribute('data-size', size);
@@ -1759,17 +1751,17 @@ describe('TabList - panels still loading inside their own Suspense', () => {
       (appearance) => {
         render(twoTabs({ appearance, orientation: 'vertical' }));
         expect(tablist()).toHaveAttribute('data-orientation', 'vertical');
-        expect(tablist()).toHaveClass('flex-col');
-        expect(tablist().className).not.toMatch(/(^| )border-b( |$)/);
+        expect(tablist()).toHaveClass('wave:flex-col');
+        expect(tablist().className).not.toMatch(/(^| )wave:border-b( |$)/);
       },
     );
 
     it('vertical transparent keeps the start border indicator, also in RTL', () => {
       renderWithProviders(twoTabs({ orientation: 'vertical' }), { dir: 'rtl' });
       expect(tab('Tab A')).toHaveClass(
-        'border-s-2',
-        'border-s-transparent',
-        'after:border-s-primary',
+        'wave:border-s-2',
+        'wave:border-s-transparent',
+        'wave:after:border-s-primary',
       );
     });
 
@@ -1815,7 +1807,7 @@ describe('TabList - panels still loading inside their own Suspense', () => {
         </TabList>,
       );
       expect(tab('Home')).toHaveAttribute('data-icon-only', '');
-      expect(tab('Home')).toHaveClass('p-2');
+      expect(tab('Home')).toHaveClass('wave:p-2');
       expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
     });
@@ -1841,7 +1833,7 @@ describe('TabList - panels still loading inside their own Suspense', () => {
         </TabList>,
       );
       expect(tab('Home')).not.toHaveAttribute('data-icon-only');
-      expect(tab('Home')).toHaveClass('inline-flex', 'gap-2');
+      expect(tab('Home')).toHaveClass('wave:inline-flex', 'wave:gap-2');
     });
 
     it.each(APPEARANCES)('is axe clean in the %s appearance with icons', async (appearance) => {

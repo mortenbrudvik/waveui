@@ -1,30 +1,20 @@
 import * as React from 'react';
 import { skeletonClassNames, skeletonGroupClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
-import { resolveDeprecatedProp } from '../../lib/dev';
+import { wcn } from '../../lib/cn';
 import type { Shape } from '../../lib/types';
-
-/** The 0.4 `variant` values (deprecated; written out in {@link SkeletonProps}, not a public name). */
-type SkeletonVariant = NonNullable<SkeletonProps['variant']>;
-
-/** `rectangular` rendered with the default 4px radius in 0.4, so it maps to `rounded`. */
-const variantShapes: Record<SkeletonVariant, Shape> = {
-  text: 'rounded',
-  circular: 'circular',
-  rectangular: 'rounded',
-};
 
 /**
  * Forced colors replace the author fill with the page color, so the placeholder would vanish: it
  * is painted `GrayText` instead (a leaf element, so opting out of forced colors reaches nothing
  * else).
  */
-const forcedColorsFill = 'forced-colors:bg-[GrayText] forced-colors:forced-color-adjust-none';
+const forcedColorsFill =
+  'wave:forced-colors:bg-[GrayText] wave:forced-colors:forced-color-adjust-none';
 
 const shapeClasses: Record<Shape, string> = {
-  rounded: 'rounded',
-  circular: 'rounded-full',
-  square: 'rounded-none',
+  rounded: 'wave:rounded',
+  circular: 'wave:rounded-full',
+  square: 'wave:rounded-none',
 };
 
 /** Properties for the Skeleton component. */
@@ -38,11 +28,6 @@ export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'rounded'
    */
   shape?: Shape;
-  /**
-   * @deprecated Use `shape`: `text` and `rectangular` → `rounded` (their 0.4 look), `circular` →
-   * `circular`. Still works, warns once in development, and `shape` wins when both are given.
-   */
-  variant?: 'text' | 'circular' | 'rectangular';
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -51,29 +36,21 @@ const SkeletonRoot = ({
   width,
   height,
   shape: shapeProp,
-  variant,
   className,
   style,
   ref,
   ...rest
 }: SkeletonProps) => {
-  const shape =
-    resolveDeprecatedProp(
-      'Skeleton',
-      shapeProp,
-      variant === undefined ? undefined : variantShapes[variant],
-      'variant',
-      'shape',
-    ) ?? 'rounded';
+  const shape = shapeProp ?? 'rounded';
 
   return (
     <div
       aria-hidden="true"
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         skeletonClassNames.root,
-        'bg-skeleton animate-wave-pulse motion-reduce:animate-none',
+        'wave:bg-skeleton wave:animate-wave-pulse wave:motion-reduce:animate-none',
         forcedColorsFill,
         shapeClasses[shape],
         className,
@@ -118,9 +95,9 @@ export const SkeletonGroup = ({
       {...rest}
       aria-busy={busy}
       ref={ref}
-      className={cn(skeletonGroupClassNames.root, className)}
+      className={wcn(skeletonGroupClassNames.root, className)}
     >
-      {loading && <span className="sr-only">{label}</span>}
+      {loading && <span className="wave:sr-only">{label}</span>}
       {children}
     </div>
   );

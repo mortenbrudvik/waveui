@@ -194,13 +194,13 @@ describe('DataGrid virtualWindow', () => {
       const { unmount } = render(<Grid />);
       // A scroller is a tab stop in Firefox unless it says otherwise: the grid's cell is the stop.
       expect(scroller()).toHaveAttribute('tabindex', '-1');
-      expect(scroller()).toHaveClass('[overflow-anchor:none]');
+      expect(scroller()).toHaveClass('wave:[overflow-anchor:none]');
       expect(tabStops()).toHaveLength(1);
       unmount();
 
       render(<Grid windowed={false} items={ITEMS.slice(0, 5)} />);
       expect(scroller()).not.toHaveAttribute('tabindex');
-      expect(scroller()).not.toHaveClass('[overflow-anchor:none]');
+      expect(scroller()).not.toHaveClass('wave:[overflow-anchor:none]');
     });
 
     it('takes a tabIndex from containerProps instead', () => {
@@ -240,12 +240,12 @@ describe('DataGrid virtualWindow', () => {
     it('gives every row the window’s height and keeps the header in view (sticky)', () => {
       render(<Grid />);
       for (const row of bodyRows()) expect(row.style.height).toBe(`${ITEM}px`);
-      expect(grid().querySelector('thead')).toHaveClass('sticky', 'top-0');
+      expect(grid().querySelector('thead')).toHaveClass('wave:sticky', 'wave:top-0');
     });
 
     describe('cells that fit the row height', () => {
       /** The selection cell's own box, less its block padding (`py-3`). */
-      const unpadded = SELECTION_CELL_CLASSES.split(' ').filter((name) => name !== 'py-3');
+      const unpadded = SELECTION_CELL_CLASSES.split(' ').filter((name) => name !== 'wave:py-3');
       const selectionCellOf = (row: HTMLTableRowElement) =>
         row.querySelector<HTMLTableCellElement>(':scope > [data-selection-cell]');
 
@@ -255,8 +255,8 @@ describe('DataGrid virtualWindow', () => {
           render(<Grid selectionMode={selectionMode} />);
           for (const row of bodyRows()) {
             for (const cell of Array.from(row.cells)) {
-              expect(cell).toHaveClass('py-0', 'align-middle');
-              expect(cell).not.toHaveClass('py-3');
+              expect(cell).toHaveClass('wave:py-0', 'wave:align-middle');
+              expect(cell).not.toHaveClass('wave:py-3');
             }
             expect(selectionCellOf(row)).toHaveClass(
               ...unpadded,
@@ -268,7 +268,7 @@ describe('DataGrid virtualWindow', () => {
             grid().querySelector('thead tr') as HTMLTableRowElement,
           );
           expect(headerCell).toHaveClass(...SELECTION_CELL_CLASSES.split(' '));
-          expect(headerCell).not.toHaveClass('py-0');
+          expect(headerCell).not.toHaveClass('wave:py-0');
         },
       );
 
@@ -280,7 +280,7 @@ describe('DataGrid virtualWindow', () => {
         expect(rows).toHaveLength(5);
         for (const row of rows) {
           expect(selectionCellOf(row)).toHaveClass(...SELECTION_CELL_CLASSES.split(' '));
-          expect(selectionCellOf(row)).not.toHaveClass('py-0', 'align-middle');
+          expect(selectionCellOf(row)).not.toHaveClass('wave:py-0', 'wave:align-middle');
         }
       });
 
@@ -299,7 +299,7 @@ describe('DataGrid virtualWindow', () => {
         );
         for (const row of bodyRows()) {
           expect(selectionCellOf(row)).toHaveClass('py-2');
-          expect(selectionCellOf(row)).not.toHaveClass('py-0');
+          expect(selectionCellOf(row)).not.toHaveClass('wave:py-0');
         }
       });
     });
@@ -441,7 +441,7 @@ describe('DataGrid virtualWindow', () => {
         expect(row).not.toHaveAttribute('data-row-index');
       }
       expect(grid().querySelector('[data-virtual-spacer]')).toBeNull();
-      expect(grid().querySelector('thead')).not.toHaveClass('sticky');
+      expect(grid().querySelector('thead')).not.toHaveClass('wave:sticky');
       expect(grid().querySelector('colgroup')).toBeNull();
     });
 

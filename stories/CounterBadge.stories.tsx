@@ -4,13 +4,12 @@ import type { BadgeColor } from '../src';
 import { badgeColorArgType } from './_helpers';
 
 const APPEARANCES = ['filled', 'outline'] as const;
-// `important` changes meaning in 1.0 and warns in development: the matrix leaves it out (Badge's
-// "Important in 1.0" story explains it).
 const COLORS: BadgeColor[] = [
   'brand',
   'success',
   'warning',
   'danger',
+  'important',
   'informative',
   'severe',
   'subtle',
@@ -78,7 +77,7 @@ export const Dot: Story = {
     'aria-label': 'Unread messages',
   },
   render: (args) => (
-    <span className="inline-flex items-center gap-2 text-body-1 text-foreground">
+    <span className="inline-flex items-center gap-2 text-wave-body-1 text-wave-foreground">
       Inbox
       <CounterBadge {...args} />
     </span>
@@ -93,7 +92,7 @@ const renderColorRows: Story['render'] = (args) => (
         {COLORS.map((color) => (
           <span
             key={color}
-            className="inline-flex flex-col items-center gap-1 text-caption-1 text-muted-foreground"
+            className="inline-flex flex-col items-center gap-1 text-wave-caption-1 text-wave-muted-foreground"
           >
             <CounterBadge {...args} appearance={appearance} color={color} />
             {color}

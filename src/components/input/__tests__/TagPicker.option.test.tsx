@@ -53,7 +53,7 @@ describe('TagPicker.Option', () => {
     expect(media).toHaveClass(tagPickerOptionClassNames.media);
     expect(media).toHaveAttribute('aria-hidden', 'true');
     const second = within(katri).getByText('Designer');
-    expect(second).toHaveClass(tagPickerOptionClassNames.secondaryContent, 'text-caption-1');
+    expect(second).toHaveClass(tagPickerOptionClassNames.secondaryContent, 'wave:text-caption-1');
     // The second line follows the text in the same column.
     expect(second.previousElementSibling).toHaveTextContent('Katri Athokas');
   });

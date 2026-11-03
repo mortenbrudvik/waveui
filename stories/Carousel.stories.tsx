@@ -5,24 +5,26 @@ import { Button, Carousel } from '../src';
 import type { CarouselMotion, CarouselProps } from '../src';
 
 const slideClass =
-  'flex h-44 flex-col items-center justify-center gap-2 rounded-md text-center text-body-1';
+  'flex h-44 flex-col items-center justify-center gap-2 rounded-md text-center text-wave-body-1';
 
 const neutralSlides = [
   <Carousel.Item key="1">
-    <div className={`${slideClass} bg-muted text-foreground`}>
-      <h3 className="text-subtitle-2">Slide 1</h3>
+    <div className={`${slideClass} bg-wave-muted text-wave-foreground`}>
+      <h3 className="text-wave-subtitle-2">Slide 1</h3>
       <p>First slide content</p>
     </div>
   </Carousel.Item>,
   <Carousel.Item key="2">
-    <div className={`${slideClass} bg-card text-card-foreground border border-border`}>
-      <h3 className="text-subtitle-2">Slide 2</h3>
+    <div
+      className={`${slideClass} bg-wave-card text-wave-card-foreground border border-wave-border`}
+    >
+      <h3 className="text-wave-subtitle-2">Slide 2</h3>
       <p>Second slide content</p>
     </div>
   </Carousel.Item>,
   <Carousel.Item key="3">
-    <div className={`${slideClass} bg-selected text-selected-foreground`}>
-      <h3 className="text-subtitle-2">Slide 3</h3>
+    <div className={`${slideClass} bg-wave-selected text-wave-selected-foreground`}>
+      <h3 className="text-wave-subtitle-2">Slide 3</h3>
       <p>Third slide content</p>
     </div>
   </Carousel.Item>,
@@ -30,13 +32,17 @@ const neutralSlides = [
 
 const tintedSlides = [
   <Carousel.Item key="a">
-    <div className={`${slideClass} bg-info-tint text-info-tint-foreground`}>Slide A</div>
+    <div className={`${slideClass} bg-wave-info-tint text-wave-info-tint-foreground`}>Slide A</div>
   </Carousel.Item>,
   <Carousel.Item key="b">
-    <div className={`${slideClass} bg-success-tint text-success-tint-foreground`}>Slide B</div>
+    <div className={`${slideClass} bg-wave-success-tint text-wave-success-tint-foreground`}>
+      Slide B
+    </div>
   </Carousel.Item>,
   <Carousel.Item key="c">
-    <div className={`${slideClass} bg-warning-tint text-warning-tint-foreground`}>Slide C</div>
+    <div className={`${slideClass} bg-wave-warning-tint text-wave-warning-tint-foreground`}>
+      Slide C
+    </div>
   </Carousel.Item>,
 ];
 
@@ -130,8 +136,8 @@ export const InteractiveSlides: Story = {
   args: {
     children: ['Plan', 'Build', 'Ship'].map((step) => (
       <Carousel.Item key={step}>
-        <div className={`${slideClass} bg-muted text-foreground`}>
-          <h3 className="text-subtitle-2">{step}</h3>
+        <div className={`${slideClass} bg-wave-muted text-wave-foreground`}>
+          <h3 className="text-wave-subtitle-2">{step}</h3>
           <Button appearance="primary">Learn about {step.toLowerCase()}</Button>
         </div>
       </Carousel.Item>
@@ -144,7 +150,7 @@ function ControlledCarousel(args: CarouselProps) {
   const [value, setValue] = React.useState(0);
   return (
     <div>
-      <p className="mb-2 text-body-1 text-foreground">Active slide: {value + 1}</p>
+      <p className="mb-2 text-wave-body-1 text-wave-foreground">Active slide: {value + 1}</p>
       <Carousel
         {...args}
         value={value}
@@ -163,7 +169,7 @@ export const Controlled: Story = {
 
 const manySlides = Array.from({ length: 7 }, (_, i) => (
   <Carousel.Item key={i}>
-    <div className={`${slideClass} bg-muted text-foreground`}>Slide {i + 1}</div>
+    <div className={`${slideClass} bg-wave-muted text-wave-foreground`}>Slide {i + 1}</div>
   </Carousel.Item>
 ));
 
@@ -174,7 +180,7 @@ const thumbnail = (n: number) =>
 
 const thumbSlides = Array.from({ length: 5 }, (_, i) => (
   <Carousel.Item key={i} thumbnail={thumbnail(i + 1)}>
-    <div className={`${slideClass} bg-muted text-foreground`}>Slide {i + 1}</div>
+    <div className={`${slideClass} bg-wave-muted text-wave-foreground`}>Slide {i + 1}</div>
   </Carousel.Item>
 ));
 
@@ -190,7 +196,9 @@ export const AutoSize: Story = {
     align: 'center',
     children: manySlides.map((slide, i) => (
       <Carousel.Item key={i}>
-        <div className={`${slideClass} w-40 bg-card text-card-foreground border border-border`}>
+        <div
+          className={`${slideClass} w-40 bg-wave-card text-wave-card-foreground border border-wave-border`}
+        >
           Slide {i + 1}
         </div>
       </Carousel.Item>

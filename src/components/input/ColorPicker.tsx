@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { colorPickerClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hexToHsv, hsvToHex } from '../../lib/color';
-import { warnDeprecated, warnOnce } from '../../lib/dev';
+import { warnOnce } from '../../lib/dev';
 import { getFirstTabbable } from '../../lib/focus';
 import { slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
@@ -72,11 +72,6 @@ export interface ColorPickerProps extends Omit<
    * is not fully opaque.
    */
   onValueChange?: (color: string) => void;
-  /**
-   * Called with the new color when it changes.
-   * @deprecated Use `onValueChange`.
-   */
-  onChange?: (color: string) => void;
   /**
    * Preset colors shown as quick-select swatches. Pass `{ color, label }` objects so screen reader
    * users hear a name; a plain hex string is announced by its hex code. Non-hex presets are
@@ -213,7 +208,6 @@ const ColorPickerRoot = ({
   value: valueProp,
   defaultValue,
   onValueChange,
-  onChange,
   presets = DEFAULT_PRESETS,
   showOpacity = false,
   labels,
@@ -234,17 +228,13 @@ const ColorPickerRoot = ({
   slotProps,
   ...rest
 }: ColorPickerProps) => {
-  if (onChange !== undefined) warnDeprecated('ColorPicker', 'onChange', 'onValueChange');
   // The default is written like every edit (C-FORMS): the picker shows, submits and restores it as
   // a lowercase `#rrggbb`/`#rrggbbaa`. A value that is not a hex color stays as given (warning
   // below).
   const rawDefault = defaultValue ?? DEFAULT_COLOR;
   const initialValue = normalizeHexColor(rawDefault) ?? rawDefault;
   const strings = React.useMemo(() => ({ ...DEFAULT_COLOR_PICKER_LABELS, ...labels }), [labels]);
-  const [color, setColor] = useControllable(valueProp, initialValue, (next: string) => {
-    onValueChange?.(next);
-    onChange?.(next);
-  });
+  const [color, setColor] = useControllable(valueProp, initialValue, onValueChange);
 
   const parsed = React.useMemo(() => parseHexColor(color), [color]);
   const alpha = parsed?.alpha ?? 255;
@@ -407,9 +397,9 @@ const ColorPickerRoot = ({
     <div
       role="group"
       {...groupProps}
-      className={cn(
+      className={wcn(
         colorPickerClassNames.root,
-        'relative inline-flex flex-col gap-3 rounded border border-border bg-background p-3 shadow-4',
+        'wave:relative wave:inline-flex wave:flex-col wave:gap-3 wave:rounded wave:border wave:border-border wave:bg-background wave:p-3 wave:shadow-4',
         className,
       )}
       {...rest}
@@ -425,29 +415,29 @@ const ColorPickerRoot = ({
             <>
               <ColorArea />
               <ColorSlider />
-              <div className="flex items-start gap-2">
+              <div className="wave:flex wave:items-start wave:gap-2">
                 <ColorPickerPreview />
                 <ColorPickerHexField />
               </div>
               <ColorPickerSwatches />
               {showOpacity && (
-                <div className="flex items-center gap-2">
+                <div className="wave:flex wave:items-center wave:gap-2">
                   <span
                     {...mergeSlotProps(slotProps?.opacityLabel, {
-                      className: cn(
+                      className: wcn(
                         colorPickerClassNames.opacityLabel,
-                        'w-14 text-caption-1 text-muted-foreground',
+                        'wave:w-14 wave:text-caption-1 wave:text-muted-foreground',
                       ),
                     })}
                   >
                     {strings.opacity}
                   </span>
-                  <AlphaSlider className="min-w-0 flex-1" />
+                  <AlphaSlider className="wave:min-w-0 wave:flex-1" />
                   <span
                     {...mergeSlotProps(slotProps?.opacityValue, {
-                      className: cn(
+                      className: wcn(
                         colorPickerClassNames.opacityValue,
-                        'w-10 text-end text-caption-1 text-muted-foreground',
+                        'wave:w-10 wave:text-end wave:text-caption-1 wave:text-muted-foreground',
                       ),
                     })}
                   >

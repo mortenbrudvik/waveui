@@ -132,7 +132,11 @@ function pickVictim(
  * - **Measurement never writes styles.** An item's or divider's size on the row's axis (width, or
  *   height for a vertical row) is read (`offsetWidth` or `offsetHeight`) only while it is visible
  *   and cached; a hidden one (`data-overflow-hidden` and an inline `display: none`, both rendered
- *   by React) keeps its last visible size. All reads happen before React applies the result.
+ *   by React) keeps its last visible size. The marker counts on the measured element and on an
+ *   element around it: an `asChild` item whose child's `ref` reaches an element inside the one
+ *   that takes the item's props (the control of a Checkbox or a SearchBox, since 1.0) is measured
+ *   through that inner element, which never carries the marker itself and measures 0 while it is
+ *   hidden. All reads happen before React applies the result.
  * - **Membership-only updates.** A new snapshot is published only when the hidden set, a group's
  *   visibility or whether the button covers the visible items changes, so a resize that hides the
  *   same items renders nothing. The group record is a new object only when one entry changed.
@@ -395,7 +399,7 @@ export class OverflowStore {
     const dividerEntries = Array.from(this.dividers).filter(inRow);
     this.order = entries.map(([el]) => el);
     for (const [el] of [...entries, ...dividerEntries]) {
-      if (!el.hasAttribute('data-overflow-hidden')) this.sizes.set(el, sizeOf(el));
+      if (!el.closest('[data-overflow-hidden]')) this.sizes.set(el, sizeOf(el));
     }
     this.buttonMeasured = false;
     if (this.button?.isConnected) {

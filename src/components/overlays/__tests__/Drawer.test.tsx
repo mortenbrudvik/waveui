@@ -181,7 +181,7 @@ describe('Drawer', () => {
       expectedTag: 'div',
       displayName: 'Drawer',
       defaultProps: { defaultOpen: true, title: 'Settings', children: <p>Content</p> },
-      conflictingClass: { className: 'w-96', overrides: 'w-80' },
+      conflictingClass: { className: 'w-96', overrides: 'wave:w-80' },
       a11yVariants: [
         { name: 'start position', props: { position: 'start' } },
         { name: 'bottom position', props: { position: 'bottom' } },
@@ -392,12 +392,12 @@ describe('Drawer', () => {
 
   describe('positions (overlays#40)', () => {
     it.each([
-      [undefined, 'end-0'],
-      ['end', 'end-0'],
-      ['start', 'start-0'],
-      ['left', 'left-0'],
-      ['right', 'right-0'],
-      ['bottom', 'bottom-0'],
+      [undefined, 'wave:end-0'],
+      ['end', 'wave:end-0'],
+      ['start', 'wave:start-0'],
+      ['left', 'wave:left-0'],
+      ['right', 'wave:right-0'],
+      ['bottom', 'wave:bottom-0'],
     ] as const)('position %s places the panel with %s', (position, expected) => {
       render(
         <Drawer defaultOpen position={position} title="Drawer">
@@ -407,14 +407,20 @@ describe('Drawer', () => {
       expect(screen.getByRole('dialog')).toHaveClass(expected);
     });
 
-    const edgeClasses = ['border-s', 'border-e', 'border-l', 'border-r', 'border-t'];
+    const edgeClasses = [
+      'wave:border-s',
+      'wave:border-e',
+      'wave:border-l',
+      'wave:border-r',
+      'wave:border-t',
+    ];
     it.each([
-      [undefined, 'border-s'],
-      ['end', 'border-s'],
-      ['start', 'border-e'],
-      ['left', 'border-r'],
-      ['right', 'border-l'],
-      ['bottom', 'border-t'],
+      [undefined, 'wave:border-s'],
+      ['end', 'wave:border-s'],
+      ['start', 'wave:border-e'],
+      ['left', 'wave:border-r'],
+      ['right', 'wave:border-l'],
+      ['bottom', 'wave:border-t'],
     ] as const)('position %s draws a border on the inner edge only, %s', (position, expected) => {
       // High contrast paints the page, the backdrop and the panel black and the shadow is black
       // too (forced colors drop it): only the border marks the edge facing the page.
@@ -425,11 +431,11 @@ describe('Drawer', () => {
         { theme: 'high-contrast' },
       );
       const dialog = screen.getByRole('dialog');
-      expect(dialog).toHaveClass(expected, 'border-border');
+      expect(dialog).toHaveClass(expected, 'wave:border-border');
       for (const other of edgeClasses.filter((edge) => edge !== expected)) {
         expect(dialog).not.toHaveClass(other);
       }
-      expect(dialog).not.toHaveClass('border');
+      expect(dialog).not.toHaveClass('wave:border');
     });
 
     it('places a start drawer with logical utilities under rtl', () => {
@@ -441,14 +447,14 @@ describe('Drawer', () => {
       );
       const dialog = screen.getByRole('dialog');
       expect(dialog.closest('[data-wave-portal]')).toHaveAttribute('dir', 'rtl');
-      expect(dialog).toHaveClass('start-0', 'border-e');
+      expect(dialog).toHaveClass('wave:start-0', 'wave:border-e');
       // One class per assertion: a multi-class `not.toHaveClass` passes when any one is missing.
-      expect(dialog).not.toHaveClass('left-0');
-      expect(dialog).not.toHaveClass('right-0');
-      expect(dialog).not.toHaveClass('border-l');
-      expect(dialog).not.toHaveClass('border-r');
-      expect(button('Close')).toHaveClass('ms-auto');
-      expect(button('Close')).not.toHaveClass('ml-auto');
+      expect(dialog).not.toHaveClass('wave:left-0');
+      expect(dialog).not.toHaveClass('wave:right-0');
+      expect(dialog).not.toHaveClass('wave:border-l');
+      expect(dialog).not.toHaveClass('wave:border-r');
+      expect(button('Close')).toHaveClass('wave:ms-auto');
+      expect(button('Close')).not.toHaveClass('wave:ml-auto');
     });
   });
 
@@ -470,8 +476,8 @@ describe('Drawer', () => {
         </Drawer>,
       );
       const dialog = screen.getByRole('dialog');
-      expect(dialog).toHaveClass('bg-background', 'text-foreground', 'shadow-64');
-      expect(backdrop()).toHaveClass('bg-backdrop');
+      expect(dialog).toHaveClass('wave:bg-background', 'wave:text-foreground', 'wave:shadow-64');
+      expect(backdrop()).toHaveClass('wave:bg-backdrop');
       expect(dialog.className).not.toMatch(/#|rgba|black|white/);
       expect(backdrop().className).not.toMatch(/#|rgba|black|white/);
     });
@@ -482,7 +488,7 @@ describe('Drawer', () => {
           <p>Content</p>
         </Drawer>,
       );
-      expect(screen.getByText('Content').parentElement).toHaveClass('overflow-y-auto');
+      expect(screen.getByText('Content').parentElement).toHaveClass('wave:overflow-y-auto');
     });
   });
 
@@ -1578,7 +1584,7 @@ describe('Drawer', () => {
             title="Unsaved filters"
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason !== 'outside-press') setOpen(next);
+              if (details.reason !== 'outside-press') setOpen(next);
             }}
           >
             <input aria-label="Name" />
@@ -1658,18 +1664,22 @@ describe('Drawer', () => {
       warn.mockRestore();
     });
 
-    it('types details as an optional second argument with the shared reason union', () => {
+    it('types details as a required second argument (1.0) with the shared reason union', () => {
       expectTypeOf<DrawerOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
       expectTypeOf<DrawerOpenChangeDetails>().toEqualTypeOf<
         OpenChangeDetails<ModalOpenChangeReason>
       >();
       type Handler = NonNullable<DrawerProps['onOpenChange']>;
-      expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DrawerOpenChangeDetails | undefined>();
+      expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DrawerOpenChangeDetails>();
       // A 0.5 handler that takes only the value still fits.
       expectTypeOf<(open: boolean) => void>().toExtend<Handler>();
-      // Code that calls the prop itself (a wrapper, a custom Cancel button) keeps compiling.
-      const forward = (props: DrawerProps) => props.onOpenChange?.(false);
+      // Code that calls the prop itself (a wrapper, a custom Cancel button) passes `details`.
+      const forward = (props: DrawerProps, event: Event) =>
+        props.onOpenChange?.(false, { reason: 'close', event });
       expectTypeOf(forward).parameter(0).toEqualTypeOf<DrawerProps>();
+      // @ts-expect-error `details` is required (1.0)
+      const withoutDetails = (props: DrawerProps) => props.onOpenChange?.(false);
+      expect(withoutDetails).toBeTypeOf('function');
     });
   });
 
@@ -1700,7 +1710,7 @@ describe('Drawer', () => {
             title="Filters"
             open={open}
             onOpenChange={(next, details) => {
-              if (details?.reason !== 'outside-press') setOpen(next);
+              if (details.reason !== 'outside-press') setOpen(next);
             }}
           >
             <input aria-label="Name" onBlur={onBlur} />
@@ -1738,10 +1748,10 @@ describe('Drawer', () => {
         // padding reserves the footer's height; the drawer body has neither.
         expect(footer).toHaveAttribute(
           'class',
-          `${dialogFooterClassNames.root} mt-6 flex justify-end gap-2`,
+          `${dialogFooterClassNames.root} wave:mt-6 wave:flex wave:justify-end wave:gap-2`,
         );
         const body = footer.parentElement as HTMLElement;
-        expect(body).toHaveClass('overflow-y-auto');
+        expect(body).toHaveClass('wave:overflow-y-auto');
         mockRect(footer, { height: 64 });
         resizeObserver.trigger(footer);
         expect(body.getAttribute('style')).toBeNull();
@@ -1960,7 +1970,7 @@ describe('Drawer — slotProps', () => {
     root.querySelector<HTMLElement>('.' + drawerClassNames.header) as HTMLElement;
   /** The opening tag of the built-in header row at 234b990 (the same in both types). */
   const HEADER_0_17 =
-    '<div class="wave-drawer__header flex shrink-0 items-center justify-between gap-2 p-4 border-b border-transparent data-[scroll-state=middle]:border-border data-[scroll-state=bottom]:border-border forced-colors:border-[CanvasText]" data-scroll-state="none">';
+    '<div class="wave-drawer__header wave:flex wave:shrink-0 wave:items-center wave:justify-between wave:gap-2 wave:p-4 wave:border-b wave:border-transparent wave:data-[scroll-state=middle]:border-border wave:data-[scroll-state=bottom]:border-border wave:forced-colors:border-[CanvasText]" data-scroll-state="none">';
 
   /** An open drawer titled "Filters" with a body button and `props`. */
   function Open(props: Partial<DrawerProps>) {
@@ -2005,7 +2015,7 @@ describe('Drawer — slotProps', () => {
       />,
     );
     const row = header();
-    expect(row).toHaveClass(drawerClassNames.header, 'justify-between', 'my-header');
+    expect(row).toHaveClass(drawerClassNames.header, 'wave:justify-between', 'my-header');
     expect(row?.classList[0]).toBe(drawerClassNames.header);
     expect(row?.classList[row.classList.length - 1]).toBe('my-header');
     expect(row).toHaveAttribute('data-part', 'header');
@@ -2017,7 +2027,7 @@ describe('Drawer — slotProps', () => {
   it('lets your class replace a conflicting class of the header row', () => {
     render(<Open slotProps={{ header: { className: 'p-2' } }} />);
     expect(header()).toHaveClass('p-2');
-    expect(header()).not.toHaveClass('p-4');
+    expect(header()).not.toHaveClass('wave:p-4');
   });
 
   it('locks the scroll state and keeps the row visible and reachable', () => {

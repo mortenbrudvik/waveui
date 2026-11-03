@@ -6,9 +6,9 @@ import {
   accordionTriggerClassNames,
 } from '../../lib/classNames';
 import { flattenChildren, getElementType } from '../../lib/children';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
-import { reportMissingContext, warnDeprecated, warnOnce } from '../../lib/dev';
+import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
@@ -96,7 +96,7 @@ const AccordionHeadingOutsideContext = React.createContext(false);
  * so a wrapper between the heading and the button (a Tooltip's inline-block `<span>`) does not
  * shrink the full-width button and move its chevron away from the row end.
  */
-const HEADING_CLASS = 'm-0 grid';
+const HEADING_CLASS = 'wave:m-0 wave:grid';
 
 /**
  * What the heading part locks unset: a role and a level (it stays the heading `headingLevel`
@@ -126,7 +126,7 @@ const BLOCK_CLICK = ['onClick'] as const;
  * Trigger renders the heading, or the Item around a wrapper of the Trigger).
  */
 function headingProps(part: SlotPart<'h3'> | undefined): Record<string, unknown> {
-  const className = cn(accordionTriggerClassNames.heading, HEADING_CLASS);
+  const className = wcn(accordionTriggerClassNames.heading, HEADING_CLASS);
   return part ? mergeSlotProps(part, { className, locked: HEADING_PART_LOCKS }) : { className };
 }
 
@@ -186,18 +186,12 @@ export interface AccordionSingleProps extends AccordionBaseProps {
   defaultOpenItem?: string | null;
   /** Called with the new open item (`null` when it closed) when it changes. */
   onOpenItemChange?: (openItem: string | null) => void;
-  /** @deprecated Use `openItem` (single mode); `openItems` belongs to `type="multiple"`. */
-  openItems?: readonly string[];
-  /**
-   * @deprecated Use `defaultOpenItem` (single mode); `defaultOpenItems` belongs to
-   * `type="multiple"`.
-   */
-  defaultOpenItems?: readonly string[];
-  /**
-   * @deprecated Use `onOpenItemChange` (single mode); `onOpenItemsChange` belongs to
-   * `type="multiple"`.
-   */
-  onOpenItemsChange?: (openItems: string[]) => void;
+  /** `type="multiple"` only: a single Accordion takes `openItem`. */
+  openItems?: never;
+  /** `type="multiple"` only: a single Accordion takes `defaultOpenItem`. */
+  defaultOpenItems?: never;
+  /** `type="multiple"` only: a single Accordion reports through `onOpenItemChange`. */
+  onOpenItemsChange?: never;
 }
 
 /** Props of an Accordion in which any number of items can be open. */
@@ -230,6 +224,9 @@ export interface AccordionMultipleProps extends AccordionBaseProps {
  */
 export type AccordionProps = AccordionSingleProps | AccordionMultipleProps;
 
+/** The props only `type="multiple"` takes (`never` in single mode). */
+type MultipleOnly = 'openItems' | 'defaultOpenItems' | 'onOpenItemsChange';
+
 function toItems(value: string | null | undefined): readonly string[] | undefined {
   if (value === undefined) return undefined;
   return value === null ? EMPTY : [value];
@@ -237,6 +234,8 @@ function toItems(value: string | null | undefined): readonly string[] | undefine
 
 // The Accordion root, documented on the exported `Accordion` const.
 const AccordionRoot = (props: AccordionProps) => {
+  // Both modes' props, read by mode: a single Accordion ignores the multiple-mode ones (and the
+  // other way round), so neither reaches the root element.
   const {
     type,
     openItem,
@@ -250,49 +249,22 @@ const AccordionRoot = (props: AccordionProps) => {
     children,
     ref,
     ...rest
-  } = props as Omit<AccordionSingleProps, 'type'> & { type?: SelectionMode };
+  } = props as Omit<AccordionSingleProps, 'type' | MultipleOnly> &
+    Pick<AccordionMultipleProps, MultipleOnly> & { type?: SelectionMode };
   const multiple = type === 'multiple';
 
-  if (!multiple) {
-    if (openItemsProp !== undefined) {
-      warnDeprecated(
-        'Accordion',
-        'openItems',
-        'openItem',
-        'In single mode the Accordion takes one value.',
-      );
-    }
-    if (defaultOpenItems !== undefined) {
-      warnDeprecated(
-        'Accordion',
-        'defaultOpenItems',
-        'defaultOpenItem',
-        'In single mode the Accordion takes one value.',
-      );
-    }
-    if (onOpenItemsChange !== undefined) {
-      warnDeprecated(
-        'Accordion',
-        'onOpenItemsChange',
-        'onOpenItemChange',
-        'In single mode the Accordion reports one value.',
-      );
-    }
-  }
-
-  const controlledSingle = multiple ? undefined : openItem;
   const controlled = React.useMemo(
-    () => toItems(controlledSingle) ?? openItemsProp,
-    [controlledSingle, openItemsProp],
+    () => (multiple ? openItemsProp : toItems(openItem)),
+    [multiple, openItem, openItemsProp],
   );
   const [initialItems] = React.useState(
-    () => (multiple ? undefined : toItems(defaultOpenItem)) ?? defaultOpenItems ?? EMPTY,
+    () => (multiple ? defaultOpenItems : toItems(defaultOpenItem)) ?? EMPTY,
   );
 
   const handleChange = (next: readonly string[]) => {
     const list = [...next];
-    if (!multiple) onOpenItemChange?.(list[0] ?? null);
-    onOpenItemsChange?.(list);
+    if (multiple) onOpenItemsChange?.(list);
+    else onOpenItemChange?.(list[0] ?? null);
   };
 
   const [openItems, setOpenItems] = useControllable<readonly string[]>(
@@ -300,16 +272,6 @@ const AccordionRoot = (props: AccordionProps) => {
     initialItems,
     handleChange,
   );
-
-  const openCount = openItems.length;
-  React.useEffect(() => {
-    if (!multiple && openCount > 1) {
-      warnOnce(
-        'Accordion:single-multiple-open',
-        `Accordion: type="single" allows one open item, but ${openCount} are open. Pass \`openItem\`, or use type="multiple".`,
-      );
-    }
-  }, [multiple, openCount]);
 
   const toggle = React.useCallback(
     (value: string) => {
@@ -351,7 +313,11 @@ const AccordionRoot = (props: AccordionProps) => {
           <AccordionHeadingOutsideContext.Provider value={false}>
             <div
               ref={ref}
-              className={cn(accordionClassNames.root, 'divide-y divide-border', className)}
+              className={wcn(
+                accordionClassNames.root,
+                'wave:divide-y wave:divide-border',
+                className,
+              )}
               {...rest}
             >
               {children}
@@ -539,7 +505,7 @@ const AccordionItem = ({
         <div
           ref={ref}
           data-state={isOpen ? 'open' : 'closed'}
-          className={cn(accordionItemClassNames.root, className)}
+          className={wcn(accordionItemClassNames.root, className)}
           {...rest}
         >
           {hasTrigger ? null : <AccordionTrigger>{value}</AccordionTrigger>}
@@ -617,19 +583,19 @@ const AccordionTrigger = ({
   const Heading: `h${AccordionHeadingLevel}` = `h${item.headingLevel}`;
   const state = item.isOpen ? 'open' : 'closed';
   const iconPart = slotProps?.expandIcon;
-  const iconClassName = cn(
+  const iconClassName = wcn(
     accordionTriggerClassNames.expandIcon,
-    'shrink-0 transition-transform motion-reduce:transition-none',
-    item.isOpen && 'rotate-180',
+    'wave:shrink-0 wave:transition-transform wave:motion-reduce:transition-none',
+    item.isOpen && 'wave:rotate-180',
   );
 
   const button = (
     <button
       type="button"
-      className={cn(
+      className={wcn(
         accordionTriggerClassNames.root,
-        'flex w-full items-center justify-between gap-2 px-4 py-3 text-start text-body-1 font-semibold text-foreground',
-        'not-disabled:not-aria-disabled:hover:bg-subtle-hover not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+        'wave:flex wave:w-full wave:items-center wave:justify-between wave:gap-2 wave:px-4 wave:py-3 wave:text-start wave:text-body-1 wave:font-semibold wave:text-foreground',
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
         disabledStyles,
         focusRingInset,
         className,
@@ -745,7 +711,7 @@ const AccordionPanel = ({
     // and stays while that region is mounted, so it also stays while the region collapses.
     return (
       <div
-        className={cn(accordionPanelClassNames.root, className)}
+        className={wcn(accordionPanelClassNames.root, className)}
         {...rest}
         id={idProp || undefined}
         ref={ref}
@@ -760,13 +726,13 @@ const AccordionPanel = ({
       <div
         ref={wrapperRef}
         {...presenceProps}
-        className={cn(accordionPanelClassNames.collapse, collapseClassName)}
+        className={wcn(accordionPanelClassNames.collapse, collapseClassName)}
       >
         <div
           role="region"
-          className={cn(
+          className={wcn(
             accordionPanelClassNames.root,
-            'px-4 pb-3 text-body-1 text-muted-foreground',
+            'wave:px-4 wave:pb-3 wave:text-body-1 wave:text-muted-foreground',
             className,
           )}
           {...rest}

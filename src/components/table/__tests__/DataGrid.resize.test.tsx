@@ -158,11 +158,13 @@ afterEach(() => {
 describe('DataGrid column sizing', () => {
   describe('types', () => {
     it('reports the widths and the details of a change, and takes localizable labels', () => {
-      // `details` is optional through 0.x (C-NAMING); the grid always passes it.
+      // `details` is required (1.0, C-NAMING); the grid always passes it.
       expectTypeOf<DataGridBaseProps['onColumnWidthsChange']>().toEqualTypeOf<
-        | ((widths: Record<string, number>, details?: TableColumnWidthsChangeDetails) => void)
+        | ((widths: Record<string, number>, details: TableColumnWidthsChangeDetails) => void)
         | undefined
       >();
+      // @ts-expect-error `details` is required (1.0)
+      expectTypeOf<NonNullable<DataGridBaseProps['onColumnWidthsChange']>>().toBeCallableWith({});
       expectTypeOf<DataGridLabels['resizeColumn']>().toEqualTypeOf<string | undefined>();
       expectTypeOf<DataGridLabels['columnWidth']>().toEqualTypeOf<
         ((width: number) => string) | undefined
@@ -177,7 +179,9 @@ describe('DataGrid column sizing', () => {
       expect(grid().querySelector('colgroup')).toBeNull();
       expect(grid()).not.toHaveAttribute('style');
       expect(screen.queryByRole('separator')).toBeNull();
-      expect(screen.getByRole('gridcell', { name: 'Bolt' })).not.toHaveClass('whitespace-nowrap');
+      expect(screen.getByRole('gridcell', { name: 'Bolt' })).not.toHaveClass(
+        'wave:whitespace-nowrap',
+      );
     });
 
     it('renders a col per column at its initial width from columnSizingOptions', () => {
@@ -239,7 +243,7 @@ describe('DataGrid column sizing', () => {
     it('positions a header cell that holds a handle and puts the handle directly in it', () => {
       render(<Grid resizableColumns />);
       for (const name of ['Item', 'Owner']) {
-        expect(header(name)).toHaveClass('relative');
+        expect(header(name)).toHaveClass('wave:relative');
         expect(handleOf(name).parentElement).toBe(header(name));
       }
     });
@@ -247,9 +251,9 @@ describe('DataGrid column sizing', () => {
     it('truncates the body cells of a grid with column sizing', () => {
       render(<Grid resizableColumns />);
       expect(screen.getByRole('gridcell', { name: 'Bolt' })).toHaveClass(
-        'overflow-hidden',
-        'text-ellipsis',
-        'whitespace-nowrap',
+        'wave:overflow-hidden',
+        'wave:text-ellipsis',
+        'wave:whitespace-nowrap',
       );
     });
 
@@ -269,8 +273,8 @@ describe('DataGrid column sizing', () => {
       );
       const cell = screen.getByRole('gridcell', { name: 'Bolt' });
       expect(cell).toHaveClass('whitespace-normal');
-      expect(cell).not.toHaveClass('whitespace-nowrap');
-      expect(screen.getByRole('gridcell', { name: 'Ada' })).toHaveClass('whitespace-nowrap');
+      expect(cell).not.toHaveClass('wave:whitespace-nowrap');
+      expect(screen.getByRole('gridcell', { name: 'Ada' })).toHaveClass('wave:whitespace-nowrap');
     });
   });
 
@@ -489,8 +493,8 @@ describe('DataGrid column sizing', () => {
       render(<Grid resizableColumns />);
       const [head] = screen.getAllByRole('rowgroup');
       expect(head).toContainElement(header('Item'));
-      expect(head).toHaveClass('in-data-[resizing]:pointer-events-none');
-      expect(handleOf('Item')).toHaveClass('data-[dragging]:pointer-events-auto');
+      expect(head).toHaveClass('wave:in-data-[resizing]:pointer-events-none');
+      expect(handleOf('Item')).toHaveClass('wave:data-[dragging]:pointer-events-auto');
     });
 
     it('also marks an unresized grid while its handle drags', () => {
@@ -953,7 +957,9 @@ describe('DataGrid column sizing', () => {
       expect(grid().querySelector('colgroup')).toBeNull();
       expect(grid()).not.toHaveAttribute('style');
       expect(screen.queryByRole('separator')).toBeNull();
-      expect(screen.getByRole('gridcell', { name: 'Bolt' })).not.toHaveClass('whitespace-nowrap');
+      expect(screen.getByRole('gridcell', { name: 'Bolt' })).not.toHaveClass(
+        'wave:whitespace-nowrap',
+      );
       expect(warn.mock.calls).toEqual([[REQUIRE_COLUMNS_WARNING]]);
     });
 
@@ -1041,7 +1047,7 @@ describe('DataGrid.HeaderCell — slotProps.resizeHandle', () => {
 
   // Captured from 6f6b500's dist: the server markup, and the client one after the grid's
   // navigation wrote its tab stops (the same in both directions).
-  const HANDLE = `wave-table-resize-handle absolute inset-y-0 end-0 z-1 w-2 cursor-col-resize touch-none select-none border-e-2 border-transparent hover:border-stroke-accessible focus-visible:border-primary data-[dragging]:border-primary forced-colors:forced-color-adjust-none forced-colors:hover:border-[ButtonText] forced-colors:focus-visible:border-[Highlight] forced-colors:data-[dragging]:border-[Highlight] wave-data-grid-header-cell__resize-handle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring data-[dragging]:pointer-events-auto`;
+  const HANDLE = `wave-table-resize-handle wave:absolute wave:inset-y-0 wave:end-0 wave:z-1 wave:w-2 wave:cursor-col-resize wave:touch-none wave:select-none wave:border-e-2 wave:border-transparent wave:hover:border-stroke-accessible wave:focus-visible:border-primary wave:data-[dragging]:border-primary wave:forced-colors:forced-color-adjust-none wave:forced-colors:hover:border-[ButtonText] wave:forced-colors:focus-visible:border-[Highlight] wave:forced-colors:data-[dragging]:border-[Highlight] wave-data-grid-header-cell__resize-handle wave:focus-visible:outline-2 wave:focus-visible:-outline-offset-2 wave:focus-visible:outline-ring wave:data-[dragging]:pointer-events-auto`;
   const pins = (tabIndex: string) =>
     Array(3)
       .fill(
@@ -1102,7 +1108,7 @@ describe('DataGrid.HeaderCell — slotProps.resizeHandle', () => {
       expect(handle.classList[0]).toBe(tableResizeHandleClassNames.root);
       expect(handle).toHaveClass(dataGridHeaderCellClassNames.resizeHandle, 'my-handle', 'w-4');
       // Your class replaces a conflicting one of the part.
-      expect(handle).not.toHaveClass('w-2');
+      expect(handle).not.toHaveClass('wave:w-2');
       expect(handle).toHaveAttribute('data-part', 'handle');
       expect(handle).toHaveStyle({ opacity: '0.5' });
     }

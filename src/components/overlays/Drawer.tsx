@@ -102,8 +102,8 @@ export type {
  *   `className` resizes oddly during the motion: give it a length, or pass `motion={null}`).
  *   Under reduced motion every drawer appears and disappears at once. `motion` (the panel, or an
  *   inline drawer's space) and `backdropMotion` (the backdrop) turn each off (`null`) or replace
- *   it, and `WaveProvider motion="none"` turns both defaults off. `data-[presence=…]:` classes in
- *   `className` keep 0.14's behaviour: no default motion, they animate the panel.
+ *   it, and `WaveProvider motion="none"` turns both defaults off. `className` is a plain class
+ *   list: `data-[presence=…]:` classes there apply next to the default motion.
  * - **Presence**: the panel and the backdrop mount through the presence core and render
  *   `data-presence` (`entering` and `exiting` while the drawer's motion runs, `entered` while
  *   open, `exited` while kept closed). An inline drawer's `<aside>` is the only child of an

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { colorAreaClassNames } from '../../lib/classNames';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { hsvToHex } from '../../lib/color';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { getArrowIntent, getDirection } from '../../lib/direction';
@@ -410,7 +410,7 @@ export const ColorArea = ({
     'aria-hidden': axis !== activeAxis && !coarsePointer ? true : undefined,
     onChange: handleInputChange(axis),
     onFocus: handleInputFocus(axis),
-    className: 'sr-only',
+    className: 'wave:sr-only',
   });
 
   return (
@@ -418,10 +418,10 @@ export const ColorArea = ({
       role="group"
       data-disabled={part.disabled ? '' : undefined}
       {...groupProps}
-      className={cn(
+      className={wcn(
         colorAreaClassNames.root,
-        'group/color-area relative h-40 w-full min-w-40 touch-none select-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
-        resolvedShape === 'square' ? 'rounded-none' : 'rounded',
+        'wave:group/color-area wave:relative wave:h-40 wave:w-full wave:min-w-40 wave:touch-none wave:select-none wave:data-[disabled]:cursor-not-allowed wave:data-[disabled]:opacity-50',
+        resolvedShape === 'square' ? 'wave:rounded-none' : 'wave:rounded',
         className,
       )}
       style={areaStyle}
@@ -433,9 +433,9 @@ export const ColorArea = ({
     >
       <div
         {...mergeSlotProps(slotProps?.field, {
-          className: cn(
+          className: wcn(
             colorAreaClassNames.field,
-            'absolute inset-0 rounded-[inherit] bg-(image:--wave-color-area-gradient) wave-rtl:-scale-x-100 forced-colors:forced-color-adjust-none',
+            'wave:absolute wave:inset-0 wave:rounded-[inherit] wave:bg-(image:--wave-color-area-gradient) wave:wave-rtl:-scale-x-100 wave:forced-colors:forced-color-adjust-none',
           ),
           locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}
@@ -444,11 +444,11 @@ export const ColorArea = ({
       />
       <span
         {...mergeSlotProps(slotProps?.thumb, {
-          className: cn(
+          className: wcn(
             colorAreaClassNames.thumb,
             COLOR_THUMB_CLASSES,
-            'start-(--wave-color-area-x) bottom-(--wave-color-area-y) -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2',
-            'group-has-[:focus-visible]/color-area:ring-2 group-has-[:focus-visible]/color-area:ring-background forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] group-has-[:focus-visible]/color-area:outline-2 group-has-[:focus-visible]/color-area:outline-offset-2 group-has-[:focus-visible]/color-area:outline-ring forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]',
+            'wave:start-(--wave-color-area-x) wave:bottom-(--wave-color-area-y) wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:translate-y-1/2',
+            'wave:group-has-[:focus-visible]/color-area:ring-2 wave:group-has-[:focus-visible]/color-area:ring-background wave:forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] wave:group-has-[:focus-visible]/color-area:outline-2 wave:group-has-[:focus-visible]/color-area:outline-offset-2 wave:group-has-[:focus-visible]/color-area:outline-ring wave:forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]',
           ),
           locked: { 'aria-hidden': 'true', tabIndex: undefined },
         })}

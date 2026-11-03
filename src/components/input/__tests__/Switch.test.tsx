@@ -4,6 +4,8 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Switch } from '../Switch';
+import { Button } from '../../button/Button';
+import { Toolbar } from '../../button/Toolbar';
 import type { SwitchLabelPosition, SwitchProps } from '../Switch';
 import { switchClassNames } from '../../../lib/classNames';
 import {
@@ -14,7 +16,9 @@ import {
   testComposedHandler,
   testFocusEvents,
   testNoImplicitSubmit,
+  testRootPartRef,
   testSystemProps,
+  UNKNOWN_PROP,
 } from '../../../test-utils';
 import { renderWithFieldContext, FIELD_TEST_IDS, FIELD_TEST_TEXT } from '../../../test-utils-field';
 
@@ -31,7 +35,8 @@ describe('Switch', () => {
   testSystemProps(Switch, {
     expectedTag: 'label',
     displayName: 'Switch',
-    control: { role: 'switch' },
+    ref: 'control',
+    control: { role: 'switch', tag: 'button' },
     defaultProps: { label: 'Dark mode' },
     a11yVariants: [
       { name: 'checked', props: { defaultChecked: true } },
@@ -41,6 +46,8 @@ describe('Switch', () => {
       { name: 'label above', props: { labelPosition: 'above' } },
     ],
   });
+
+  testRootPartRef(Switch, { props: { label: 'Dark mode' } });
 
   testFocusEvents(Switch, { label: 'Dark mode' }, 'button');
 
@@ -124,21 +131,24 @@ describe('Switch', () => {
     expect(onCheckedChange).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
+  it('has no onChange alias of onCheckedChange: the 0.4 name is removed in 1.0', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      const { rerender } = render(<Switch label="Dark mode" onChange={onChange} />);
-      rerender(<Switch label="Dark mode" onChange={onChange} />);
+      const onCheckedChange = vi.fn();
+      render(
+        <Switch
+          label="Dark mode"
+          // @ts-expect-error -- `onChange(checked)` is removed in 1.0: use `onCheckedChange`
+          onChange={onChange}
+          onCheckedChange={onCheckedChange}
+        />,
+      );
       await user.click(screen.getByRole('switch', { name: 'Dark mode' }));
-      expect(onChange).toHaveBeenCalledWith(true);
-      expect(warn.mock.calls).toEqual([
-        [
-          '[WaveUI] Switch: `onChange` is deprecated and will be removed in 1.0. Use ' +
-            '`onCheckedChange` instead.',
-        ],
-      ]);
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -193,12 +203,12 @@ describe('Switch — props reach the switch control (C-ROUTING)', () => {
     }
   });
 
-  it('keeps ref on the label and exposes the button through controlRef', () => {
-    const ref = React.createRef<HTMLLabelElement>();
-    const controlRef = React.createRef<HTMLButtonElement>();
-    render(<Switch ref={ref} controlRef={controlRef} label="Dark mode" />);
-    expect(ref.current?.tagName).toBe('LABEL');
-    expect(controlRef.current).toBe(screen.getByRole('switch', { name: 'Dark mode' }));
+  it('gives ref the button and slotProps.root.ref the label', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const root = React.createRef<HTMLLabelElement>();
+    render(<Switch ref={ref} slotProps={{ root: { ref: root } }} label="Dark mode" />);
+    expect(root.current?.tagName).toBe('LABEL');
+    expect(ref.current).toBe(screen.getByRole('switch', { name: 'Dark mode' }));
   });
 
   it('fires a consumer onClick once when the label text is clicked, and toggles once', async () => {
@@ -212,6 +222,120 @@ describe('Switch — props reach the switch control (C-ROUTING)', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(currentTargets).toEqual([screen.getByRole('switch')]);
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+// 1.0 (Phase 14, R5): `ref` reaches the role="switch" button, the focusable control; the root
+// <label> is `slotProps.root.ref`, and `controlRef` is gone.
+describe('Switch — ref reaches the control', () => {
+  it('focuses the switch through ref', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    render(<Switch ref={ref} label="Dark mode" />);
+    act(() => ref.current?.focus());
+    expect(screen.getByRole('switch', { name: 'Dark mode' })).toHaveFocus();
+  });
+
+  it('gives ref and slotProps.track.ref the same button', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const track = React.createRef<HTMLButtonElement>();
+    render(<Switch ref={ref} label="Dark mode" slotProps={{ track: { ref: track } }} />);
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(ref.current).toBe(control);
+    expect(track.current).toBe(control);
+  });
+
+  it('keeps the invalid focus and the form reset working with an inline ref that changes on every render', async () => {
+    const user = userEvent.setup();
+    const nodes: (HTMLButtonElement | null)[] = [];
+    const ui = (pass: number) => (
+      <form aria-label="Form">
+        <Switch
+          ref={(node) => {
+            nodes.push(node);
+          }}
+          name="dark"
+          required
+          label="Dark mode"
+          data-pass={pass}
+        />
+      </form>
+    );
+    const { rerender } = render(ui(0));
+    rerender(ui(1));
+    rerender(ui(2));
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    expect(nodes.at(-1)).toBe(control);
+    const form = screen.getByRole('form', { name: 'Form' }) as HTMLFormElement;
+    // The hidden input's invalid event focuses the control through the Switch's own ref.
+    act(() => {
+      form.reportValidity();
+    });
+    expect(control).toHaveFocus();
+    await user.click(control);
+    rerender(ui(3));
+    expect(control).toHaveAttribute('aria-checked', 'true');
+    act(() => form.reset());
+    expect(control).toHaveAttribute('aria-checked', 'false');
+    expect(nodes.at(-1)).toBe(control);
+  });
+
+  it('attaches a callback ref once, keeps it across renders and detaches it on unmount', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(<Switch ref={ref} label="Dark mode" />);
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    rerender(<Switch ref={ref} label="Dark mode" defaultChecked />);
+    expect(ref.mock.calls).toEqual([[control]]);
+    unmount();
+    expect(ref.mock.calls).toEqual([[control], [null]]);
+  });
+
+  it('in StrictMode, attaches only the control: React detaches and attaches it again on mount, once', () => {
+    const ref = vi.fn();
+    const { rerender, unmount } = render(
+      <React.StrictMode>
+        <Switch ref={ref} label="Dark mode" />
+      </React.StrictMode>,
+    );
+    const control = screen.getByRole('switch', { name: 'Dark mode' });
+    rerender(
+      <React.StrictMode>
+        <Switch ref={ref} label="Dark mode" defaultChecked />
+      </React.StrictMode>,
+    );
+    expect(ref.mock.calls).toEqual([[control], [null], [control]]);
+    unmount();
+    expect(ref).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reaches the control the Field label points at', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    renderWithFieldContext(<Switch ref={ref} />);
+    const fieldLabel = screen.getByText(FIELD_TEST_TEXT.label).closest('label') as HTMLLabelElement;
+    expect(ref.current).toBe(screen.getByRole('switch', { name: FIELD_TEST_TEXT.label }));
+    expect(ref.current?.id).toBe(fieldLabel.htmlFor);
+  });
+
+  it('has no controlRef: TypeScript rejects it, and untyped code puts an unknown prop on the root', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const controlRef = React.createRef<HTMLButtonElement>();
+      render(
+        <Switch
+          label="Dark mode"
+          // @ts-expect-error -- `controlRef` is removed in 1.0: `ref` reaches the switch
+          controlRef={controlRef}
+        />,
+      );
+      const control = screen.getByRole('switch', { name: 'Dark mode' });
+      expect(controlRef.current).toBeNull();
+      expect(control.closest('label')).toHaveAttribute('controlref', '[object Object]');
+      expect(error.mock.calls).toEqual([UNKNOWN_PROP('controlRef')]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });
 
@@ -501,58 +625,71 @@ describe('Switch — styling tokens', () => {
     render(<Switch label="Dark mode" />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
     expect(sw).toHaveClass(
-      'bg-transparent',
-      'border-stroke-accessible',
-      'forced-colors:border-[ButtonText]',
+      'wave:bg-transparent',
+      'wave:border-stroke-accessible',
+      'wave:forced-colors:border-[ButtonText]',
     );
-    expect(getThumb(sw)).toHaveClass('bg-stroke-accessible', 'forced-colors:bg-[ButtonText]');
+    expect(getThumb(sw)).toHaveClass(
+      'wave:bg-stroke-accessible',
+      'wave:forced-colors:bg-[ButtonText]',
+    );
   });
 
   it('on: primary track with a primary-foreground thumb', () => {
     render(<Switch label="Dark mode" defaultChecked />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('bg-primary', 'border-primary', 'forced-colors:bg-[Highlight]');
+    expect(sw).toHaveClass(
+      'wave:bg-primary',
+      'wave:border-primary',
+      'wave:forced-colors:bg-[Highlight]',
+    );
     expect(getThumb(sw)).toHaveClass(
-      'bg-primary-foreground',
-      'forced-colors:bg-[HighlightText]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:bg-primary-foreground',
+      'wave:forced-colors:bg-[HighlightText]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
   });
 
   it('forced colors: the track keeps system colors; only the thumb opts out (leaf)', () => {
     render(<Switch label="Dark mode" defaultChecked />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('forced-colors:border-[Highlight]', 'forced-colors:bg-[Highlight]');
-    expect(sw).not.toHaveClass('forced-colors:forced-color-adjust-none');
+    expect(sw).toHaveClass(
+      'wave:forced-colors:border-[Highlight]',
+      'wave:forced-colors:bg-[Highlight]',
+    );
+    expect(sw).not.toHaveClass('wave:forced-colors:forced-color-adjust-none');
   });
 
   it('forced colors: a disabled switch that is on draws a GrayText thumb and border on Canvas', () => {
     render(<Switch label="Dark mode" defaultChecked disabled />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
-    expect(sw).not.toHaveClass('forced-colors:bg-[Highlight]');
-    expect(sw).not.toHaveClass('forced-colors:border-[Highlight]');
-    expect(getThumb(sw)).toHaveClass(
-      'forced-colors:bg-[GrayText]',
-      'forced-colors:forced-color-adjust-none',
+    expect(sw).toHaveClass(
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
     );
-    expect(getThumb(sw)).not.toHaveClass('forced-colors:bg-[HighlightText]');
+    expect(sw).not.toHaveClass('wave:forced-colors:bg-[Highlight]');
+    expect(sw).not.toHaveClass('wave:forced-colors:border-[Highlight]');
+    expect(getThumb(sw)).toHaveClass(
+      'wave:forced-colors:bg-[GrayText]',
+      'wave:forced-colors:forced-color-adjust-none',
+    );
+    expect(getThumb(sw)).not.toHaveClass('wave:forced-colors:bg-[HighlightText]');
   });
 
   it('forced colors: a disabled switch that is off draws a GrayText thumb and border', () => {
     render(<Switch label="Dark mode" disabled />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('forced-colors:border-[GrayText]');
-    expect(sw).not.toHaveClass('forced-colors:border-[ButtonText]');
-    expect(getThumb(sw)).toHaveClass('forced-colors:bg-[GrayText]');
-    expect(getThumb(sw)).not.toHaveClass('forced-colors:bg-[ButtonText]');
+    expect(sw).toHaveClass('wave:forced-colors:border-[GrayText]');
+    expect(sw).not.toHaveClass('wave:forced-colors:border-[ButtonText]');
+    expect(getThumb(sw)).toHaveClass('wave:forced-colors:bg-[GrayText]');
+    expect(getThumb(sw)).not.toHaveClass('wave:forced-colors:bg-[ButtonText]');
   });
 
   it('sizes the track and the thumb in one unit (px), so the thumb fits the track at any root font size', () => {
     /** The value of a `<utility>-[<n>px]` class (not one behind a variant). */
     function px(element: HTMLElement, utility: string): number {
       const match = element.className.match(
-        new RegExp(`(?:^|\\s)${utility}-\\[(\\d+(?:\\.\\d+)?)px\\](?=\\s|$)`),
+        new RegExp(`(?:^|\\s)wave:${utility}-\\[(\\d+(?:\\.\\d+)?)px\\](?=\\s|$)`),
       );
       if (!match) throw new Error(`no ${utility}-[…px] class in "${element.className}"`);
       return Number(match[1]);
@@ -566,8 +703,8 @@ describe('Switch — styling tokens', () => {
     const off = screen.getByRole('switch', { name: 'Off' });
     const on = screen.getByRole('switch', { name: 'On' });
     // A rem track (h-5 w-10) scales with the root font size while the px thumb does not.
-    expect(on.className).not.toMatch(/(^|\s)(h|w|size)-\d/);
-    expect(on).toHaveClass('border');
+    expect(on.className).not.toMatch(/(^|\s)wave:(h|w|size)-\d/);
+    expect(on).toHaveClass('wave:border');
     const border = 1;
     const thumb = px(getThumb(on), 'w');
     expect(px(getThumb(on), 'h')).toBe(thumb);
@@ -585,21 +722,24 @@ describe('Switch — styling tokens', () => {
         <Switch label="On" defaultChecked />
       </>,
     );
-    expect(screen.getByRole('switch', { name: 'Off' })).toHaveClass('p-0', 'bg-transparent');
-    expect(screen.getByRole('switch', { name: 'On' })).toHaveClass('p-0', 'bg-primary');
+    expect(screen.getByRole('switch', { name: 'Off' })).toHaveClass(
+      'wave:p-0',
+      'wave:bg-transparent',
+    );
+    expect(screen.getByRole('switch', { name: 'On' })).toHaveClass('wave:p-0', 'wave:bg-primary');
   });
 
   it('draws the label text on the px type ramp like Field and Label (text-body-1)', () => {
     render(<Switch label="Dark mode" />);
-    expect(screen.getByText('Dark mode')).toHaveClass('text-body-1');
-    expect(screen.getByText('Dark mode')).not.toHaveClass('text-sm');
+    expect(screen.getByText('Dark mode')).toHaveClass('wave:text-body-1');
+    expect(screen.getByText('Dark mode')).not.toHaveClass('wave:text-sm');
   });
 
   it('turns off the track and thumb transitions for reduced motion', () => {
     render(<Switch label="Dark mode" />);
     const sw = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(sw).toHaveClass('motion-reduce:transition-none');
-    expect(getThumb(sw)).toHaveClass('motion-reduce:transition-none');
+    expect(sw).toHaveClass('wave:motion-reduce:transition-none');
+    expect(getThumb(sw)).toHaveClass('wave:motion-reduce:transition-none');
   });
 
   it('mirrors the thumb position under dir="rtl" (wave-rtl: variant, C-LOGICAL)', () => {
@@ -611,12 +751,12 @@ describe('Switch — styling tokens', () => {
       { dir: 'rtl' },
     );
     expect(getThumb(screen.getByRole('switch', { name: 'Off' }))).toHaveClass(
-      'translate-x-[2px]',
-      'wave-rtl:-translate-x-[2px]',
+      'wave:translate-x-[2px]',
+      'wave:wave-rtl:-translate-x-[2px]',
     );
     expect(getThumb(screen.getByRole('switch', { name: 'On' }))).toHaveClass(
-      'translate-x-[22px]',
-      'wave-rtl:-translate-x-[22px]',
+      'wave:translate-x-[22px]',
+      'wave:wave-rtl:-translate-x-[22px]',
     );
   });
 
@@ -633,11 +773,11 @@ describe('Switch — styling tokens', () => {
     for (const name of ['Off', 'On']) {
       const sw = screen.getByRole('switch', { name });
       for (const element of [sw, getThumb(sw)]) {
-        expect(element.className, name).not.toMatch(/(^|\s)rtl:/);
+        expect(element.className, name).not.toMatch(/(^|\s)wave:rtl:/);
       }
     }
     expect(getThumb(screen.getByRole('switch', { name: 'On' }))).toHaveClass(
-      'wave-rtl:-translate-x-[22px]',
+      'wave:wave-rtl:-translate-x-[22px]',
     );
   });
 });
@@ -683,7 +823,7 @@ describe('Switch — rich label and labelPosition', () => {
       control.compareDocumentPosition(screen.getByText('Dark mode')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(root).not.toHaveClass('flex-col');
+    expect(root).not.toHaveClass('wave:flex-col');
   });
 
   it.each([
@@ -698,8 +838,8 @@ describe('Switch — rich label and labelPosition', () => {
       expect(root).toHaveAttribute('data-label-position', position);
       const text = screen.getByText('Dark mode');
       expect(root.firstElementChild).toBe(text);
-      if (column) expect(root).toHaveClass('flex-col', 'items-start', 'gap-1');
-      else expect(root).not.toHaveClass('flex-col');
+      if (column) expect(root).toHaveClass('wave:flex-col', 'wave:items-start', 'wave:gap-1');
+      else expect(root).not.toHaveClass('wave:flex-col');
       const control = screen.getByRole('switch', { name: 'Dark mode' });
       await user.click(text);
       expect(control).toHaveAttribute('aria-checked', 'true');
@@ -731,9 +871,9 @@ describe('Switch — rich label and labelPosition', () => {
       );
       const root = screen.getByTestId('root');
       // The 20px track is as tall as the first line of `text-body-1`: both start at the top.
-      expect(root).toHaveClass('items-start');
-      expect(root).not.toHaveClass('items-center');
-      expect(root).not.toHaveClass('flex-col');
+      expect(root).toHaveClass('wave:items-start');
+      expect(root).not.toHaveClass('wave:items-center');
+      expect(root).not.toHaveClass('wave:flex-col');
     },
   );
 
@@ -844,10 +984,13 @@ describe('Switch — disabledFocusable', () => {
 
   it('has the disabled look, forced colors included', () => {
     render(<Switch label="Dark mode" disabledFocusable defaultChecked data-testid="root" />);
-    expect(screen.getByTestId('root')).toHaveClass('cursor-not-allowed', 'opacity-50');
+    expect(screen.getByTestId('root')).toHaveClass('wave:cursor-not-allowed', 'wave:opacity-50');
     const control = screen.getByRole('switch', { name: 'Dark mode' });
-    expect(control).toHaveClass('forced-colors:border-[GrayText]', 'forced-colors:bg-[Canvas]');
-    expect(getThumb(control)).toHaveClass('forced-colors:bg-[GrayText]');
+    expect(control).toHaveClass(
+      'wave:forced-colors:border-[GrayText]',
+      'wave:forced-colors:bg-[Canvas]',
+    );
+    expect(getThumb(control)).toHaveClass('wave:forced-colors:bg-[GrayText]');
   });
 
   it('keeps its focus ring at full strength: the dimmed look lifts while a focus ring shows inside it', () => {
@@ -860,8 +1003,8 @@ describe('Switch — disabledFocusable', () => {
     // The root's opacity dims the switch's outline too, which would put the ring below 3:1.
     // tailwind-merge keeps both classes (different variants); the variant wins while it matches.
     expect(screen.getByTestId('focusable')).toHaveClass(
-      'opacity-50',
-      'has-focus-visible:opacity-100',
+      'wave:opacity-50',
+      'wave:has-focus-visible:opacity-100',
     );
     expect(screen.getByTestId('available').className).not.toMatch(/opacity/);
   });
@@ -907,12 +1050,12 @@ describe('size (Phase 4 D14)', () => {
 
   it('medium is the 0.7 look', () => {
     render(<Switch label="Wi-Fi" defaultChecked />);
-    expect(control()).toHaveClass('h-[20px]', 'w-[40px]');
+    expect(control()).toHaveClass('wave:h-[20px]', 'wave:w-[40px]');
     expect(thumb()).toHaveClass(
-      'h-[14px]',
-      'w-[14px]',
-      'translate-x-[22px]',
-      'wave-rtl:-translate-x-[22px]',
+      'wave:h-[14px]',
+      'wave:w-[14px]',
+      'wave:translate-x-[22px]',
+      'wave:wave-rtl:-translate-x-[22px]',
     );
     expect(control().closest('label')).toHaveAttribute('data-size', 'medium');
   });
@@ -922,40 +1065,40 @@ describe('size (Phase 4 D14)', () => {
       <Switch label="Wi-Fi" size="small" checked={false} onCheckedChange={() => {}} />,
     );
     expect(control()).toHaveClass(
-      'h-[16px]',
-      'w-[32px]',
-      'mt-0.5',
-      'before:-inset-y-[5px]',
-      'before:inset-x-0',
+      'wave:h-[16px]',
+      'wave:w-[32px]',
+      'wave:mt-0.5',
+      'wave:before:-inset-y-[5px]',
+      'wave:before:inset-x-0',
     );
     expect(thumb()).toHaveClass(
-      'h-[10px]',
-      'w-[10px]',
-      'translate-x-[2px]',
-      'wave-rtl:-translate-x-[2px]',
+      'wave:h-[10px]',
+      'wave:w-[10px]',
+      'wave:translate-x-[2px]',
+      'wave:wave-rtl:-translate-x-[2px]',
     );
     rerender(<Switch label="Wi-Fi" size="small" checked onCheckedChange={() => {}} />);
-    expect(thumb()).toHaveClass('translate-x-[18px]', 'wave-rtl:-translate-x-[18px]');
+    expect(thumb()).toHaveClass('wave:translate-x-[18px]', 'wave:wave-rtl:-translate-x-[18px]');
   });
 
   it('small with the label above: no offset (the column gap alone, 4px); beside it, the offset', () => {
     const { rerender } = render(<Switch label="Wi-Fi" size="small" labelPosition="above" />);
-    expect(control().closest('label')).toHaveClass('flex-col', 'gap-1');
-    expect(control()).toHaveClass('h-[16px]', 'w-[32px]');
-    expect(control()).not.toHaveClass('mt-0.5');
+    expect(control().closest('label')).toHaveClass('wave:flex-col', 'wave:gap-1');
+    expect(control()).toHaveClass('wave:h-[16px]', 'wave:w-[32px]');
+    expect(control()).not.toHaveClass('wave:mt-0.5');
     rerender(<Switch label="Wi-Fi" size="small" labelPosition="before" />);
-    expect(control()).toHaveClass('mt-0.5');
+    expect(control()).toHaveClass('wave:mt-0.5');
   });
 
   it('mirrors the small thumb in RTL through the wave-rtl classes', () => {
     renderWithProviders(<Switch label="Wi-Fi" size="small" defaultChecked />, { dir: 'rtl' });
-    expect(thumb()).toHaveClass('wave-rtl:-translate-x-[18px]');
+    expect(thumb()).toHaveClass('wave:wave-rtl:-translate-x-[18px]');
   });
 
   it('renders and reports the default for a size from untyped code', () => {
     // @ts-expect-error Switch has no large size
     render(<Switch label="Wi-Fi" size="large" />);
-    expect(control()).toHaveClass('h-[20px]', 'w-[40px]');
+    expect(control()).toHaveClass('wave:h-[20px]', 'wave:w-[40px]');
     expect(control().closest('label')).toHaveAttribute('data-size', 'medium');
   });
 });
@@ -973,11 +1116,12 @@ describe('Switch — types', () => {
     void (<Switch labelPosition="below" />);
   });
 
-  it('declares ref, controlRef and the routed handlers in SwitchProps (C-REF, C-ROUTING)', () => {
-    expectTypeOf<SwitchProps['ref']>().toEqualTypeOf<React.Ref<HTMLLabelElement> | undefined>();
-    expectTypeOf<SwitchProps['controlRef']>().toEqualTypeOf<
-      React.Ref<HTMLButtonElement> | undefined
-    >();
+  it('declares ref (for the button) and the routed handlers in SwitchProps, and no controlRef (C-REF, C-ROUTING)', () => {
+    expectTypeOf<SwitchProps['ref']>().toEqualTypeOf<React.Ref<HTMLButtonElement> | undefined>();
+    expectTypeOf<SwitchProps>().not.toHaveProperty('controlRef');
+    const labelRef = React.createRef<HTMLLabelElement>();
+    // @ts-expect-error -- in 1.0 `ref` reaches the role="switch" button; the label is slotProps.root.ref
+    void (<Switch ref={labelRef} />);
     expectTypeOf<SwitchProps['onKeyDown']>().toEqualTypeOf<
       React.KeyboardEventHandler<HTMLButtonElement> | undefined
     >();
@@ -989,7 +1133,7 @@ describe('Switch — types', () => {
 
 describe('Switch — slotProps', () => {
   type SwitchSlotProps = NonNullable<SwitchProps['slotProps']>;
-  const EVERY_PART: SwitchSlotProps = { track: {}, thumb: {}, label: {} };
+  const EVERY_PART: SwitchSlotProps = { root: {}, track: {}, thumb: {}, label: {} };
 
   it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
     // Captured from 17abc07: the merged props may put the class before the locked attributes.
@@ -999,12 +1143,12 @@ describe('Switch — slotProps', () => {
       ),
     ).toBe(
       [
-        '<label class="wave-switch relative inline-flex items-start gap-2 select-none cursor-pointer" data-label-position="after" data-size="medium">',
-        '<button aria-checked="true" aria-describedby="hint" aria-labelledby="switch-label-_R_0H1_" class="wave-switch__track relative inline-flex shrink-0 items-center rounded-full border p-0 transition-colors duration-200 motion-reduce:transition-none h-[20px] w-[40px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring border-primary bg-primary forced-colors:border-[Highlight] forced-colors:bg-[Highlight]" id="switch-_R_0_" role="switch" type="button">',
-        '<span aria-hidden="true" class="wave-switch__thumb block rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:forced-color-adjust-none h-[14px] w-[14px] translate-x-[22px] wave-rtl:-translate-x-[22px] bg-primary-foreground forced-colors:bg-[HighlightText]">',
+        '<label class="wave-switch wave:relative wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer" data-label-position="after" data-size="medium">',
+        '<button aria-checked="true" aria-describedby="hint" aria-labelledby="switch-label-_R_0H1_" class="wave-switch__track wave:relative wave:inline-flex wave:shrink-0 wave:items-center wave:rounded-full wave:border wave:p-0 wave:transition-colors wave:duration-200 wave:motion-reduce:transition-none wave:h-[20px] wave:w-[40px] wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:border-primary wave:bg-primary wave:forced-colors:border-[Highlight] wave:forced-colors:bg-[Highlight]" id="switch-_R_0_" role="switch" type="button">',
+        '<span aria-hidden="true" class="wave-switch__thumb wave:block wave:rounded-full wave:transition-transform wave:duration-200 wave:motion-reduce:transition-none wave:forced-colors:forced-color-adjust-none wave:h-[14px] wave:w-[14px] wave:translate-x-[22px] wave:wave-rtl:-translate-x-[22px] wave:bg-primary-foreground wave:forced-colors:bg-[HighlightText]">',
         '</span>',
         '</button>',
-        '<span class="wave-switch__label text-body-1 text-foreground" id="switch-label-_R_0H1_">Dark mode',
+        '<span class="wave-switch__label wave:text-body-1 wave:text-foreground" id="switch-label-_R_0H1_">Dark mode',
         '</span>',
         '</label>',
       ].join(''),
@@ -1017,6 +1161,18 @@ describe('Switch — slotProps', () => {
       { label: 'Dark mode', labelPosition: 'before', defaultChecked: true },
       { label: 'Dark mode', disabledFocusable: true, size: 'small', 'aria-describedby': 'd' },
       { 'aria-label': 'Dark mode', disabled: true, id: 'own', tabIndex: 0 },
+      // The root's own props: the rest, the style and the hidden state.
+      {
+        label: 'Dark mode',
+        labelPosition: 'above',
+        className: 'c',
+        style: { color: 'red' },
+        title: 't',
+        hidden: true,
+        inert: true,
+        'aria-hidden': true,
+        onPointerDown: () => {},
+      },
     ];
     for (const props of cases) {
       expectInertSlotProps((slotProps) => <Switch {...props} slotProps={slotProps} />, EVERY_PART);
@@ -1038,9 +1194,9 @@ describe('Switch — slotProps', () => {
     const thumb = getThumb(track);
     const label = screen.getByText('Dark mode');
     for (const [element, stable, own, mine, part] of [
-      [track, switchClassNames.track, 'rounded-full', 'my-track', 'track'],
-      [thumb, switchClassNames.thumb, 'block', 'my-thumb', 'thumb'],
-      [label, switchClassNames.label, 'text-body-1', 'my-label', 'label'],
+      [track, switchClassNames.track, 'wave:rounded-full', 'my-track', 'track'],
+      [thumb, switchClassNames.thumb, 'wave:block', 'my-thumb', 'thumb'],
+      [label, switchClassNames.label, 'wave:text-body-1', 'my-label', 'label'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -1056,29 +1212,33 @@ describe('Switch — slotProps', () => {
     render(<Switch label="Dark mode" slotProps={{ track: { className: 'rounded-none' } }} />);
     const track = screen.getByRole('switch', { name: 'Dark mode' });
     expect(track).toHaveClass('rounded-none');
-    expect(track).not.toHaveClass('rounded-full');
+    expect(track).not.toHaveClass('wave:rounded-full');
   });
 
-  it('attaches your refs to the parts, beside controlRef and ref', () => {
+  it('attaches your refs to the parts, beside ref', () => {
+    const root = React.createRef<HTMLLabelElement>();
     const track = React.createRef<HTMLButtonElement>();
     const thumb = React.createRef<HTMLSpanElement>();
     const label = React.createRef<HTMLSpanElement>();
-    const controlRef = React.createRef<HTMLButtonElement>();
-    const ref = React.createRef<HTMLLabelElement>();
+    const ref = React.createRef<HTMLButtonElement>();
     render(
       <Switch
         ref={ref}
         label="Dark mode"
-        controlRef={controlRef}
-        slotProps={{ track: { ref: track }, thumb: { ref: thumb }, label: { ref: label } }}
+        slotProps={{
+          root: { ref: root },
+          track: { ref: track },
+          thumb: { ref: thumb },
+          label: { ref: label },
+        }}
       />,
     );
     const control = screen.getByRole('switch', { name: 'Dark mode' });
     expect(track.current).toBe(control);
-    expect(controlRef.current).toBe(control);
+    expect(ref.current).toBe(control);
     expect(thumb.current).toBe(getThumb(control));
     expect(label.current).toBe(screen.getByText('Dark mode'));
-    expect(ref.current).toBe(control.closest('label'));
+    expect(root.current).toBe(control.closest('label'));
   });
 
   it("runs your track onClick first, then the Switch's onClick and the toggle", async () => {
@@ -1263,8 +1423,8 @@ describe('Switch — slotProps', () => {
       { dir: 'rtl' },
     );
     expect(getThumb(screen.getByRole('switch', { name: 'Dark mode' }))).toHaveClass(
-      'translate-x-[2px]',
-      'wave-rtl:-translate-x-[2px]',
+      'wave:translate-x-[2px]',
+      'wave:wave-rtl:-translate-x-[2px]',
       'my-thumb',
     );
   });
@@ -1349,7 +1509,10 @@ describe('Switch — slotProps', () => {
   });
 
   it('types each part for its element, and takes no children', () => {
-    expectTypeOf<keyof SwitchSlotProps>().toEqualTypeOf<'track' | 'thumb' | 'label'>();
+    expectTypeOf<keyof SwitchSlotProps>().toEqualTypeOf<'root' | 'track' | 'thumb' | 'label'>();
+    expectTypeOf<NonNullable<SwitchSlotProps['root']>['ref']>().toEqualTypeOf<
+      React.Ref<HTMLLabelElement> | undefined
+    >();
     expectTypeOf<NonNullable<SwitchSlotProps['track']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLButtonElement> | undefined
     >();
@@ -1361,5 +1524,256 @@ describe('Switch — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: the Switch draws its content
     void (<Switch slotProps={{ label: { children: 'Other' } }} />);
+    // @ts-expect-error -- a part takes no children: the Switch draws its content
+    void (<Switch slotProps={{ root: { children: 'Other' } }} />);
+  });
+
+  describe('the root part', () => {
+    const control = () => screen.getByRole('switch', { name: 'Dark mode', hidden: true });
+    const root = () => control().closest('label') as HTMLElement;
+
+    // CLAUDE.md, Testing, "Roving markers" (ruling BO): a toolbar's roving hook takes any element
+    // with a tabindex for a control and reads roles and markers on each, so the root, which holds
+    // the switch, tries every one at once; each lock is proven by the attribute it keeps off and by
+    // the arrow order with exactly one tab stop.
+    it('keeps the switch one control of a toolbar, with one tab stop, when the root tries every role and roving marker', async () => {
+      const user = userEvent.setup();
+      const ROVING_ATTEMPT = {
+        role: 'radiogroup',
+        tabIndex: 0,
+        'data-roving-container': '',
+        'data-roving-disabled': '',
+        'data-roving-value': 'z',
+        'aria-disabled': true,
+      };
+      render(
+        <Toolbar aria-label="View">
+          <Button appearance="subtle">Bold</Button>
+          <Switch label="Grid" slotProps={{ root: ROVING_ATTEMPT }} />
+          <Button appearance="subtle">Italic</Button>
+        </Toolbar>,
+      );
+      const toolbar = screen.getByRole('toolbar', { name: 'View' });
+      const item = screen.getByRole('switch', { name: 'Grid' });
+      const bold = screen.getByRole('button', { name: 'Bold' });
+      const italic = screen.getByRole('button', { name: 'Italic' });
+      for (const attribute of [
+        'role',
+        'tabindex',
+        'data-roving-container',
+        'data-roving-disabled',
+        'data-roving-value',
+        'aria-disabled',
+      ]) {
+        expect(item.closest('label'), attribute).not.toHaveAttribute(attribute);
+      }
+      expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      await user.tab();
+      expect(bold).toHaveFocus();
+      const order: Element[] = [];
+      for (let step = 0; step < 3; step++) {
+        await user.keyboard('{ArrowRight}');
+        order.push(document.activeElement as Element);
+        expect(toolbar.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+      }
+      expect(order).toEqual([item, italic, bold]);
+    });
+
+    it("puts your className, style, data-* and attributes on the root <label>, after the Switch's className and style", () => {
+      render(
+        <Switch
+          label="Dark mode"
+          className="mine"
+          style={{ color: 'red', width: 10 }}
+          slotProps={{
+            root: { className: 'my-root', style: { width: 20 }, 'data-part': 'root', title: 'R' },
+          }}
+        />,
+      );
+      expect(root().classList[0]).toBe(switchClassNames.root);
+      expect(root().className).toMatch(/ mine my-root$/);
+      expect(root()).toHaveStyle({ color: 'rgb(255, 0, 0)', width: '20px' });
+      expect(root()).toHaveAttribute('data-part', 'root');
+      expect(root()).toHaveAttribute('title', 'R');
+      expect(control()).not.toHaveAttribute('data-part');
+    });
+
+    it('lets your class replace a conflicting class of the root', () => {
+      render(<Switch label="Dark mode" slotProps={{ root: { className: 'items-center' } }} />);
+      expect(root()).toHaveClass('items-center');
+      expect(root()).not.toHaveClass('wave:items-start');
+    });
+
+    it("keeps the props you give the Switch over the part's", () => {
+      render(
+        <Switch
+          label="Dark mode"
+          title="Own"
+          data-x="own"
+          slotProps={{ root: { title: 'Part', 'data-x': 'part' } }}
+        />,
+      );
+      expect(root()).toHaveAttribute('title', 'Own');
+      expect(root()).toHaveAttribute('data-x', 'own');
+    });
+
+    it('keeps its data attributes and its hidden state: a part changes none of them', () => {
+      const { rerender } = render(
+        <Switch
+          label="Dark mode"
+          size="small"
+          labelPosition="above"
+          slotProps={{
+            root: {
+              'data-size': 'medium',
+              'data-label-position': 'after',
+              hidden: true,
+              inert: true,
+              'aria-hidden': true,
+            },
+          }}
+        />,
+      );
+      expect(root()).toHaveAttribute('data-size', 'small');
+      expect(root()).toHaveAttribute('data-label-position', 'above');
+      for (const attribute of ['hidden', 'inert', 'aria-hidden']) {
+        expect(root()).not.toHaveAttribute(attribute);
+      }
+      // The Switch's own hidden state stays its own.
+      rerender(<Switch label="Dark mode" hidden slotProps={{ root: { hidden: false } }} />);
+      expect(root()).toHaveAttribute('hidden');
+    });
+
+    // State-off lock: the root has no `for` of its own (it labels the switch it holds), so a
+    // part's `htmlFor` would be the only one and would send the text's clicks to another element.
+    it('keeps a part from giving the root a for: a click on the text still toggles the switch once', async () => {
+      const user = userEvent.setup();
+      const onCheckedChange = vi.fn();
+      const { rerender } = render(
+        <>
+          <input type="checkbox" id="decoy" aria-label="Decoy" />
+          <Switch
+            label="Dark mode"
+            onCheckedChange={onCheckedChange}
+            slotProps={{ root: { htmlFor: 'decoy' } }}
+          />
+        </>,
+      );
+      expect(root()).not.toHaveAttribute('for');
+      await user.click(screen.getByText('Dark mode'));
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      expect(screen.getByRole('checkbox', { name: 'Decoy' })).not.toBeChecked();
+      // A `for` given to the Switch itself (untyped code) still reaches the root, as in 0.18.
+      rerender(
+        <>
+          <input type="checkbox" id="decoy" aria-label="Decoy" />
+          <Switch label="Dark mode" {...({ htmlFor: 'decoy' } as object)} />
+        </>,
+      );
+      expect(root()).toHaveAttribute('for', 'decoy');
+    });
+
+    it("runs your root handlers before the Switch's own; preventDefault() in yours skips its own", () => {
+      const order: string[] = [];
+      const { rerender } = render(
+        <Switch
+          label="Dark mode"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: () => order.push('part') } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+      rerender(
+        <Switch
+          label="Dark mode"
+          onPointerDown={() => order.push('own')}
+          slotProps={{ root: { onPointerDown: (event) => event.preventDefault() } }}
+        />,
+      );
+      fireEvent.pointerDown(root());
+      expect(order).toEqual(['part', 'own']);
+    });
+
+    // A click on the label text reaches the root, then the <label> passes it to the switch, whose
+    // own click bubbles to the root again: the browser's label behaviour. The toggle happens once.
+    it('toggles once per click on the text or the switch and per Space, your root onClick seeing each click as it bubbles (StrictMode)', async () => {
+      const user = userEvent.setup();
+      const onCheckedChange = vi.fn();
+      const targets: EventTarget[] = [];
+      render(
+        <React.StrictMode>
+          <Switch
+            label="Dark mode"
+            onCheckedChange={onCheckedChange}
+            slotProps={{ root: { onClick: (event) => targets.push(event.target) } }}
+          />
+        </React.StrictMode>,
+      );
+      const text = screen.getByText('Dark mode');
+      await user.click(text);
+      expect(targets).toEqual([text, control()]);
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+      targets.length = 0;
+      await user.click(getThumb(control()));
+      expect(targets).toEqual([getThumb(control())]);
+      await user.keyboard(' ');
+      expect(targets).toEqual([getThumb(control()), control()]);
+      expect(onCheckedChange.mock.calls).toEqual([[true], [false], [true]]);
+    });
+
+    it('keeps the label text from toggling when your root onClick prevents the default; the switch handles its own click first', async () => {
+      const user = userEvent.setup();
+      const onCheckedChange = vi.fn();
+      render(
+        <Switch
+          label="Dark mode"
+          onCheckedChange={onCheckedChange}
+          slotProps={{ root: { onClick: (event) => event.preventDefault() } }}
+        />,
+      );
+      await user.click(screen.getByText('Dark mode'));
+      expect(control()).toHaveAttribute('aria-checked', 'false');
+      expect(onCheckedChange).not.toHaveBeenCalled();
+      await user.click(control());
+      expect(onCheckedChange.mock.calls).toEqual([[true]]);
+    });
+
+    it.each([
+      ['disabled', { disabled: true }],
+      ['disabledFocusable', { disabledFocusable: true }],
+    ] as const)('neither calls your root onClick nor toggles while %s', async (_, state) => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onCheckedChange = vi.fn();
+      render(
+        <Switch
+          label="Dark mode"
+          {...state}
+          onCheckedChange={onCheckedChange}
+          slotProps={{ root: { onClick } }}
+        />,
+      );
+      await user.click(screen.getByText('Dark mode'));
+      fireEvent.click(root());
+      fireEvent.click(control());
+      if ('disabledFocusable' in state) {
+        act(() => control().focus());
+        await user.keyboard(' ');
+      }
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onCheckedChange).not.toHaveBeenCalled();
+      expect(control()).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('has no accessibility violations with the root customised', async () => {
+      render(
+        <Switch
+          label="Dark mode"
+          slotProps={{ root: { className: 'my-root', title: 'Theme' }, track: { title: 'Track' } }}
+        />,
+      );
+      await expectNoA11yViolations();
+    });
   });
 });

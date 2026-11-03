@@ -92,25 +92,25 @@ describe('ColorArea', () => {
     const field = root.querySelector(`.${colorAreaClassNames.field}`);
     expect(field).toHaveAttribute('aria-hidden', 'true');
     expect(field).toHaveClass(
-      'bg-(image:--wave-color-area-gradient)',
-      'wave-rtl:-scale-x-100',
-      'forced-colors:forced-color-adjust-none',
+      'wave:bg-(image:--wave-color-area-gradient)',
+      'wave:wave-rtl:-scale-x-100',
+      'wave:forced-colors:forced-color-adjust-none',
     );
     expect(root.querySelector(`.${colorAreaClassNames.thumb}`)).toHaveClass(
-      'size-6',
-      'start-(--wave-color-area-x)',
-      'bottom-(--wave-color-area-y)',
-      'group-has-[:focus-visible]/color-area:outline-ring',
-      'group-has-[:focus-visible]/color-area:ring-background',
-      'forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas]',
+      'wave:size-6',
+      'wave:start-(--wave-color-area-x)',
+      'wave:bottom-(--wave-color-area-y)',
+      'wave:group-has-[:focus-visible]/color-area:outline-ring',
+      'wave:group-has-[:focus-visible]/color-area:ring-background',
+      'wave:forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas]',
     );
-    expect(root).toHaveClass('group/color-area', 'touch-none', 'rounded');
+    expect(root).toHaveClass('wave:group/color-area', 'wave:touch-none', 'wave:rounded');
   });
 
   it('shape="square" removes the corner radius', () => {
     render(<ColorArea aria-label="Accent" shape="square" />);
-    expect(group()).toHaveClass('rounded-none');
-    expect(group()).not.toHaveClass('rounded');
+    expect(group()).toHaveClass('wave:rounded-none');
+    expect(group()).not.toHaveClass('wave:rounded');
   });
 
   describe('keyboard (D19)', () => {
@@ -484,7 +484,7 @@ describe('ColorArea', () => {
         </form>,
       );
       const root = group('Saturation and brightness');
-      expect(root).toHaveClass('rounded-none');
+      expect(root).toHaveClass('wave:rounded-none');
       act(() => saturationInput().focus());
       await user.keyboard('{ArrowRight}');
       expect(onHsvChange.mock.calls).toEqual([[{ ...MIDDLE, s: 0.51 }]]);
@@ -863,8 +863,8 @@ describe('ColorArea — slotProps', () => {
     // Captured from the dist of 1f67a85: the merged props may put the class before the locked
     // attributes.
     const pin = [
-      '<div aria-hidden="true" class="wave-color-area__field absolute inset-0 rounded-[inherit] bg-(image:--wave-color-area-gradient) wave-rtl:-scale-x-100 forced-colors:forced-color-adjust-none">',
-      '<span aria-hidden="true" class="wave-color-area__thumb pointer-events-none absolute size-6 rounded-full border-2 border-background bg-(--wave-color-thumb) ring-1 ring-foreground forced-colors:forced-color-adjust-none forced-colors:border-[Canvas] forced-colors:ring-[CanvasText] start-(--wave-color-area-x) bottom-(--wave-color-area-y) -translate-x-1/2 wave-rtl:translate-x-1/2 translate-y-1/2 group-has-[:focus-visible]/color-area:ring-2 group-has-[:focus-visible]/color-area:ring-background forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] group-has-[:focus-visible]/color-area:outline-2 group-has-[:focus-visible]/color-area:outline-offset-2 group-has-[:focus-visible]/color-area:outline-ring forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]">',
+      '<div aria-hidden="true" class="wave-color-area__field wave:absolute wave:inset-0 wave:rounded-[inherit] wave:bg-(image:--wave-color-area-gradient) wave:wave-rtl:-scale-x-100 wave:forced-colors:forced-color-adjust-none">',
+      '<span aria-hidden="true" class="wave-color-area__thumb wave:pointer-events-none wave:absolute wave:size-6 wave:rounded-full wave:border-2 wave:border-background wave:bg-(--wave-color-thumb) wave:ring-1 wave:ring-foreground wave:forced-colors:forced-color-adjust-none wave:forced-colors:border-[Canvas] wave:forced-colors:ring-[CanvasText] wave:start-(--wave-color-area-x) wave:bottom-(--wave-color-area-y) wave:-translate-x-1/2 wave:wave-rtl:translate-x-1/2 wave:translate-y-1/2 wave:group-has-[:focus-visible]/color-area:ring-2 wave:group-has-[:focus-visible]/color-area:ring-background wave:forced-colors:group-has-[:focus-visible]/color-area:ring-[Canvas] wave:group-has-[:focus-visible]/color-area:outline-2 wave:group-has-[:focus-visible]/color-area:outline-offset-2 wave:group-has-[:focus-visible]/color-area:outline-ring wave:forced-colors:group-has-[:focus-visible]/color-area:outline-[Highlight]">',
     ].join('\n');
     const template = document.createElement('template');
     template.innerHTML = renderToString(<ColorArea aria-label="Accent" defaultValue={DARK_BLUE} />);
@@ -899,8 +899,8 @@ describe('ColorArea — slotProps', () => {
     );
     const root = group();
     for (const [element, stable, own, mine, part, opacity] of [
-      [fieldOf(root), colorAreaClassNames.field, 'inset-0', 'my-field', 'field', '0.5'],
-      [thumbOf(root), colorAreaClassNames.thumb, 'size-6', 'my-thumb', 'thumb', '0.25'],
+      [fieldOf(root), colorAreaClassNames.field, 'wave:inset-0', 'my-field', 'field', '0.5'],
+      [thumbOf(root), colorAreaClassNames.thumb, 'wave:size-6', 'my-thumb', 'thumb', '0.25'],
     ] as const) {
       expect(element).toHaveClass(stable, own, mine);
       expect(element.classList[0]).toBe(stable);
@@ -914,7 +914,7 @@ describe('ColorArea — slotProps', () => {
     render(<ColorArea aria-label="Accent" slotProps={{ field: { className: 'rounded-none' } }} />);
     const field = fieldOf(group());
     expect(field).toHaveClass('rounded-none');
-    expect(field).not.toHaveClass('rounded-[inherit]');
+    expect(field).not.toHaveClass('wave:rounded-[inherit]');
   });
 
   it('keeps both parts hidden from assistive technology, and adds your other attributes', () => {
@@ -1066,7 +1066,7 @@ describe('ColorArea — slotProps', () => {
       { dir: 'rtl' },
     );
     const field = fieldOf(group());
-    expect(field).toHaveClass('wave-rtl:-scale-x-100', 'my-field');
+    expect(field).toHaveClass('wave:wave-rtl:-scale-x-100', 'my-field');
     mockRect(field, { left: 0, top: 0, width: 200, height: 100 });
     fireEvent.pointerDown(field, PRESS);
     expect(onValueChange).toHaveBeenLastCalledWith({ h: 100, s: 0.75, v: 0.75 });

@@ -39,13 +39,10 @@ function star(n: number): HTMLElement {
   return screen.getByRole('radio', { name: n === 1 ? '1 star' : `${n} stars` });
 }
 
-const DEPRECATED_ON_CHANGE =
-  '[WaveUI] Rating: `onChange` is deprecated and will be removed in 1.0. Use `onValueChange` ' +
-  'instead.';
-
 /** Number of stars drawn filled (the rating color). */
 function filledCount(): number {
-  return screen.getAllByRole('radio').filter((s) => s.classList.contains('text-rating')).length;
+  return screen.getAllByRole('radio').filter((s) => s.classList.contains('wave:text-rating'))
+    .length;
 }
 
 describe('Rating', () => {
@@ -93,7 +90,10 @@ describe('Rating', () => {
 
   it('merges custom className', () => {
     render(<Rating className="custom" />);
-    expect(screen.getByRole('radiogroup', { name: 'Rating' })).toHaveClass('custom', 'inline-flex');
+    expect(screen.getByRole('radiogroup', { name: 'Rating' })).toHaveClass(
+      'custom',
+      'wave:inline-flex',
+    );
   });
 
   it('renders 5 stars by default', () => {
@@ -137,35 +137,18 @@ describe('Rating', () => {
     expect(onValueChange).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the deprecated onChange alias working and warns once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const user = userEvent.setup();
-      const onChange = vi.fn();
-      const { rerender } = render(<Rating onChange={onChange} />);
-      rerender(<Rating onChange={onChange} />);
-      await user.click(star(2));
-      expect(onChange).toHaveBeenCalledWith(2);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it('the deprecated onChange alias is change-only like onValueChange: clicking the current star calls neither', async () => {
+  it('has no onChange alias of onValueChange: the 0.4 name is removed in 1.0', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const user = userEvent.setup();
       const onChange = vi.fn();
       const onValueChange = vi.fn();
-      render(<Rating defaultValue={3} onChange={onChange} onValueChange={onValueChange} />);
-      await user.click(star(3));
+      // @ts-expect-error -- `onChange(value)` is removed in 1.0: use `onValueChange`
+      render(<Rating onChange={onChange} onValueChange={onValueChange} />);
+      await user.click(star(2));
+      expect(onValueChange.mock.calls).toEqual([[2]]);
       expect(onChange).not.toHaveBeenCalled();
-      expect(onValueChange).not.toHaveBeenCalled();
-      await user.click(star(4));
-      expect(onChange.mock.calls).toEqual([[4]]);
-      expect(onValueChange.mock.calls).toEqual([[4]]);
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
@@ -305,45 +288,29 @@ describe('Rating — roving focus between the stars', () => {
     expect(star(1)).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('does not exceed max on ArrowRight/ArrowUp/End (no onValueChange or onChange alias, selection unchanged)', async () => {
+  it('does not exceed max on ArrowRight/ArrowUp/End (no onValueChange, selection unchanged)', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
-    const onChange = vi.fn();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      render(<Rating defaultValue={5} onValueChange={onValueChange} onChange={onChange} />);
-      act(() => star(5).focus());
-      await user.keyboard('{ArrowRight}');
-      await user.keyboard('{ArrowUp}');
-      await user.keyboard('{End}');
-      expect(onValueChange).not.toHaveBeenCalled();
-      expect(onChange).not.toHaveBeenCalled();
-      expect(star(5)).toHaveFocus();
-      expect(star(5)).toHaveAttribute('aria-checked', 'true');
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
-    } finally {
-      warn.mockRestore();
-    }
+    render(<Rating defaultValue={5} onValueChange={onValueChange} />);
+    act(() => star(5).focus());
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowUp}');
+    await user.keyboard('{End}');
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(star(5)).toHaveFocus();
+    expect(star(5)).toHaveAttribute('aria-checked', 'true');
   });
 
   it('does not go below the first star on ArrowLeft/ArrowDown: the keyboard cannot clear the rating (no onValueChange, selection unchanged)', async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
-    const onChange = vi.fn();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      render(<Rating defaultValue={1} onValueChange={onValueChange} onChange={onChange} />);
-      act(() => star(1).focus());
-      await user.keyboard('{ArrowLeft}');
-      await user.keyboard('{ArrowDown}');
-      expect(onValueChange).not.toHaveBeenCalled();
-      expect(onChange).not.toHaveBeenCalled();
-      expect(star(1)).toHaveFocus();
-      expect(star(1)).toHaveAttribute('aria-checked', 'true');
-      expect(warn.mock.calls).toEqual([[DEPRECATED_ON_CHANGE]]);
-    } finally {
-      warn.mockRestore();
-    }
+    render(<Rating defaultValue={1} onValueChange={onValueChange} />);
+    act(() => star(1).focus());
+    await user.keyboard('{ArrowLeft}');
+    await user.keyboard('{ArrowDown}');
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(star(1)).toHaveFocus();
+    expect(star(1)).toHaveAttribute('aria-checked', 'true');
   });
 
   it('mirrors Left/Right under dir="rtl"', async () => {
@@ -583,8 +550,8 @@ describe('Rating — native forms (C-FORMS)', () => {
 describe('Rating — styling tokens and target size', () => {
   it('draws filled stars with the rating token and empty stars as accessible-stroke outlines', () => {
     render(<Rating defaultValue={2} />);
-    expect(star(2)).toHaveClass('text-rating');
-    expect(star(3)).toHaveClass('text-stroke-accessible');
+    expect(star(2)).toHaveClass('wave:text-rating');
+    expect(star(3)).toHaveClass('wave:text-stroke-accessible');
     expect(star(2).querySelector('svg')).toHaveAttribute('fill', 'currentColor');
     expect(star(3).querySelector('svg')).toHaveAttribute('fill', 'none');
     expect(star(3).querySelector('svg')).toHaveAttribute('stroke', 'currentColor');
@@ -593,20 +560,23 @@ describe('Rating — styling tokens and target size', () => {
   it('gives extra-small and small stars a 24px target', () => {
     const { rerender } = render(<Rating size="extra-small" />);
     // 12px icon + 2 × 6px padding
-    expect(star(1)).toHaveClass('p-1.5');
-    expect(star(1).querySelector('svg')).toHaveClass('h-3', 'w-3');
+    expect(star(1)).toHaveClass('wave:p-1.5');
+    expect(star(1).querySelector('svg')).toHaveClass('wave:h-3', 'wave:w-3');
     rerender(<Rating size="small" />);
     // 16px icon + 2 × 4px padding
-    expect(star(1)).toHaveClass('p-1');
-    expect(star(1).querySelector('svg')).toHaveClass('h-4', 'w-4');
+    expect(star(1)).toHaveClass('wave:p-1');
+    expect(star(1).querySelector('svg')).toHaveClass('wave:h-4', 'wave:w-4');
     rerender(<Rating size="medium" />);
     // 20px icon + 2 × 2px padding
-    expect(star(1)).toHaveClass('p-0.5');
+    expect(star(1)).toHaveClass('wave:p-0.5');
   });
 
   it('turns off the color transition for reduced motion and shows a focus ring on the star', () => {
     render(<Rating />);
-    expect(star(1)).toHaveClass('motion-reduce:transition-none', 'focus-visible:outline-ring');
+    expect(star(1)).toHaveClass(
+      'wave:motion-reduce:transition-none',
+      'wave:focus-visible:outline-ring',
+    );
   });
 });
 
@@ -634,12 +604,17 @@ describe('RatingDisplay', () => {
     render(<RatingDisplay value={4.6} />);
     const stars = Array.from(screen.getByRole('img', { name: 'Rating: 4.6 out of 5' }).children);
     expect(stars).toHaveLength(5);
-    for (const whole of stars.slice(0, 4)) expect(whole).toHaveClass('text-rating');
+    for (const whole of stars.slice(0, 4)) expect(whole).toHaveClass('wave:text-rating');
     const partial = stars[4] as HTMLElement;
     // The outline of the empty star, with the filled star clipped to the fraction over it.
-    expect(partial).toHaveClass('relative', 'text-stroke-accessible');
+    expect(partial).toHaveClass('wave:relative', 'wave:text-stroke-accessible');
     const clip = partial.lastElementChild as HTMLElement;
-    expect(clip).toHaveClass('absolute', 'start-0', 'overflow-hidden', 'text-rating');
+    expect(clip).toHaveClass(
+      'wave:absolute',
+      'wave:start-0',
+      'wave:overflow-hidden',
+      'wave:text-rating',
+    );
     expect(clip).toHaveStyle({ width: '60%' });
     expect(clip.querySelector('svg')).toHaveAttribute('fill', 'currentColor');
     expect(partial.firstElementChild).toHaveAttribute('fill', 'none');
@@ -650,9 +625,9 @@ describe('RatingDisplay', () => {
       dir: 'rtl',
     });
     const [first, second] = Array.from(screen.getByRole('img').children);
-    expect(first.lastElementChild).toHaveClass('start-0');
+    expect(first.lastElementChild).toHaveClass('wave:start-0');
     expect(first.lastElementChild).toHaveStyle({ width: '25%' });
-    expect(second).toHaveClass('text-stroke-accessible');
+    expect(second).toHaveClass('wave:text-stroke-accessible');
     expect(second.children).toHaveLength(1);
     expect(container.innerHTML).not.toMatch(/\b(left|right)-0\b/);
   });
@@ -660,8 +635,8 @@ describe('RatingDisplay', () => {
   it('draws filled stars with the rating token and empty ones as accessible-stroke outlines', () => {
     render(<RatingDisplay value={2} max={3} />);
     const stars = Array.from(screen.getByRole('img').children);
-    expect(stars[1]).toHaveClass('text-rating');
-    expect(stars[2]).toHaveClass('text-stroke-accessible');
+    expect(stars[1]).toHaveClass('wave:text-rating');
+    expect(stars[2]).toHaveClass('wave:text-stroke-accessible');
     expect(stars[2].querySelector('svg')).toHaveAttribute('fill', 'none');
   });
 });
@@ -706,7 +681,12 @@ describe('RatingDisplay — value text, count, compact and localizable name', ()
     render(<RatingDisplay value={4.5} showValue locale={locale} />);
     expect(visibleText()).toBe(text);
     const valueText = screen.getByText(text);
-    expect(valueText).toHaveClass('ms-1', 'font-semibold', 'text-foreground', 'text-body-1');
+    expect(valueText).toHaveClass(
+      'wave:ms-1',
+      'wave:font-semibold',
+      'wave:text-foreground',
+      'wave:text-body-1',
+    );
   });
 
   it('shows up to one decimal', () => {
@@ -725,7 +705,7 @@ describe('RatingDisplay — value text, count, compact and localizable name', ()
       expect(visibleText()).toBe(text);
       expect(screen.getByRole('img')).toHaveAccessibleName(name);
       const countText = screen.getByText(/^\(/);
-      expect(countText).toHaveClass('ms-1', 'text-muted-foreground');
+      expect(countText).toHaveClass('wave:ms-1', 'wave:text-muted-foreground');
     },
   );
 
@@ -781,17 +761,17 @@ describe('RatingDisplay — value text, count, compact and localizable name', ()
     const stars = root.querySelectorAll('svg');
     expect(stars).toHaveLength(1);
     expect(stars[0]).toHaveAttribute('fill', 'currentColor');
-    expect(stars[0].closest('.text-rating')).not.toBeNull();
+    expect(stars[0].closest('.wave\\:text-rating')).not.toBeNull();
     expect(visibleText()).toBe('3.5(20)');
     expect(root).toHaveAccessibleName('Rating: 3.5 out of 5, 20 ratings');
   });
 
   it.each([
-    { size: 'extra-small', text: 'text-caption-1' },
-    { size: 'small', text: 'text-caption-1' },
-    { size: 'medium', text: 'text-body-1' },
-    { size: 'large', text: 'text-body-2' },
-    { size: 'extra-large', text: 'text-body-2' },
+    { size: 'extra-small', text: 'wave:text-caption-1' },
+    { size: 'small', text: 'wave:text-caption-1' },
+    { size: 'medium', text: 'wave:text-body-1' },
+    { size: 'large', text: 'wave:text-body-2' },
+    { size: 'extra-large', text: 'wave:text-body-2' },
   ] as const)('sizes the text with the stars ($size)', ({ size, text }) => {
     render(<RatingDisplay value={4} showValue count={3} size={size} locale="en-US" />);
     expect(screen.getByText('4')).toHaveClass(text);
@@ -804,7 +784,7 @@ describe('RatingDisplay — value text, count, compact and localizable name', ()
       { dir: 'rtl' },
     );
     expect(container.innerHTML).not.toMatch(/\b(?:ml|mr)-/);
-    expect(screen.getByText('4')).toHaveClass('ms-1');
+    expect(screen.getByText('4')).toHaveClass('wave:ms-1');
   });
 
   it('passes axe with the value, the count and compact', async () => {
@@ -956,7 +936,7 @@ describe('RatingItem — system props, routing and children (Phase 4 D26)', () =
   testForwardRef(RatingItem, 'button', itemProps, { wrapper: ServiceRating });
   testClassName(RatingItem, itemProps, {
     wrapper: ServiceRating,
-    conflictingClass: { className: 'rounded-md', overrides: 'rounded' },
+    conflictingClass: { className: 'rounded-md', overrides: 'wave:rounded' },
   });
   testDisplayName(RatingItem, 'RatingItem');
   testA11y(RatingItem, itemProps, { wrapper: ServiceRating });
@@ -993,10 +973,10 @@ describe('RatingItem — system props, routing and children (Phase 4 D26)', () =
       await user.hover(star(2));
     },
     assertInternal: () => {
-      expect(star(2)).toHaveClass('text-rating');
+      expect(star(2)).toHaveClass('wave:text-rating');
     },
     assertInternalSuppressed: () => {
-      expect(star(2)).toHaveClass('text-stroke-accessible');
+      expect(star(2)).toHaveClass('wave:text-stroke-accessible');
     },
   });
 
@@ -1069,9 +1049,9 @@ describe('RatingItem — system props, routing and children (Phase 4 D26)', () =
       screen.getByTestId('one'),
       screen.getByTestId('two'),
     ]);
-    expect(screen.getByTestId('one')).toHaveClass('inline-flex', 'text-rating');
+    expect(screen.getByTestId('one')).toHaveClass('wave:inline-flex', 'wave:text-rating');
     const partial = screen.getByTestId('two');
-    expect(partial).toHaveClass('relative', 'text-stroke-accessible', 'custom-star');
+    expect(partial).toHaveClass('wave:relative', 'wave:text-stroke-accessible', 'custom-star');
     expect(partial.lastElementChild).toHaveStyle({ width: '50%' });
 
     rerender(
@@ -1204,18 +1184,22 @@ describe('color and icons (Phase 4 D24, D25)', () => {
   it('marigold is the default; the root renders data-color', () => {
     render(<Rating aria-label="Service" defaultValue={2} />);
     expect(screen.getByRole('radiogroup')).toHaveAttribute('data-color', 'marigold');
-    expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass('text-rating');
-    expect(screen.getByRole('radio', { name: '3 stars' })).toHaveClass('text-stroke-accessible');
+    expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass('wave:text-rating');
+    expect(screen.getByRole('radio', { name: '3 stars' })).toHaveClass(
+      'wave:text-stroke-accessible',
+    );
   });
 
   it.each([
-    ['brand', 'text-primary'],
-    ['neutral', 'text-foreground'],
+    ['brand', 'wave:text-primary'],
+    ['neutral', 'wave:text-foreground'],
   ] as const)('%s fills with %s and keeps the outline token', (color, filled) => {
     render(<Rating aria-label="Service" defaultValue={1} color={color} />);
     expect(screen.getByRole('radiogroup')).toHaveAttribute('data-color', color);
     expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass(filled);
-    expect(screen.getByRole('radio', { name: '2 stars' })).toHaveClass('text-stroke-accessible');
+    expect(screen.getByRole('radio', { name: '2 stars' })).toHaveClass(
+      'wave:text-stroke-accessible',
+    );
   });
 
   it('an unknown color from untyped code renders as marigold', () => {
@@ -1228,7 +1212,7 @@ describe('color and icons (Phase 4 D24, D25)', () => {
     expect(screen.getByRole('img')).toHaveAttribute('data-color', 'brand');
     const clip = container.querySelector('[style*="width"]') as HTMLElement;
     expect(clip).toHaveStyle({ width: '60%' });
-    expect(clip).toHaveClass('text-primary');
+    expect(clip).toHaveClass('wave:text-primary');
   });
 
   it('renders a custom icon pair, decorative', () => {
@@ -1303,9 +1287,9 @@ describe('color and icons (Phase 4 D24, D25)', () => {
   // Spec P4-03 "Tests" cases beyond the brief.
 
   it.each([
-    ['marigold', 'text-rating'],
-    ['brand', 'text-primary'],
-    ['neutral', 'text-foreground'],
+    ['marigold', 'wave:text-rating'],
+    ['brand', 'wave:text-primary'],
+    ['neutral', 'wave:text-foreground'],
   ] as const)(
     'RatingDisplay %s: whole and partial stars fill with %s; unfilled stars keep the outline token',
     (color, filled) => {
@@ -1313,10 +1297,10 @@ describe('color and icons (Phase 4 D24, D25)', () => {
       const root = screen.getByRole('img');
       expect(root).toHaveAttribute('data-color', color);
       const [whole, partial, empty] = Array.from(root.children) as HTMLElement[];
-      expect(whole).toHaveClass('inline-flex', filled);
-      expect(partial).toHaveClass('relative', 'text-stroke-accessible');
+      expect(whole).toHaveClass('wave:inline-flex', filled);
+      expect(partial).toHaveClass('wave:relative', 'wave:text-stroke-accessible');
       expect(partial.lastElementChild).toHaveClass(filled);
-      expect(empty).toHaveClass('text-stroke-accessible');
+      expect(empty).toHaveClass('wave:text-stroke-accessible');
       expect(empty).not.toHaveClass(filled);
     },
   );
@@ -1330,12 +1314,12 @@ describe('color and icons (Phase 4 D24, D25)', () => {
     );
     const group = screen.getByRole('radiogroup');
     expect(group).not.toHaveAttribute('color');
-    expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass('text-rating');
+    expect(screen.getByRole('radio', { name: '1 star' })).toHaveClass('wave:text-rating');
     const display = screen.getByRole('img');
     expect(display).toHaveAttribute('data-color', 'marigold');
     expect(display).not.toHaveAttribute('color');
-    expect(display.firstElementChild).toHaveClass('text-rating');
-    expect(display.querySelector('[style*="width"]')).toHaveClass('text-rating');
+    expect(display.firstElementChild).toHaveClass('wave:text-rating');
+    expect(display.querySelector('[style*="width"]')).toHaveClass('wave:text-rating');
   });
 
   it('draws both glyphs of the pair decorative and sized by the star size', () => {
@@ -1352,13 +1336,18 @@ describe('color and icons (Phase 4 D24, D25)', () => {
     for (const id of ['heart-filled', 'heart-outline']) {
       const glyph = screen.getByTestId(id).parentElement as HTMLElement;
       expect(glyph).toHaveAttribute('aria-hidden', 'true');
-      expect(glyph).toHaveClass('inline-flex', 'h-6', 'w-6', '[&>svg]:size-full');
+      expect(glyph).toHaveClass(
+        'wave:inline-flex',
+        'wave:h-6',
+        'wave:w-6',
+        'wave:[&>svg]:size-full',
+      );
     }
     expect(within(star(1)).getByTestId('heart-filled')).toBeInTheDocument();
     expect(within(star(2)).getByTestId('heart-outline')).toBeInTheDocument();
     // The radios keep their color classes and their 24px targets.
-    expect(star(1)).toHaveClass('text-rating', 'p-0.5');
-    expect(star(2)).toHaveClass('text-stroke-accessible');
+    expect(star(1)).toHaveClass('wave:text-rating', 'wave:p-0.5');
+    expect(star(2)).toHaveClass('wave:text-stroke-accessible');
   });
 
   it('a glyph that renders nothing draws the default star; null draws it without a warning', () => {
@@ -1377,7 +1366,7 @@ describe('color and icons (Phase 4 D24, D25)', () => {
     );
     const [filled, unfilled] = Array.from(screen.getByTestId('empty').children);
     // The default star, filled in the rating color, next to the custom outline glyph.
-    expect(filled).toHaveClass('text-rating');
+    expect(filled).toHaveClass('wave:text-rating');
     expect(filled.firstElementChild).toHaveAttribute('data-wave-icon', 'star');
     expect(filled.firstElementChild).toHaveAttribute('fill', 'currentColor');
     expect(within(unfilled as HTMLElement).getByTestId('heart-outline')).toBeInTheDocument();
@@ -1394,13 +1383,18 @@ describe('color and icons (Phase 4 D24, D25)', () => {
     );
     const stars = Array.from(screen.getByRole('img', { name: 'Rating: 4.6 out of 5' }).children);
     const partial = stars[4] as HTMLElement;
-    expect(partial).toHaveClass('relative', 'text-stroke-accessible');
+    expect(partial).toHaveClass('wave:relative', 'wave:text-stroke-accessible');
     const [outline, clip] = Array.from(partial.children) as HTMLElement[];
     expect(outline).toHaveAttribute('aria-hidden', 'true');
     expect(within(outline).getByTestId('heart-outline')).toBeInTheDocument();
-    expect(clip).toHaveClass('absolute', 'start-0', 'overflow-hidden', 'text-rating');
+    expect(clip).toHaveClass(
+      'wave:absolute',
+      'wave:start-0',
+      'wave:overflow-hidden',
+      'wave:text-rating',
+    );
     expect(clip).toHaveStyle({ width: '60%' });
-    expect(within(clip).getByTestId('heart-filled').parentElement).toHaveClass('shrink-0');
+    expect(within(clip).getByTestId('heart-filled').parentElement).toHaveClass('wave:shrink-0');
     // Four whole stars and the clipped one draw the custom filled glyph; no default star is drawn.
     expect(screen.getAllByTestId('heart-filled')).toHaveLength(5);
     expect(screen.getAllByTestId('heart-outline')).toHaveLength(1);
@@ -1503,7 +1497,7 @@ describe('color and icons (Phase 4 D24, D25)', () => {
     );
     const root = screen.getByTestId('root');
     expect(root).toHaveAttribute('data-color', 'neutral');
-    expect(screen.getByTestId('heart-filled').closest('.text-foreground')).not.toBeNull();
+    expect(screen.getByTestId('heart-filled').closest('.wave\\:text-foreground')).not.toBeNull();
     expect(screen.queryByTestId('heart-outline')).toBeNull();
     expect(root.querySelector('[data-wave-icon="star"]')).toBeNull();
   });
@@ -1533,16 +1527,16 @@ describe('RatingDisplay — slotProps', () => {
       ),
     ).toBe(
       [
-        '<div aria-label="Rating: 4.5 out of 5, 12 ratings" class="wave-rating-display inline-flex items-center gap-0.5" data-color="marigold" data-compact="" role="img">',
-        '<span class="wave-rating-display__star inline-flex text-rating">',
-        '<svg aria-hidden="true" class="wave-rating-display__icon h-5 w-5" data-wave-icon="star" fill="currentColor" focusable="false" height="16" viewBox="0 0 20 20" width="16" xmlns="http://www.w3.org/2000/svg">',
+        '<div aria-label="Rating: 4.5 out of 5, 12 ratings" class="wave-rating-display wave:inline-flex wave:items-center wave:gap-0.5" data-color="marigold" data-compact="" role="img">',
+        '<span class="wave-rating-display__star wave:inline-flex wave:text-rating">',
+        '<svg aria-hidden="true" class="wave-rating-display__icon wave:h-5 wave:w-5" data-wave-icon="star" fill="currentColor" focusable="false" height="16" viewBox="0 0 20 20" width="16" xmlns="http://www.w3.org/2000/svg">',
         '<path d="M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.49L10 13.88l-4.94 2.82.94-5.49-4-3.9 5.53-.8L10 1.5Z">',
         '</path>',
         '</svg>',
         '</span>',
-        '<span class="wave-rating-display__value ms-1 font-semibold text-foreground text-body-1">4.5',
+        '<span class="wave-rating-display__value wave:ms-1 wave:font-semibold wave:text-foreground wave:text-body-1">4.5',
         '</span>',
-        '<span class="wave-rating-display__count ms-1 text-muted-foreground text-body-1">(',
+        '<span class="wave-rating-display__count wave:ms-1 wave:text-muted-foreground wave:text-body-1">(',
         '<!-- -->12',
         '<!-- -->)',
         '</span>',
@@ -1587,13 +1581,17 @@ describe('RatingDisplay — slotProps', () => {
     const root = screen.getByRole('img', { name: 'Rating: 4.5 out of 5, 12 ratings' });
     const starElement = root.querySelector(`.${ratingDisplayClassNames.star}`);
     expect(star.current).toBe(starElement);
-    expect(starElement).toHaveClass(ratingDisplayClassNames.star, 'inline-flex', 'my-star');
+    expect(starElement).toHaveClass(ratingDisplayClassNames.star, 'wave:inline-flex', 'my-star');
     expect(starElement?.classList[0]).toBe(ratingDisplayClassNames.star);
     expect(starElement?.classList[starElement.classList.length - 1]).toBe('my-star');
     expect(starElement).toHaveStyle({ color: 'rgb(255, 0, 0)' });
     expect(starElement).toHaveAttribute('data-part', 'star');
     expect(value.current).toBe(screen.getByText('4.5'));
-    expect(value.current).toHaveClass(ratingDisplayClassNames.value, 'font-semibold', 'my-value');
+    expect(value.current).toHaveClass(
+      ratingDisplayClassNames.value,
+      'wave:font-semibold',
+      'my-value',
+    );
     expect(value.current).toHaveAttribute('title', 'Average');
     fireEvent.click(screen.getByText('4.5'));
     expect(onClick).toHaveBeenCalledTimes(1);

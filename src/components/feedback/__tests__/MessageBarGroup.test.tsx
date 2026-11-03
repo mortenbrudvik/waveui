@@ -156,7 +156,7 @@ describe('MessageBarGroup', () => {
         </MessageBar>
       ),
     },
-    conflictingClass: { className: 'gap-4', overrides: 'gap-2' },
+    conflictingClass: { className: 'gap-4', overrides: 'wave:gap-2' },
   });
 });
 
@@ -166,7 +166,7 @@ describe('markup (§8)', () => {
     const el = root();
     expect(el).not.toBeNull();
     expect(el?.classList[0]).toBe(messageBarGroupClassNames.root);
-    expect(el).toHaveClass('flex', 'flex-col', 'gap-2');
+    expect(el).toHaveClass('wave:flex', 'wave:flex-col', 'wave:gap-2');
     expect(el).toHaveAttribute('data-animate', 'exit-only');
     expect(el).not.toHaveAttribute('role');
     // The items are the root's only children, one per bar.

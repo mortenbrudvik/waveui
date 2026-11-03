@@ -26,7 +26,7 @@ type Story = StoryObj<typeof meta>;
 
 /** The stories' card: a block element, so the `hidden` attribute of an exited card applies. */
 const cardClasses =
-  'mt-3 w-72 rounded-md border border-border bg-card p-4 text-body-1 text-card-foreground shadow-4';
+  'mt-3 w-72 rounded-md border border-wave-border bg-wave-card p-4 text-wave-body-1 text-wave-card-foreground shadow-wave-4';
 
 /**
  * A toggle button and the Presence it controls; `visible` is the initial state, the other args

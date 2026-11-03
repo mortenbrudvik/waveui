@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { badgeClassNames } from '../../lib/classNames';
 import type { BadgeAppearance, BadgeColor, Size } from '../../lib/types';
-import { badgeColorClasses, warnImportantColor } from './Badge.colors';
+import { badgeColorClasses } from './Badge.colors';
 
 /** Properties for the Badge component. */
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -12,11 +12,10 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   appearance?: BadgeAppearance;
   /**
    * Semantic color: `brand`, `danger`, `important`, `informative`, `severe`, `subtle`, `success`,
-   * `warning`. `severe` is dark orange. `subtle` is the page background with foreground text, for
-   * colored surfaces. `important` renders the severe (orange) colors in 0.x, as in 0.5; in 1.0 it
-   * becomes Fluent's neutral high-emphasis color (near black in the light theme) — use `severe` to
-   * keep the orange look. Its meaning changes (it is not removed), so development builds log a
-   * warning once; pass `severe` to keep the orange look.
+   * `warning`. `important` is Fluent's neutral high-emphasis color: near black with white text in
+   * the light theme, inverted in the dark one (through 0.x it was the orange that `severe` draws).
+   * `severe` is dark orange. `subtle` is the page background with foreground text, for colored
+   * surfaces.
    * @default 'brand'
    */
   color?: BadgeColor;
@@ -34,11 +33,11 @@ function isName(value: unknown): value is string {
 }
 
 const sizeClasses: Record<Size, string> = {
-  'extra-small': 'text-[10px] leading-[14px] px-1',
-  small: 'text-[10px] leading-[14px] px-1',
-  medium: 'text-caption-1 px-2 py-0.5',
-  large: 'text-body-2 px-2.5 py-0.5',
-  'extra-large': 'text-body-2 px-2.5 py-0.5',
+  'extra-small': 'wave:text-[10px] wave:leading-[14px] wave:px-1',
+  small: 'wave:text-[10px] wave:leading-[14px] wave:px-1',
+  medium: 'wave:text-caption-1 wave:px-2 wave:py-0.5',
+  large: 'wave:text-body-2 wave:px-2.5 wave:py-0.5',
+  'extra-large': 'wave:text-body-2 wave:px-2.5 wave:py-0.5',
 };
 
 /**
@@ -66,17 +65,12 @@ export const Badge = ({
 }: BadgeProps) => {
   const c = badgeColorClasses[color];
 
-  // C-DEV: `important` changes meaning in 1.0 (not a removal, so not `warnDeprecated`'s wording).
-  React.useEffect(() => {
-    if (color === 'important') warnImportantColor('Badge');
-  }, [color]);
-
   const appearanceClasses =
     appearance === 'filled'
       ? c.filled
       : appearance === 'tint'
         ? c.tint
-        : cn('bg-transparent border text-foreground', c.border);
+        : wcn('wave:bg-transparent wave:border wave:text-foreground', c.border);
 
   // A name on a role-less <span> is not announced by screen readers: name it as an image. An empty
   // or whitespace-only name adds no role (an unnamed role="img" fails axe).
@@ -88,9 +82,9 @@ export const Badge = ({
       role={named ? 'img' : undefined}
       data-color={color}
       data-appearance={appearance}
-      className={cn(
+      className={wcn(
         badgeClassNames.root,
-        'rounded-full inline-flex items-center font-semibold',
+        'wave:rounded-full wave:inline-flex wave:items-center wave:font-semibold',
         sizeClasses[size],
         appearanceClasses,
         className,

@@ -490,9 +490,9 @@ describe('List.Item onAction (P9-06)', () => {
       ['keydown', listItem('Banana')],
       ['keydown', listItem('Banana')],
     ]);
-    expect(listItem('Banana')).toHaveClass('cursor-pointer', 'hover:bg-subtle-hover');
-    expect(listItem('Apple')).not.toHaveClass('cursor-pointer');
-    expect(listItem('Apple')).not.toHaveClass('hover:bg-subtle-hover');
+    expect(listItem('Banana')).toHaveClass('wave:cursor-pointer', 'wave:hover:bg-subtle-hover');
+    expect(listItem('Apple')).not.toHaveClass('wave:cursor-pointer');
+    expect(listItem('Apple')).not.toHaveClass('wave:hover:bg-subtle-hover');
   });
 
   it('a selectable item: click and Enter run it and then toggle the selection; Space only toggles', async () => {
@@ -739,7 +739,7 @@ describe('List.Item onAction (P9-06)', () => {
       </List>,
     );
     expect(listItem('Apple')).not.toHaveAttribute('tabindex');
-    expect(listItem('Apple')).toHaveClass('cursor-pointer');
+    expect(listItem('Apple')).toHaveClass('wave:cursor-pointer');
     await user.click(screen.getByText('Apple'));
     expect(onAction).toHaveBeenCalledTimes(1);
     rerender(
@@ -775,7 +775,7 @@ describe('List.Item onAction (P9-06)', () => {
     fireEvent.click(listItem('Apple'));
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(listItem('Apple').className).toBe(
-      'wave-list-item flex items-center border-b border-border px-4 py-2 text-body-1',
+      'wave-list-item wave:flex wave:items-center wave:border-b wave:border-border wave:px-4 wave:py-2 wave:text-body-1',
     );
   });
 });
@@ -806,9 +806,9 @@ describe('List.Item disabledSelection (P9-06)', () => {
     expect(banana).toHaveAttribute('data-disabled', '');
     expect(banana).toHaveAttribute('data-disabled-focusable', '');
     expect(banana).toHaveAttribute('aria-selected', 'false');
-    expect(banana).toHaveClass('cursor-default');
-    expect(banana).not.toHaveClass('cursor-pointer');
-    expect(banana).not.toHaveClass('hover:bg-subtle-hover');
+    expect(banana).toHaveClass('wave:cursor-default');
+    expect(banana).not.toHaveClass('wave:cursor-pointer');
+    expect(banana).not.toHaveClass('wave:hover:bg-subtle-hover');
     await user.click(banana);
     act(() => banana.focus());
     await user.keyboard('{Enter}');
@@ -860,7 +860,7 @@ describe('List.Item disabledSelection (P9-06)', () => {
     expect(banana).not.toHaveAttribute('aria-disabled');
     expect(banana).not.toHaveAttribute('data-disabled');
     expect(banana).toHaveAttribute('data-disabled-selection', '');
-    expect(banana).toHaveClass('cursor-pointer', 'hover:bg-subtle-hover');
+    expect(banana).toHaveClass('wave:cursor-pointer', 'wave:hover:bg-subtle-hover');
     await user.click(banana);
     act(() => banana.focus());
     await user.keyboard('{Enter}');
@@ -943,20 +943,20 @@ describe('List checkmark (P9-06)', () => {
       expect(mark?.querySelector('svg')).not.toBeNull();
       // Logical margin before the content; drawn first although it follows the content in the DOM,
       // so typeahead reads the item's text first.
-      expect(mark).toHaveClass('me-2', 'order-first', 'text-primary');
+      expect(mark).toHaveClass('wave:me-2', 'wave:order-first', 'wave:text-primary');
       expect(mark).toHaveClass(
-        'forced-colors:text-[Highlight]',
-        'forced-colors:forced-color-adjust-none',
+        'wave:forced-colors:text-[Highlight]',
+        'wave:forced-colors:forced-color-adjust-none',
       );
       expect(mark?.className).not.toMatch(/\b(ml|mr|pl|pr)-/);
     }
-    expect(apple).not.toHaveClass('invisible');
-    expect(banana).toHaveClass('invisible');
+    expect(apple).not.toHaveClass('wave:invisible');
+    expect(banana).toHaveClass('wave:invisible');
     // The accessible name stays the item's text.
     expect(option('Banana')).toBeInTheDocument();
     await user.click(option('Banana'));
-    expect(checkmarkOf(option('Banana'))).not.toHaveClass('invisible');
-    expect(checkmarkOf(option('Apple'))).toHaveClass('invisible');
+    expect(checkmarkOf(option('Banana'))).not.toHaveClass('wave:invisible');
+    expect(checkmarkOf(option('Apple'))).toHaveClass('wave:invisible');
   });
 
   it('an item checkmark replaces the glyph; false hides it; null and undefined keep the default', () => {
@@ -1004,8 +1004,8 @@ describe('List checkmark (P9-06)', () => {
     );
     const apple = checkmarkOf(option('Apple'));
     expect(apple).toHaveTextContent('+');
-    expect(apple).toHaveClass(listItemClassNames.checkmark, 'me-2', 'text-success');
-    expect(apple).not.toHaveClass('text-primary');
+    expect(apple).toHaveClass(listItemClassNames.checkmark, 'wave:me-2', 'text-success');
+    expect(apple).not.toHaveClass('wave:text-primary');
     expect(checkmarkOf(option('Banana'))).toBeNull();
   });
 
@@ -1044,11 +1044,11 @@ describe('List checkmark (P9-06)', () => {
     );
     const mark = checkmarkOf(option('Apple'));
     expect(mark).toHaveClass(
-      'text-muted-foreground',
-      'forced-colors:text-[GrayText]',
-      'forced-colors:forced-color-adjust-none',
+      'wave:text-muted-foreground',
+      'wave:forced-colors:text-[GrayText]',
+      'wave:forced-colors:forced-color-adjust-none',
     );
-    expect(mark).not.toHaveClass('text-primary');
+    expect(mark).not.toHaveClass('wave:text-primary');
   });
 
   it('draws in grid rows, outside the cells; RTL keeps the logical margin', () => {
@@ -1063,7 +1063,7 @@ describe('List checkmark (P9-06)', () => {
     const mark = checkmarkOf(row(/Doc a/));
     expect(mark?.parentElement).toBe(row(/Doc a/));
     expect(mark?.closest('[role="gridcell"]')).toBeNull();
-    expect(mark).toHaveClass('me-2');
+    expect(mark).toHaveClass('wave:me-2');
   });
 
   it('has no axe violations in a listbox and in a grid', async () => {

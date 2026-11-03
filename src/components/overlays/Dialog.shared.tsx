@@ -27,17 +27,18 @@ export type ModalRequestOpen = (open: boolean, details: ModalOpenChangeDetails) 
  * `useControllable` calls its `onChange` synchronously inside the setter, only when the value
  * changes, and that `onChange` passes the ref's details on as `onOpenChange(next, details)`.
  * Clearing the ref afterwards means a change that no request caused can never report a stale
- * reason.
+ * reason; the setter is this hook's own, so every change has a request (and its details).
  */
 export function useModalOpenState(
   open: boolean | undefined,
   defaultOpen: boolean | undefined,
-  onOpenChange: ((open: boolean, details?: ModalOpenChangeDetails) => void) | undefined,
+  onOpenChange: ((open: boolean, details: ModalOpenChangeDetails) => void) | undefined,
 ): [open: boolean, requestOpen: ModalRequestOpen] {
   const detailsRef = React.useRef<ModalOpenChangeDetails | undefined>(undefined);
-  const [value, setOpen] = useControllable(open, defaultOpen ?? false, (next: boolean) =>
-    onOpenChange?.(next, detailsRef.current),
-  );
+  const [value, setOpen] = useControllable(open, defaultOpen ?? false, (next: boolean) => {
+    const details = detailsRef.current;
+    if (details) onOpenChange?.(next, details);
+  });
   const requestOpen = React.useCallback<ModalRequestOpen>(
     (next, details) => {
       detailsRef.current = details;

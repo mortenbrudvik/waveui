@@ -26,10 +26,12 @@ export interface UseTableSortOptions {
    */
   defaultSort?: DataGridSort | null;
   /**
-   * Called with the new sort whenever it changes, and the event behind it when the change was
-   * given one. Setting the sort it already has does not call it.
+   * Called with the new sort whenever it changes, then `details` with the event behind it: the one
+   * `setColumnSort` or `toggleColumnSort` was given, else an untrusted `sort` event with no target
+   * (as DataGrid's `setSort` of `useDataGridSort`). Setting the sort it already has does not call
+   * it.
    */
-  onSortChange?: (sort: DataGridSort, details?: DataGridSortChangeDetails) => void;
+  onSortChange?: (sort: DataGridSort, details: DataGridSortChangeDetails) => void;
 }
 
 /**
@@ -58,8 +60,8 @@ export function sortTableRows<T, R extends { item: T }>(
  * The sort plugin of `useTableFeatures`: sorts the rows by the `compare` of a column and fills
  * `state.sort`. The sort is controlled with `sort` or uncontrolled with `defaultSort`;
  * `toggleColumnSort` goes from ascending to descending as a sortable DataGrid header does. The
- * sorted column is the one whose `columnId` is the sort's `columnId` (the deprecated `id` of a
- * column is not read). Call it unconditionally and pass the plugin to `useTableFeatures`.
+ * sorted column is the one whose `columnId` is the sort's `columnId`. Call it unconditionally
+ * and pass the plugin to `useTableFeatures`.
  *
  * @example
  * const state = useTableFeatures({ items, columns }, [
@@ -74,12 +76,14 @@ export function useTableSort<T>(options: UseTableSortOptions = {}): TableFeature
   // onChange synchronously inside it, and only on change.
   const detailsRef = useRef<DataGridSortChangeDetails | undefined>(undefined);
   const [current, setSort] = useControllable<DataGridSort | null>(sortProp, defaultSort, (next) => {
-    if (next) onSortChange?.(next, detailsRef.current);
+    const details = detailsRef.current;
+    if (next && details) onSortChange?.(next, details);
   });
 
   const change = useCallback(
     (update: (previous: DataGridSort | null) => DataGridSort, event: Event | undefined) => {
-      detailsRef.current = event ? { event } : undefined;
+      // Without an event, an untrusted `sort` event of its own (as DataGrid's `setSort`).
+      detailsRef.current = { event: event ?? new Event('sort') };
       try {
         setSort((previous) => {
           const next = update(previous);

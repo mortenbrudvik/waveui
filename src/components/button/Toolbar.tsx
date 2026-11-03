@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import { toolbarClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
@@ -65,7 +65,7 @@ export interface ToolbarOwnProps {
   /**
    * Called when a toggle or radio changes them (only on change): the new checked values first,
    * then `details` with the group's `name`, its `checkedItems` and the `event` (Fluent's
-   * `onCheckedValueChange(event, { name, checkedItems })`; always passed, typed optional until 1.0).
+   * `onCheckedValueChange(event, { name, checkedItems })`; WaveUI always passes `details`).
    */
   onCheckedValuesChange?: CheckedValuesChangeHandler;
 }
@@ -88,11 +88,11 @@ type ToolbarImplProps = ToolbarOwnProps &
 
 /** The toolbar's padding per size. */
 const toolbarPaddingClasses: Record<Size, string> = {
-  'extra-small': 'p-0.5',
-  small: 'p-0.5',
-  medium: 'p-1',
-  large: 'p-1.5',
-  'extra-large': 'p-2',
+  'extra-small': 'wave:p-0.5',
+  small: 'wave:p-0.5',
+  medium: 'wave:p-1',
+  large: 'wave:p-1.5',
+  'extra-large': 'wave:p-2',
 };
 
 // The root of the Toolbar compound; its component JSDoc is on the `Toolbar` export below (C-DOCS).
@@ -140,11 +140,11 @@ const ToolbarRoot: PolymorphicComponent<'div', ToolbarOwnProps> = (props) => {
         onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
           checkDefaultPrevented: false,
         })}
-        className={cn(
+        className={wcn(
           toolbarClassNames.root,
-          'inline-flex items-center gap-1 rounded border border-border',
+          'wave:inline-flex wave:items-center wave:gap-1 wave:rounded wave:border wave:border-border',
           toolbarPaddingClasses[size],
-          orientation === 'vertical' && 'flex-col items-stretch',
+          orientation === 'vertical' && 'wave:flex-col wave:items-stretch',
           className,
         )}
       />

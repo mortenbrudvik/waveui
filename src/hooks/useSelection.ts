@@ -26,11 +26,12 @@ export interface UseSelectionOptions {
    */
   defaultSelectedItems?: readonly string[];
   /**
-   * Called with a new array of the selected ids whenever the selection changes. A call that leaves
+   * Called with a new array of the selected ids whenever the selection changes, then `details`
+   * (always passed: the event the action got, if any, and the id it acted on). A call that leaves
    * the selection as it is (selecting a selected id, toggling the selected id in `single` mode)
    * does not call it.
    */
-  onSelectedItemsChange?: (selectedItems: string[], details?: UseSelectionChangeDetails) => void;
+  onSelectedItemsChange?: (selectedItems: string[], details: UseSelectionChangeDetails) => void;
 }
 
 /** What {@link useSelection} returns. */
@@ -86,7 +87,10 @@ export function useSelection({
   const [ids, setIds] = useControllable<readonly string[]>(
     selectedItemsProp,
     defaultSelectedItems ?? NO_IDS,
-    (next) => onSelectedItemsChange?.([...next], detailsRef.current),
+    (next) => {
+      const details = detailsRef.current;
+      if (details) onSelectedItemsChange?.([...next], details);
+    },
   );
 
   // The set is rebuilt only when the ids differ, by content: a controlled parent that passes a new

@@ -23,44 +23,57 @@ const THEMES: WaveTheme[] = ['light', 'dark', 'high-contrast'];
 
 // One distinguishing token set per appearance and color.
 const COLOR_CLASSES: Array<[BadgeAppearance, BadgeColor, string[]]> = [
-  ['filled', 'brand', ['bg-primary', 'text-primary-foreground']],
-  ['filled', 'success', ['bg-success', 'text-success-foreground']],
-  ['filled', 'warning', ['bg-warning', 'text-warning-foreground']],
-  ['filled', 'danger', ['bg-destructive', 'text-destructive-foreground']],
-  ['filled', 'important', ['bg-severe', 'text-severe-foreground']],
-  ['filled', 'informative', ['bg-muted', 'text-foreground']],
-  ['filled', 'severe', ['bg-severe', 'text-severe-foreground']],
-  ['filled', 'subtle', ['bg-background', 'text-foreground']],
-  ['tint', 'brand', ['bg-info-tint', 'text-info-tint-foreground']],
-  ['tint', 'success', ['bg-success-tint', 'text-success-tint-foreground']],
-  ['tint', 'warning', ['bg-warning-tint', 'text-warning-tint-foreground']],
-  ['tint', 'danger', ['bg-error-tint', 'text-error-tint-foreground']],
-  ['tint', 'important', ['bg-severe-tint', 'text-severe-tint-foreground']],
-  ['tint', 'informative', ['bg-muted', 'text-foreground']],
-  ['tint', 'severe', ['bg-severe-tint', 'text-severe-tint-foreground']],
-  ['tint', 'subtle', ['bg-background', 'text-muted-foreground', 'border', 'border-border']],
-  ['outline', 'brand', ['bg-transparent', 'border', 'border-primary', 'text-foreground']],
-  ['outline', 'success', ['border-success']],
-  ['outline', 'warning', ['border-warning']],
-  ['outline', 'danger', ['border-destructive']],
-  ['outline', 'important', ['border-severe']],
-  ['outline', 'informative', ['border-border']],
-  ['outline', 'severe', ['bg-transparent', 'border', 'border-severe', 'text-foreground']],
-  ['outline', 'subtle', ['bg-transparent', 'border', 'border-border', 'text-foreground']],
+  ['filled', 'brand', ['wave:bg-primary', 'wave:text-primary-foreground']],
+  ['filled', 'success', ['wave:bg-success', 'wave:text-success-foreground']],
+  ['filled', 'warning', ['wave:bg-warning', 'wave:text-warning-foreground']],
+  ['filled', 'danger', ['wave:bg-destructive', 'wave:text-destructive-foreground']],
+  ['filled', 'important', ['wave:bg-foreground', 'wave:text-background']],
+  ['filled', 'informative', ['wave:bg-muted', 'wave:text-foreground']],
+  ['filled', 'severe', ['wave:bg-severe', 'wave:text-severe-foreground']],
+  ['filled', 'subtle', ['wave:bg-background', 'wave:text-foreground']],
+  ['tint', 'brand', ['wave:bg-info-tint', 'wave:text-info-tint-foreground']],
+  ['tint', 'success', ['wave:bg-success-tint', 'wave:text-success-tint-foreground']],
+  ['tint', 'warning', ['wave:bg-warning-tint', 'wave:text-warning-tint-foreground']],
+  ['tint', 'danger', ['wave:bg-error-tint', 'wave:text-error-tint-foreground']],
+  ['tint', 'important', ['wave:bg-muted-foreground', 'wave:text-background']],
+  ['tint', 'informative', ['wave:bg-muted', 'wave:text-foreground']],
+  ['tint', 'severe', ['wave:bg-severe-tint', 'wave:text-severe-tint-foreground']],
+  [
+    'tint',
+    'subtle',
+    ['wave:bg-background', 'wave:text-muted-foreground', 'wave:border', 'wave:border-border'],
+  ],
+  [
+    'outline',
+    'brand',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-primary', 'wave:text-foreground'],
+  ],
+  ['outline', 'success', ['wave:border-success']],
+  ['outline', 'warning', ['wave:border-warning']],
+  ['outline', 'danger', ['wave:border-destructive']],
+  ['outline', 'important', ['wave:border-stroke-accessible']],
+  ['outline', 'informative', ['wave:border-border']],
+  [
+    'outline',
+    'severe',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-severe', 'wave:text-foreground'],
+  ],
+  [
+    'outline',
+    'subtle',
+    ['wave:bg-transparent', 'wave:border', 'wave:border-border', 'wave:text-foreground'],
+  ],
 ];
 
-/** The development warning of `color="important"` (P13-03), which the color tables render on purpose. */
-const IMPORTANT_WARNING =
-  '[WaveUI] Badge: color="important" changes meaning in 1.0 (neutral, high emphasis); pass color="severe" to keep the orange look.';
-
 describe('Badge', () => {
-  // The tables below render `important` (0.x: the severe colors); nothing else may be logged.
+  // The tables below render every color, `important` included (1.0: no warning); nothing may be
+  // logged.
   let warn: MockInstance<typeof console.warn>;
   beforeEach(() => {
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
   afterEach(() => {
-    expect(warn.mock.calls.every((call) => call[0] === IMPORTANT_WARNING)).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
@@ -68,7 +81,7 @@ describe('Badge', () => {
     expectedTag: 'span',
     displayName: 'Badge',
     defaultProps: { children: 'Label' },
-    conflictingClass: { className: 'px-4', overrides: 'px-2' },
+    conflictingClass: { className: 'px-4', overrides: 'wave:px-2' },
     a11yVariants: APPEARANCES.map((appearance) => ({ name: appearance, props: { appearance } })),
   });
 
@@ -94,7 +107,7 @@ describe('Badge', () => {
     expect(screen.getByTestId('badge')).toHaveClass(...classes);
   });
 
-  it('severe renders the orange colors important has in 0.x', () => {
+  it('important no longer renders the orange colors severe draws (1.0)', () => {
     for (const appearance of APPEARANCES) {
       const { unmount } = render(
         <>
@@ -106,7 +119,7 @@ describe('Badge', () => {
           </Badge>
         </>,
       );
-      expect(screen.getByTestId('severe').className).toBe(
+      expect(screen.getByTestId('severe').className).not.toBe(
         screen.getByTestId('important').className,
       );
       unmount();
@@ -130,11 +143,11 @@ describe('Badge', () => {
   );
 
   it.each([
-    ['extra-small', ['text-[10px]', 'px-1']],
-    ['small', ['text-[10px]', 'px-1']],
-    ['medium', ['text-caption-1', 'px-2']],
-    ['large', ['text-body-2', 'px-2.5']],
-    ['extra-large', ['text-body-2', 'px-2.5']],
+    ['extra-small', ['wave:text-[10px]', 'wave:px-1']],
+    ['small', ['wave:text-[10px]', 'wave:px-1']],
+    ['medium', ['wave:text-caption-1', 'wave:px-2']],
+    ['large', ['wave:text-body-2', 'wave:px-2.5']],
+    ['extra-large', ['wave:text-body-2', 'wave:px-2.5']],
   ] as Array<[Size, string[]]>)('size %s applies %j', (size, classes) => {
     render(
       <Badge size={size} data-testid="badge">

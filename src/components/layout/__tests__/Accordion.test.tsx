@@ -195,8 +195,8 @@ describe('Accordion', () => {
     render(<Accordion>{items}</Accordion>);
     const button = screen.getByRole('button', { name: 'Item 1' });
     expect(button).toHaveAttribute('type', 'button');
-    expect(button).toHaveClass('not-disabled:not-aria-disabled:hover:bg-subtle-hover');
-    expect(button.className).not.toMatch(/(^|\s)enabled:/);
+    expect(button).toHaveClass('wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover');
+    expect(button.className).not.toMatch(/(^|\s)wave:enabled:/);
   });
 
   it('StrictMode: onOpenItemsChange fires exactly once per click', async () => {
@@ -351,8 +351,8 @@ describe('Accordion.Trigger and Accordion.Panel (layout#17)', () => {
     expect(panelRef.current).toBe(region);
     expect(button).toHaveAttribute('data-testid', 'trigger');
     expect(region).toHaveAttribute('data-testid', 'panel');
-    expect(button).toHaveClass('custom-trigger', 'w-full');
-    expect(region).toHaveClass('custom-panel', 'px-4');
+    expect(button).toHaveClass('custom-trigger', 'wave:w-full');
+    expect(region).toHaveClass('custom-panel', 'wave:px-4');
   });
 
   it('a conflicting className on the trigger wins over the default', () => {
@@ -365,7 +365,7 @@ describe('Accordion.Trigger and Accordion.Panel (layout#17)', () => {
     );
     const button = screen.getByRole('button', { name: 'Item 1' });
     expect(button).toHaveClass('px-8');
-    expect(button).not.toHaveClass('px-4');
+    expect(button).not.toHaveClass('wave:px-4');
   });
 
   testComposedHandler(Accordion.Trigger, {
@@ -545,7 +545,7 @@ describe('Accordion - heading (layout#18)', () => {
     const headings = screen.getAllByRole('heading', { level: 3 });
     expect(headings).toHaveLength(2);
     expect(within(headings[0]).getByRole('button', { name: 'Item 1' })).toBeInTheDocument();
-    expect(headings[0]).toHaveClass('m-0');
+    expect(headings[0]).toHaveClass('wave:m-0');
   });
 
   it('uses the Accordion headingLevel, overridable per Item', () => {
@@ -592,8 +592,8 @@ describe('Accordion - heading (layout#18)', () => {
     expect(tooltipWrapper?.parentElement).toBe(heading);
     // A grid heading stretches the inline-block wrapper, so the full-width button keeps its
     // chevron at the end of the row.
-    expect(heading).toHaveClass('m-0', 'grid');
-    expect(button).toHaveClass('w-full');
+    expect(heading).toHaveClass('wave:m-0', 'wave:grid');
+    expect(button).toHaveClass('wave:w-full');
     expect(button).toHaveAccessibleDescription('Delivery times and costs');
     const region = screen.getByRole('region', { name: 'Shipping' });
     expect(button).toHaveAttribute('aria-controls', region.id);
@@ -772,62 +772,67 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
     >().toEqualTypeOf<string[]>();
   });
 
-  it('single: the legacy openItems/defaultOpenItems/onOpenItemsChange still work and warn once', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onOpenItemsChange = vi.fn();
-    render(
-      <Accordion defaultOpenItems={['2']} onOpenItemsChange={onOpenItemsChange}>
-        {items}
-      </Accordion>,
-    );
-    expect(screen.getByText('Panel 2')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Item 1' }));
-    expect(onOpenItemsChange).toHaveBeenCalledWith(['1']);
-    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      '[WaveUI] Accordion: `defaultOpenItems` is deprecated and will be removed in 1.0. Use `defaultOpenItem` instead. In single mode the Accordion takes one value.',
-      '[WaveUI] Accordion: `onOpenItemsChange` is deprecated and will be removed in 1.0. Use `onOpenItemChange` instead. In single mode the Accordion reports one value.',
-    ]);
-  });
+  // The multiple-mode props are `never` in single mode (removed there in 1.0). Untyped code that
+  // still passes them gets nothing: a single Accordion reads only its own props, and they never
+  // reach the root element.
+  describe('single: the 0.4 openItems, defaultOpenItems and onOpenItemsChange are removed in 1.0', () => {
+    it('ignores openItems: every item stays closed', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { container } = render(
+        // @ts-expect-error -- single-mode `openItems` is removed in 1.0: use `openItem`
+        <Accordion openItems={['1']}>{items}</Accordion>,
+      );
+      expect(screen.queryByRole('region')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Item 1' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+      expect(container.firstElementChild).not.toHaveAttribute('openitems');
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
 
-  it('single: legacy controlled openItems still controls the open item and warns once', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { rerender } = render(<Accordion openItems={['1']}>{items}</Accordion>);
-    expect(screen.getByText('Panel 1')).toBeInTheDocument();
-    expect(screen.queryByText('Panel 2')).not.toBeInTheDocument();
-    rerender(<Accordion openItems={['1']}>{items}</Accordion>);
-    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      '[WaveUI] Accordion: `openItems` is deprecated and will be removed in 1.0. Use `openItem` instead. In single mode the Accordion takes one value.',
-    ]);
-  });
+    it('ignores defaultOpenItems: every item starts closed', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        // @ts-expect-error -- single-mode `defaultOpenItems` is removed in 1.0: use `defaultOpenItem`
+        <Accordion defaultOpenItems={['2']}>{items}</Accordion>,
+      );
+      expect(screen.queryByRole('region')).not.toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
 
-  it('single: calls both onOpenItemChange and its deprecated alias onOpenItemsChange (C-NAMING)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const user = userEvent.setup();
-    const onOpenItemChange = vi.fn();
-    const onOpenItemsChange = vi.fn();
-    render(
-      <Accordion onOpenItemChange={onOpenItemChange} onOpenItemsChange={onOpenItemsChange}>
-        {items}
-      </Accordion>,
-    );
-    await user.click(screen.getByRole('button', { name: 'Item 1' }));
-    expect(onOpenItemChange).toHaveBeenCalledTimes(1);
-    expect(onOpenItemChange).toHaveBeenCalledWith('1');
-    expect(onOpenItemsChange).toHaveBeenCalledTimes(1);
-    expect(onOpenItemsChange).toHaveBeenCalledWith(['1']);
-    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      '[WaveUI] Accordion: `onOpenItemsChange` is deprecated and will be removed in 1.0. Use `onOpenItemChange` instead. In single mode the Accordion reports one value.',
-    ]);
-  });
+    it('never calls onOpenItemsChange: only onOpenItemChange reports', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const onOpenItemChange = vi.fn();
+      const onOpenItemsChange = vi.fn();
+      render(
+        // @ts-expect-error -- single-mode `onOpenItemsChange` is removed in 1.0: use `onOpenItemChange`
+        <Accordion onOpenItemChange={onOpenItemChange} onOpenItemsChange={onOpenItemsChange}>
+          {items}
+        </Accordion>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Item 1' }));
+      expect(onOpenItemChange.mock.calls).toEqual([['1']]);
+      expect(onOpenItemsChange).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
 
-  it('single: warns when more than one item is open', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    render(<Accordion openItems={['1', '2']}>{items}</Accordion>);
-    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      '[WaveUI] Accordion: `openItems` is deprecated and will be removed in 1.0. Use `openItem` instead. In single mode the Accordion takes one value.',
-      '[WaveUI] Accordion: type="single" allows one open item, but 2 are open. Pass `openItem`, or use type="multiple".',
-    ]);
+    it('rejects them in the props type too, while type="multiple" takes them', () => {
+      // @ts-expect-error -- `openItems` belongs to type="multiple"
+      const single: AccordionProps = { openItems: ['a'] };
+      // @ts-expect-error -- `onOpenItemsChange` belongs to type="multiple"
+      const singleCallback: AccordionSingleProps = { onOpenItemsChange: () => {} };
+      const multiple: AccordionProps = { type: 'multiple', defaultOpenItems: ['a'] };
+      expectTypeOf<AccordionSingleProps['openItems']>().toEqualTypeOf<undefined>();
+      expect([single, singleCallback, multiple]).toHaveLength(3);
+    });
   });
 
   it('multiple: openItems is not deprecated', async () => {
@@ -1261,11 +1266,11 @@ describe('Accordion.Trigger — slotProps', () => {
   const ICON =
     'data-wave-icon="chevron-down" fill="currentColor" focusable="false" height="16" viewBox="0 0 12 12" width="16" xmlns="http://www.w3.org/2000/svg"';
   const ICON_CLASSES =
-    'wave-accordion-trigger__expand-icon shrink-0 transition-transform motion-reduce:transition-none';
+    'wave-accordion-trigger__expand-icon wave:shrink-0 wave:transition-transform wave:motion-reduce:transition-none';
   const BASE_PINS = [
-    '<h2 class="wave-accordion-trigger__heading m-0 grid">',
-    '<h4 class="wave-accordion-trigger__heading m-0 grid">',
-    `<svg aria-hidden="true" class="${ICON_CLASSES} rotate-180" ${ICON}>`,
+    '<h2 class="wave-accordion-trigger__heading wave:m-0 wave:grid">',
+    '<h4 class="wave-accordion-trigger__heading wave:m-0 wave:grid">',
+    `<svg aria-hidden="true" class="${ICON_CLASSES} wave:rotate-180" ${ICON}>`,
     `<svg aria-hidden="true" class="${ICON_CLASSES}" ${ICON}>`,
   ].join('\n');
 
@@ -1314,8 +1319,8 @@ describe('Accordion.Trigger — slotProps', () => {
     const icons = all(document, accordionTriggerClassNames.expandIcon);
     expect(headings.map((heading) => heading.tagName)).toEqual(['H2', 'H4']);
     for (const [elements, stable, name, conflict] of [
-      [headings, accordionTriggerClassNames.heading, 'heading', 'm-0'],
-      [icons, accordionTriggerClassNames.expandIcon, 'icon', 'shrink-0'],
+      [headings, accordionTriggerClassNames.heading, 'heading', 'wave:m-0'],
+      [icons, accordionTriggerClassNames.expandIcon, 'icon', 'wave:shrink-0'],
     ] as const) {
       expect(elements).toHaveLength(2);
       for (const element of elements) {

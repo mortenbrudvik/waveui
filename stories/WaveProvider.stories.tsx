@@ -20,8 +20,8 @@ import type { WaveTokenOverrides } from '../src';
 function SampleContent({ title = 'Theme preview' }: { title?: string }) {
   return (
     <div className="flex flex-col gap-4 p-6">
-      <h3 className="text-subtitle-1 font-semibold">{title}</h3>
-      <p className="text-muted-foreground">
+      <h3 className="text-wave-subtitle-1 font-semibold">{title}</h3>
+      <p className="text-wave-muted-foreground">
         Text, background and font come from WaveProvider; no inline colours are needed.
       </p>
       <div className="flex gap-2">
@@ -84,7 +84,7 @@ export const DarkInsideLight: Story = {
   render: (args) => (
     <WaveProvider {...args}>
       <SampleContent title="Light application" />
-      <WaveProvider theme="dark" className="m-6 rounded-md border border-border">
+      <WaveProvider theme="dark" className="m-6 rounded-md border border-wave-border">
         <SampleContent title="Dark panel" />
       </WaveProvider>
     </WaveProvider>
@@ -100,7 +100,7 @@ export const NestedInheritsDirection: Story = {
   render: (args) => (
     <WaveProvider {...args}>
       <SampleContent title="Dark right-to-left application" />
-      <WaveProvider theme="light" className="m-6 rounded-md border border-border">
+      <WaveProvider theme="light" className="m-6 rounded-md border border-wave-border">
         <SampleContent title="Light panel, still right-to-left" />
       </WaveProvider>
     </WaveProvider>
@@ -113,7 +113,7 @@ export const LightInsideDark: Story = {
   render: (args) => (
     <WaveProvider {...args}>
       <SampleContent title="Dark application" />
-      <WaveProvider theme="light" className="m-6 rounded-md border border-border">
+      <WaveProvider theme="light" className="m-6 rounded-md border border-wave-border">
         <SampleContent title="Light preview" />
       </WaveProvider>
     </WaveProvider>
@@ -255,7 +255,7 @@ function AccentDialogs() {
         <WaveProvider
           theme="light"
           tokens={crimsonAccent}
-          className="rounded-md border border-border p-4"
+          className="rounded-md border border-wave-border p-4"
         >
           <Dialog defaultOpen modalType="non-modal" onOpenChange={onOpenChange}>
             <Dialog.Trigger>

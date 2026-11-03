@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../lib/cn';
+import { wcn } from '../../lib/cn';
 import {
   drawerClassNames,
   navDrawerBodyClassNames,
@@ -95,10 +95,11 @@ export interface NavDrawerProps
   defaultOpen?: boolean;
   /**
    * Called with the new open state when it changes, with `details.reason`: `trigger` (a Hamburger
-   * inside the drawer), `escape` and `outside-press` (the backdrop; overlay only). `details` is
-   * typed optional until 1.0. A controlled drawer stays as it is until you update `open`.
+   * inside the drawer), `escape` and `outside-press` (the backdrop; overlay only), and the event
+   * as `details.event`. WaveUI always passes `details`. A controlled drawer stays as it is until
+   * you update `open`.
    */
-  onOpenChange?: (open: boolean, details?: DrawerOpenChangeDetails) => void;
+  onOpenChange?: (open: boolean, details: DrawerOpenChangeDetails) => void;
   /**
    * Called with an item's value every time an item is activated, also when the current page is
    * activated again (a disabled item, a link opened in another tab or window, and a button item
@@ -183,11 +184,9 @@ export interface NavDrawerProps
    * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
    * `motion="none"`, which otherwise turns the default off. They go on the overlay panel, or on
    * the element around an inline drawer's panel (`wave-nav-drawer__collapse`), whose phases the
-   * drawer waits for. A `className` that holds `data-[presence=…]` classes while `motion` is unset
-   * keeps 0.14's behaviour: no default motion, your classes animate the panel, and the drawer
-   * waits for the panel's motion (inline too, not the element around it); development builds log
-   * a warning once, and the rule is removed in 1.0, so pass `motion` instead. Fluent's
-   * `OverlayDrawer` and `InlineDrawer` `surfaceMotion`.
+   * drawer waits for. `className` is a plain class list on the panel: `data-[presence=…]` classes
+   * there apply next to the default motion, and the drawer still waits for the motion above, so
+   * pass a motion of your own here. Fluent's `OverlayDrawer` and `InlineDrawer` `surfaceMotion`.
    * @default the slide (overlay) or the collapse (inline) above
    */
   motion?: MotionSlot | null;
@@ -454,9 +453,9 @@ const NavDrawerRoot = ({
       inlineAs="div"
       trigger={inertModalTrigger}
       finalFocusRef={finalFocusRef}
-      rootClassName={cn(drawerClassNames.root, navDrawerClassNames.root)}
-      backdropClassName={cn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
-      collapseClassName={cn(drawerClassNames.collapse, navDrawerClassNames.collapse)}
+      rootClassName={wcn(drawerClassNames.root, navDrawerClassNames.root)}
+      backdropClassName={wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
+      collapseClassName={wcn(drawerClassNames.collapse, navDrawerClassNames.collapse)}
       backdrop={backdrop}
       motion={motion}
       backdropMotion={backdropMotion}
@@ -467,7 +466,10 @@ const NavDrawerRoot = ({
     >
       <nav
         {...mergeSlotProps(slotProps?.nav, {
-          className: cn(navDrawerClassNames.nav, 'flex min-h-0 flex-1 flex-col'),
+          className: wcn(
+            navDrawerClassNames.nav,
+            'wave:flex wave:min-h-0 wave:flex-1 wave:flex-col',
+          ),
           locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps },
         })}
         ref={navMergedRef}
@@ -504,9 +506,9 @@ export const NavDrawerHeader = ({ className, children, ref, ...rest }: NavDrawer
       data-scroll-state={scrollState}
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         navDrawerHeaderClassNames.root,
-        'flex shrink-0 items-center gap-2 ps-2.5 pe-2 py-2',
+        'wave:flex wave:shrink-0 wave:items-center wave:gap-2 wave:ps-2.5 wave:pe-2 wave:py-2',
         scrollSeparatorClasses.header,
         className,
       )}
@@ -588,12 +590,16 @@ export const NavDrawerBody = ({
       onFocus={composeEventHandlers(onFocus, arrow ? containerProps.onFocus : undefined, {
         checkDefaultPrevented: false,
       })}
-      className={cn(navDrawerBodyClassNames.root, 'min-h-0 flex-1 overflow-y-auto py-2', className)}
+      className={wcn(
+        navDrawerBodyClassNames.root,
+        'wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:py-2',
+        className,
+      )}
     >
       <NavRovingContext.Provider value={arrow ? roving : null}>
         <ul
           {...mergeSlotProps(slotProps?.list, {
-            className: cn(navDrawerBodyClassNames.list, 'm-0 list-none p-0'),
+            className: wcn(navDrawerBodyClassNames.list, 'wave:m-0 wave:list-none wave:p-0'),
             locked: NAV_SHOWN_PART_LOCKS,
           })}
           ref={listMergedRef}
@@ -627,16 +633,16 @@ export const NavDrawerFooter = ({
       data-scroll-state={scrollState}
       {...rest}
       ref={ref}
-      className={cn(
+      className={wcn(
         navDrawerFooterClassNames.root,
-        'shrink-0 py-2',
+        'wave:shrink-0 wave:py-2',
         scrollSeparatorClasses.footer,
         className,
       )}
     >
       <ul
         {...mergeSlotProps(slotProps?.list, {
-          className: cn(navDrawerFooterClassNames.list, 'm-0 list-none p-0'),
+          className: wcn(navDrawerFooterClassNames.list, 'wave:m-0 wave:list-none wave:p-0'),
           locked: NAV_SHOWN_PART_LOCKS,
         })}
         ref={listMergedRef}

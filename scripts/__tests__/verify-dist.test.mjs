@@ -2,8 +2,9 @@
 /**
  * `scripts/verify-dist.mjs` (repo-level#2, #3, #4, #5): every check runs against small synthetic
  * `dist/` trees that reproduce one packaging defect each — a missing or misplaced `"use client"`,
- * a single-module bundle that defeats tree-shaking, a missing CommonJS declaration, a bundled or
- * undeclared dependency, a dotted-only compound — and against a correct tree that passes.
+ * a single-module bundle that defeats tree-shaking, CommonJS output in a dist of ES modules, an
+ * entry that `require()` cannot load, a bundled or undeclared dependency, a dotted-only compound —
+ * and against a correct tree that passes.
  *
  * The fixtures live under the repository's `node_modules/.cache`, so `react` resolves from them
  * exactly as it does from the real `dist/` (the react-server check needs it).
@@ -28,9 +29,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  BRAND_TOKENS_BUDGET,
-  BUDGET_MARGIN_0_18,
-  checkCjsParity,
+  BASELINES_0_18_1,
+  BUDGET_MARGIN_1_0,
   checkClassNameExports,
   checkDeclarations,
   checkDevEnvironment,
@@ -39,13 +39,13 @@ import {
   checkFlatExports,
   checkImports,
   checkModuleOnlyNames,
+  checkNoCommonJs,
+  checkRequireEsm,
   checkServerImport,
   checkTestOnlyModules,
   clientReferenceStub,
   createWorkDir,
   CUSTOMIZATION_MODULES,
-  BASELINES_0_17_1,
-  DATA_GRID_BUDGET,
   DATA_SCALE_MODULES,
   DEV_ONLY_LIBRARIES,
   directivePrologue,
@@ -81,9 +81,7 @@ import {
   probeIncludes,
   probeSizeBudget,
   probeTreeShaking,
-  RECORDED_IMPORTS,
-  RECORDED_IMPORTS_0_17,
-  RECORDED_IMPORTS_0_18,
+  RECORDED_IMPORTS_1_0,
   removeWorkDir,
   REQUIRED_DECLARATIONS,
   runScript,
@@ -92,20 +90,23 @@ import {
   undocumentedComponents,
   VALUE_AND_TYPE_DECLARATIONS,
   verifyDist,
-  VIRTUAL_BUDGET,
-  WAVE_TOKENS_BUDGET,
 } from '../verify-dist.mjs';
 // The source of `dist/lib/motion.mjs` (0.15): MOTION_RECIPE_MIN is the count of its literals.
 import * as motionSource from '../../src/lib/motion.ts';
 
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
+
+/** The record of `records` whose names, joined with ` + `, are `label`. */
+const recordOf = (records, label) => records.find(({ names }) => names.join(' + ') === label);
+/** The budget of the 1.0 record of `label` (RECORDED_IMPORTS_1_0, spec R7 of Phase 14). */
+const budgetOf = (label) => recordOf(RECORDED_IMPORTS_1_0, label).budget;
 // Removed with its parent once no other run uses the parent (no empty directory is left behind).
 const fixtureRun = createWorkDir(
   join(repoRoot, 'node_modules', '.cache', 'wave-verify-dist-test'),
   'run-',
 );
 const fixtureRoot = fixtureRun.work;
-// Some 170 fixtures of about 200 files each: removing them takes more than the 10 s default of a
+// Some 170 fixtures of about 100 files each: removing them takes more than the 10 s default of a
 // hook on Windows, where a timed-out hook fails the file and leaves the directory behind.
 afterAll(() => removeWorkDir(fixtureRun), 120_000);
 
@@ -160,22 +161,13 @@ function goodFilesBefore015() {
           .join(', ')} });\n`
       : `export const ${name} = ${name}Root;\n`;
     const classes = `${constant ? `${constant}.root, ` : ''}'${name.toLowerCase()}'`;
-    const esm =
+    return (
       `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
       (constant ? `import { ${constant} } from '../../lib/classNames.mjs';\n` : '') +
       `function ${name}Root(props) { return cn(${classes}, props && props.className); }\n` +
       `${name}Root.displayName = '${name}';\n${parts.join('')}${assign}` +
-      (members.length ? `export { ${members.map((member) => name + member).join(', ')} };\n` : '');
-    const cjs =
-      `${DIRECTIVE}const { cn } = require('../../lib/cn.cjs');\n` +
-      (constant ? `const { ${constant} } = require('../../lib/classNames.cjs');\n` : '') +
-      `function ${name}Root(props) { return cn(${classes}, props && props.className); }\n` +
-      `${name}Root.displayName = '${name}';\n${parts.join('')}` +
-      `exports.${name} = Object.assign(${name}Root, { ${members
-        .map((member) => `${member}: ${name}${member}`)
-        .join(', ')} });\n` +
-      members.map((member) => `exports.${name}${member} = ${name}${member};\n`).join('');
-    return { esm, cjs };
+      (members.length ? `export { ${members.map((member) => name + member).join(', ')} };\n` : '')
+    );
   };
   const button = component('Button', [], 'buttonClassNames');
   // Field and InfoButton (0.9): Field reaches no InfoButton code, so an import of only Field
@@ -188,56 +180,27 @@ function goodFilesBefore015() {
   const dialog = withDialogMotion(component('Dialog', ['Trigger', 'Content']));
   const motion = fixtureMotionModules();
   // The presence core (0.7): a hook and a component on it, with React external.
-  const usePresence = {
-    esm:
-      `${DIRECTIVE}import { useState } from 'react';\n` +
-      "export function usePresence(visible) { const [phase] = useState(visible ? 'entered' : 'exited'); return { isMounted: visible, phase }; }\n",
-    cjs:
-      `${DIRECTIVE}const react = require('react');\n` +
-      "exports.usePresence = function usePresence(visible) { const [phase] = react.useState(visible ? 'entered' : 'exited'); return { isMounted: visible, phase }; };\n",
-  };
-  const presence = {
-    esm:
-      `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
-      "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
-      "function Presence(props) { const { isMounted, phase } = usePresence(props.visible); return isMounted ? jsx('div', { 'data-presence': phase, children: props.children }) : null; }\n" +
-      "Presence.displayName = 'Presence';\nexport { Presence };\n",
-    cjs:
-      `${DIRECTIVE}const jsxRuntime = require('react/jsx-runtime');\n` +
-      "const hook = require('../../hooks/usePresence.cjs');\n" +
-      "function Presence(props) { const { isMounted, phase } = hook.usePresence(props.visible); return isMounted ? jsxRuntime.jsx('div', { 'data-presence': phase, children: props.children }) : null; }\n" +
-      "Presence.displayName = 'Presence';\nexports.Presence = Presence;\n",
-  };
+  const usePresence =
+    `${DIRECTIVE}import { useState } from 'react';\n` +
+    "export function usePresence(visible) { const [phase] = useState(visible ? 'entered' : 'exited'); return { isMounted: visible, phase }; }\n";
+  const presence =
+    `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
+    "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
+    "function Presence(props) { const { isMounted, phase } = usePresence(props.visible); return isMounted ? jsx('div', { 'data-presence': phase, children: props.children }) : null; }\n" +
+    "Presence.displayName = 'Presence';\nexport { Presence };\n";
   // A component on the presence core (Menu.Popover, 0.7): an import of only Menu holds it.
-  const menu = {
-    esm:
-      `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
-      "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
-      "function Menu(props) { const { isMounted, phase } = usePresence(props.open); return isMounted ? jsx('div', { role: 'menu', 'data-presence': phase, children: props.children }) : null; }\n" +
-      "Menu.displayName = 'Menu';\nexport { Menu };\n",
-    cjs:
-      `${DIRECTIVE}const jsxRuntime = require('react/jsx-runtime');\n` +
-      "const hook = require('../../hooks/usePresence.cjs');\n" +
-      "function Menu(props) { const { isMounted, phase } = hook.usePresence(props.open); return isMounted ? jsxRuntime.jsx('div', { role: 'menu', 'data-presence': phase, children: props.children }) : null; }\n" +
-      "Menu.displayName = 'Menu';\nexports.Menu = Menu;\n",
-  };
+  const menu =
+    `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
+    "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
+    "function Menu(props) { const { isMounted, phase } = usePresence(props.open); return isMounted ? jsx('div', { role: 'menu', 'data-presence': phase, children: props.children }) : null; }\n" +
+    "Menu.displayName = 'Menu';\nexport { Menu };\n";
   // 0.8 (INTEGRATION): the opt-in color parts, the server-safe color helpers and toaster handle,
   // and a Toaster on the presence core.
-  const colorPart = (name) => ({
-    esm:
-      `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
-      "import { hsvToHex } from '../../lib/color.mjs';\n" +
-      `function ${name}(props) { return cn('${name.toLowerCase()}', hsvToHex(props.value)); }\n` +
-      `${name}.displayName = '${name}';\nexport { ${name} };\n`,
-    cjs:
-      `${DIRECTIVE}const { cn } = require('../../lib/cn.cjs');\n` +
-      "const { hsvToHex } = require('../../lib/color.cjs');\n" +
-      `function ${name}(props) { return cn('${name.toLowerCase()}', hsvToHex(props.value)); }\n` +
-      `${name}.displayName = '${name}';\nexports.${name} = ${name};\n`,
-  });
-  const colorArea = colorPart('ColorArea');
-  const colorSlider = colorPart('ColorSlider');
-  const alphaSlider = colorPart('AlphaSlider');
+  const colorPart = (name) =>
+    `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
+    "import { hsvToHex } from '../../lib/color.mjs';\n" +
+    `function ${name}(props) { return cn('${name.toLowerCase()}', hsvToHex(props.value)); }\n` +
+    `${name}.displayName = '${name}';\nexport { ${name} };\n`;
   const colorHelpers = `function channel(n, h, s, v) {
   const k = (n + h / 60) % 6;
   return Math.round((v - v * s * Math.max(0, Math.min(k, 4 - k, 1))) * 255);
@@ -272,61 +235,31 @@ function createToaster() {
 }
 `;
   // A Toaster on the presence core (0.8): an import of only Toaster holds it.
-  const toaster = {
-    esm:
-      `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
-      "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
-      "function Toaster(props) { const { isMounted, phase } = usePresence(true); return isMounted ? jsx('div', { role: 'region', 'data-presence': phase, children: props.children }) : null; }\n" +
-      "Toaster.displayName = 'Toaster';\nexport { Toaster };\n",
-    cjs:
-      `${DIRECTIVE}const jsxRuntime = require('react/jsx-runtime');\n` +
-      "const hook = require('../../hooks/usePresence.cjs');\n" +
-      "function Toaster(props) { const { isMounted, phase } = hook.usePresence(true); return isMounted ? jsxRuntime.jsx('div', { role: 'region', 'data-presence': phase, children: props.children }) : null; }\n" +
-      "Toaster.displayName = 'Toaster';\nexports.Toaster = Toaster;\n",
-  };
+  const toaster =
+    `${DIRECTIVE}import { jsx } from 'react/jsx-runtime';\n` +
+    "import { usePresence } from '../../hooks/usePresence.mjs';\n" +
+    "function Toaster(props) { const { isMounted, phase } = usePresence(true); return isMounted ? jsx('div', { role: 'region', 'data-presence': phase, children: props.children }) : null; }\n" +
+    "Toaster.displayName = 'Toaster';\nexport { Toaster };\n";
   // 0.10 (INTEGRATION): the server-safe date helpers, the listbox core (a hook, Option, Listbox,
   // Dropdown) and a Calendar that holds none of it.
   const dateHelpers =
     'function addDays(date, days) { const next = new Date(date.getTime()); next.setDate(next.getDate() + days); return next; }\n';
-  const useActiveDescendant = {
-    esm: `${DIRECTIVE}import { useState } from 'react';\nexport function useActiveDescendant() { return useState(null); }\n`,
-    cjs: `${DIRECTIVE}const react = require('react');\nexports.useActiveDescendant = function useActiveDescendant() { return react.useState(null); };\n`,
-  };
-  const useListbox = {
-    esm: `${DIRECTIVE}import { useState } from 'react';\nexport function useListbox() { return useState(null); }\n`,
-    cjs: `${DIRECTIVE}const react = require('react');\nexports.useListbox = function useListbox() { return react.useState(null); };\n`,
-  };
-  const option = {
-    esm: `${DIRECTIVE}function Option() { return null; }\nOption.displayName = 'Option';\nexport { Option };\n`,
-    cjs: `${DIRECTIVE}function Option() { return null; }\nOption.displayName = 'Option';\nexports.Option = Option;\n`,
-  };
-  const listboxUser = (name) => ({
-    esm:
-      `${DIRECTIVE}import { useListbox } from '../../hooks/useListbox.mjs';\n` +
-      "import { Option } from './Option.mjs';\n" +
-      `function ${name}() { useListbox(); return Option(); }\n${name}.displayName = '${name}';\nexport { ${name} };\n`,
-    cjs:
-      `${DIRECTIVE}const hook = require('../../hooks/useListbox.cjs');\n` +
-      "const option = require('./Option.cjs');\n" +
-      `function ${name}() { hook.useListbox(); return option.Option(); }\n${name}.displayName = '${name}';\nexports.${name} = ${name};\n`,
-  });
-  const listbox = listboxUser('Listbox');
-  const dropdown = listboxUser('Dropdown');
-  const calendar = {
-    esm:
-      `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
-      "import { addDays } from '../../lib/date.mjs';\n" +
-      "function Calendar(props) { return cn('calendar', String(addDays(props.value, 1))); }\n" +
-      "Calendar.displayName = 'Calendar';\nexport { Calendar };\n",
-    cjs:
-      `${DIRECTIVE}const { cn } = require('../../lib/cn.cjs');\n` +
-      "const { addDays } = require('../../lib/date.cjs');\n" +
-      "function Calendar(props) { return cn('calendar', String(addDays(props.value, 1))); }\n" +
-      "Calendar.displayName = 'Calendar';\nexports.Calendar = Calendar;\n",
-  };
+  const useActiveDescendant = `${DIRECTIVE}import { useState } from 'react';\nexport function useActiveDescendant() { return useState(null); }\n`;
+  const useListbox = `${DIRECTIVE}import { useState } from 'react';\nexport function useListbox() { return useState(null); }\n`;
+  const option = `${DIRECTIVE}function Option() { return null; }\nOption.displayName = 'Option';\nexport { Option };\n`;
+  const listboxUser = (name) =>
+    `${DIRECTIVE}import { useListbox } from '../../hooks/useListbox.mjs';\n` +
+    "import { Option } from './Option.mjs';\n" +
+    `function ${name}() { useListbox(); return Option(); }\n${name}.displayName = '${name}';\nexport { ${name} };\n`;
+  const calendar =
+    `${DIRECTIVE}import { cn } from '../../lib/cn.mjs';\n` +
+    "import { addDays } from '../../lib/date.mjs';\n" +
+    "function Calendar(props) { return cn('calendar', String(addDays(props.value, 1))); }\n" +
+    "Calendar.displayName = 'Calendar';\nexport { Calendar };\n";
   // src/lib/dev.ts reads the bundler-injected mode at call time.
-  const dev = (exportSyntax) =>
-    `function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n${exportSyntax}`;
+  const dev =
+    'function isDevEnvironment() {\n  try {\n    return process.env.NODE_ENV !== "production";\n  } catch {\n    return true;\n  }\n}\n' +
+    'export const isDev = isDevEnvironment();\n';
   return withPhase9Modules(
     withPhase8Modules(
       withPhase7Modules(
@@ -338,68 +271,44 @@ function createToaster() {
             dependencies: { clsx: '^2.1.1' },
             peerDependencies: { react: '^19.0.0' },
           }),
+          // The library's merge in small: a class and its wave: twin are one class, and of two
+          // steps of one scale (p-2, p-4) the last wins, so the react-server probe's prefix parse
+          // passes.
           'dist/lib/cn.mjs':
-            "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
-          'dist/lib/cn.cjs':
-            "exports.cn = function cn(...inputs) { return inputs.filter(Boolean).join(' '); };\n",
+            'export function cn(...inputs) {\n' +
+            "  const key = (word) => { const bare = word.replace(/^wave:/, ''); return /^[a-z]+-\\d+$/.test(bare) ? bare.replace(/-\\d+$/, '') : bare; };\n" +
+            "  const words = inputs.filter(Boolean).join(' ').split(' ');\n" +
+            "  return words.filter((word, i) => !words.slice(i + 1).some((later) => key(later) === key(word))).join(' ');\n" +
+            '}\n',
           'dist/lib/classNames.mjs':
             "export const buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
             "export const dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
             "export const infoButtonClassNames = { root: 'wave-info-button', info: 'wave-info-button__info' };\n",
-          'dist/lib/classNames.cjs':
-            "exports.buttonClassNames = { root: 'wave-button', icon: 'wave-button__icon' };\n" +
-            "exports.dialogContentClassNames = { root: 'wave-dialog-content', body: 'wave-dialog-content__body' };\n" +
-            "exports.infoButtonClassNames = { root: 'wave-info-button', info: 'wave-info-button__info' };\n",
-          'dist/lib/dev.mjs': dev('export const isDev = isDevEnvironment();\n'),
-          'dist/lib/dev.cjs': dev('exports.isDev = isDevEnvironment();\n'),
+          'dist/lib/dev.mjs': dev,
           'dist/hooks/useThing.mjs': `${DIRECTIVE}import { useState } from 'react';\nexport function useThing() { return useState(0); }\n`,
-          'dist/hooks/useThing.cjs': `${DIRECTIVE}const react = require('react');\nexports.useThing = function useThing() { return react.useState(0); };\n`,
-          'dist/components/button/Button.mjs': button.esm,
-          'dist/components/button/Button.cjs': button.cjs,
-          'dist/components/input/Field.mjs': field.esm,
-          'dist/components/input/Field.cjs': field.cjs,
-          'dist/components/data-display/InfoButton.mjs': infoButton.esm,
-          'dist/components/data-display/InfoButton.cjs': infoButton.cjs,
-          'dist/components/layout/Card.mjs': card.esm,
-          'dist/components/layout/Card.cjs': card.cjs,
-          'dist/components/overlays/Dialog.mjs': dialog.esm,
-          'dist/components/overlays/Dialog.cjs': dialog.cjs,
-          'dist/lib/motion.mjs': motion.module.esm,
-          'dist/lib/motion.cjs': motion.module.cjs,
-          'dist/hooks/useMotion.mjs': motion.hook.esm,
-          'dist/hooks/useMotion.cjs': motion.hook.cjs,
-          'dist/hooks/usePresence.mjs': usePresence.esm,
-          'dist/hooks/usePresence.cjs': usePresence.cjs,
-          'dist/components/motion/Presence.mjs': presence.esm,
-          'dist/components/motion/Presence.cjs': presence.cjs,
-          'dist/components/navigation/Menu.mjs': menu.esm,
-          'dist/components/navigation/Menu.cjs': menu.cjs,
-          'dist/components/input/ColorArea.mjs': colorArea.esm,
-          'dist/components/input/ColorArea.cjs': colorArea.cjs,
-          'dist/components/input/ColorSlider.mjs': colorSlider.esm,
-          'dist/components/input/ColorSlider.cjs': colorSlider.cjs,
-          'dist/components/input/AlphaSlider.mjs': alphaSlider.esm,
-          'dist/components/input/AlphaSlider.cjs': alphaSlider.cjs,
-          'dist/components/feedback/Toaster.mjs': toaster.esm,
-          'dist/components/feedback/Toaster.cjs': toaster.cjs,
+          'dist/components/button/Button.mjs': button,
+          'dist/components/input/Field.mjs': field,
+          'dist/components/data-display/InfoButton.mjs': infoButton,
+          'dist/components/layout/Card.mjs': card,
+          'dist/components/overlays/Dialog.mjs': dialog,
+          'dist/lib/motion.mjs': motion.module,
+          'dist/hooks/useMotion.mjs': motion.hook,
+          'dist/hooks/usePresence.mjs': usePresence,
+          'dist/components/motion/Presence.mjs': presence,
+          'dist/components/navigation/Menu.mjs': menu,
+          'dist/components/input/ColorArea.mjs': colorPart('ColorArea'),
+          'dist/components/input/ColorSlider.mjs': colorPart('ColorSlider'),
+          'dist/components/input/AlphaSlider.mjs': colorPart('AlphaSlider'),
+          'dist/components/feedback/Toaster.mjs': toaster,
           'dist/lib/date.mjs': `${dateHelpers}export { addDays };\n`,
-          'dist/lib/date.cjs': `${dateHelpers}exports.addDays = addDays;\n`,
-          'dist/hooks/useActiveDescendant.mjs': useActiveDescendant.esm,
-          'dist/hooks/useActiveDescendant.cjs': useActiveDescendant.cjs,
-          'dist/hooks/useListbox.mjs': useListbox.esm,
-          'dist/hooks/useListbox.cjs': useListbox.cjs,
-          'dist/components/input/Option.mjs': option.esm,
-          'dist/components/input/Option.cjs': option.cjs,
-          'dist/components/input/Listbox.mjs': listbox.esm,
-          'dist/components/input/Listbox.cjs': listbox.cjs,
-          'dist/components/input/Dropdown.mjs': dropdown.esm,
-          'dist/components/input/Dropdown.cjs': dropdown.cjs,
-          'dist/components/input/Calendar.mjs': calendar.esm,
-          'dist/components/input/Calendar.cjs': calendar.cjs,
+          'dist/hooks/useActiveDescendant.mjs': useActiveDescendant,
+          'dist/hooks/useListbox.mjs': useListbox,
+          'dist/components/input/Option.mjs': option,
+          'dist/components/input/Listbox.mjs': listboxUser('Listbox'),
+          'dist/components/input/Dropdown.mjs': listboxUser('Dropdown'),
+          'dist/components/input/Calendar.mjs': calendar,
           'dist/lib/color.mjs': `${colorHelpers}export { hsvToHex, hexToHsv };\n`,
-          'dist/lib/color.cjs': `${colorHelpers}exports.hsvToHex = hsvToHex;\nexports.hexToHsv = hexToHsv;\n`,
           'dist/lib/toaster.mjs': `${toasterHandle}export { createToaster };\n`,
-          'dist/lib/toaster.cjs': `${toasterHandle}exports.createToaster = createToaster;\n`,
           'dist/index.mjs':
             "export { cn } from './lib/cn.mjs';\n" +
             "export { buttonClassNames, dialogContentClassNames } from './lib/classNames.mjs';\n" +
@@ -424,49 +333,7 @@ function createToaster() {
             "export { Listbox } from './components/input/Listbox.mjs';\n" +
             "export { Dropdown } from './components/input/Dropdown.mjs';\n" +
             "export { Calendar } from './components/input/Calendar.mjs';\n",
-          'dist/index.cjs':
-            "Object.defineProperty(exports, '__esModule', { value: true });\n" +
-            "const cn = require('./lib/cn.cjs');\n" +
-            "const classNames = require('./lib/classNames.cjs');\n" +
-            "const hook = require('./hooks/useThing.cjs');\n" +
-            "const button = require('./components/button/Button.cjs');\n" +
-            "const field = require('./components/input/Field.cjs');\n" +
-            "const infoButton = require('./components/data-display/InfoButton.cjs');\n" +
-            "const card = require('./components/layout/Card.cjs');\n" +
-            "const dialog = require('./components/overlays/Dialog.cjs');\n" +
-            "const presenceHook = require('./hooks/usePresence.cjs');\n" +
-            "const presence = require('./components/motion/Presence.cjs');\n" +
-            "const menu = require('./components/navigation/Menu.cjs');\n" +
-            "const color = require('./lib/color.cjs');\n" +
-            "const toasterHandle = require('./lib/toaster.cjs');\n" +
-            "const colorArea = require('./components/input/ColorArea.cjs');\n" +
-            "const colorSlider = require('./components/input/ColorSlider.cjs');\n" +
-            "const alphaSlider = require('./components/input/AlphaSlider.cjs');\n" +
-            "const toaster = require('./components/feedback/Toaster.cjs');\n" +
-            "const date = require('./lib/date.cjs');\n" +
-            "const activeDescendant = require('./hooks/useActiveDescendant.cjs');\n" +
-            "const listbox = require('./components/input/Listbox.cjs');\n" +
-            "const dropdown = require('./components/input/Dropdown.cjs');\n" +
-            "const calendar = require('./components/input/Calendar.cjs');\n" +
-            'exports.cn = cn.cn;\nexports.useThing = hook.useThing;\nexports.Button = button.Button;\n' +
-            'exports.Field = field.Field;\nexports.InfoButton = infoButton.InfoButton;\n' +
-            'exports.buttonClassNames = classNames.buttonClassNames;\n' +
-            'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n' +
-            'exports.infoButtonClassNames = classNames.infoButtonClassNames;\n' +
-            'exports.Card = card.Card;\nexports.CardHeader = card.CardHeader;\n' +
-            'exports.Dialog = dialog.Dialog;\nexports.DialogTrigger = dialog.DialogTrigger;\n' +
-            'exports.DialogContent = dialog.DialogContent;\n' +
-            'exports.usePresence = presenceHook.usePresence;\nexports.Presence = presence.Presence;\n' +
-            'exports.Menu = menu.Menu;\n' +
-            'exports.hsvToHex = color.hsvToHex;\nexports.hexToHsv = color.hexToHsv;\n' +
-            'exports.createToaster = toasterHandle.createToaster;\n' +
-            'exports.ColorArea = colorArea.ColorArea;\nexports.ColorSlider = colorSlider.ColorSlider;\n' +
-            'exports.AlphaSlider = alphaSlider.AlphaSlider;\nexports.Toaster = toaster.Toaster;\n' +
-            'exports.addDays = date.addDays;\nexports.useActiveDescendant = activeDescendant.useActiveDescendant;\n' +
-            'exports.Listbox = listbox.Listbox;\nexports.Dropdown = dropdown.Dropdown;\n' +
-            'exports.Calendar = calendar.Calendar;\n',
           'dist/index.d.ts': DTS,
-          'dist/index.d.cts': DTS,
         }),
       ),
     ),
@@ -605,14 +472,14 @@ const PHASE6_CLASS_NAMES = {
 };
 
 /**
- * The ESM and CommonJS code of the 0.11 module `path` with `spec` (see PHASE6_MODULES). Every
- * module starts with `"use client"`; a hook calls its uses, a component calls them in its render
+ * The code of the 0.11 module `path` with `spec` (see PHASE6_MODULES). Every module starts with
+ * `"use client"`; a hook calls its uses, a component calls them in its render
  * (`function X(props) { … }`), so an import of the component keeps them.
  */
 function phase6Module(path, spec) {
-  const rel = (target, ext) => {
+  const rel = (target) => {
     const relative = posix.relative(posix.dirname(path), target);
-    return `${relative.startsWith('.') ? relative : `./${relative}`}.${ext}`;
+    return `${relative.startsWith('.') ? relative : `./${relative}`}.mjs`;
   };
   const imports = [];
   if (!spec.hook) imports.push(['lib/cn', 'cn']);
@@ -620,19 +487,12 @@ function phase6Module(path, spec) {
   for (const use of spec.uses ?? []) imports.push(use);
   if (spec.root) imports.push(spec.root);
   for (const [, module, name] of spec.members ?? []) if (module) imports.push([module, name]);
-  const esmImports = imports
-    .map(([module, name]) => `import { ${name} } from '${rel(module, 'mjs')}';\n`)
-    .join('');
-  const cjsImports = imports
-    .map(([module, name]) => `const { ${name} } = require('${rel(module, 'cjs')}');\n`)
+  const importLines = imports
+    .map(([module, name]) => `import { ${name} } from '${rel(module)}';\n`)
     .join('');
   const calls = (spec.uses ?? []).map(([, name]) => `${name}(props); `).join('');
   if (spec.hook) {
-    const body = `function ${spec.hook}(props) { ${calls}return null; }\n`;
-    return {
-      esm: `${DIRECTIVE}${esmImports}export ${body}`,
-      cjs: `${DIRECTIVE}${cjsImports}${body}exports.${spec.hook} = ${spec.hook};\n`,
-    };
+    return `${DIRECTIVE}${importLines}export function ${spec.hook}(props) { ${calls}return null; }\n`;
   }
   const { name } = spec;
   const classes = `${spec.constant ? `${spec.constant}.root, ` : ''}'${name.toLowerCase()}'`;
@@ -656,24 +516,17 @@ function phase6Module(path, spec) {
         .join(', ')} })`
     : rootName;
   const flat = members.map((member) => [local(member[0]), memberName(member)]);
-  return {
-    esm:
-      `${DIRECTIVE}${esmImports}${code}export const ${name} = ${assign};\n` +
-      flat.map(([as, from]) => `export { ${from === as ? as : `${from} as ${as}`} };\n`).join(''),
-    cjs:
-      `${DIRECTIVE}${cjsImports}${code}exports.${name} = ${assign};\n` +
-      flat.map(([as, from]) => `exports.${as} = ${from};\n`).join(''),
-  };
+  return (
+    `${DIRECTIVE}${importLines}${code}export const ${name} = ${assign};\n` +
+    flat.map(([as, from]) => `export { ${from === as ? as : `${from} as ${as}`} };\n`).join('')
+  );
 }
 
 /** `code` (a module of the fixture) importing `name` from `target` and calling it in its render. */
-function withCall(code, path, target, name, ext = 'mjs') {
+function withCall(code, path, target, name) {
   const relative = posix.relative(posix.dirname(path), target);
-  const specifier = `${relative.startsWith('.') ? relative : `./${relative}`}.${ext}`;
-  const line =
-    ext === 'mjs'
-      ? `import { ${name} } from '${specifier}';\n`
-      : `const { ${name} } = require('${specifier}');\n`;
+  const specifier = `${relative.startsWith('.') ? relative : `./${relative}`}.mjs`;
+  const line = `import { ${name} } from '${specifier}';\n`;
   const render = /function \w+\(props\) \{ /;
   expect(code).toMatch(render);
   return code
@@ -702,41 +555,21 @@ function withPhase7Modules(files) {
   for (const [path, [name, body, client]] of Object.entries(modules)) {
     const directive = client ? DIRECTIVE : '';
     result[`dist/${path}.mjs`] = `${directive}export function ${name}() { ${body} }\n`;
-    result[`dist/${path}.cjs`] = `${directive}exports.${name} = function ${name}() { ${body} };\n`;
   }
   result['dist/hooks/useFocusableGroup.mjs'] =
     `${DIRECTIVE}import { getFirstTabbable } from '../lib/focus.mjs';\n` +
     'export function useFocusableGroup() { return { first: getFirstTabbable }; }\n';
-  result['dist/hooks/useFocusableGroup.cjs'] =
-    `${DIRECTIVE}const { getFirstTabbable } = require('../lib/focus.cjs');\n` +
-    'exports.useFocusableGroup = function useFocusableGroup() { return { first: getFirstTabbable }; };\n';
   result['dist/hooks/useModalOpen.mjs'] =
     `${DIRECTIVE}import { hasOpenModal } from '../lib/layers.mjs';\n` +
     'export function useModalOpen() { return hasOpenModal(); }\n';
-  result['dist/hooks/useModalOpen.cjs'] =
-    `${DIRECTIVE}const { hasOpenModal } = require('../lib/layers.cjs');\n` +
-    'exports.useModalOpen = function useModalOpen() { return hasOpenModal(); };\n';
   result['dist/components/overlays/Popover.mjs'] =
     `${DIRECTIVE}function Popover() { return null; }\nPopover.displayName = 'Popover';\nexport { Popover };\n`;
-  result['dist/components/overlays/Popover.cjs'] =
-    `${DIRECTIVE}function Popover() { return null; }\nPopover.displayName = 'Popover';\nexports.Popover = Popover;\n`;
   result['dist/index.mjs'] +=
     "export { useFocusVisible } from './hooks/useFocusVisible.mjs';\n" +
     "export { useFocusableGroup } from './hooks/useFocusableGroup.mjs';\n" +
     "export { usePopupPosition } from './hooks/usePopupPosition.mjs';\n" +
     "export { useModalOpen } from './hooks/useModalOpen.mjs';\n" +
     "export { getFirstTabbable } from './lib/focus.mjs';\n";
-  result['dist/index.cjs'] +=
-    "const phase7Focus = require('./hooks/useFocusVisible.cjs');\n" +
-    "const phase7Group = require('./hooks/useFocusableGroup.cjs');\n" +
-    "const phase7Position = require('./hooks/usePopupPosition.cjs');\n" +
-    "const phase7ModalOpen = require('./hooks/useModalOpen.cjs');\n" +
-    "const phase7Tabbable = require('./lib/focus.cjs');\n" +
-    'exports.useFocusVisible = phase7Focus.useFocusVisible;\n' +
-    'exports.useFocusableGroup = phase7Group.useFocusableGroup;\n' +
-    'exports.usePopupPosition = phase7Position.usePopupPosition;\n' +
-    'exports.useModalOpen = phase7ModalOpen.useModalOpen;\n' +
-    'exports.getFirstTabbable = phase7Tabbable.getFirstTabbable;\n';
   return result;
 }
 
@@ -749,26 +582,15 @@ function withPhase8Modules(files) {
   const result = { ...files };
   result['dist/lib/initials.mjs'] =
     'export function getInitials(name) { return name.slice(0, 1); }\n';
-  result['dist/lib/initials.cjs'] =
-    'exports.getInitials = function getInitials(name) { return name.slice(0, 1); };\n';
   result['dist/components/data-display/AvatarGroup.partition.mjs'] =
     `${DIRECTIVE}export function partitionAvatarGroupItems(options) { return { inlineItems: options.items, overflowItems: undefined }; }\n`;
-  result['dist/components/data-display/AvatarGroup.partition.cjs'] =
-    `${DIRECTIVE}exports.partitionAvatarGroupItems = function partitionAvatarGroupItems(options) { return { inlineItems: options.items, overflowItems: undefined }; };\n`;
   for (const name of ['Avatar', 'AvatarGroup', 'Persona']) {
     result[`dist/components/data-display/${name}.mjs`] =
       `${DIRECTIVE}import { createElement } from 'react';\nfunction ${name}() { return createElement('span'); }\n${name}.displayName = '${name}';\nexport { ${name} };\n`;
-    result[`dist/components/data-display/${name}.cjs`] =
-      `${DIRECTIVE}const { createElement } = require('react');\nfunction ${name}() { return createElement('span'); }\n${name}.displayName = '${name}';\nexports.${name} = ${name};\n`;
   }
   result['dist/index.mjs'] +=
     "export { getInitials } from './lib/initials.mjs';\n" +
     "export { partitionAvatarGroupItems } from './components/data-display/AvatarGroup.partition.mjs';\n";
-  result['dist/index.cjs'] +=
-    "const phase8Initials = require('./lib/initials.cjs');\n" +
-    "const phase8Partition = require('./components/data-display/AvatarGroup.partition.cjs');\n" +
-    'exports.getInitials = phase8Initials.getInitials;\n' +
-    'exports.partitionAvatarGroupItems = phase8Partition.partitionAvatarGroupItems;\n';
   return result;
 }
 
@@ -782,16 +604,13 @@ const BREADCRUMB_HELPERS = [
 
 /**
  * A fixture `lib/breadcrumb` module: `body(name)` is the body of each helper, and `head` the code
- * before them (an import). Every helper is exported in both formats.
+ * before them (an import). Every helper is exported.
  */
-function breadcrumbModule(body, head = { esm: '', cjs: '' }) {
+function breadcrumbModule(body, head = '') {
   const helpers = BREADCRUMB_HELPERS.map((name) => `function ${name}() { ${body(name)} }\n`).join(
     '',
   );
-  return {
-    esm: `${head.esm}${helpers}export { ${BREADCRUMB_HELPERS.join(', ')} };\n`,
-    cjs: `${head.cjs}${helpers}${BREADCRUMB_HELPERS.map((name) => `exports.${name} = ${name};\n`).join('')}`,
-  };
+  return `${head}${helpers}export { ${BREADCRUMB_HELPERS.join(', ')} };\n`;
 }
 
 /**
@@ -805,10 +624,7 @@ function withPhase9Modules(files) {
   const table =
     'function createTableColumn(options) { return { ...options, sortable: options.sortable ?? options.compare !== undefined }; }\n';
   result['dist/lib/table.mjs'] = `${table}export { createTableColumn };\n`;
-  result['dist/lib/table.cjs'] = `${table}exports.createTableColumn = createTableColumn;\n`;
-  const breadcrumb = breadcrumbModule(() => 'return null;');
-  result['dist/lib/breadcrumb.mjs'] = breadcrumb.esm;
-  result['dist/lib/breadcrumb.cjs'] = breadcrumb.cjs;
+  result['dist/lib/breadcrumb.mjs'] = breadcrumbModule(() => 'return null;');
   for (const [path, name] of [
     ['components/table/DataGrid', 'DataGrid'],
     ['components/table/Table', 'Table'],
@@ -818,17 +634,10 @@ function withPhase9Modules(files) {
   ]) {
     result[`dist/${path}.mjs`] =
       `${DIRECTIVE}import { createElement } from 'react';\nfunction ${name}() { return createElement('div'); }\n${name}.displayName = '${name}';\nexport { ${name} };\n`;
-    result[`dist/${path}.cjs`] =
-      `${DIRECTIVE}const { createElement } = require('react');\nfunction ${name}() { return createElement('div'); }\n${name}.displayName = '${name}';\nexports.${name} = ${name};\n`;
   }
   result['dist/index.mjs'] +=
     "export { createTableColumn } from './lib/table.mjs';\n" +
     `export { ${BREADCRUMB_HELPERS.join(', ')} } from './lib/breadcrumb.mjs';\n`;
-  result['dist/index.cjs'] +=
-    "const phase9Table = require('./lib/table.cjs');\n" +
-    "const phase9Breadcrumb = require('./lib/breadcrumb.cjs');\n" +
-    'exports.createTableColumn = phase9Table.createTableColumn;\n' +
-    BREADCRUMB_HELPERS.map((name) => `exports.${name} = phase9Breadcrumb.${name};\n`).join('');
   return result;
 }
 
@@ -898,42 +707,26 @@ const PHASE10_MODULES = {
   },
 };
 
-/** The ESM and CommonJS code of the 0.15 module `path` with `spec` (see PHASE10_MODULES). */
+/** The code of the 0.15 module `path` with `spec` (see PHASE10_MODULES). */
 function phase10Module(path, { imports, body, exports }) {
-  const specifier = (target, ext) => {
+  const specifier = (target) => {
     if (!target.includes('/')) return target;
     const relative = posix.relative(posix.dirname(path), target);
-    return `${relative.startsWith('.') ? relative : `./${relative}`}.${ext}`;
+    return `${relative.startsWith('.') ? relative : `./${relative}`}.mjs`;
   };
-  const esmImports = imports
-    .map(
-      ([module, names]) => `import { ${names.join(', ')} } from '${specifier(module, 'mjs')}';\n`,
-    )
+  const importLines = imports
+    .map(([module, names]) => `import { ${names.join(', ')} } from '${specifier(module)}';\n`)
     .join('');
-  const cjsImports = imports
-    .map(
-      ([module, names]) =>
-        `const { ${names.join(', ')} } = require('${specifier(module, 'cjs')}');\n`,
-    )
-    .join('');
-  return {
-    esm: `${DIRECTIVE}${esmImports}${body}export { ${exports.join(', ')} };\n`,
-    cjs: `${DIRECTIVE}${cjsImports}${body}${exports.map((name) => `exports.${name} = ${name};\n`).join('')}`,
-  };
+  return `${DIRECTIVE}${importLines}${body}export { ${exports.join(', ')} };\n`;
 }
 
 /** The good files with the 0.15 modules of PHASE10_MODULES, their public names in the entry. */
 function withPhase10Modules(files) {
   const result = { ...files };
   for (const [path, spec] of Object.entries(PHASE10_MODULES)) {
-    const { esm, cjs } = phase10Module(path, spec);
-    result[`dist/${path}.mjs`] = esm;
-    result[`dist/${path}.cjs`] = cjs;
+    result[`dist/${path}.mjs`] = phase10Module(path, spec);
     if (!spec.entry) continue;
     result['dist/index.mjs'] += `export { ${spec.exports.join(', ')} } from './${path}.mjs';\n`;
-    result['dist/index.cjs'] += spec.exports
-      .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
-      .join('');
   }
   return result;
 }
@@ -1141,25 +934,19 @@ const PHASE11_MODULES = {
   },
 };
 
-/** The ESM and CommonJS code of the 0.16 module `path` (see PHASE11_MODULES). */
+/** The code of the 0.16 module `path` (see PHASE11_MODULES). */
 function phase11Module(path, spec) {
-  const { esm, cjs } = phase10Module(path, spec);
-  if (expectsUseClient(`${path}.mjs`)) return { esm, cjs };
-  return { esm: esm.replace(DIRECTIVE, ''), cjs: cjs.replace(DIRECTIVE, '') };
+  const code = phase10Module(path, spec);
+  return expectsUseClient(`${path}.mjs`) ? code : code.replace(DIRECTIVE, '');
 }
 
 /** The good files with the 0.16 modules of PHASE11_MODULES, their public names in the entry. */
 function withPhase11Modules(files) {
   const result = { ...files };
   for (const [path, spec] of Object.entries(PHASE11_MODULES)) {
-    const { esm, cjs } = phase11Module(path, spec);
-    result[`dist/${path}.mjs`] = esm;
-    result[`dist/${path}.cjs`] = cjs;
+    result[`dist/${path}.mjs`] = phase11Module(path, spec);
     if (!spec.entry) continue;
     result['dist/index.mjs'] += `export { ${spec.exports.join(', ')} } from './${path}.mjs';\n`;
-    result['dist/index.cjs'] += spec.exports
-      .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
-      .join('');
   }
   return result;
 }
@@ -1232,20 +1019,15 @@ const PHASE12_MODULES = {
   },
 };
 
-/** The ESM and CommonJS code of the 0.17 module `path` (see PHASE12_MODULES). */
+/** The code of the 0.17 module `path` (see PHASE12_MODULES). */
 const phase12Module = phase11Module;
 
 /** The good files with the 0.17 modules of PHASE12_MODULES, their `entry` names in the entry. */
 function withPhase12Modules(files) {
   const result = { ...files };
   for (const [path, spec] of Object.entries(PHASE12_MODULES)) {
-    const { esm, cjs } = phase12Module(path, spec);
-    result[`dist/${path}.mjs`] = esm;
-    result[`dist/${path}.cjs`] = cjs;
+    result[`dist/${path}.mjs`] = phase12Module(path, spec);
     result['dist/index.mjs'] += `export { ${spec.entry.join(', ')} } from './${path}.mjs';\n`;
-    result['dist/index.cjs'] += spec.entry
-      .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
-      .join('');
   }
   return result;
 }
@@ -1352,7 +1134,7 @@ const PHASE13_MODULES = {
   },
 };
 
-/** The ESM and CommonJS code of the 0.18 module `path` (see PHASE13_MODULES). */
+/** The code of the 0.18 module `path` (see PHASE13_MODULES). */
 const phase13Module = phase11Module;
 
 /**
@@ -1376,25 +1158,12 @@ const PHASE13_CALLS = [
 function withPhase13Modules(files) {
   const result = { ...files };
   for (const [path, spec] of Object.entries(PHASE13_MODULES)) {
-    const { esm, cjs } = phase13Module(path, spec);
-    result[`dist/${path}.mjs`] = esm;
-    result[`dist/${path}.cjs`] = cjs;
+    result[`dist/${path}.mjs`] = phase13Module(path, spec);
     if (!spec.entry) continue;
     result['dist/index.mjs'] += `export { ${spec.entry.join(', ')} } from './${path}.mjs';\n`;
-    result['dist/index.cjs'] += spec.entry
-      .map((name) => `exports.${name} = require('./${path}.cjs').${name};\n`)
-      .join('');
   }
   for (const [path, target, name] of PHASE13_CALLS) {
-    for (const ext of ['mjs', 'cjs']) {
-      result[`dist/${path}.${ext}`] = withCall(
-        result[`dist/${path}.${ext}`],
-        path,
-        target,
-        name,
-        ext,
-      );
-    }
+    result[`dist/${path}.mjs`] = withCall(result[`dist/${path}.mjs`], path, target, name);
   }
   return result;
 }
@@ -1402,16 +1171,11 @@ function withPhase13Modules(files) {
 function withPhase6Modules(files) {
   const result = { ...files };
   for (const [path, spec] of Object.entries(PHASE6_MODULES)) {
-    const { esm, cjs } = phase6Module(path, spec);
-    result[`dist/${path}.mjs`] = esm;
-    result[`dist/${path}.cjs`] = cjs;
+    result[`dist/${path}.mjs`] = phase6Module(path, spec);
   }
   const constants = Object.entries(PHASE6_CLASS_NAMES);
   result['dist/lib/classNames.mjs'] += constants
     .map(([name, root]) => `export const ${name} = { root: '${root}' };\n`)
-    .join('');
-  result['dist/lib/classNames.cjs'] += constants
-    .map(([name, root]) => `exports.${name} = { root: '${root}' };\n`)
     .join('');
   const publicModules = Object.entries(PHASE6_MODULES).filter(([, spec]) => spec.exports);
   result['dist/index.mjs'] +=
@@ -1419,25 +1183,13 @@ function withPhase6Modules(files) {
     publicModules
       .map(([path, spec]) => `export { ${spec.exports.join(', ')} } from './${path}.mjs';\n`)
       .join('');
-  result['dist/index.cjs'] +=
-    constants.map(([name]) => `exports.${name} = classNames.${name};\n`).join('') +
-    publicModules
-      .map(
-        ([path, spec], i) =>
-          `const phase6Module${i} = require('./${path}.cjs');\n` +
-          spec.exports.map((name) => `exports.${name} = phase6Module${i}.${name};\n`).join(''),
-      )
-      .join('');
-  for (const ext of ['mjs', 'cjs']) {
-    const path = `dist/components/overlays/Dialog.${ext}`;
-    result[path] = withCall(
-      withCall(files[path], 'components/overlays/Dialog', 'hooks/usePresence', 'usePresence', ext),
-      'components/overlays/Dialog',
-      'components/overlays/Dialog.shared',
-      'useModalOpenState',
-      ext,
-    );
-  }
+  const dialog = 'dist/components/overlays/Dialog.mjs';
+  result[dialog] = withCall(
+    withCall(files[dialog], 'components/overlays/Dialog', 'hooks/usePresence', 'usePresence'),
+    'components/overlays/Dialog',
+    'components/overlays/Dialog.shared',
+    'useModalOpenState',
+  );
   return result;
 }
 
@@ -1462,9 +1214,9 @@ describe('directivePrologue', () => {
   it.each([
     ['"use client";import x from "y";', ['use client']],
     ["'use client'\nimport x from 'y';", ['use client']],
-    ['"use client";const e=require(`../x.cjs`);', ['use client']],
+    ['"use client";const e=import(`../x.mjs`);', ['use client']],
     ['// banner\n/* more */\n"use client";\nexport {};', ['use client']],
-    ['"use strict";\n"use client";\nexports.a = 1;', ['use strict', 'use client']],
+    ['"use strict";\n"use client";\nexport const a = 1;', ['use strict', 'use client']],
     ['#!/usr/bin/env node\n"use client";', ['use client']],
   ])('reads the prologue of %j', (code, expected) => {
     expect(directivePrologue(code)).toEqual(expected);
@@ -1498,11 +1250,11 @@ describe('importSpecifiers', () => {
     ],
     ['function f(){}import{c}from"./c.mjs";', ['./c.mjs']],
     ['/*! banner */import{d}from"./d.mjs";', ['./d.mjs']],
-    // Dynamic imports and CommonJS requires, minified.
+    // Dynamic imports and require() calls (an ES module may require() one), minified.
     ['const m=await import("./lazy.mjs")', ['./lazy.mjs']],
     [
-      '"use client";const e=require(`../../_virtual/runtime.cjs`),t=require("react");',
-      ['../../_virtual/runtime.cjs', 'react'],
+      '"use client";const e=require(`../../_virtual/runtime.mjs`),t=require("react");',
+      ['../../_virtual/runtime.mjs', 'react'],
     ],
   ])('finds the specifiers of %j', (code, expected) => {
     expect(importSpecifiers(code)).toEqual(expected);
@@ -1512,7 +1264,7 @@ describe('importSpecifiers', () => {
     'const important = fromValue("x");',
     'export const from = "./not-an-import.mjs";',
     'export default fromX("y");',
-    'exports.a = "./not-an-import.cjs";',
+    'const a = "./not-an-import.mjs";',
   ])('finds no specifier in %j', (code) => {
     expect(importSpecifiers(code)).toEqual([]);
   });
@@ -1521,15 +1273,12 @@ describe('importSpecifiers', () => {
 describe('expectsUseClient', () => {
   it.each([
     ['components/button/Button.mjs', true],
-    ['components/button/Button.cjs', true],
     ['hooks/useControllable.mjs', true],
     ['components/button/index.mjs', false],
-    ['hooks/index.cjs', false],
+    ['hooks/index.mjs', false],
     ['index.mjs', false],
-    ['index.cjs', false],
     ['lib/cn.mjs', false],
-    ['lib/cn.cjs', false],
-    ['_virtual/_rolldown/runtime.cjs', false],
+    ['_virtual/_rolldown/runtime.mjs', false],
   ])('%s -> %s', (path, expected) => {
     expect(expectsUseClient(path)).toBe(expected);
   });
@@ -1540,18 +1289,18 @@ describe('checkDirectives (repo-level#2)', () => {
     expect(checkDirectives(fixture().dist)).toEqual([]);
   });
 
-  it('reports a component or hook module without the directive, per format', () => {
+  it('reports a component or hook module without the directive', () => {
     const { dist } = fixture({
       'dist/components/button/Button.mjs': goodFiles()['dist/components/button/Button.mjs'].replace(
         DIRECTIVE,
         '',
       ),
-      'dist/hooks/useThing.cjs': goodFiles()['dist/hooks/useThing.cjs'].replace(DIRECTIVE, ''),
+      'dist/hooks/useThing.mjs': goodFiles()['dist/hooks/useThing.mjs'].replace(DIRECTIVE, ''),
     });
     const errors = checkDirectives(dist);
     expect(errors).toEqual([
       expect.stringContaining('components/button/Button.mjs'),
-      expect.stringContaining('hooks/useThing.cjs'),
+      expect.stringContaining('hooks/useThing.mjs'),
     ]);
     expect(errors.join('\n')).toMatch(/lacks "use client"/);
   });
@@ -1559,12 +1308,12 @@ describe('checkDirectives (repo-level#2)', () => {
   it('reports the directive in cn, in the entry and in any index barrel', () => {
     const { dist } = fixture({
       'dist/lib/cn.mjs': DIRECTIVE + goodFiles()['dist/lib/cn.mjs'],
-      'dist/index.cjs': DIRECTIVE + goodFiles()['dist/index.cjs'],
+      'dist/index.mjs': DIRECTIVE + goodFiles()['dist/index.mjs'],
       'dist/components/button/index.mjs': `${DIRECTIVE}export { Button } from './Button.mjs';\n`,
     });
     const errors = checkDirectives(dist);
     expect(errors).toHaveLength(3);
-    for (const path of ['lib/cn.mjs', 'index.cjs', 'components/button/index.mjs']) {
+    for (const path of ['lib/cn.mjs', 'index.mjs', 'components/button/index.mjs']) {
       expect(errors.some((error) => error.includes(path) && /must not/.test(error))).toBe(true);
     }
   });
@@ -1583,36 +1332,20 @@ describe('checkDirectives (repo-level#2)', () => {
 });
 
 describe('checkDeclarations (repo-level#5)', () => {
-  it('passes when index.d.ts and its index.d.cts copy exist', () => {
+  it('passes when index.d.ts declares and exports the required names', () => {
     expect(checkDeclarations(fixture().dist)).toEqual([]);
-  });
-
-  it('reports a missing index.d.cts', () => {
-    expect(checkDeclarations(fixture({ 'dist/index.d.cts': null }).dist)).toEqual([
-      expect.stringContaining('index.d.cts'),
-    ]);
   });
 
   it('reports a missing or empty index.d.ts', () => {
     expect(checkDeclarations(fixture({ 'dist/index.d.ts': null }).dist)).toEqual(
       expect.arrayContaining([expect.stringContaining('index.d.ts')]),
     );
-    expect(
-      checkDeclarations(fixture({ 'dist/index.d.ts': '', 'dist/index.d.cts': '' }).dist),
-    ).not.toEqual([]);
-  });
-
-  it('reports an index.d.cts that is not a copy of index.d.ts', () => {
-    expect(
-      checkDeclarations(fixture({ 'dist/index.d.cts': `${DTS}export declare const x: 1;\n` }).dist),
-    ).toEqual([expect.stringMatching(/index\.d\.cts differs/)]);
+    expect(checkDeclarations(fixture({ 'dist/index.d.ts': '' }).dist)).not.toEqual([]);
   });
 
   it('reports an exported component without a JSDoc (C-DOCS)', () => {
     const dts = `${DTS}export declare const Card: () => null;\n`;
-    expect(
-      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
-    ).toEqual([
+    expect(checkDeclarations(fixture({ 'dist/index.d.ts': dts }).dist)).toEqual([
       'index.d.ts: the exported component Card has no JSDoc (document it on its export, C-DOCS)',
     ]);
   });
@@ -1622,14 +1355,10 @@ describe('checkDeclarations (repo-level#5)', () => {
     expect(missingDeclarations(DTS, REQUIRED_DECLARATIONS)).toEqual([]);
   });
 
-  it('reports an empty roll-up (only `export { }`) in both files', () => {
-    const { dist } = fixture({
-      'dist/index.d.ts': EMPTY_ROLL_UP,
-      'dist/index.d.cts': EMPTY_ROLL_UP,
-    });
+  it('reports an empty roll-up (only `export { }`)', () => {
+    const { dist } = fixture({ 'dist/index.d.ts': EMPTY_ROLL_UP });
     expect(checkDeclarations(dist)).toEqual([
       "index.d.ts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, TagGroup, NavDrawer, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
-      "index.d.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, TagGroup, NavDrawer, buttonClassNames (an empty or partial roll-up: check tsconfig.json's rootDir and the declaration plugin in vite.config.ts)",
     ]);
   });
 
@@ -1638,29 +1367,16 @@ describe('checkDeclarations (repo-level#5)', () => {
       '/** A menu. */\nexport declare const Menu',
       '/** A menu. */\ndeclare const Menu',
     );
-    expect(
-      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
-    ).toEqual([
+    expect(checkDeclarations(fixture({ 'dist/index.d.ts': dts }).dist)).toEqual([
       expect.stringMatching(/^index\.d\.ts does not declare and export ButtonProps, Menu \(/),
-      expect.stringMatching(/^index\.d\.cts does not declare and export ButtonProps, Menu \(/),
-    ]);
-  });
-
-  it('checks index.d.cts on its own', () => {
-    expect(checkDeclarations(fixture({ 'dist/index.d.cts': EMPTY_ROLL_UP }).dist)).toEqual([
-      expect.stringMatching(/index\.d\.cts differs/),
-      expect.stringMatching(
-        /^index\.d\.cts does not declare and export cn, Button, ButtonProps, Menu, usePresence, useActiveDescendant, Calendar, TagGroup, NavDrawer, buttonClassNames \(/,
-      ),
     ]);
   });
 
   it('takes the required names as an option', () => {
     expect(checkDeclarations(fixture().dist, { requiredDeclarations: ['cn', 'Card'] })).toEqual([
       expect.stringMatching(/^index\.d\.ts does not declare and export Card \(/),
-      expect.stringMatching(/^index\.d\.cts does not declare and export Card \(/),
     ]);
-    const empty = fixture({ 'dist/index.d.ts': EMPTY_ROLL_UP, 'dist/index.d.cts': EMPTY_ROLL_UP });
+    const empty = fixture({ 'dist/index.d.ts': EMPTY_ROLL_UP });
     expect(
       checkDeclarations(empty.dist, { requiredDeclarations: [], valueAndTypeDeclarations: [] }),
     ).toEqual([]);
@@ -1759,18 +1475,18 @@ describe('undocumentedComponents (C-DOCS)', () => {
 });
 
 describe('checkDevEnvironment', () => {
-  it('passes when dist/lib/dev.* read process.env.NODE_ENV at run time', () => {
+  it('passes when dist/lib/dev.mjs reads process.env.NODE_ENV at run time', () => {
     expect(checkDevEnvironment(fixture().dist)).toEqual([]);
   });
 
   it('reports a mode inlined at build time (a `define` in vite.config.ts) or a missing module', () => {
     const inlined = goodFiles()['dist/lib/dev.mjs'].replace('process.env.NODE_ENV', '"production"');
-    expect(
-      checkDevEnvironment(fixture({ 'dist/lib/dev.mjs': inlined, 'dist/lib/dev.cjs': null }).dist),
-    ).toEqual([
+    expect(checkDevEnvironment(fixture({ 'dist/lib/dev.mjs': inlined }).dist)).toEqual([
       'lib/dev.mjs does not read process.env.NODE_ENV: the build inlined the mode (a `define` in ' +
         "vite.config.ts?), so the consumer's bundler can no longer choose development or production",
-      'lib/dev.cjs is missing',
+    ]);
+    expect(checkDevEnvironment(fixture({ 'dist/lib/dev.mjs': null }).dist)).toEqual([
+      'lib/dev.mjs is missing',
     ]);
   });
 });
@@ -1790,14 +1506,14 @@ describe('checkImports (repo-level#4)', () => {
     const { dist } = fixture({
       'dist/lib/extra.mjs':
         "import merge from 'lodash/merge';\nimport fs from 'node:fs';\nexport { merge, fs };\n",
-      'dist/lib/extra.cjs': 'const x = require(`left-pad`);\nexports.x = x;\n',
+      'dist/lib/lazy.mjs': 'export const load = () => import(`left-pad`);\n',
     });
     const errors = checkImports(dist, pkg);
     expect(errors).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/lib\/extra\.mjs.*lodash\/merge/),
         expect.stringMatching(/lib\/extra\.mjs.*node:fs/),
-        expect.stringMatching(/lib\/extra\.cjs.*left-pad/),
+        expect.stringMatching(/lib\/lazy\.mjs.*left-pad/),
       ]),
     );
   });
@@ -1822,13 +1538,13 @@ describe('checkImports (repo-level#4)', () => {
 });
 
 describe('checkServerImport (repo-level#2)', () => {
-  // Each check loads the fixture in two child Node.js processes: more than Vitest's 5 s default
+  // Each check loads the fixture in a child Node.js process: more than Vitest's 5 s default
   // under load (the parallel gate, a CI runner), hence 30 s per check.
   const withIndexImport = (line) => ({
     'dist/index.mjs': `${line}\n${goodFiles()['dist/index.mjs']}`,
   });
 
-  it('loads the package in both formats under the react-server condition', async () => {
+  it('loads the package under the react-server condition', async () => {
     expect(await checkServerImport(fixture().dist)).toEqual([]);
   }, 30_000);
 
@@ -1845,8 +1561,9 @@ describe('checkServerImport (repo-level#2)', () => {
   }, 30_000);
 
   it('reports a cn that is missing or returns the wrong value', async () => {
-    expect(await checkServerImport(fixture({ 'dist/lib/cn.cjs': null }).dist)).toEqual([
-      expect.stringContaining('lib/cn.cjs'),
+    // Only the missing module: the modules that import it are not reported as well.
+    expect(await checkServerImport(fixture({ 'dist/lib/cn.mjs': null }).dist)).toEqual([
+      'lib/cn.mjs is missing',
     ]);
     expect(
       await checkServerImport(
@@ -1855,17 +1572,24 @@ describe('checkServerImport (repo-level#2)', () => {
     ).toEqual([expect.stringContaining('lib/cn.mjs')]);
   }, 60_000);
 
+  it('reports a cn that joins classes but does not read the prefix (review B4)', async () => {
+    const { dist } = fixture({
+      'dist/lib/cn.mjs':
+        "export function cn(...inputs) { return inputs.filter(Boolean).join(' '); }\n",
+    });
+    expect(await checkServerImport(dist)).toEqual([
+      expect.stringContaining(`cn('wave:p-2', 'p-4') returned "wave:p-2 p-4", not 'p-4'`),
+    ]);
+  }, 30_000);
+
   it('loads every other src/lib module the entry imports, not only cn', async () => {
     const { dist } = fixture({
       ...withIndexImport("export { ThemeContext } from './lib/theme.mjs';"),
       'dist/lib/theme.mjs':
         "import { createContext } from 'react';\nexport const ThemeContext = createContext(null);\n",
-      'dist/lib/theme.cjs':
-        "const react = require('react');\nexports.ThemeContext = react.createContext(null);\n",
     });
     const errors = await checkServerImport(dist);
     expect(errors).toEqual([
-      expect.stringMatching(/^lib\/theme\.cjs does not load under node --conditions=react-server/),
       expect.stringMatching(/^lib\/theme\.mjs does not load under node --conditions=react-server/),
     ]);
     expect(errors.join('\n')).not.toMatch(/^index\.mjs/m);
@@ -1933,18 +1657,22 @@ describe('checkServerImport (repo-level#2)', () => {
 });
 
 describe('clientReferenceStub', () => {
-  it('exports a client reference per name, in both formats', async () => {
-    const esm = clientReferenceStub('components/x/Card.mjs', ['Card', 'default'], 'esm');
-    expect(esm).toMatch(/export \{ reference0 as "Card", reference1 as "default" \};/);
-    const cjs = clientReferenceStub('components/x/Card.cjs', ['Card', '__esModule'], 'cjs');
-    expect(cjs).toMatch(/exports\["Card"\] = clientReference\("Card"\);/);
-    expect(cjs).not.toMatch(/exports\["__esModule"\]/);
+  let stubs = 0;
+  /** Loads `source` as an ES module (written next to the fixtures, so Node.js imports it). */
+  const load = (source) => {
+    const file = join(fixtureRoot, `stub-${++stubs}.mjs`);
+    writeFileSync(file, source);
+    return import(pathToFileURL(file).href);
+  };
 
-    const exports = {};
-    new Function('exports', cjs)(exports);
-    const { Card } = exports;
+  it('exports a client reference per name', async () => {
+    const source = clientReferenceStub('components/x/Card.mjs', ['Card', 'default']);
+    expect(source).toMatch(/export \{ reference0 as "Card", reference1 as "default" \};/);
+
+    const { Card, default: fallback } = await load(source);
+    expect(fallback.$$id).toBe('components/x/Card.mjs#default');
     expect(Card.$$typeof).toBe(Symbol.for('react.client.reference'));
-    expect(Card.$$id).toBe('components/x/Card.cjs#Card');
+    expect(Card.$$id).toBe('components/x/Card.mjs#Card');
     expect(Card.displayName).toBeUndefined();
     expect(() => Card()).toThrow(/Attempted to call Card\(\) from the server/);
     expect(() => Card.Header).toThrow(/Cannot access Card\.Header on the server/);
@@ -1954,9 +1682,7 @@ describe('clientReferenceStub', () => {
   });
 
   it('cannot be awaited or resolved as a thenable, like React client references', async () => {
-    const exports = {};
-    new Function('exports', clientReferenceStub('components/x/Card.cjs', ['Card'], 'cjs'))(exports);
-    const { Card } = exports;
+    const { Card } = await load(clientReferenceStub('components/x/Card.mjs', ['Card']));
     const thenable = /Cannot await or return from a thenable/;
     expect(() => Card.then).toThrow(thenable);
     await expect(Promise.resolve(Card)).rejects.toThrow(thenable);
@@ -2141,19 +1867,61 @@ describe('checkFlatExports (repo-level#2, C-COMPOUND)', () => {
   });
 });
 
-describe('checkCjsParity', () => {
-  it('passes when index.cjs exports the names of index.mjs', async () => {
-    expect(await checkCjsParity(fixture().dist)).toEqual([]);
+describe('ES modules only (1.0, spec R4)', () => {
+  const commonJs = (path) =>
+    `${path} is CommonJS output: the package ships ES modules only ` +
+    '(one ES output in vite.config.ts, no index.d.cts)';
+
+  it('checkNoCommonJs passes a dist of ES modules, their maps and index.d.ts', () => {
+    expect(checkNoCommonJs(fixture({ 'dist/index.mjs.map': '{}\n' }).dist)).toEqual([]);
   });
 
-  it('reports names missing from either format', async () => {
+  it('checkNoCommonJs reports every CommonJS module, source map and declaration', () => {
     const { dist } = fixture({
-      'dist/index.cjs': goodFiles()['dist/index.cjs'].replace(
-        'exports.CardHeader = card.CardHeader;\n',
-        '',
-      ),
+      'dist/index.cjs': "exports.cn = require('./lib/cn.cjs').cn;\n",
+      'dist/index.d.cts': DTS,
+      'dist/lib/cn.cjs.map': '{}\n',
     });
-    expect(await checkCjsParity(dist)).toEqual([expect.stringMatching(/CardHeader/)]);
+    expect(checkNoCommonJs(dist)).toEqual([
+      commonJs('index.cjs'),
+      commonJs('index.d.cts'),
+      commonJs('lib/cn.cjs.map'),
+    ]);
+  });
+
+  it('checkRequireEsm passes an entry that require() loads with the names of import()', async () => {
+    expect(await checkRequireEsm(fixture().dist)).toEqual([]);
+  }, 30_000);
+
+  it('checkRequireEsm reports a module graph with a top-level await', async () => {
+    const files = goodFiles();
+    // A module the entry imports waits at its top level: require() refuses the whole graph.
+    const { dist } = fixture({
+      'dist/lib/date.mjs': `await Promise.resolve();\n${files['dist/lib/date.mjs']}`,
+    });
+    expect(await checkRequireEsm(dist)).toEqual([
+      expect.stringMatching(
+        /^index\.mjs does not load through require\(\), so CommonJS consumers \(Node\.js 22\.12 and later\) cannot use the package: ERR_REQUIRE_ASYNC_MODULE: /,
+      ),
+    ]);
+  }, 30_000);
+
+  it('checkRequireEsm reports an entry whose require() gives other names than import()', async () => {
+    // A `module.exports` export is what require() returns in place of the module namespace.
+    const { dist } = fixture({
+      'dist/index.mjs':
+        "export const a = 1;\nconst other = { b: 2 };\nexport { other as 'module.exports' };\n",
+    });
+    expect(await checkRequireEsm(dist)).toEqual([
+      'require() of index.mjs lacks a, module.exports, which import() exports',
+      'require() of index.mjs has b, which import() does not export',
+    ]);
+  }, 30_000);
+
+  it('checkRequireEsm reports a missing entry', async () => {
+    expect(await checkRequireEsm(fixture({ 'dist/index.mjs': null }).dist)).toEqual([
+      'index.mjs is missing',
+    ]);
   });
 });
 
@@ -2577,11 +2345,11 @@ describe('verifyDist: the 0.14 helper probes', () => {
   }, 90_000);
 
   it('probes each breadcrumb helper on its own', async () => {
-    const { esm } = breadcrumbModule(() => 'return Breadcrumb.displayName;', {
-      esm: "import { Breadcrumb } from '../components/navigation/Breadcrumb.mjs';\n",
-      cjs: '',
-    });
-    const { dist } = fixture({ 'dist/lib/breadcrumb.mjs': esm });
+    const code = breadcrumbModule(
+      () => 'return Breadcrumb.displayName;',
+      "import { Breadcrumb } from '../components/navigation/Breadcrumb.mjs';\n",
+    );
+    const { dist } = fixture({ 'dist/lib/breadcrumb.mjs': code });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual(
       BREADCRUMB_HELPERS.flatMap((name) => [
@@ -2592,12 +2360,12 @@ describe('verifyDist: the 0.14 helper probes', () => {
   }, 90_000);
 
   it('reports a breadcrumb helper whose bundle holds the Overflow the Breadcrumb is built on', async () => {
-    const { esm } = breadcrumbModule(
+    const code = breadcrumbModule(
       (name) =>
         name === 'truncateBreadcrumbLongTooltip' ? 'return Overflow.displayName;' : 'return null;',
-      { esm: "import { Overflow } from '../components/layout/Overflow.mjs';\n", cjs: '' },
+      "import { Overflow } from '../components/layout/Overflow.mjs';\n",
     );
-    const { dist } = fixture({ 'dist/lib/breadcrumb.mjs': esm });
+    const { dist } = fixture({ 'dist/lib/breadcrumb.mjs': code });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual([
       'components/layout/Overflow.mjs is in the bundle of an import of only truncateBreadcrumbLongTooltip',
@@ -2607,12 +2375,12 @@ describe('verifyDist: the 0.14 helper probes', () => {
 
   it('reports every helper of a module that imports a React module', async () => {
     // One helper uses React; the bundler keeps the external import for the others too.
-    const { esm } = breadcrumbModule(
+    const code = breadcrumbModule(
       (name) =>
         name === 'partitionBreadcrumbItems' ? 'return React.useState(0);' : 'return null;',
-      { esm: "import * as React from 'react';\n", cjs: '' },
+      "import * as React from 'react';\n",
     );
-    const { dist } = fixture({ 'dist/lib/breadcrumb.mjs': esm });
+    const { dist } = fixture({ 'dist/lib/breadcrumb.mjs': code });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual(
       BREADCRUMB_HELPERS.map((name) => `the bundle of an import of only ${name} imports react`),
@@ -2636,9 +2404,9 @@ describe('checkServerImport: the 0.8 server-safe modules (INTEGRATION)', () => {
 
   it('reports a missing color or toaster module', async () => {
     const errors = await checkServerImport(
-      fixture({ 'dist/lib/color.mjs': null, 'dist/lib/toaster.cjs': null }).dist,
+      fixture({ 'dist/lib/color.mjs': null, 'dist/lib/toaster.mjs': null }).dist,
     );
-    expect(errors).toEqual(['lib/color.mjs is missing', 'lib/toaster.cjs is missing']);
+    expect(errors).toEqual(['lib/color.mjs is missing', 'lib/toaster.mjs is missing']);
   }, 30_000);
 
   it('reports a handle that calls client code on the server', async () => {
@@ -2776,8 +2544,8 @@ describe('the 0.10 probes (INTEGRATION)', () => {
   }, 90_000);
 
   it('reports a missing lib/date module', async () => {
-    const errors = await checkServerImport(fixture({ 'dist/lib/date.cjs': null }).dist);
-    expect(errors).toEqual(['lib/date.cjs is missing']);
+    const errors = await checkServerImport(fixture({ 'dist/lib/date.mjs': null }).dist);
+    expect(errors).toEqual(['lib/date.mjs is missing']);
   }, 30_000);
 
   it('reports a date module whose addDays does not return a Date', async () => {
@@ -2812,14 +2580,9 @@ describe('the 0.10 probes (INTEGRATION)', () => {
       const dts = DTS.split('\n')
         .filter((line) => !new RegExp(`declare (const|function) ${name}\\b`).test(line))
         .join('\n');
-      expect(
-        checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
-      ).toEqual([
+      expect(checkDeclarations(fixture({ 'dist/index.d.ts': dts }).dist)).toEqual([
         expect.stringMatching(
           new RegExp(`^index\\.d\\.ts does not declare and export ${name} \\(`),
-        ),
-        expect.stringMatching(
-          new RegExp(`^index\\.d\\.cts does not declare and export ${name} \\(`),
         ),
       ]);
     },
@@ -2917,7 +2680,7 @@ describe('the 0.11 probes (INTEGRATION)', () => {
       'dist/components/input/TagPicker.mjs': phase6Module('components/input/TagPicker', {
         name: 'TagPicker',
         members: [['List'], ['Option']],
-      }).esm,
+      }),
     }),
     Dialog: (files) => ({
       'dist/components/overlays/Dialog.mjs': files['dist/components/overlays/Dialog.mjs']
@@ -2928,13 +2691,13 @@ describe('the 0.11 probes (INTEGRATION)', () => {
       'dist/components/overlays/Drawer.root.mjs': phase6Module('components/overlays/Drawer.root', {
         ...PHASE6_MODULES['components/overlays/Drawer.root'],
         uses: [],
-      }).esm,
+      }),
     }),
     NavDrawer: () => ({
       'dist/components/navigation/NavDrawer.mjs': phase6Module('components/navigation/NavDrawer', {
         ...PHASE6_MODULES['components/navigation/NavDrawer'],
         uses: [],
-      }).esm,
+      }),
     }),
   };
 
@@ -3051,7 +2814,6 @@ describe('module-only names (0.11 INTEGRATION)', () => {
         'useMotionClasses',
         'useMotionPreference',
         'usePresenceGroup',
-        'usesLegacyMotion',
         'collapseMotion',
         'dialogMotion',
         'popupMotion',
@@ -3080,7 +2842,6 @@ describe('module-only names (0.11 INTEGRATION)', () => {
     const files = goodFiles();
     const { dist } = fixture({
       'dist/index.mjs': `${files['dist/index.mjs']}export { useToolbarNavigation } from './components/button/Toolbar.navigation.mjs';\n`,
-      'dist/index.cjs': `${files['dist/index.cjs']}exports.useToolbarNavigation = require('./components/button/Toolbar.navigation.cjs').useToolbarNavigation;\n`,
     });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual([
@@ -3126,11 +2887,8 @@ describe('names declared as a type and a value (0.11 INTEGRATION)', () => {
       '',
     );
     expect(dts).not.toBe(DTS);
-    expect(
-      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
-    ).toEqual([
+    expect(checkDeclarations(fixture({ 'dist/index.d.ts': dts }).dist)).toEqual([
       'index.d.ts does not export TagPickerOption both as a type and as a value (the interface and the component of one name: export the name once, without `type`, from the barrel)',
-      'index.d.cts does not export TagPickerOption both as a type and as a value (the interface and the component of one name: export the name once, without `type`, from the barrel)',
     ]);
   });
 });
@@ -3139,11 +2897,8 @@ describe('the class-name registry (P3-00)', () => {
   it('requires the class-name constants in the roll-up (buttonClassNames)', () => {
     expect(REQUIRED_DECLARATIONS).toContain('buttonClassNames');
     const dts = DTS.replace(/^export declare const buttonClassNames.*\n/m, '');
-    expect(
-      checkDeclarations(fixture({ 'dist/index.d.ts': dts, 'dist/index.d.cts': dts }).dist),
-    ).toEqual([
+    expect(checkDeclarations(fixture({ 'dist/index.d.ts': dts }).dist)).toEqual([
       expect.stringMatching(/^index\.d\.ts does not declare and export buttonClassNames \(/),
-      expect.stringMatching(/^index\.d\.cts does not declare and export buttonClassNames \(/),
     ]);
   });
 
@@ -3176,7 +2931,7 @@ describe('the class-name registry (P3-00)', () => {
     ]);
   }, 30_000);
 
-  it('passes when the entry exports every class-name constant with the same value, in both formats', async () => {
+  it('passes when the entry exports every class-name constant with the same value', async () => {
     expect(await checkClassNameExports(fixture().dist)).toEqual([]);
   });
 
@@ -3196,19 +2951,19 @@ describe('the class-name registry (P3-00)', () => {
   it('reports a constant the entry exports with another value', async () => {
     const files = goodFiles();
     const { dist } = fixture({
-      'dist/index.cjs': files['dist/index.cjs'].replace(
-        'exports.buttonClassNames = classNames.buttonClassNames;',
-        "exports.buttonClassNames = { root: 'wave-button' };",
+      'dist/index.mjs': files['dist/index.mjs'].replace(
+        'export { buttonClassNames, dialogContentClassNames }',
+        "export const buttonClassNames = { root: 'wave-button' };\nexport { dialogContentClassNames }",
       ),
     });
     expect(await checkClassNameExports(dist)).toEqual([
-      'index.cjs exports buttonClassNames with another value than lib/classNames.cjs',
+      'index.mjs exports buttonClassNames with another value than lib/classNames.mjs',
     ]);
   });
 
   it('reports a missing registry module', async () => {
-    expect(await checkClassNameExports(fixture({ 'dist/lib/classNames.cjs': null }).dist)).toEqual([
-      'lib/classNames.cjs is missing (the class-name registry, src/lib/classNames.ts)',
+    expect(await checkClassNameExports(fixture({ 'dist/lib/classNames.mjs': null }).dist)).toEqual([
+      'lib/classNames.mjs is missing (the class-name registry, src/lib/classNames.ts)',
     ]);
   });
 });
@@ -3301,23 +3056,18 @@ const MOTION_LITERALS = [
 ];
 
 /**
- * The resolver of a fixture `lib/motion` (without its export), whose own literal holds the
- * presence-variant text, as the real module's does.
+ * The resolver of a fixture `lib/motion` (without its export), as the real module's: the slot, then
+ * the provider's preference, then the recipe (1.0: no className rule, so no literal of its own).
  */
 const MOTION_RESOLVER =
-  "const PRESENCE_VARIANT = '[presence=';\n" +
-  'function resolveMotion(slot, recipe, preference, legacyClassName) {\n' +
+  'function resolveMotion(slot, recipe, preference) {\n' +
   "  if (slot === null) return '';\n" +
   "  if (slot !== undefined) return typeof slot === 'string' ? slot : slot.className;\n" +
   "  if (preference === 'none') return '';\n" +
-  "  if (legacyClassName !== undefined && legacyClassName.includes(PRESENCE_VARIANT)) return '';\n" +
   '  return recipe;\n' +
   '}\n';
 
-/**
- * A fixture `lib/motion.mjs`: the recipes, the durations, `extra` exports and the resolver, whose
- * own literal holds the presence-variant text, as the real module's does.
- */
+/** A fixture `lib/motion.mjs`: the recipes, the durations, `extra` exports and the resolver. */
 function motionModule(extra = '') {
   return (
     MOTION_RESOLVER +
@@ -3345,30 +3095,19 @@ function fixtureMotionRecipes() {
 }
 
 /**
- * The good files' motion modules in both formats: `lib/motion` (the recipes of
- * {@link fixtureMotionRecipes} and the resolver) and `hooks/useMotion` on it.
+ * The good files' motion modules: `lib/motion` (the recipes of {@link fixtureMotionRecipes} and
+ * the resolver) and `hooks/useMotion` on it.
  */
 function fixtureMotionModules() {
   const recipes = Object.entries(fixtureMotionRecipes());
   return {
-    module: {
-      esm:
-        MOTION_RESOLVER +
-        recipes.map(([name, value]) => `export const ${name} = '${value}';\n`).join('') +
-        'export { resolveMotion };\n',
-      cjs:
-        MOTION_RESOLVER +
-        recipes.map(([name, value]) => `exports.${name} = '${value}';\n`).join('') +
-        'exports.resolveMotion = resolveMotion;\n',
-    },
-    hook: {
-      esm:
-        `${DIRECTIVE}import { resolveMotion } from '../lib/motion.mjs';\n` +
-        "export function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); }\n",
-      cjs:
-        `${DIRECTIVE}const { resolveMotion } = require('../lib/motion.cjs');\n` +
-        "exports.useMotionClasses = function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); };\n",
-    },
+    module:
+      MOTION_RESOLVER +
+      recipes.map(([name, value]) => `export const ${name} = '${value}';\n`).join('') +
+      'export { resolveMotion };\n',
+    hook:
+      `${DIRECTIVE}import { resolveMotion } from '../lib/motion.mjs';\n` +
+      "export function useMotionClasses(slot, recipe) { return resolveMotion(slot, recipe, 'default'); }\n",
   };
 }
 
@@ -3376,24 +3115,15 @@ function fixtureMotionModules() {
 const DIALOG_MOTION_CALLS =
   'useMotionClasses(props.motion, dialogMotion), useMotionClasses(props.backdropMotion, dialogBackdropMotion), ';
 
-/** `dialog` (the fixture's component modules) resolving its two recipes in its render. */
+/** `dialog` (the fixture's component module) resolving its two recipes in its render. */
 function withDialogMotion(dialog) {
-  return {
-    esm: dialog.esm
-      .replace(
-        DIRECTIVE,
-        `${DIRECTIVE}import { dialogBackdropMotion, dialogMotion } from '../../lib/motion.mjs';\n` +
-          "import { useMotionClasses } from '../../hooks/useMotion.mjs';\n",
-      )
-      .replace('return cn(', `return cn(${DIALOG_MOTION_CALLS}`),
-    cjs: dialog.cjs
-      .replace(
-        DIRECTIVE,
-        `${DIRECTIVE}const { dialogBackdropMotion, dialogMotion } = require('../../lib/motion.cjs');\n` +
-          "const { useMotionClasses } = require('../../hooks/useMotion.cjs');\n",
-      )
-      .replace('return cn(', `return cn(${DIALOG_MOTION_CALLS}`),
-  };
+  return dialog
+    .replace(
+      DIRECTIVE,
+      `${DIRECTIVE}import { dialogBackdropMotion, dialogMotion } from '../../lib/motion.mjs';\n` +
+        "import { useMotionClasses } from '../../hooks/useMotion.mjs';\n",
+    )
+    .replace('return cn(', `return cn(${DIALOG_MOTION_CALLS}`);
 }
 
 /**
@@ -3660,7 +3390,7 @@ describe('the 0.15 probes (INTEGRATION)', () => {
         imports: [['lib/cn', ['cn']]],
         body: "function Accordion(props) { return cn('accordion', props.className); }\n",
         exports: ['Accordion'],
-      }).esm,
+      }),
     }),
     MessageBarGroup: () => ({
       'dist/components/feedback/MessageBarGroup.mjs': phase10Module(
@@ -3670,7 +3400,7 @@ describe('the 0.15 probes (INTEGRATION)', () => {
           body: "function MessageBarGroup(props) { return cn('message-bar-group', props.className); }\n",
           exports: ['MessageBarGroup'],
         },
-      ).esm,
+      ),
     }),
   };
 
@@ -3790,10 +3520,9 @@ describe('the 0.15 probes (INTEGRATION)', () => {
 
 describe('the 0.16 probes (INTEGRATION)', () => {
   /** The fixture module of `path` (see PHASE11_MODULES) with `change` applied to its spec. */
-  const changed = (path, change) => {
-    const { esm, cjs } = phase11Module(path, change(PHASE11_MODULES[path]));
-    return { [`dist/${path}.mjs`]: esm, [`dist/${path}.cjs`]: cjs };
-  };
+  const changed = (path, change) => ({
+    [`dist/${path}.mjs`]: phase11Module(path, change(PHASE11_MODULES[path])),
+  });
   /** The fixture module of `path` that also imports `name` from `target` and calls it. */
   const calling = (path, target, name) =>
     changed(path, (spec) => ({
@@ -3847,29 +3576,8 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     expect(INCLUSION_PROBES_0_16.map(({ keep }) => keep)).toEqual(['DataGrid', 'FlatTree', 'Tree']);
     expect(INCLUSION_PROBES_0_16[2].modules).toEqual(['lib/treeCascade.mjs']);
 
-    // Measured in 0.16.0 (3,532 and 1,695 bytes), plus 25 %; gzip at the ceiling of 2 KiB.
-    expect(VIRTUAL_BUDGET).toEqual({
-      names: ['useVirtualWindow'],
-      maxMinifiedBytes: 4415,
-      maxGzipBytes: 2048,
-      allowedExternals: ['react'],
-    });
-    // Measured in 0.16.0 (69,592 and 23,545 bytes), plus 25 % (86,990 and 29,431), until 0.18
-    // re-set it from the size measured at the end of Phase 13 (73,310 and 24,921) plus 512 and 192
-    // (spec R23; RECORDED_IMPORTS_0_18 holds it).
-    expect(DATA_GRID_BUDGET).toEqual({
-      names: ['DataGrid'],
-      maxMinifiedBytes: 73822,
-      maxGzipBytes: 25113,
-      allowedExternals: ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'],
-    });
-    // Printed against 0.15.0 for drift; the budgets live in the newest record.
-    expect(RECORDED_IMPORTS).toEqual([
-      { names: ['DataGrid'], baseline: { version: '0.15.0', minified: 48403, gzip: 16520 } },
-      { names: ['Tree'], baseline: { version: '0.15.0', minified: 47248, gzip: 16201 } },
-      { names: ['Button'], baseline: { version: '0.15.0', minified: 11195, gzip: 3855 } },
-      { names: ['MessageBar'], baseline: { version: '0.15.0', minified: 26831, gzip: 9312 } },
-    ]);
+    // The window's and the DataGrid-only budgets, and the drift records against 0.15.0, are
+    // folded into RECORDED_IMPORTS_1_0 since 1.0 (pinned with it, spec R7 of Phase 14).
   });
 
   it('the hook probes pass on a correct dist and report a component or the JSX runtime in the bundle', async () => {
@@ -4026,7 +3734,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     expect(measured.externals).toEqual(['react']);
     expect(measured.minified).toBeGreaterThan(0);
     expect(measured.gzip).toBeGreaterThan(0);
-    const budget = await probeSizeBudget(dist, VIRTUAL_BUDGET);
+    const budget = await probeSizeBudget(dist, budgetOf('useVirtualWindow'));
     expect(budget).toEqual({ ...measured, errors: [] });
   });
 
@@ -4052,11 +3760,13 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       body: `const TABLE = ${JSON.stringify(noise(8000))};\n${spec.body.replace('[{', '[TABLE, {')}`,
     }));
     const result = await verifyDist(fixture(big).dist, noPending);
-    expect(result.virtualBudget.minified).toBeGreaterThan(VIRTUAL_BUDGET.maxMinifiedBytes);
-    expect(result.virtualBudget.gzip).toBeGreaterThan(VIRTUAL_BUDGET.maxGzipBytes);
+    const windowRecord = recordOf(result.recorded, 'useVirtualWindow');
+    const { maxMinifiedBytes, maxGzipBytes } = budgetOf('useVirtualWindow');
+    expect(windowRecord.minified).toBeGreaterThan(maxMinifiedBytes);
+    expect(windowRecord.gzip).toBeGreaterThan(maxGzipBytes);
     expect(result.errors).toEqual([
-      `useVirtualWindow: ${result.virtualBudget.minified} bytes minified, over the budget of 4415`,
-      `useVirtualWindow: ${result.virtualBudget.gzip} bytes gzip, over the budget of 2048`,
+      `useVirtualWindow: ${windowRecord.minified} bytes minified, over the budget of ${maxMinifiedBytes}`,
+      `useVirtualWindow: ${windowRecord.gzip} bytes gzip, over the budget of ${maxGzipBytes}`,
     ]);
 
     const withClsx = changed('lib/virtual', (spec) => ({
@@ -4070,9 +3780,10 @@ describe('the 0.16 probes (INTEGRATION)', () => {
   }, 180_000);
 
   it('verifyDist gates the DataGrid-only import: passes on a correct dist, reports a grid over its budget and an import outside the dependencies', async () => {
-    const good = await probeSizeBudget(fixture().dist, DATA_GRID_BUDGET);
+    const dataGridBudget = budgetOf('DataGrid');
+    const good = await probeSizeBudget(fixture().dist, dataGridBudget);
     expect(good.errors).toEqual([]);
-    expect(good.minified).toBeLessThanOrEqual(DATA_GRID_BUDGET.maxMinifiedBytes);
+    expect(good.minified).toBeLessThanOrEqual(dataGridBudget.maxMinifiedBytes);
 
     // 120,000 characters of random base64, which gzip cannot shrink below 6 bits each (`noise`
     // repeats too soon at this length): over both budgets.
@@ -4082,13 +3793,13 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       body: `const TABLE = ${JSON.stringify(table)};\n${spec.body.replace("createElement('table', null", "createElement('table', { title: TABLE }")}`,
     }));
     const result = await verifyDist(fixture(big).dist, noPending);
-    const [dataGrid] = result.recorded;
-    expect(dataGrid.minified).toBeGreaterThan(DATA_GRID_BUDGET.maxMinifiedBytes);
-    expect(dataGrid.gzip).toBeGreaterThan(DATA_GRID_BUDGET.maxGzipBytes);
-    // Reported once, by the 0.18 record that holds the budget.
+    const dataGrid = recordOf(result.recorded, 'DataGrid');
+    expect(dataGrid.minified).toBeGreaterThan(dataGridBudget.maxMinifiedBytes);
+    expect(dataGrid.gzip).toBeGreaterThan(dataGridBudget.maxGzipBytes);
+    // Reported once, by the 1.0 record that holds the budget.
     expect(result.errors).toEqual([
-      `DataGrid: ${dataGrid.minified} bytes minified, over the budget of 73822`,
-      `DataGrid: ${dataGrid.gzip} bytes gzip, over the budget of 25113`,
+      `DataGrid: ${dataGrid.minified} bytes minified, over the budget of ${dataGridBudget.maxMinifiedBytes}`,
+      `DataGrid: ${dataGrid.gzip} bytes gzip, over the budget of ${dataGridBudget.maxGzipBytes}`,
     ]);
 
     const withLibrary = changed('components/table/DataGrid.window', (spec) => ({
@@ -4099,7 +3810,7 @@ describe('the 0.16 probes (INTEGRATION)', () => {
         'window: rows(options.virtualWindow)',
       ),
     }));
-    expect(await probeSizeBudget(fixture(withLibrary).dist, DATA_GRID_BUDGET)).toEqual({
+    expect(await probeSizeBudget(fixture(withLibrary).dist, dataGridBudget)).toEqual({
       minified: expect.any(Number),
       gzip: expect.any(Number),
       externals: ['react', 'virtual-rows'],
@@ -4109,10 +3820,10 @@ describe('the 0.16 probes (INTEGRATION)', () => {
     });
   }, 90_000);
 
-  it('verifyDist measures the recorded imports, and main prints them with the window and DataGrid budgets', async () => {
+  it('verifyDist measures each recorded import once, and main prints each with its budget against 0.18.1', async () => {
     const { dist } = fixture();
     const measured = [];
-    const { errors, virtualBudget, recorded } = await verifyDist(dist, {
+    const { errors, recorded } = await verifyDist(dist, {
       ...noPending,
       measure: (root, names) => {
         measured.push(names.join(' + '));
@@ -4120,48 +3831,30 @@ describe('the 0.16 probes (INTEGRATION)', () => {
       },
     });
     expect(errors).toEqual([]);
-    expect(virtualBudget).toEqual({ minified: expect.any(Number), gzip: expect.any(Number) });
-    // 0.17 appends its own records (RECORDED_IMPORTS_0_17, against 0.16.0), and 0.18 its own
-    // (RECORDED_IMPORTS_0_18, against 0.17.1).
     expect(recorded).toEqual(
-      [...RECORDED_IMPORTS, ...RECORDED_IMPORTS_0_17, ...RECORDED_IMPORTS_0_18].map((entry) => ({
+      RECORDED_IMPORTS_1_0.map((entry) => ({
         ...entry,
         minified: expect.any(Number),
         gzip: expect.any(Number),
       })),
     );
-    // An import recorded in several lists is measured once: one measurement per label.
-    const labels = recorded.map(({ names }) => names.join(' + '));
-    expect([...measured].sort()).toEqual([...new Set(labels)].sort());
-    for (const label of ['DataGrid', 'Tree', 'Button', 'MessageBar']) {
-      expect(labels.filter((each) => each === label).length, label).toBeGreaterThan(1);
-      expect(
-        measured.filter((each) => each === label),
-        label,
-      ).toEqual([label]);
-    }
+    // One list since 1.0: one measurement per record.
+    expect(measured).toEqual(RECORDED_IMPORTS_1_0.map(({ names }) => names.join(' + ')));
     const lines = [];
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     expect(await main(['--dist', dist, '--no-pending'], io)).toBe(0);
     const output = lines.join('\n');
-    expect(output).toMatch(
-      /verify-dist: window \(useVirtualWindow\): \d+ B minified \(budget 4415\), \d+ B gzip \(budget 2048\)/,
-    );
-    expect(output).toMatch(
-      /verify-dist: DataGrid-only import: \d+ B minified \(budget 73822\), \d+ B gzip \(budget 25113\) \(0\.17\.1: 70097 B, 23719 B; [+-]\d+\.\d{2} %, [+-]\d+\.\d{2} %\)/,
-    );
-    for (const [name, minified, gzip] of [
-      ['DataGrid', 48403, 16520],
-      ['Tree', 47248, 16201],
-      ['Button', 11195, 3855],
-      ['MessageBar', 26831, 9312],
-    ]) {
+    for (const { names, baseline, budget } of RECORDED_IMPORTS_1_0) {
       expect(output).toMatch(
         new RegExp(
-          `verify-dist: ${name}-only import: \\d+ B minified, \\d+ B gzip \\(0\\.15\\.0: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
+          `verify-dist: ${names.join(' \\+ ')}-only import: \\d+ B minified \\(budget ${budget.maxMinifiedBytes}\\), ` +
+            `\\d+ B gzip \\(budget ${budget.maxGzipBytes}\\) \\(0\\.18\\.1: ${baseline.minified} B, ` +
+            `${baseline.gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
         ),
       );
     }
+    // No comparison with an older release and no separate presence or window line any more.
+    expect(output).not.toMatch(/0\.15\.0|0\.16\.0|0\.17\.1|presence core \(|window \(/);
   }, 180_000);
 
   it('the real exports carry the 0.16 flat names', async () => {
@@ -4234,13 +3927,12 @@ describe('the 0.16 probes (INTEGRATION)', () => {
 
 describe('the 0.17 probes (INTEGRATION)', () => {
   /** The fixture module of `path` (see PHASE12_MODULES, else PHASE11_MODULES) with `change` applied. */
-  const changed = (path, change) => {
-    const { esm, cjs } = phase12Module(
+  const changed = (path, change) => ({
+    [`dist/${path}.mjs`]: phase12Module(
       path,
       change(PHASE12_MODULES[path] ?? PHASE11_MODULES[path]),
-    );
-    return { [`dist/${path}.mjs`]: esm, [`dist/${path}.cjs`]: cjs };
-  };
+    ),
+  });
   /** The fixture module of `path` that also imports `name` from `target` and calls it. */
   const calling = (path, target, name) =>
     changed(path, (spec) => ({
@@ -4300,56 +3992,9 @@ describe('the 0.17 probes (INTEGRATION)', () => {
     ]);
     expect(DEV_ONLY_LIBRARIES).toEqual(['recharts', 'chart.js', 'kurkle']);
 
-    // Spec §10: 3 KiB gzip; minified, the size first measured for 0.17.0 (3,596 and 3,071 bytes)
-    // plus 25 %.
-    expect(BRAND_TOKENS_BUDGET).toEqual({
-      names: ['createBrandTokens'],
-      maxMinifiedBytes: 4495,
-      maxGzipBytes: 3072,
-      allowedExternals: [],
-    });
-    expect(WAVE_TOKENS_BUDGET).toEqual({
-      names: ['waveTokens'],
-      maxMinifiedBytes: 3839,
-      maxGzipBytes: 3072,
-      allowedExternals: [],
-    });
-    // The published 0.16.0 package, measured with this release's tools (the printed comparison).
-    // The five component imports are printed for drift only: 0.18 budgets them against 0.17.1
-    // (RECORDED_IMPORTS_0_18).
-    const records = [
-      [['Button'], { minified: 11195, gzip: 3855 }],
-      [['MessageBar'], { minified: 26831, gzip: 9312 }],
-      [['Tree'], { minified: 47248, gzip: 16196 }],
-      [['Dialog'], { minified: 70721, gzip: 23723 }],
-      [['WaveProvider', 'Dialog'], { minified: 71884, gzip: 24127 }],
-    ];
-    expect(RECORDED_IMPORTS_0_17).toEqual([
-      { names: ['createBrandTokens'], baseline: null, budget: BRAND_TOKENS_BUDGET },
-      { names: ['waveTokens'], baseline: null, budget: WAVE_TOKENS_BUDGET },
-      ...records.map(([names, baseline]) => ({
-        names,
-        baseline: { version: '0.16.0', ...baseline },
-      })),
-    ]);
-    // The 0.17 allowances (Dialog +0.4 KiB, WaveProvider with Dialog +0.7 KiB), rounded down: a
-    // budget never above the spec's figure.
-    expect(Math.floor(0.4 * 1024)).toBe(409);
-    expect(Math.floor(0.7 * 1024)).toBe(716);
-    // The 0.16.0 figures of Button, MessageBar and Tree are those of the 0.16.0 CHANGELOG.
-    const changelog = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
-    const section = changelog.slice(changelog.indexOf('## [0.16.0]'));
-    for (const [name, minified, gzip] of [
-      ['Tree', '47,248', '16,196'],
-      ['Button', '11,195', '3,855'],
-      ['MessageBar', '26,831', '9,312'],
-    ]) {
-      expect(section, name).toMatch(
-        new RegExp(
-          `An import of only \`${name}\` \\| [^|]+ \\| ${minified} \\(${gzip} gzip\\) \\|`,
-        ),
-      );
-    }
+    // The budgets of createBrandTokens and waveTokens (through 0.18 3 KiB gzip; minified, the
+    // size first measured for 0.17.0 plus 25 %) and the drift records against 0.16.0 are folded
+    // into RECORDED_IMPORTS_1_0 since 1.0 (pinned with it, spec R7 of Phase 14).
   });
 
   it('the hook probes pass on a correct dist built for production, whatever NODE_ENV this process has', async () => {
@@ -4574,15 +4219,15 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       'dist/components/data-display/Chart.mjs':
         `${DIRECTIVE}import { BarChart } from 'recharts';\n` +
         '/** Works with Recharts and Chart.js, as the guide shows. */\nexport { BarChart };\n',
-      'dist/lib/chartColors.cjs':
-        '//#region node_modules/@kurkle/color/dist/color.esm.js\nexports.a = 1;\n',
+      'dist/lib/chartColors.mjs':
+        '//#region node_modules/@kurkle/color/dist/color.esm.js\nexport const a = 1;\n',
       'dist/styles.css': '.wave-chart { content: "chart.js"; }\n',
       'dist/index.d.ts': `${DTS}import type { ChartData } from 'chart.js';\n`,
     });
     expect(checkDevOnlyLibraries(dist)).toEqual([
       'components/data-display/Chart.mjs holds "recharts" (a library of the stories only, R14: it must not reach dist)',
       'index.d.ts holds "chart.js" (a library of the stories only, R14: it must not reach dist)',
-      'lib/chartColors.cjs holds "kurkle" (a library of the stories only, R14: it must not reach dist)',
+      'lib/chartColors.mjs holds "kurkle" (a library of the stories only, R14: it must not reach dist)',
       'styles.css holds "chart.js" (a library of the stories only, R14: it must not reach dist)',
     ]);
   });
@@ -4590,9 +4235,9 @@ describe('the 0.17 probes (INTEGRATION)', () => {
   it('checkServerImport reads the token helpers from lib and from the entry on the server', async () => {
     expect(await checkServerImport(fixture().dist)).toEqual([]);
     const missing = await checkServerImport(
-      fixture({ 'dist/lib/brand.cjs': null, 'dist/lib/waveTokens.mjs': null }).dist,
+      fixture({ 'dist/lib/brand.mjs': null, 'dist/lib/waveTokens.mjs': null }).dist,
     );
-    expect(missing).toEqual(['lib/brand.cjs is missing', 'lib/waveTokens.mjs is missing']);
+    expect(missing).toEqual(['lib/brand.mjs is missing', 'lib/waveTokens.mjs is missing']);
   }, 60_000);
 
   it('checkServerImport reports a token style, a token object or a brand ramp that is wrong on the server', async () => {
@@ -4607,11 +4252,8 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       })),
     });
     expect(await checkServerImport(dist)).toEqual([
-      'lib/brand.cjs under node --conditions=react-server: createBrandTokens(\'#0f6cbd\') returned a brand80 of "#7f7f7f", not "#0f6cbd"',
       'lib/brand.mjs under node --conditions=react-server: createBrandTokens(\'#0f6cbd\') returned a brand80 of "#7f7f7f", not "#0f6cbd"',
-      'lib/tokens.cjs under node --conditions=react-server: getTokenStyle({ brand80: \'#c43e00\', zOverlay: 2000 }) returned {"--wave-brand80":"#c43e00","--wave-z-overlay":"2000"}',
       'lib/tokens.mjs under node --conditions=react-server: getTokenStyle({ brand80: \'#c43e00\', zOverlay: 2000 }) returned {"--wave-brand80":"#c43e00","--wave-z-overlay":"2000"}',
-      'lib/waveTokens.cjs under node --conditions=react-server: waveTokens[chartPalette[0]] is "var(--wave-palette-blue)" and waveTokens.brand80 "var(--wave-brand80)", not "var(--wave-palette-blue)" and "var(--wave-brand-80)"',
       'lib/waveTokens.mjs under node --conditions=react-server: waveTokens[chartPalette[0]] is "var(--wave-palette-blue)" and waveTokens.brand80 "var(--wave-brand80)", not "var(--wave-palette-blue)" and "var(--wave-brand-80)"',
     ]);
   }, 60_000);
@@ -4674,7 +4316,7 @@ describe('the 0.17 probes (INTEGRATION)', () => {
     ]);
   }, 180_000);
 
-  it('verifyDist gates the 0.17 budgets: passes on a correct dist, reports an import over its budget', async () => {
+  it('verifyDist gates the createBrandTokens budget: passes on a correct dist, reports an import over its budget', async () => {
     const good = await verifyDist(fixture().dist, noPending);
     expect(good.errors).toEqual([]);
     // 120,000 characters of random base64 (see the DataGrid budget): over every budget.
@@ -4686,45 +4328,13 @@ describe('the 0.17 probes (INTEGRATION)', () => {
       })),
     );
     const result = await verifyDist(dist, noPending);
-    // The 0.17 records follow those of RECORDED_IMPORTS (against 0.15.0, without these budgets).
-    const records = result.recorded.slice(RECORDED_IMPORTS.length);
-    const brand = records.find(({ names }) => names.join() === 'createBrandTokens');
-    const button = records.find(({ names }) => names.join() === 'Button');
-    expect(brand.baseline).toBeNull();
-    // The component imports of 0.17 have no budget there since 0.18 (RECORDED_IMPORTS_0_18).
-    expect(button.baseline.version).toBe('0.16.0');
-    expect(button.budget).toBeUndefined();
+    const brand = recordOf(result.recorded, 'createBrandTokens');
+    const { maxMinifiedBytes, maxGzipBytes } = budgetOf('createBrandTokens');
+    expect(brand.baseline).toEqual({ version: '0.18.1', minified: 3630, gzip: 1956 });
     expect(result.errors).toEqual([
-      `createBrandTokens: ${brand.minified} bytes minified, over the budget of 4495`,
-      `createBrandTokens: ${brand.gzip} bytes gzip, over the budget of 3072`,
+      `createBrandTokens: ${brand.minified} bytes minified, over the budget of ${maxMinifiedBytes}`,
+      `createBrandTokens: ${brand.gzip} bytes gzip, over the budget of ${maxGzipBytes}`,
     ]);
-  }, 180_000);
-
-  it('main prints the 0.17 imports against 0.16.0, and the new ones with their budgets', async () => {
-    const lines = [];
-    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
-    expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
-    const output = lines.join('\n');
-    expect(output).toMatch(
-      /verify-dist: createBrandTokens-only import: \d+ B minified \(budget 4495\), \d+ B gzip \(budget 3072\)\n/,
-    );
-    expect(output).toMatch(
-      /verify-dist: waveTokens-only import: \d+ B minified \(budget 3839\), \d+ B gzip \(budget 3072\)\n/,
-    );
-    // Without a budget since 0.18, which prints them with theirs against 0.17.1.
-    for (const [label, minified, gzip] of [
-      ['Button', 11195, 3855],
-      ['MessageBar', 26831, 9312],
-      ['Tree', 47248, 16196],
-      ['Dialog', 70721, 23723],
-      ['WaveProvider \\+ Dialog', 71884, 24127],
-    ]) {
-      expect(output).toMatch(
-        new RegExp(
-          `verify-dist: ${label}-only import: \\d+ B minified, \\d+ B gzip \\(0\\.16\\.0: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
-        ),
-      );
-    }
   }, 180_000);
 
   it('the real exports carry the 0.17 names', async () => {
@@ -4796,8 +4406,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
    */
   const changed = (path, change) => {
     const spec = PHASE13_MODULES[path] ?? PHASE12_MODULES[path] ?? PHASE11_MODULES[path];
-    const { esm, cjs } = phase13Module(path, change(spec));
-    return { [`dist/${path}.mjs`]: esm, [`dist/${path}.cjs`]: cjs };
+    return { [`dist/${path}.mjs`]: phase13Module(path, change(spec)) };
   };
   /** The fixture module of `path` whose function `fn` also imports `name` from `target` and calls it. */
   const callingIn = (path, fn, target, name) =>
@@ -4837,7 +4446,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     const files = goodFiles();
     expect(CUSTOMIZATION_MODULES.filter((path) => !(`dist/${path}` in files))).toEqual([]);
 
-    expect(TEST_ONLY_MODULES).toEqual(['lib/deprecations', 'lib/slotParts']);
+    expect(TEST_ONLY_MODULES).toEqual(['lib/slotParts']);
     const sources = readdirSync(join(repoRoot, 'src'), { recursive: true })
       .map((path) => String(path).replaceAll('\\', '/'))
       .filter((path) => /\.tsx?$/.test(path) && !/(^|\/)__tests__\//.test(path))
@@ -4933,71 +4542,97 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       },
     ]);
 
-    // Spec R23: each budget is the size measured at the end of Phase 13 plus 512 bytes minified
-    // and 192 gzip; each import is printed against its size in the published 0.17.1 package.
-    expect(BUDGET_MARGIN_0_18).toEqual({ minified: 512, gzip: 192 });
-    expect(BASELINES_0_17_1).toEqual({
-      Button: { minified: 11222, gzip: 3866 },
-      MessageBar: { minified: 26858, gzip: 9324 },
-      Tree: { minified: 47327, gzip: 16232 },
-      Dialog: { minified: 70850, gzip: 23786 },
-      'WaveProvider + Dialog': { minified: 73403, gzip: 24778 },
-      DataGrid: { minified: 70097, gzip: 23719 },
+    // The 0.18 records (spec R23) are folded into RECORDED_IMPORTS_1_0 (spec R7 of Phase 14).
+  });
+
+  it('pins RECORDED_IMPORTS_1_0: every budget is the size measured at the flip plus the margin (spec R7 of Phase 14)', () => {
+    // Each budget is the size measured at the flip plus 512 bytes minified and 192 gzip; each
+    // import is printed against its size in the published 0.18.1 package.
+    expect(BUDGET_MARGIN_1_0).toEqual({ minified: 512, gzip: 192 });
+    expect(BASELINES_0_18_1).toEqual({
+      Button: { minified: 11079, gzip: 3865 },
+      MessageBar: { minified: 29221, gzip: 10201 },
+      Tree: { minified: 50383, gzip: 17271 },
+      Dialog: { minified: 72599, gzip: 24466 },
+      'WaveProvider + Dialog': { minified: 75147, gzip: 25458 },
+      DataGrid: { minified: 73306, gzip: 24926 },
+      'usePresence + Presence': { minified: 5453, gzip: 2341 },
+      useVirtualWindow: { minified: 3868, gzip: 1817 },
+      createBrandTokens: { minified: 3630, gzip: 1956 },
+      waveTokens: { minified: 3071, gzip: 969 },
     });
     const components = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
     const portal = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
     const records = [
-      [['Button'], [11222, 3866], [11079, 3865], [11591, 4057], components],
-      [['MessageBar'], [26858, 9324], [29185, 10188], [29697, 10380], components],
-      [['Tree'], [47327, 16232], [50387, 17260], [50899, 17452], components],
-      [['Dialog'], [70850, 23786], [72599, 24466], [73111, 24658], portal],
-      [['WaveProvider', 'Dialog'], [73403, 24778], [75147, 25458], [75659, 25650], portal],
-      [['DataGrid'], [70097, 23719], [73310, 24921], [73822, 25113], portal],
+      [['Button'], [12037, 4033], components],
+      [['MessageBar'], [30070, 10222], components],
+      [['Tree'], [51190, 17427], components],
+      [['Dialog'], [73934, 24667], portal],
+      [['WaveProvider', 'Dialog'], [76487, 25640], portal],
+      [['DataGrid'], [72123, 24325], portal],
+      [
+        ['usePresence', 'Presence'],
+        [5453, 2341],
+        ['react', 'react/jsx-runtime'],
+      ],
+      [['useVirtualWindow'], [3868, 1817], ['react']],
+      [['createBrandTokens'], [3630, 1956], []],
+      [['waveTokens'], [3071, 969], []],
     ];
-    expect(RECORDED_IMPORTS_0_18).toEqual(
-      records.map(([names, baseline, measured, budget, allowedExternals]) => ({
+    expect(RECORDED_IMPORTS_1_0).toEqual(
+      records.map(([names, measured, allowedExternals]) => ({
         names,
-        baseline: { version: '0.17.1', minified: baseline[0], gzip: baseline[1] },
+        baseline: { version: '0.18.1', ...BASELINES_0_18_1[names.join(' + ')] },
         measured: { minified: measured[0], gzip: measured[1] },
-        budget: { names, maxMinifiedBytes: budget[0], maxGzipBytes: budget[1], allowedExternals },
+        budget: {
+          names,
+          maxMinifiedBytes: measured[0] + 512,
+          maxGzipBytes: measured[1] + 192,
+          allowedExternals,
+        },
       })),
     );
-    expect(RECORDED_IMPORTS_0_18.at(-1).budget).toBe(DATA_GRID_BUDGET);
-    for (const { names, measured, budget } of RECORDED_IMPORTS_0_18) {
-      expect([budget.maxMinifiedBytes, budget.maxGzipBytes], names.join(' + ')).toEqual([
-        measured.minified + BUDGET_MARGIN_0_18.minified,
-        measured.gzip + BUDGET_MARGIN_0_18.gzip,
-      ]);
-    }
-    // The growth over 0.17.1 that the script's header and spec §11 state.
+    // The growth over 0.18.1 that the records' JSDoc states.
     expect(
-      RECORDED_IMPORTS_0_18.map(({ names, baseline, measured }) => [
+      RECORDED_IMPORTS_1_0.map(({ names, baseline, measured }) => [
         names.join(' + '),
         measured.minified - baseline.minified,
         measured.gzip - baseline.gzip,
       ]),
     ).toEqual([
-      ['Button', -143, -1],
-      ['MessageBar', 2327, 864],
-      ['Tree', 3060, 1028],
-      ['Dialog', 1749, 680],
-      ['WaveProvider + Dialog', 1744, 680],
-      ['DataGrid', 3213, 1202],
+      ['Button', 958, 168],
+      ['MessageBar', 849, 21],
+      ['Tree', 807, 156],
+      ['Dialog', 1335, 201],
+      ['WaveProvider + Dialog', 1340, 182],
+      ['DataGrid', -1183, -601],
+      ['usePresence + Presence', 0, 0],
+      ['useVirtualWindow', 0, 0],
+      ['createBrandTokens', 0, 0],
+      ['waveTokens', 0, 0],
     ]);
-    // The 0.17.1 sizes are those of the CHANGELOG's Size tables (0.17.1 changed only the
-    // provider, so the component imports keep their 0.17.0 sizes).
+    // The 0.18.1 sizes of the component imports are those of the 0.18.0 CHANGELOG's Size table
+    // (0.18.1 changed no size), and those of createBrandTokens and waveTokens of the 0.17.0 one.
     const log = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
-    const rows = log.slice(log.indexOf('## [0.17.1]'), log.indexOf('## [0.16.0]')).split('\n');
+    const section = (from, to) => log.slice(log.indexOf(from), log.indexOf(to)).split('\n');
+    const rows018 = section('## [0.18.0]', '## [0.17.1]');
     for (const [label, minified, gzip] of [
-      ['only `Button`', '11,222', '3,866'],
-      ['only `MessageBar`', '26,858', '9,324'],
-      ['only `Tree`', '47,327', '16,232'],
-      ['only `Dialog`', '70,850', '23,786'],
-      ['`WaveProvider` and `Dialog`', '73,403', '24,778'],
-      ['only `DataGrid`', '70,097', '23,719'],
+      ['only `Button`', '11,079', '3,865'],
+      ['only `MessageBar`', '29,221', '10,201'],
+      ['only `Tree`', '50,383', '17,271'],
+      ['only `Dialog`', '72,599', '24,466'],
+      ['`WaveProvider` and `Dialog`', '75,147', '25,458'],
+      ['only `DataGrid`', '73,306', '24,926'],
     ]) {
-      // The newest row of the import (0.17.1's table comes first), its last column.
-      const row = rows.find((line) => line.startsWith(`| An import of ${label} |`));
+      const row = rows018.find((line) => line.startsWith(`| An import of ${label} |`));
+      expect(row, label).toMatch(new RegExp(` \\| ${minified} \\(${gzip} gzip\\) \\|$`));
+    }
+    const rows017 = section('## [0.17.0]', '## [0.16.0]');
+    for (const [label, minified, gzip] of [
+      ['only `createBrandTokens` (new)', '3,630', '1,956'],
+      ['only `waveTokens` (new)', '3,071', '969'],
+    ]) {
+      const row = rows017.find((line) => line.startsWith(`| An import of ${label} |`));
       expect(row, label).toMatch(new RegExp(` \\| ${minified} \\(${gzip} gzip\\) \\|$`));
     }
   });
@@ -5189,14 +4824,12 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     const { dist } = fixture({
       'dist/lib/slotParts.mjs': 'export const SLOT_PROPS_KEYS = {};\n',
       'dist/lib/slotParts.mjs.map': '{}\n',
-      'dist/lib/deprecations.cjs': 'exports.DEPRECATIONS = [];\n',
       // Only a module of that name counts, not one whose name starts like it.
       'dist/lib/slotPartsGuide.mjs': 'export const guide = 1;\n',
     });
     const reason = (module) =>
       `is in dist: ${module} is read by the tests only (no module of the package may import it)`;
     expect(checkTestOnlyModules(dist)).toEqual([
-      `lib/deprecations.cjs ${reason('lib/deprecations')}`,
       `lib/slotParts.mjs ${reason('lib/slotParts')}`,
       `lib/slotParts.mjs.map ${reason('lib/slotParts')}`,
     ]);
@@ -5205,9 +4838,9 @@ describe('the 0.18 probes (INTEGRATION)', () => {
   it('checkServerImport reads the part helpers from lib and from the entry on the server', async () => {
     expect(await checkServerImport(fixture().dist)).toEqual([]);
     const missing = await checkServerImport(
-      fixture({ 'dist/lib/slotProps.cjs': null, 'dist/lib/nativeProps.mjs': null }).dist,
+      fixture({ 'dist/lib/slotProps.mjs': null, 'dist/lib/nativeProps.mjs': null }).dist,
     );
-    expect(missing).toEqual(['lib/nativeProps.mjs is missing', 'lib/slotProps.cjs is missing']);
+    expect(missing).toEqual(['lib/nativeProps.mjs is missing', 'lib/slotProps.mjs is missing']);
   }, 60_000);
 
   it('checkServerImport reports a part helper that is wrong on the server, and one the entry takes from a "use client" module', async () => {
@@ -5228,9 +4861,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       "'status' } }) returned " +
       '{"title":"Yours","role":"button","className":"part"}';
     expect(await checkServerImport(dist)).toEqual([
-      `lib/nativeProps.cjs under node --conditions=react-server: ${helper}`,
       `lib/nativeProps.mjs under node --conditions=react-server: ${helper}`,
-      `lib/slotProps.cjs under node --conditions=react-server: ${merge}`,
       `lib/slotProps.mjs under node --conditions=react-server: ${merge}`,
     ]);
 
@@ -5271,7 +4902,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     ]);
   }, 180_000);
 
-  it('verifyDist gates the 0.18 budgets: passes on a correct dist, reports each import over its budget', async () => {
+  it('verifyDist gates the component budgets: passes on a correct dist, reports each import over its budget', async () => {
     const good = await verifyDist(fixture().dist, noPending);
     expect(good.errors).toEqual([]);
     // 120,000 characters of random base64 (see the DataGrid budget) in Button and in the part
@@ -5291,52 +4922,23 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       })),
     });
     const result = await verifyDist(dist, noPending);
-    // The 0.18 records follow those of RECORDED_IMPORTS (0.15.0) and RECORDED_IMPORTS_0_17 (0.16.0).
-    const records = result.recorded.slice(RECORDED_IMPORTS.length + RECORDED_IMPORTS_0_17.length);
     expect(
-      records.map(({ names, baseline }) => `${names.join(' + ')} ${baseline.version}`),
-    ).toEqual([
-      'Button 0.17.1',
-      'MessageBar 0.17.1',
-      'Tree 0.17.1',
-      'Dialog 0.17.1',
-      'WaveProvider + Dialog 0.17.1',
-      'DataGrid 0.17.1',
-    ]);
-    const over = (label, maxMinified, maxGzip) => {
-      const { minified, gzip } = records.find(({ names }) => names.join(' + ') === label);
+      result.recorded.map(({ names, baseline }) => `${names.join(' + ')} ${baseline.version}`),
+    ).toEqual(RECORDED_IMPORTS_1_0.map(({ names }) => `${names.join(' + ')} 0.18.1`));
+    const over = (label) => {
+      const { minified, gzip } = recordOf(result.recorded, label);
+      const { maxMinifiedBytes, maxGzipBytes } = budgetOf(label);
       return [
-        `${label}: ${minified} bytes minified, over the budget of ${maxMinified}`,
-        `${label}: ${gzip} bytes gzip, over the budget of ${maxGzip}`,
+        `${label}: ${minified} bytes minified, over the budget of ${maxMinifiedBytes}`,
+        `${label}: ${gzip} bytes gzip, over the budget of ${maxGzipBytes}`,
       ];
     };
     expect(result.errors).toEqual([
-      ...over('Button', 11591, 4057),
-      ...over('MessageBar', 29697, 10380),
-      ...over('Dialog', 73111, 24658),
-      ...over('WaveProvider + Dialog', 75659, 25650),
+      ...over('Button'),
+      ...over('MessageBar'),
+      ...over('Dialog'),
+      ...over('WaveProvider + Dialog'),
     ]);
-  }, 180_000);
-
-  it('main prints the 0.18 imports against 0.17.1, with their budgets', async () => {
-    const lines = [];
-    const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
-    expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
-    const output = lines.join('\n');
-    for (const [label, minified, gzip, maxMinified, maxGzip] of [
-      ['Button', 11222, 3866, 11591, 4057],
-      ['MessageBar', 26858, 9324, 29697, 10380],
-      ['Tree', 47327, 16232, 50899, 17452],
-      ['Dialog', 70850, 23786, 73111, 24658],
-      ['WaveProvider \\+ Dialog', 73403, 24778, 75659, 25650],
-      ['DataGrid', 70097, 23719, 73822, 25113],
-    ]) {
-      expect(output).toMatch(
-        new RegExp(
-          `verify-dist: ${label}-only import: \\d+ B minified \\(budget ${maxMinified}\\), \\d+ B gzip \\(budget ${maxGzip}\\) \\(0\\.17\\.1: ${minified} B, ${gzip} B; [+-]\\d+\\.\\d{2} %, [+-]\\d+\\.\\d{2} %\\)`,
-        ),
-      );
-    }
   }, 180_000);
 
   it('the real exports carry the 0.18 names, mergeSlotProps last in the entry', async () => {
@@ -5371,7 +4973,6 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       'src/lib/slotProps.ts',
       'src/lib/nativeProps.ts',
       'src/lib/slotParts.ts',
-      'src/lib/deprecations.ts',
       'src/components/input/RadioGroup.context.ts',
       'src/components/navigation/Menu.hooks.ts',
       'src/components/feedback/MessageBar.context.ts',
@@ -5380,7 +4981,6 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     // The seams 0.18 adds to modules that existed before (their older exports are not listed).
     const seams = {
       'src/components/data-display/AvatarGroup.parts.tsx': ['AVATAR_GROUP_PART_LOCKS'],
-      'src/components/data-display/Badge.colors.ts': ['warnImportantColor'],
       'src/components/data-display/TagGroup.context.ts': ['BLOCK_CLICK', 'TAG_PART_LOCKS'],
       'src/components/input/Calendar.tsx': ['CalendarViewParts'],
       'src/components/input/Calendar.views.tsx': ['CalendarDayGridParts'],
@@ -5402,7 +5002,6 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       'src/components/table/Table.resize.tsx': ['TableResizeHandlePartProps'],
       'src/hooks/useFieldControl.ts': ['fieldLocks'],
       'src/hooks/useListbox.ts': ['OPTION_STATE_LOCKS', 'preventMouseDown'],
-      'src/hooks/useMotion.ts': ['useLegacyMotionWarning'],
       'src/lib/mergeProps.ts': ['ID_LIST_KEYS'],
       'src/lib/slot.ts': ['resolveWiredSlot'],
     };
@@ -5427,9 +5026,6 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     expect([...moduleOnly].sort()).toEqual([
       'BUTTON_PART_LOCKS',
       'ClassNameConstant',
-      'DEPRECATIONS',
-      'Deprecation',
-      'DeprecationKind',
       'HIDDEN_PART_LOCKS',
       'MessageBarContext',
       'NAMED_SLOT_PARTS',
@@ -5438,6 +5034,7 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       'NATIVE_NO_CAPTURE_EVENTS',
       'NATIVE_TAG_PROPS',
       'PENDING_SLOT_PARTS',
+      'ROVING_PART_LOCKS',
       'RadioGroupContext',
       'RadioGroupItemsContextValue',
       'RadioItemState',
@@ -5481,6 +5078,28 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       expect(MODULE_ONLY_NAMES, name).not.toContain(name);
     }
   }, 60_000);
+
+  it('lists the merge of the components (1.0, spec R6): lib/cn exports cn to the entry, the rest stays module-only', () => {
+    const entry = join(repoRoot, 'src/index.ts');
+    const cnModule = join(repoRoot, 'src/lib/cn.ts');
+    const config = ts.readConfigFile(join(repoRoot, 'tsconfig.json'), ts.sys.readFile);
+    const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, repoRoot);
+    const program = ts.createProgram({
+      rootNames: [entry, cnModule],
+      options: { ...parsed.options, noEmit: true },
+    });
+    const checker = program.getTypeChecker();
+    const exportsOf = (file) =>
+      checker
+        .getExportsOfModule(checker.getSymbolAtLocation(program.getSourceFile(file)))
+        .map((symbol) => symbol.name);
+    const entryNames = new Set(exportsOf(entry));
+    expect(entryNames.has('cn')).toBe(true);
+    const moduleOnly = exportsOf(cnModule).filter((name) => !entryNames.has(name));
+    expect(moduleOnly.sort()).toEqual(['UTILITY_PREFIX', 'createWcn', 'wcn']);
+    for (const name of moduleOnly) expect(MODULE_ONLY_NAMES, name).toContain(name);
+    expect(MODULE_ONLY_NAMES).not.toContain('cn');
+  }, 60_000);
 });
 
 describe('verifyDist and main', () => {
@@ -5502,44 +5121,55 @@ describe('verifyDist and main', () => {
         'export { buttonClassNames, dialogContentClassNames }',
         'export { buttonClassNames }',
       ),
-      'dist/index.cjs': files['dist/index.cjs'].replace(
-        'exports.dialogContentClassNames = classNames.dialogContentClassNames;\n',
-        '',
-      ),
     });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual([
       'index.mjs does not export dialogContentClassNames (a class-name constant of lib/classNames.mjs)',
-      'index.cjs does not export dialogContentClassNames (a class-name constant of lib/classNames.cjs)',
+    ]);
+  }, 90_000);
+
+  it('runs the ES-only checks: a CommonJS file and a top-level await fail (spec R4)', async () => {
+    const files = goodFiles();
+    const { dist } = fixture({
+      'dist/index.d.cts': DTS,
+      'dist/lib/date.mjs': `await Promise.resolve();\n${files['dist/lib/date.mjs']}`,
+    });
+    const { errors } = await verifyDist(dist, noPending);
+    expect(errors).toEqual([
+      'index.d.cts is CommonJS output: the package ships ES modules only (one ES output in vite.config.ts, no index.d.cts)',
+      expect.stringMatching(
+        /^index\.mjs does not load through require\(\), .*: ERR_REQUIRE_ASYNC_MODULE: /,
+      ),
     ]);
   }, 90_000);
 
   it('collects the failures of every check', async () => {
     const { dist } = fixture({
-      'dist/index.d.cts': null,
+      'dist/index.d.ts': null,
+      'dist/index.cjs': 'exports.cn = () => "";\n',
       'dist/lib/cn.mjs': DIRECTIVE + goodFiles()['dist/lib/cn.mjs'],
-      'dist/lib/dev.cjs': null,
+      'dist/lib/dev.mjs': goodFiles()['dist/lib/dev.mjs'].replace(
+        'process.env.NODE_ENV',
+        '"production"',
+      ),
     });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual(
       expect.arrayContaining([
-        expect.stringContaining('index.d.cts'),
+        'index.d.ts is missing',
+        expect.stringMatching(/^index\.cjs is CommonJS output/),
         expect.stringContaining('lib/cn.mjs'),
-        'lib/dev.cjs is missing',
+        expect.stringMatching(/^lib\/dev\.mjs does not read process\.env\.NODE_ENV/),
       ]),
     );
   }, 90_000);
 
   it('fails a dist whose JavaScript is correct but whose declarations rolled up empty', async () => {
     // TypeScript 6 without tsconfig.json's rootDir: the build passes, index.d.ts is `export { }`.
-    const { dist } = fixture({
-      'dist/index.d.ts': EMPTY_ROLL_UP,
-      'dist/index.d.cts': EMPTY_ROLL_UP,
-    });
+    const { dist } = fixture({ 'dist/index.d.ts': EMPTY_ROLL_UP });
     const { errors } = await verifyDist(dist, noPending);
     expect(errors).toEqual([
       expect.stringMatching(/^index\.d\.ts does not declare and export cn, Button, /),
-      expect.stringMatching(/^index\.d\.cts does not declare and export cn, Button, /),
     ]);
   }, 90_000);
 
@@ -5583,10 +5213,11 @@ describe('verifyDist and main', () => {
       ),
     });
     const { errors } = await verifyDist(dist, noPending);
+    // The modules alone: the resolver holds no presence variant of its own since 1.0 (the
+    // className rule is gone), and this Button keeps no recipe.
     expect(errors).toEqual([
       'hooks/useMotion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
       'lib/motion.mjs is in the bundle of an import of only Button (Presence must be dropped)',
-      'the bundle of an import of only Button contains "[presence=" outside comments (its minified code)',
     ]);
   }, 90_000);
 
@@ -5643,12 +5274,16 @@ describe('verifyDist and main', () => {
     ]);
   }, 90_000);
 
-  it('prints the measured presence budget', async () => {
+  it('prints the measured presence core with its budget (a record of RECORDED_IMPORTS_1_0)', async () => {
     const lines = [];
     const io = { log: (line) => lines.push(line), error: (line) => lines.push(line) };
     expect(await main(['--dist', fixture().dist, '--no-pending'], io)).toBe(0);
+    const { maxMinifiedBytes, maxGzipBytes } = budgetOf('usePresence + Presence');
     expect(lines.join('\n')).toMatch(
-      /verify-dist: presence core \(usePresence \+ Presence\): \d+ B minified \(budget 6804\), \d+ B gzip \(budget 2927\)/,
+      new RegExp(
+        `verify-dist: usePresence \\+ Presence-only import: \\d+ B minified \\(budget ${maxMinifiedBytes}\\), ` +
+          `\\d+ B gzip \\(budget ${maxGzipBytes}\\) \\(0\\.18\\.1: 5453 B, 2341 B;`,
+      ),
     );
   }, 90_000);
 
@@ -5656,7 +5291,7 @@ describe('verifyDist and main', () => {
     const quiet = { log: () => {}, error: () => {} };
     expect(await main(['--dist', fixture().dist, '--no-pending'], quiet)).toBe(0);
     expect(
-      await main(['--dist', fixture({ 'dist/index.d.cts': null }).dist, '--no-pending'], quiet),
+      await main(['--dist', fixture({ 'dist/index.d.cts': DTS }).dist, '--no-pending'], quiet),
     ).toBe(1);
     expect(await main(['--dist', join(fixtureRoot, 'missing')], quiet)).toBe(1);
   }, 180_000);
@@ -5681,17 +5316,11 @@ describe('verifyDist and main', () => {
         'export { Card, CardHeader }',
         'export { Card }',
       ),
-      'dist/index.cjs': goodFiles()['dist/index.cjs'].replace(
-        'exports.CardHeader = card.CardHeader;\n',
-        '',
-      ),
     });
     expect(await verifyDist(dist, { pendingFlatExports: ['Card'] })).toEqual({
       errors: [],
       pending: ['CardHeader'],
       planned: [],
-      budget: { minified: expect.any(Number), gzip: expect.any(Number) },
-      virtualBudget: { minified: expect.any(Number), gzip: expect.any(Number) },
       recorded: expect.any(Array),
     });
     expect((await verifyDist(dist, { pendingFlatExports: ['Card'], final: true })).errors).toEqual([

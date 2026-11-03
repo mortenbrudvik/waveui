@@ -6,9 +6,10 @@ type GlobalStore = Record<symbol, unknown>;
  * Returns the module singleton registered under `key`, creating it with `create` on first use.
  *
  * The value is stored on `globalThis[Symbol.for('@mortenbrudvik/waveui/' + key)]` (non-enumerable),
- * so an app that evaluates the library twice — the ESM and the CJS build side by side (Next.js
- * server CJS + client ESM, or a dependency that `require`s the package) — still shares one state
- * per key. A change to the value shape stored under a key must stay compatible with the other copy.
+ * so an app that evaluates the library twice — two copies of the package (duplicate installs or
+ * versions, a bundler that duplicates a chunk, hot reload, micro-frontends) — still shares one
+ * state per key. A change to the value shape stored under a key must stay compatible with the
+ * other copy.
  *
  * Keys and their users:
  * - `'layers'` — the dismiss-layer stack (`layers.ts`);

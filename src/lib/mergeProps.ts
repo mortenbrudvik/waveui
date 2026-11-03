@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import { cn } from './cn';
+import { wcn } from './cn';
 import { composeEventHandlers } from './composeEventHandlers';
 import { mergeRefs } from './mergeRefs';
 import { joinIds } from './aria';
@@ -27,7 +27,7 @@ export const ID_LIST_KEYS: ReadonlySet<string> = new Set(['aria-describedby', 'a
  *
  * - `on*` handlers present on both sides are composed with `composeEventHandlers` (theirs first;
  *   ours is skipped when theirs calls `preventDefault()`).
- * - `className` = `cn(ours, theirs)` (theirs win Tailwind conflicts); `style` = `{ ...ours, ...theirs }`.
+ * - `className` = `wcn(ours, theirs)` (theirs win Tailwind conflicts); `style` = `{ ...ours, ...theirs }`.
  * - `aria-describedby` / `aria-labelledby` are joined with `joinIds(theirs, ours)`.
  * - `ref`s are merged with `mergeRefs` (a new callback per call: components that clone on every
  *   render use `useTriggerElement`/`useMergedRefs`, which memoise the merged ref).
@@ -55,7 +55,7 @@ export function mergeProps<A, B>(ours: A, theirs: B, options?: MergePropsOptions
       result[key] = composeEventHandlers(theirValue as AnyHandler, ourValue as AnyHandler);
     } else if (key === 'className') {
       if (theirValue !== undefined) {
-        result[key] = cn(ourValue as string | undefined, theirValue as string | undefined);
+        result[key] = wcn(ourValue as string | undefined, theirValue as string | undefined);
       }
     } else if (key === 'style') {
       if (theirValue !== undefined) {

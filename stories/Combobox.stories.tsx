@@ -247,7 +247,7 @@ function AsyncSearchCombobox({ onQueryChange, onValueChange, ...args }: Combobox
           </Option>
         )}
       </Combobox>
-      <span className="text-caption-1 text-muted-foreground">
+      <span className="text-wave-caption-1 text-wave-muted-foreground">
         {query === answered ? `${results.length} results` : 'Searching…'}
       </span>
     </div>
@@ -337,11 +337,17 @@ type TenThousandOptionsArgs = ComboboxProps & {
 /** A Combobox of 10,000 people, windowed by `useVirtualWindow`, with the mounted-option count. */
 function TenThousandCombobox({ itemSize, ...args }: TenThousandOptionsArgs) {
   const virtualWindow = useVirtualWindow({ itemSize });
-  const [root, setRoot] = React.useState<HTMLDivElement | null>(null);
+  // The Combobox's `ref` reaches its input, the combobox whose list the readout counts.
+  const [combobox, setCombobox] = React.useState<HTMLInputElement | null>(null);
   return (
     <div className="flex flex-col gap-3">
-      <Combobox {...args} ref={setRoot} items={TEN_THOUSAND_PEOPLE} virtualWindow={virtualWindow} />
-      <MountedOptions scope={root} total={TEN_THOUSAND_PEOPLE.length} />
+      <Combobox
+        {...args}
+        ref={setCombobox}
+        items={TEN_THOUSAND_PEOPLE}
+        virtualWindow={virtualWindow}
+      />
+      <MountedOptions scope={combobox} total={TEN_THOUSAND_PEOPLE.length} />
     </div>
   );
 }

@@ -40,7 +40,7 @@ const BRAND_STOPS: readonly BrandStop[] = [
 const SEED_INDEX = 7;
 
 /**
- * The default brand ramp: the fallbacks of the `--wave-brand-N` declarations of `tokens.css`
+ * The default brand ramp: the values of the `--wave-brand-N` declarations of `tokens.css`
  * (Fluent's brand ramp), which a test keeps equal.
  */
 export const DEFAULT_BRAND_RAMP: BrandRamp = /* @__PURE__ */ Object.freeze({
