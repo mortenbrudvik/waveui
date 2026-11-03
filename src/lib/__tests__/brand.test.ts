@@ -440,6 +440,20 @@ describe('createBrandTokens checks a full ramp in development (R8)', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('runs the check without a `process` global, as every other development warning does', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('process', undefined);
+    try {
+      createBrandTokens({ ...DEFAULT_BRAND_RAMP, 80: '#b4d6fa' });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(warn).toHaveBeenCalled();
+    expect(
+      warn.mock.calls.every(([message]) => String(message).includes('createBrandTokens: in the')),
+    ).toBe(true);
+  });
+
   it.each(BRAND_SEEDS)('passes the generated ramp of %s without a warning', (seed) => {
     const warn = vi.spyOn(console, 'warn');
     const tokens = createBrandTokens(seed);

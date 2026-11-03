@@ -173,6 +173,19 @@ const DEFAULT_CONTEXT: WaveContextValue = {
 
 const WaveContext = React.createContext<WaveContextValue>(DEFAULT_CONTEXT);
 
+/** The development warnings of skipped `tokens` entries (module level, so a production bundle drops it). */
+function reportInvalidTokens(invalid: ReturnType<typeof collectTokenStyle>['invalid']): void {
+  for (const { key, reason } of invalid) {
+    warnOnce(
+      `WaveProvider:tokens:${reason}:${key}`,
+      `WaveProvider: \`tokens\` skips \`${key}\`: ` +
+        (reason === 'name'
+          ? 'not a token name (the CSS variable in camelCase without `--wave-`, such as `primaryForeground`).'
+          : 'its value must be a finite number, or CSS text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without `!` or a backslash outside strings and comments.'),
+    );
+  }
+}
+
 /** Whether two override maps have the same keys in the same order, with the same values. */
 function sameTokens(a: WaveTokenOverrides, b: WaveTokenOverrides): boolean {
   const keys = Object.keys(a) as (keyof WaveTokenOverrides)[];
@@ -266,21 +279,13 @@ export const WaveProvider = ({
   React.useEffect(() => {
     // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
     // production bundle then drops the warnings and their text. Without a bundler and without
-    // `process` (an unbundled import in a browser), the read throws and the warnings are skipped.
+    // `process` (an unbundled import in a browser), the read throws and the warnings run, as the
+    // other development warnings (`lib/dev`) assume development there.
     try {
-      if (process.env.NODE_ENV !== 'production') {
-        for (const { key, reason } of invalid) {
-          warnOnce(
-            `WaveProvider:tokens:${reason}:${key}`,
-            `WaveProvider: \`tokens\` skips \`${key}\`: ` +
-              (reason === 'name'
-                ? 'not a token name (the CSS variable in camelCase without `--wave-`, such as `primaryForeground`).'
-                : 'its value must be a finite number, or CSS text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without `!` or a backslash outside strings and comments.'),
-          );
-        }
-      }
+      if (process.env.NODE_ENV !== 'production') reportInvalidTokens(invalid);
     } catch {
-      // No `process`: see above.
+      // No `process` (the read throws): development.
+      reportInvalidTokens(invalid);
     }
   }, [invalid]);
 
