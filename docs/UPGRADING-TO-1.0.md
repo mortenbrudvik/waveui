@@ -20,7 +20,7 @@ Items 4 to 6 were announced in 0.x releases (the "Announced in" columns below), 
 3. Upgrade to 1.0 and run your type check: the removed props, values, call forms and exports, the `ref` types of the twelve controls and the required `details` arguments are type errors.
 4. Run the [migration codemod](#the-migration-codemod) if your own classes use Wave's token utilities (`bg-primary`, `text-body-1`, `shadow-4`), and check your stylesheet setup ([What changes in each setup](#what-changes-in-each-setup)).
 
-1.0 logs none of the 0.18 notices: the forms they announced are gone. JavaScript that no type checker reads gets no message for a removed prop; [Untyped code](#untyped-code) says what it gets instead.
+1.0 logs none of the 0.18 notices: the forms they announced are gone. JavaScript that no type checker reads gets no message for a removed prop, PresenceBadge's old status names aside; [Untyped code](#untyped-code) says what it gets instead.
 
 ## ES modules only
 
@@ -217,7 +217,7 @@ Each item is gone, with no alias. Every replacement works in 0.x too, so you can
 | Slider numeric `size` | nothing: it has no effect, remove it | 0.9 | yes |
 | InfoLabel `label` | `children` | 0.9 | yes |
 | The classes `wave-tag-picker__control` and `wave-tag-picker__group` (`tagPickerClassNames.control` and `tagPickerClassNames.group`) | `wave-tag-picker-control` and `wave-tag-picker-group` (`tagPickerControlClassNames.root` and `tagPickerGroupClassNames.root`) | 0.11 | no |
-| PresenceBadge `status` `'dnd'` and `'oof'` (type `DeprecatedPresenceStatus`) | `'do-not-disturb'` and `'out-of-office'` | 0.13 | yes |
+| PresenceBadge `status` `'dnd'` and `'oof'` (type `DeprecatedPresenceStatus`) | `'do-not-disturb'` and `'out-of-office'` (the old names still draw them at run time, with a development warning: [Untyped code](#untyped-code)) | 0.13 | yes |
 | `DataGridColumn.id` | `columnId` | 0.14 | yes |
 | `useRovingTabIndex(containerRef, options)` | `useRovingTabIndex(options)` and its `containerProps` | 0.18 | yes |
 | DataGrid `onSortChange(columnId, direction)` without `items`, `sort` or `defaultSort` (type `DataGridLegacySortProps`) | `onSortChange(sort, details)`, with `items`, `sort` or `defaultSort` | 0.18 | yes |
@@ -279,12 +279,12 @@ Notes on some rows:
   ```
 
 - **A numeric `size`** on Input and Select is skipped like any value outside the sizes: no native attribute, the `medium` design size. `htmlSize` sets the attribute.
-- **PresenceBadge `'dnd'` and `'oof'`** make the badge throw a `TypeError` while it renders, as any status outside the union did in 0.18, with no warning before it. A status that comes from your server's data is not type-checked: map the old values before rendering (`status === 'dnd' ? 'do-not-disturb' : …`).
+- **PresenceBadge `'dnd'` and `'oof'`**: they draw `'do-not-disturb'` and `'out-of-office'` (the look, `data-status` and name of the new status), and a development build warns once per old name. The fallback is a bridge for server data and untyped code, which no type check reads, and may be removed in 2.0: map the old values before rendering (`status === 'dnd' ? 'do-not-disturb' : …`). Another status outside the union throws a `TypeError` while the badge renders, as in 0.18.
 - **`DataGridColumn.id`.** A column with only `id` has no id: its header is not sortable, with the development warnings of a column without `columnId`.
 
 ### Untyped code
 
-What a removed form does at run time in 1.0, in code that TypeScript does not check (Wave strips nothing and warns about none of them):
+What a removed form does at run time in 1.0, in code that TypeScript does not check (Wave strips nothing and warns about none of them but PresenceBadge's old status names):
 
 - `onChange` on Checkbox, Switch, RadioGroup, Rating and SwatchPicker lands on the root as React's change handler and is never called; on SearchBox, SpinButton, ColorPicker, TagPicker, TimePicker and DatePicker it may receive the native change event of the input inside, never the value.
 - `onOptionSelect`, `onTabSelect`, `onNavItemSelect` and DataGrid's `onSelectionChange` are never called; React logs ``Unknown event handler property `onOptionSelect`. It will be ignored.`` in development.
@@ -292,7 +292,8 @@ What a removed form does at run time in 1.0, in code that TypeScript does not ch
 - List `selectionMode="multi"` is neither of the modes 1.0 knows, so the list is single-selection: a click selects one item and replaces the selection, where 0.18 selected several and warned, and more than one selected item (`selectedItems` or `defaultSelectedItems`) logs the development warning of a single-selection list.
 - Stack `direction`, Tooltip `variant` and `delay`, Skeleton and Link `variant` and InfoLabel `label` render as plain attributes without a message, and the defaults apply. A single-mode Accordion ignores `openItems`, `defaultOpenItems` and `onOpenItemsChange`.
 - A numeric Text `weight` gets no weight class (the variant's own weight); a numeric Slider `size` is medium.
-- `Table.Head` and `Table.HeadCell` are `undefined`, so rendering one throws React's invalid element type error; PresenceBadge throws for `'dnd'` and `'oof'` (above).
+- `Table.Head` and `Table.HeadCell` are `undefined`, so rendering one throws React's invalid element type error.
+- PresenceBadge `'dnd'` and `'oof'` (also through Persona's `status` and an Avatar's badge) draw the new names and warn once in development (above).
 - `useRovingTabIndex(ref, options)` reads the ref as the options and ignores the options: no item holds the tab stop, while the arrow keys still move between the `[data-roving-value]` items of the element the key handler is on.
 - A grid without `items`, `sort` or `defaultSort` that gets an `onSortChange` calls it with the sort object and `details`.
 - A `Nav.Category` without `label` renders a toggle with no name and its text in the sub-items' list, where the development warning about a list's text names it.
@@ -365,7 +366,6 @@ Search your code for these; neither the type check nor a warning finds them:
 - **With Tailwind:** an `@theme` of yours that restyled Wave's components (`--spacing`, `--radius-*`, `--shadow-N`, an unnamespaced `--color-*` or `--text-*` key), which no longer reaches them; a class of yours that your build generated only because Wave's `dist` used it; a bare color class of yours on a component that now also covers its hover, pressed, selected and disabled colors; and `@layer components` classes of yours that now compete with Wave's by specificity and order ([What changes in each setup](#what-changes-in-each-setup)).
 - **`ref` and the components that read it:** callback refs and state setters typed for a `<div>` on SearchBox, SpinButton, ColorSlider, AlphaSlider, Combobox, TimePicker and DatePicker; code that measured, positioned or animated the root of one of the twelve controls through `ref`, directly or through `Overflow.Item asChild`, `Presence`, `Popover.Trigger`, `Menu.Trigger` or `TeachingPopover.Trigger` ([`ref` reaches the control](#ref-reaches-the-control)).
 - **Behaviour:** a TeachingPopover whose `onDismiss` must also run when Done is pressed; a TimePicker without `format` whose users need 12-hour times; the look of `color="important"`; a dismiss slot object with handlers or button attributes.
-- **Data:** PresenceBadge statuses `'dnd'` and `'oof'` from your server.
 - **Types:** a props object built apart from the element (`const props = { …, onTabSelect }`, then `{...props}`): TypeScript checks a literal for excess properties, not a spread object, so a removed prop in it compiles; and a `type` key on a dismiss slot object, which TypeScript accepts.
 
 ## Where the list comes from

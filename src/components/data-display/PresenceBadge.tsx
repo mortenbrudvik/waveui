@@ -11,6 +11,7 @@ import {
 } from '../../lib/icons';
 import type { IconComponent } from '../../lib/icons';
 import { AvatarBadgeSizeContext } from './Avatar.context';
+import { warnOnce } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { PresenceStatus, Size } from '../../lib/types';
@@ -18,7 +19,10 @@ import type { PresenceStatus, Size } from '../../lib/types';
 /** Properties for the PresenceBadge component. */
 export interface PresenceBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   /**
-   * Presence status to display.
+   * Presence status to display. The names of 0.x that 1.0 removed from the type, `'dnd'` and
+   * `'oof'`, still draw `'do-not-disturb'` and `'out-of-office'` when they come from code that no
+   * type checker reads (server data, JavaScript), with a development warning once per name: a
+   * bridge that may go in 2.0, so map such data to the new names.
    * @default 'available'
    */
   status?: PresenceStatus;
@@ -109,6 +113,15 @@ const statusLabels: Record<PresenceStatus, string> = {
   'out-of-office': 'Out of office',
 };
 
+/**
+ * The status names of 0.x that 1.0 removed from `PresenceStatus`, and the Fluent names they draw
+ * (ruling BR): a bridge for server data and untyped code, which no type checker reads.
+ */
+const RENAMED_STATUSES: Readonly<Record<string, PresenceStatus>> = {
+  dnd: 'do-not-disturb',
+  oof: 'out-of-office',
+};
+
 const sizeClasses: Record<Size, string> = {
   'extra-small': 'wave:size-2', // 8px
   small: 'wave:size-2.5', // 10px
@@ -131,13 +144,32 @@ const sizeClasses: Record<Size, string> = {
  * <PresenceBadge status="do-not-disturb" />
  */
 export const PresenceBadge = ({
-  status = 'available',
+  status: statusProp = 'available',
   size: sizeProp,
   className,
   ref,
   slotProps,
   ...props
 }: PresenceBadgeProps) => {
+  // A removed name from untyped code draws its new name (on the server too).
+  const oldName = Object.hasOwn(RENAMED_STATUSES, statusProp) ? statusProp : undefined;
+  const status = oldName ? RENAMED_STATUSES[oldName] : statusProp;
+  React.useEffect(() => {
+    // Written out so a bundler replaces it and a production bundle drops the warning and its
+    // text; without `process` (an unbundled import in a browser) the read throws and it is skipped.
+    try {
+      if (process.env.NODE_ENV !== 'production' && oldName) {
+        warnOnce(
+          `PresenceBadge:status:${oldName}`,
+          `PresenceBadge: status '${oldName}' was removed in 1.0; the badge draws ` +
+            `'${RENAMED_STATUSES[oldName]}' for it. Use '${RENAMED_STATUSES[oldName]}': this ` +
+            'fallback for server data and untyped code may be removed in 2.0.',
+        );
+      }
+    } catch {
+      // No `process`: see above.
+    }
+  }, [oldName]);
   const avatarBadgeSize = React.useContext(AvatarBadgeSizeContext);
   const size = sizeProp ?? avatarBadgeSize ?? 'medium';
   const { glyph, Icon, className: statusClassName } = statusStyles[status];

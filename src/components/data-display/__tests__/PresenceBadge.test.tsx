@@ -4,6 +4,8 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { presenceBadgeClassNames } from '../../../lib/classNames';
+import { Avatar } from '../Avatar';
+import { Persona } from '../Persona';
 import { PresenceBadge } from '../PresenceBadge';
 import type { PresenceBadgeProps } from '../PresenceBadge';
 import {
@@ -161,18 +163,42 @@ describe('PresenceBadge', () => {
   });
 
   describe('Fluent status names (0.13)', () => {
-    // Removed in 1.0: like any status outside the union (untyped code), the 0.5 spellings have no
-    // look of their own, and rendering one throws (no badge is drawn for a status it cannot name).
-    it.each(['dnd', 'oof'] as const)(
-      'has no %s alias (removed in 1.0): rendering it throws, with no warning',
-      (alias) => {
+    // Ruling BR: the 0.x names are no members of the type in 1.0, but server data and untyped code
+    // still send them. The badge draws the new name (its look, `data-status` and name) and warns
+    // once per old name in development; a bridge that may go in 2.0.
+    const OLD_NAMES = [
+      ['dnd', 'do-not-disturb', 'Do not disturb', 'bar'],
+      ['oof', 'out-of-office', 'Out of office', 'arrow'],
+    ] as const;
+    const message = (old: string, current: string) =>
+      `[WaveUI] PresenceBadge: status '${old}' was removed in 1.0; the badge draws '${current}' ` +
+      `for it. Use '${current}': this fallback for server data and untyped code may be removed in 2.0.`;
+    /** A status as untyped code passes it. */
+    const untyped = (status: string) => status as PresenceStatus;
+
+    it.each(OLD_NAMES)(
+      "draws '%s' as '%s' (look, data-status and name) and warns once in development (StrictMode)",
+      (old, current, label, glyph) => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const error = vi.spyOn(console, 'error');
         try {
-          // @ts-expect-error -- `'dnd'` and `'oof'` are removed in 1.0: use `'do-not-disturb'`
-          // and `'out-of-office'`
-          expect(() => render(<PresenceBadge status={alias} />)).toThrow(TypeError);
-          expect(warn).not.toHaveBeenCalled();
+          const { rerender } = render(
+            <React.StrictMode>
+              <PresenceBadge status={untyped(old)} />
+            </React.StrictMode>,
+          );
+          rerender(
+            <React.StrictMode>
+              <PresenceBadge status={untyped(old)} size="large" />
+            </React.StrictMode>,
+          );
+          const badge = screen.getByRole('img', { name: label });
+          expect(badge).toHaveAttribute('data-status', current);
+          expect(badge).toHaveAttribute('data-glyph', glyph);
+          render(<PresenceBadge status={current} />);
+          const expected = screen.getAllByRole('img', { name: label })[1];
+          expect(badge.innerHTML).toBe(expected.innerHTML);
+          expect(warn.mock.calls).toEqual([[message(old, current)]]);
           expect(error).not.toHaveBeenCalled();
         } finally {
           warn.mockRestore();
@@ -180,6 +206,89 @@ describe('PresenceBadge', () => {
         }
       },
     );
+
+    it('warns once for each old name, and never for the new names', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(
+          <>
+            <PresenceBadge status={untyped('dnd')} />
+            <PresenceBadge status={untyped('oof')} />
+            <PresenceBadge status={untyped('dnd')} />
+            <PresenceBadge status="do-not-disturb" />
+            <PresenceBadge status="out-of-office" />
+          </>,
+        );
+        expect(warn.mock.calls).toEqual([
+          [message('dnd', 'do-not-disturb')],
+          [message('oof', 'out-of-office')],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('draws the new name in production without a warning', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(<PresenceBadge status={untyped('oof')} />);
+        expect(screen.getByRole('img', { name: 'Out of office' })).toHaveAttribute(
+          'data-status',
+          'out-of-office',
+        );
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it('renders an old name on the server as its new name, without throwing', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const html = renderToString(<PresenceBadge status={untyped('dnd')} />);
+        expect(html).toBe(renderToString(<PresenceBadge status="do-not-disturb" />));
+        expect(html).toContain('data-status="do-not-disturb"');
+        // Effects do not run on the server: the warning comes from the client.
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('reaches the badge through Persona and the badge slot of Avatar', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        render(
+          <>
+            <Persona name="Jane Doe" status={untyped('dnd')} />
+            <Avatar name="John Doe" badge={<PresenceBadge status={untyped('oof')} />} />
+          </>,
+        );
+        expect(screen.getByRole('img', { name: 'Do not disturb' })).toHaveAttribute(
+          'data-status',
+          'do-not-disturb',
+        );
+        expect(screen.getByRole('img', { name: 'Out of office' })).toHaveAttribute(
+          'data-status',
+          'out-of-office',
+        );
+        expect(warn.mock.calls).toEqual([
+          [message('dnd', 'do-not-disturb')],
+          [message('oof', 'out-of-office')],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('keeps the old names out of the type', () => {
+      // @ts-expect-error -- `'dnd'` is removed in 1.0: use `'do-not-disturb'`
+      void (<PresenceBadge status="dnd" />);
+      // @ts-expect-error -- `'oof'` is removed in 1.0: use `'out-of-office'`
+      void (<Persona name="Jane Doe" status="oof" />);
+    });
 
     it('status is optional and defaults to available', () => {
       render(<PresenceBadge />);
