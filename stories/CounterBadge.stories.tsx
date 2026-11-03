@@ -3,7 +3,9 @@ import { CounterBadge } from '../src';
 import type { BadgeColor } from '../src';
 import { badgeColorArgType } from './_helpers';
 
-const APPEARANCES = ['filled', 'outline'] as const;
+const APPEARANCES = ['filled', 'outline', 'ghost'] as const;
+const SHAPES = ['circular', 'rounded', 'square'] as const;
+const SIZES = ['extra-small', 'small', 'medium', 'large', 'extra-large'] as const;
 const COLORS: BadgeColor[] = [
   'brand',
   'success',
@@ -24,10 +26,14 @@ const meta = {
       options: APPEARANCES,
     },
     ...badgeColorArgType,
+    shape: { control: 'select', options: SHAPES },
+    size: { control: 'select', options: SIZES },
   },
   args: {
     count: 5,
     appearance: 'filled',
+    shape: 'circular',
+    size: 'medium',
     color: 'brand',
     dot: false,
     showZero: false,
@@ -118,4 +124,23 @@ export const DotColors: Story = {
     dot: true,
   },
   render: renderColorRows,
+};
+
+/** `shape` sets the corners and `size` the height of a count; a dot is always 6px. */
+export const ShapesAndSizes: Story = {
+  argTypes: { shape: { control: false }, size: { control: false } },
+  render: (args) => (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        {SHAPES.map((shape) => (
+          <CounterBadge key={shape} {...args} shape={shape} />
+        ))}
+      </div>
+      <div className="flex items-center gap-3">
+        {SIZES.map((size) => (
+          <CounterBadge key={size} {...args} size={size} />
+        ))}
+      </div>
+    </div>
+  ),
 };

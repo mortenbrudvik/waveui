@@ -4,10 +4,12 @@ import { presenceBadgeClassNames } from '../../lib/classNames';
 import {
   PresenceAvailableIcon,
   PresenceAwayIcon,
+  PresenceBlockedIcon,
   PresenceBusyIcon,
   PresenceDndIcon,
   PresenceOfflineIcon,
   PresenceOofIcon,
+  PresenceUnknownIcon,
 } from '../../lib/icons';
 import type { IconComponent } from '../../lib/icons';
 import { AvatarBadgeSizeContext } from './Avatar.context';
@@ -24,9 +26,19 @@ export interface PresenceBadgeProps extends React.HTMLAttributes<HTMLSpanElement
    * type checker reads (server data, JavaScript), with a development warning once per name: a
    * bridge that may go in 2.0, so map such data to the new names.
    * Any other value (a misspelled name, `null`) draws `'offline'`, with a development warning once.
+   * `'blocked'` (a person you blocked) draws a bar across a red disc and `'unknown'` (no presence
+   * data) a question mark on the page color, each with a shape of its own.
    * @default 'available'
    */
   status?: PresenceStatus;
+  /**
+   * Marks the person as out of office, whatever their status: the badge draws the out-of-office
+   * arrow in the status's own color on the page color, and its name gains ", out of office". With
+   * `status="out-of-office"` it changes nothing (that status already draws the arrow). Rendered as
+   * a boolean `data-out-of-office`. Fluent's `outOfOffice`.
+   * @default false
+   */
+  outOfOffice?: boolean;
   /**
    * Size of the presence indicator. In the `badge` slot of an Avatar it is sized from the avatar.
    * @default 'medium'
@@ -61,7 +73,8 @@ const ICON_PART_LOCKS = {
 } as const;
 
 /** The shape drawn for a status, exposed as `data-glyph` (styling hook and test contract). */
-type PresenceGlyph = 'check' | 'solid' | 'clock' | 'ring-x' | 'bar' | 'arrow';
+type PresenceGlyph =
+  'check' | 'solid' | 'clock' | 'ring-x' | 'bar' | 'arrow' | 'slash' | 'question';
 
 /**
  * Per status: the glyph name, its shared icon (src/lib/icons.tsx, drawn in a 16×16 box that the
@@ -71,37 +84,54 @@ type PresenceGlyph = 'check' | 'solid' | 'clock' | 'ring-x' | 'bar' | 'arrow';
  */
 const statusStyles: Record<
   PresenceStatus,
-  { glyph: PresenceGlyph; Icon: IconComponent; className: string }
+  { glyph: PresenceGlyph; Icon: IconComponent; className: string; oofClassName?: string }
 > = {
   available: {
     glyph: 'check',
     Icon: PresenceAvailableIcon,
     className: 'wave:bg-presence-available wave:text-presence-glyph',
+    oofClassName: 'wave:text-presence-available',
   },
   busy: {
     glyph: 'solid',
     Icon: PresenceBusyIcon,
     className: 'wave:bg-presence-busy wave:text-presence-busy',
+    oofClassName: 'wave:text-presence-busy',
   },
   away: {
     glyph: 'clock',
     Icon: PresenceAwayIcon,
     className: 'wave:bg-presence-away wave:text-presence-glyph',
+    oofClassName: 'wave:text-presence-away',
   },
   offline: {
     glyph: 'ring-x',
     Icon: PresenceOfflineIcon,
     className: 'wave:bg-background wave:text-presence-offline',
+    oofClassName: 'wave:text-presence-offline',
   },
   'do-not-disturb': {
     glyph: 'bar',
     Icon: PresenceDndIcon,
     className: 'wave:bg-presence-busy wave:text-presence-glyph',
+    oofClassName: 'wave:text-presence-busy',
   },
   'out-of-office': {
     glyph: 'arrow',
     Icon: PresenceOofIcon,
     className: 'wave:bg-presence-oof wave:text-presence-glyph',
+  },
+  blocked: {
+    glyph: 'slash',
+    Icon: PresenceBlockedIcon,
+    className: 'wave:bg-presence-busy wave:text-presence-glyph',
+    oofClassName: 'wave:text-presence-busy',
+  },
+  unknown: {
+    glyph: 'question',
+    Icon: PresenceUnknownIcon,
+    className: 'wave:bg-background wave:text-presence-offline',
+    oofClassName: 'wave:text-presence-offline',
   },
 };
 
@@ -112,6 +142,8 @@ const statusLabels: Record<PresenceStatus, string> = {
   offline: 'Offline',
   'do-not-disturb': 'Do not disturb',
   'out-of-office': 'Out of office',
+  blocked: 'Blocked',
+  unknown: 'Unknown',
 };
 
 /**
@@ -147,6 +179,7 @@ const sizeClasses: Record<Size, string> = {
 export const PresenceBadge = ({
   status: statusProp = 'available',
   size: sizeProp,
+  outOfOffice = false,
   className,
   ref,
   slotProps,
@@ -186,7 +219,22 @@ export const PresenceBadge = ({
   }, [oldName, unknown, resolved]);
   const avatarBadgeSize = React.useContext(AvatarBadgeSizeContext);
   const size = sizeProp ?? avatarBadgeSize ?? 'medium';
-  const { glyph, Icon, className: statusClassName } = statusStyles[status];
+  const {
+    glyph: statusGlyph,
+    Icon: StatusIcon,
+    className: statusColors,
+    oofClassName,
+  } = statusStyles[status];
+  // The modifier replaces the glyph with the out-of-office arrow in the status's color on the page
+  // color; the status that is itself out of office has nothing to modify.
+  const outOfOfficeLook = outOfOffice && oofClassName !== undefined;
+  const glyph = outOfOfficeLook ? 'arrow' : statusGlyph;
+  const Icon = outOfOfficeLook ? PresenceOofIcon : StatusIcon;
+  const statusClassName = outOfOfficeLook ? wcn('wave:bg-background', oofClassName) : statusColors;
+  const label =
+    outOfOffice && status !== 'out-of-office'
+      ? `${statusLabels[status]}, out of office`
+      : statusLabels[status];
   const iconPart = slotProps?.icon;
   const iconClassName = wcn(
     presenceBadgeClassNames.icon,
@@ -198,9 +246,10 @@ export const PresenceBadge = ({
     <span
       ref={ref}
       role="img"
-      aria-label={statusLabels[status]}
+      aria-label={label}
       data-glyph={glyph}
       data-status={status}
+      data-out-of-office={outOfOffice ? '' : undefined}
       {...props}
       className={wcn(
         presenceBadgeClassNames.root,

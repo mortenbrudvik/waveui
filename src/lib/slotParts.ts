@@ -265,6 +265,7 @@ export const SLOT_PROPS_ROOT_OWNERS = [
 /** The parts that a named slot prop already fills (R2); see the module's JSDoc for the rule. */
 export const NAMED_SLOT_PARTS: SlotPartLists = {
   buttonClassNames: ['icon'],
+  badgeClassNames: ['icon'],
   compoundButtonClassNames: ['icon'],
   toggleButtonClassNames: ['icon'],
   // `primaryActionButtonProps` fills `primaryActionButton`; `menuButtonProps` fills `menuButton`.

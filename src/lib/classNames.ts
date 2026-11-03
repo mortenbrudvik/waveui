@@ -175,8 +175,8 @@ export const avatarGroupItemClassNames = {
 /** AvatarGroup.Popover: `root` on the overflow button (which also carries the group's button class). */
 export const avatarGroupPopoverClassNames = { root: 'wave-avatar-group-popover' } as const;
 
-/** Badge: `root` on the badge span. */
-export const badgeClassNames = { root: 'wave-badge' } as const;
+/** Badge: `root` on the badge span; `icon` on the span around its icon. */
+export const badgeClassNames = { root: 'wave-badge', icon: 'wave-badge__icon' } as const;
 
 /**
  * CounterBadge (also carries Badge's root): `root` on the badge span (a count it does not show

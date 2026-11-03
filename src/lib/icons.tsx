@@ -450,3 +450,28 @@ export const PresenceOofIcon = /* @__PURE__ */ createIcon({
   paint: 'stroke',
   content: <path d="M11.4 8H4.8m2.9-3L4.7 8l3 3" strokeWidth={1.8} />,
 });
+
+/** Presence "blocked": a diagonal bar across the badge, which no other status draws. */
+export const PresenceBlockedIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-blocked',
+  displayName: 'PresenceBlockedIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: <path d="M4.9 11.1l6.2-6.2" strokeWidth={2} />,
+});
+
+/** Presence "unknown": a question mark. */
+export const PresenceUnknownIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-unknown',
+  displayName: 'PresenceUnknownIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: (
+    <>
+      <path d="M6.2 6.3a1.9 1.9 0 1 1 2.9 1.6c-.7.4-1.1.8-1.1 1.5" strokeWidth={1.5} />
+      <path d="M8 11.9h.01" strokeWidth={1.8} />
+    </>
+  ),
+});

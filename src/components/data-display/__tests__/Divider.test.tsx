@@ -275,14 +275,9 @@ describe('Divider — appearance, inset and alignContent (divider-1, divider-2, 
   });
 
   it('draws the defaults for a value outside the unions (untyped code)', () => {
+    const untyped = { appearance: 'loud', alignContent: 'left' } as unknown as DividerOwnProps;
     render(
-      <Divider
-        data-testid="d"
-        // @ts-expect-error not an appearance
-        appearance="loud"
-        // @ts-expect-error not an alignment
-        alignContent="left"
-      >
+      <Divider data-testid="d" {...untyped}>
         OR
       </Divider>,
     );

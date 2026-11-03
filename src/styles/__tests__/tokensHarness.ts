@@ -332,6 +332,9 @@ export const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['warning-tint-foreground', 'card', 4.5],
   ['success-tint-foreground', 'background', 4.5],
   ['success-tint-foreground', 'card', 4.5],
+  // Badge and CounterBadge `ghost`: the color as text on the page.
+  ['error-tint-foreground', 'background', 4.5],
+  ['severe-tint-foreground', 'background', 4.5],
   ['error-foreground', 'error', 4.5],
   ['destructive-foreground', 'destructive', 4.5],
   ['success-foreground', 'success', 4.5],

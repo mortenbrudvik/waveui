@@ -54,6 +54,7 @@ const badgeAppearances = [
   'filled',
   'tint',
   'outline',
+  'ghost',
 ] as const satisfies readonly BadgeAppearance[];
 const badgeColors = [
   'brand',

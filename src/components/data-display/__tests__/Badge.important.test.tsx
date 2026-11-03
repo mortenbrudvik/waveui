@@ -43,6 +43,7 @@ const IMPORTANT_LOOK: Array<
 const SEVERE_CLASSES = {
   filled: 'wave:bg-severe wave:text-severe-foreground',
   tint: 'wave:bg-severe-tint wave:text-severe-tint-foreground',
+  ghost: 'wave:text-severe-tint-foreground',
   border: 'wave:border-severe',
   dot: 'wave:bg-severe',
   dotBorder: 'wave:border-severe',
@@ -80,6 +81,7 @@ describe('Badge and CounterBadge color="important" (1.0)', () => {
     expect(badgeColorClasses.important).toEqual({
       filled: 'wave:bg-foreground wave:text-background',
       tint: 'wave:bg-muted-foreground wave:text-background',
+      ghost: 'wave:text-foreground',
       border: 'wave:border-stroke-accessible',
       dot: 'wave:bg-foreground',
       dotBorder: 'wave:border-foreground',

@@ -1,4 +1,4 @@
-import type { BadgeColor } from '../../lib/types';
+import type { BadgeColor, Shape } from '../../lib/types';
 
 /** Theme-token classes of one Badge color. */
 export interface BadgeColorClasses {
@@ -6,6 +6,8 @@ export interface BadgeColorClasses {
   filled: string;
   /** `appearance="tint"`: background and text (plus a border for `subtle`). */
   tint: string;
+  /** `appearance="ghost"`: the text color (no fill, no border). */
+  ghost: string;
   /** `appearance="outline"`: the border color (the outline's background and text are the component's). */
   border: string;
   /**
@@ -34,6 +36,7 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   brand: {
     filled: 'wave:bg-primary wave:text-primary-foreground',
     tint: 'wave:bg-info-tint wave:text-info-tint-foreground',
+    ghost: 'wave:text-primary',
     border: 'wave:border-primary',
     dot: 'wave:bg-primary',
     dotBorder: 'wave:border-primary',
@@ -41,6 +44,7 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   success: {
     filled: 'wave:bg-success wave:text-success-foreground',
     tint: 'wave:bg-success-tint wave:text-success-tint-foreground',
+    ghost: 'wave:text-success-tint-foreground',
     border: 'wave:border-success',
     dot: 'wave:bg-success',
     dotBorder: 'wave:border-success',
@@ -48,6 +52,7 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   warning: {
     filled: 'wave:bg-warning wave:text-warning-foreground',
     tint: 'wave:bg-warning-tint wave:text-warning-tint-foreground',
+    ghost: 'wave:text-warning-tint-foreground',
     border: 'wave:border-warning',
     // The warning fill is 1.30:1 on the light page; warning's text token keeps 4.5:1 everywhere.
     dot: 'wave:bg-warning-tint-foreground',
@@ -56,6 +61,7 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   danger: {
     filled: 'wave:bg-destructive wave:text-destructive-foreground',
     tint: 'wave:bg-error-tint wave:text-error-tint-foreground',
+    ghost: 'wave:text-error-tint-foreground',
     border: 'wave:border-destructive',
     dot: 'wave:bg-destructive',
     dotBorder: 'wave:border-destructive',
@@ -63,6 +69,7 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   important: {
     filled: 'wave:bg-foreground wave:text-background',
     tint: 'wave:bg-muted-foreground wave:text-background',
+    ghost: 'wave:text-foreground',
     // Fluent's accessible neutral stroke (3:1 on the page).
     border: 'wave:border-stroke-accessible',
     dot: 'wave:bg-foreground',
@@ -71,6 +78,7 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   informative: {
     filled: 'wave:bg-muted wave:text-foreground',
     tint: 'wave:bg-muted wave:text-foreground',
+    ghost: 'wave:text-muted-foreground',
     border: 'wave:border-border',
     // The muted fill and the border are about 1.2:1 on the page in every theme.
     dot: 'wave:bg-muted-foreground',
@@ -79,6 +87,7 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   severe: {
     filled: 'wave:bg-severe wave:text-severe-foreground',
     tint: 'wave:bg-severe-tint wave:text-severe-tint-foreground',
+    ghost: 'wave:text-severe-tint-foreground',
     border: 'wave:border-severe',
     dot: 'wave:bg-severe',
     dotBorder: 'wave:border-severe',
@@ -86,8 +95,23 @@ export const badgeColorClasses: Record<BadgeColor, BadgeColorClasses> = {
   subtle: {
     filled: 'wave:bg-background wave:text-foreground',
     tint: 'wave:bg-background wave:text-muted-foreground wave:border wave:border-border',
+    ghost: 'wave:text-muted-foreground',
     border: 'wave:border-border',
     dot: 'wave:bg-background',
     dotBorder: 'wave:border-border',
   },
 };
+
+/** The corners of each shape, as Fluent's `shape` names them (shared by Badge and CounterBadge). */
+export const badgeShapeClasses: Record<Shape, string> = {
+  circular: 'wave:rounded-full',
+  rounded: 'wave:rounded-md',
+  square: 'wave:rounded-none',
+};
+
+/**
+ * A 6px dot with no content (Badge `size="tiny"`, CounterBadge `dot`). In forced colors the
+ * background would become Canvas and hide the dot, so it takes the text color there.
+ */
+export const badgeDotClasses =
+  'wave:h-1.5 wave:w-1.5 wave:min-w-0 wave:p-0 wave:forced-colors:forced-color-adjust-none wave:forced-colors:bg-[CanvasText]';

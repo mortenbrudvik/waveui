@@ -37,6 +37,8 @@ const ICONS: Array<[name: string, dataName: string, defaultSize: number]> = [
   ['PresenceOfflineIcon', 'presence-offline', 16],
   ['PresenceDndIcon', 'presence-dnd', 16],
   ['PresenceOofIcon', 'presence-oof', 16],
+  ['PresenceBlockedIcon', 'presence-blocked', 16],
+  ['PresenceUnknownIcon', 'presence-unknown', 16],
 ];
 
 type IconComponent = (props: IconProps) => React.ReactNode;
@@ -261,6 +263,8 @@ describe('icons (input-datetime#22, button-provider#20)', () => {
       ['PresenceOfflineIcon', 'stroke'],
       ['PresenceDndIcon', 'stroke'],
       ['PresenceOofIcon', 'stroke'],
+      ['PresenceBlockedIcon', 'stroke'],
+      ['PresenceUnknownIcon', 'stroke'],
     ];
 
     it.each(PRESENCE)('%s is drawn in the 16x16 badge box', (name, paint) => {

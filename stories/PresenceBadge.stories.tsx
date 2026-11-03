@@ -10,6 +10,8 @@ const STATUSES: PresenceStatus[] = [
   'offline',
   'do-not-disturb',
   'out-of-office',
+  'blocked',
+  'unknown',
 ];
 
 const meta = {
@@ -56,6 +58,18 @@ export const OOF: Story = {
 /** Every status has its own shape, so none depends on color alone. */
 export const AllStatuses: Story = {
   args: { size: 'extra-large' },
+  render: (args) => (
+    <div className="flex items-center gap-4">
+      {STATUSES.map((status) => (
+        <PresenceBadge key={status} {...args} status={status} />
+      ))}
+    </div>
+  ),
+};
+
+/** `outOfOffice` draws the arrow in the status's own color, whatever the status. */
+export const OutOfOffice: Story = {
+  args: { size: 'extra-large', outOfOffice: true },
   render: (args) => (
     <div className="flex items-center gap-4">
       {STATUSES.map((status) => (

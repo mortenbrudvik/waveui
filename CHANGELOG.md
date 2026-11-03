@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Text** takes Fluent's layout and decoration props: `wrap`, `truncate`, `italic`, `underline`, `strikethrough`, `align` and `block` (closes `text-1`, `text-2` and `text-5`).
 - **Divider** takes `appearance` (`default`, `subtle`, `strong`, `brand`), `inset` and `alignContent` (`start`, `center`, `end`), with `data-appearance`, `data-inset` and, on a labelled divider, `data-align-content` (closes `divider-1`, `divider-2` and `divider-3`). `DividerAppearance` is a new exported type.
+- **Badge** takes the `ghost` appearance (the color as text alone), `shape` (`circular`, `rounded`, `square`), the `tiny` size (a 6px dot with no content), and an `icon` slot with `iconPosition` (`before`, `after`), with `data-shape` and `data-size` and the stable class `wave-badge__icon` (closes `badge-3`, `badge-4`, `badge-5` and `badge-6`). `BadgeAppearance` gains `'ghost'`, and `BadgeSize` (`'tiny'` and `Size`) is a new exported type.
+- **CounterBadge** takes the `ghost` appearance, `shape` and `size` (`extra-small` to `extra-large`; a `dot` stays 6px), with `data-shape` and `data-size` (closes `counterbadge-4`).
+- **PresenceBadge** takes the statuses `blocked` and `unknown` (each with a glyph of its own) and the `outOfOffice` modifier, which draws the out-of-office arrow in the status's color and names the badge "<status>, out of office" (closes `presence-1` and `presence-2`). `PresenceStatus` gains `'blocked'` and `'unknown'`, so a `switch` over it that has no `default` needs the two cases. `presence-4` is not changed: see the roadmap.
 
 ### Fixed
 
