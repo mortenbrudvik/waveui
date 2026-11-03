@@ -676,8 +676,6 @@ export const InteractionTagPrimary: PolymorphicComponent<
 
   return (
     <Component
-      // The literal marks C-BUTTON-TYPE for the default element; another one takes no `type`.
-      {...(isButton ? { type: 'button' } : null)}
       // The tag's state (`selected`, or a selecting TagGroup's value) decides; a consumer
       // `aria-pressed` applies only to a Primary that is no toggle of the tag's.
       aria-pressed={tag.pressed ?? ariaPressed}
