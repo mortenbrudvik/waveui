@@ -146,6 +146,10 @@ export interface TeachingPopoverContextValue {
   secondaryAction: TeachingPopoverAction | undefined;
   /** The popover's `footerLayout`. */
   footerLayout: 'horizontal' | 'vertical';
+  /** The popover's `appearance`: a brand or inverted surface turns its parts' colors to it. */
+  appearance: 'neutral' | 'brand' | 'inverted';
+  /** The popover's `trapFocus`. */
+  trapFocus: boolean;
   /** The text of the Back, Next, Done and Close buttons, English unless localized. */
   backLabel: string;
   nextLabel: string;
@@ -217,6 +221,8 @@ const inertTeachingPopoverContext: TeachingPopoverContextValue = {
   primaryAction: undefined,
   secondaryAction: undefined,
   footerLayout: 'horizontal',
+  appearance: 'neutral',
+  trapFocus: false,
   backLabel: 'Back',
   nextLabel: 'Next',
   doneLabel: 'Done',
