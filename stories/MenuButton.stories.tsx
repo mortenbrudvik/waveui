@@ -109,15 +109,3 @@ export const Shapes: Story = {
     </div>
   ),
 };
-
-/** On its own a MenuButton reports `aria-expanded="false"`; `expanded` reports the open state. */
-export const ExpandedState: Story = {
-  render: (args) => (
-    <div className="flex items-center gap-2">
-      <MenuButton {...args}>Closed</MenuButton>
-      <MenuButton {...args} expanded>
-        Expanded
-      </MenuButton>
-    </div>
-  ),
-};

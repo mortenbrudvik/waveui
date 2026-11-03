@@ -3,7 +3,7 @@ import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link } from '../Link';
-import type { LinkOwnProps, LinkProps } from '../Link';
+import type { LinkBackground, LinkOwnProps, LinkProps } from '../Link';
 import type * as Wave from '../../../index';
 import { testSystemProps, testFocusEvents, testNoImplicitSubmit } from '../../../test-utils';
 
@@ -482,7 +482,7 @@ describe('Link', () => {
       expectTypeOf<LinkProps>().toEqualTypeOf<LinkProps<'a'>>();
       expectTypeOf<LinkProps['ref']>().toEqualTypeOf<React.Ref<HTMLAnchorElement> | undefined>();
       expectTypeOf<keyof LinkOwnProps>().toEqualTypeOf<
-        'appearance' | 'disabled' | 'disabledFocusable'
+        'appearance' | 'background' | 'disabled' | 'disabledFocusable'
       >();
       // @ts-expect-error -- `LinkVariant` is removed in 1.0: use `LinkAppearance`
       expectTypeOf<Wave.LinkVariant>().toBeAny();
@@ -491,6 +491,118 @@ describe('Link', () => {
         tracking?: string;
       }
       expectTypeOf<MyLinkProps>().toHaveProperty('href');
+    });
+  });
+
+  describe('background (buttons-18)', () => {
+    it('renders the link colors and no data-background by default', () => {
+      render(<Link href="#x">Docs</Link>);
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).not.toHaveAttribute('data-background');
+      expect(link).toHaveClass('wave:text-primary');
+    });
+
+    it('background="default" is the same as unset', () => {
+      render(
+        <Link href="#x" background="default">
+          Docs
+        </Link>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).not.toHaveAttribute('data-background');
+      expect(link).toHaveClass('wave:text-primary');
+    });
+
+    it.each(['inline', 'standalone', 'subtle'] as const)(
+      'brand recolors the %s link: on-brand text and ring, the appearance kept otherwise',
+      (appearance) => {
+        render(
+          <Link href="#x" appearance={appearance} background="brand">
+            Docs
+          </Link>,
+        );
+        const link = screen.getByRole('link', { name: 'Docs' });
+        expect(link).toHaveAttribute('data-background', 'brand');
+        expect(link).toHaveClass(
+          'wave:text-primary-foreground',
+          'wave:focus-visible:outline-primary-foreground',
+        );
+        expect(link).not.toHaveClass('wave:text-primary');
+        expect(link).not.toHaveClass('wave:text-foreground');
+        expect(link).not.toHaveClass('wave:focus-visible:outline-ring');
+      },
+    );
+
+    it.each(['inline', 'standalone', 'subtle'] as const)(
+      'inverted recolors the %s link with the inverted-surface text and ring',
+      (appearance) => {
+        render(
+          <Link href="#x" appearance={appearance} background="inverted">
+            Docs
+          </Link>,
+        );
+        const link = screen.getByRole('link', { name: 'Docs' });
+        expect(link).toHaveAttribute('data-background', 'inverted');
+        expect(link).toHaveClass(
+          'wave:text-inverted-foreground',
+          'wave:focus-visible:outline-inverted-foreground',
+        );
+        expect(link).not.toHaveClass('wave:text-primary');
+      },
+    );
+
+    it('keeps the underline of inline and the semibold of standalone', () => {
+      render(
+        <>
+          <Link href="#a" background="brand">
+            Inline
+          </Link>
+          <Link href="#b" appearance="standalone" background="brand">
+            Standalone
+          </Link>
+        </>,
+      );
+      expect(screen.getByRole('link', { name: 'Inline' })).toHaveClass('wave:underline');
+      expect(screen.getByRole('link', { name: 'Standalone' })).toHaveClass('wave:font-semibold');
+    });
+
+    it('a consumer text color still replaces the background color', () => {
+      render(
+        <Link href="#x" background="brand" className="text-wave-error">
+          Docs
+        </Link>,
+      );
+      const link = screen.getByRole('link', { name: 'Docs' });
+      expect(link).toHaveClass('text-wave-error');
+      expect(link).not.toHaveClass('wave:text-primary-foreground');
+    });
+
+    it('works with as, disabled and disabledFocusable', () => {
+      render(
+        <>
+          <Link as="button" background="inverted">
+            Action
+          </Link>
+          <Link href="#x" background="brand" disabled>
+            Off
+          </Link>
+        </>,
+      );
+      expect(screen.getByRole('button', { name: 'Action' })).toHaveAttribute(
+        'data-background',
+        'inverted',
+      );
+      expect(screen.getByText('Off')).toHaveClass(
+        'wave:text-primary-foreground',
+        'wave:opacity-50',
+      );
+    });
+
+    it('is typed as a LinkBackground', () => {
+      expectTypeOf<LinkOwnProps['background']>().toEqualTypeOf<LinkBackground | undefined>();
+      // @ts-expect-error background is 'default' | 'brand' | 'inverted'
+      const element = <Link background="dark">Docs</Link>;
+      expect(element).toBeTruthy();
     });
   });
 });
