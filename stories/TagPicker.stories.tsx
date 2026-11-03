@@ -10,6 +10,7 @@ import {
   type TagPickerOption,
   type TagPickerProps,
 } from '../src';
+import { motionCases } from './_motion';
 
 const fruitOptions = [
   { value: 'apple', label: 'Apple' },
@@ -522,4 +523,32 @@ export const LocalizedLabels: Story = {
       <TagPicker {...args} />
     </div>
   ),
+};
+
+/** The Motion story's popup: it zooms in from 95% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `TagPicker motion`. By default the list fades in and slides 4px away from the field, on the side it opened on, over 200ms, and fades out and slides back over 100ms (the list stays in the popup while it exits, so its option ids stay valid; a list whose options changed as it closed leaves at once). `null` turns it off; a class string replaces it (here a zoom).
+ * The popup stays in place, `inert`, while it exits; focus is already back where it was. Under
+ * reduced motion every popup appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionPopups(args) {
+    return (
+      <div className="flex flex-wrap gap-4">
+        {motionCases(fadeAndZoom).map(({ label, motion }) => (
+          <TagPicker
+            key={label}
+            {...args}
+            aria-label={label}
+            motion={motion}
+            options={fruitOptions}
+            placeholder={label}
+          />
+        ))}
+      </div>
+    );
+  },
 };

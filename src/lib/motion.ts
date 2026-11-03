@@ -54,7 +54,8 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   while the panel keeps its size. It holds no duration: the element adds its size's from
  *   `drawerDurations`.
  * - `popupMotion`, a positioned popup (Popover.Content, Menu.Popover and its submenus, the
- *   InfoButton note and the TeachingPopover surface): opacity and translate. It enters from
+ *   InfoButton note, the TeachingPopover surface, the listbox popups of the pickers, the DatePicker
+ *   calendar and the AvatarGroup overflow popup): opacity and translate. It enters from
  *   transparent and moved 4px toward its anchor, on the axis of the side it opened on (the
  *   resolved physical side the surface renders as `data-side`: a popup below its anchor starts
  *   4px higher, one to its right 4px further left), over the normal duration (200 ms) with the mid

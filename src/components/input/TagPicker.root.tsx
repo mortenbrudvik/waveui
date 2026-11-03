@@ -9,6 +9,7 @@ import type { SlotPart } from '../../lib/slotProps';
 import type {
   CoreSize,
   InputAppearance,
+  MotionSlot,
   PopupPositioningOptions,
   Size,
   TagAppearance,
@@ -197,6 +198,19 @@ export interface TagPickerProps extends Omit<
    * @default `{ matchReferenceWidth: true, fitViewport: true }`
    */
   positioning?: PopupPositioningOptions;
+  /**
+   * The popup surface's motion. By default it fades in and slides 4px away from the field, on the
+   * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
+   * 100 ms with an accelerating curve (the list stays in the surface while it exits); under
+   * reduced motion it appears and disappears at once. The list does not fade out when its options
+   * changed as it closed (a filter reset by the selection), nor does the "No matches" row. `null`
+   * turns the motion off (the surface still renders its `data-presence` phases, which then end at
+   * once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's popup `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
   /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
@@ -395,8 +409,8 @@ export interface TagPickerProps extends Omit<
     overflowCount?: SlotPart<'span'>;
     /**
      * The popup `<div>` of `TagPicker.List`, rendered in a portal while it shows (stable class
-     * `wave-tag-picker__surface`). Locked: `data-side`, `data-align`, `role`, `id`, `hidden`,
-     * `inert` and `aria-hidden`; your `style` merges, but the position, the size limits and the
+     * `wave-tag-picker__surface`). Locked: `data-side`, `data-align`, `data-state`,
+     * `data-presence`, `inert` while it exits, `role`, `id`, `hidden` and `aria-hidden`; your `style` merges, but the position, the size limits and the
      * visibility the positioning sets win.
      */
     surface?: SlotPart<'div'>;
@@ -475,6 +489,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     disabled = false,
     size: sizeProp,
     positioning,
+    motion,
     appearance: appearanceProp,
     name,
     form,
@@ -966,6 +981,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       createText: createText ?? '',
       createValue,
       emptyContent: query !== '' && !showCreate,
+      motion,
       layerId,
       surfaceRef,
       floatingProps,
@@ -1046,6 +1062,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       collapsed,
       hiddenValues,
       slotProps,
+      motion,
     ],
   );
 

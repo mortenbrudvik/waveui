@@ -1019,6 +1019,7 @@ function TagPickerListImpl({
       showCheck={false}
       listClassName={wcn(tagPickerListClassNames.root, tagPickerClassNames.listbox, className)}
       surfaceClassName={tagPickerClassNames.surface}
+      motion={ctx.motion}
       emptyContent={
         ctx.emptyContent ? (
           <div

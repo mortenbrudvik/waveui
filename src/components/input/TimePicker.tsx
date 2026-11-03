@@ -7,6 +7,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
+import { popupMotion } from '../../lib/motion';
 import {
   lockPositionStyle,
   mergeSlotProps,
@@ -24,7 +25,12 @@ import {
   inputPaddingClasses,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
+import type {
+  CoreSize,
+  InputAppearance,
+  MotionSlot,
+  PopupPositioningOptions,
+} from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -41,6 +47,7 @@ import {
 } from '../../hooks/useListbox';
 import type { ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
@@ -57,6 +64,7 @@ import {
 } from './dateUtils';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
+import { usePickerSurfacePresence } from './pickerPresence';
 import {
   pickerButtonOffset,
   pickerEndPadding,
@@ -252,6 +260,19 @@ export interface TimePickerProps extends Omit<
    */
   positioning?: PopupPositioningOptions;
   /**
+   * The popup surface's motion. By default it fades in and slides 4px away from the field, on the
+   * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
+   * 100 ms with an accelerating curve (the time list stays in the surface while it exits); under
+   * reduced motion it appears and disappears at once. The list does not fade out when its options
+   * changed as it closed (a filter reset by the selection), nor does the status row. `null` turns
+   * the motion off (the surface still renders its `data-presence` phases, which then end at
+   * once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's popup `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
+  /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
@@ -421,8 +442,8 @@ export interface TimePickerProps extends Omit<
     checkIcon?: SlotPart<'span'>;
     /**
      * The popup `<div>` around the list or the status row, rendered in a portal while the list
-     * is open (stable class `wave-time-picker__surface`). Locked: `data-state`, `data-presence`
-     * (unset: it mounts open), `data-side`, `data-align`, `role`, `id`, `hidden`, `inert` and
+     * is open (stable class `wave-time-picker__surface`). Locked: `data-state`, `data-presence`,
+     * `inert` while it exits, `data-side`, `data-align`, `role`, `id`, `hidden` and
      * `aria-hidden`; your `style` merges, but the position, the size limits and the visibility
      * the positioning sets win.
      */
@@ -517,6 +538,7 @@ export const TimePicker = (props: TimePickerProps) => {
     disabled = false,
     size: sizeProp,
     positioning,
+    motion,
     appearance: appearanceProp,
     readOnly,
     clearable = false,
@@ -774,6 +796,10 @@ export const TimePicker = (props: TimePickerProps) => {
         : undefined,
   });
 
+  // The popup surface mounts through the presence core: the list stays in it while it exits.
+  const popup = usePickerSurfacePresence(open ? (hasMatches ? 'list' : 'empty') : null, lb.items);
+  const motionClassName = useMotionClasses(motion, popupMotion);
+
   const displayLabel = selectedValue
     ? (lb.getItem(selectedValue)?.label ?? displayTime(selectedValue, format))
     : '';
@@ -815,6 +841,7 @@ export const TimePicker = (props: TimePickerProps) => {
     surfaceRef,
     setFloating,
     slotProps?.surface?.ref,
+    popup.ref,
   );
 
   /* ---- forms and Field ------------------------------------------- */
@@ -943,7 +970,7 @@ export const TimePicker = (props: TimePickerProps) => {
   /* ---- render ---------------------------------------------------- */
 
   const listboxLabelledBy = joinIds(ariaLabelledBy, field?.labelId);
-  const renderListbox = (hidden: boolean) => (
+  const renderListbox = (hidden: boolean, items: typeof lb.items = lb.items) => (
     <ul
       {...mergeSlotProps(slotProps?.listbox, {
         className: wcn(
@@ -963,7 +990,7 @@ export const TimePicker = (props: TimePickerProps) => {
         },
       })}
     >
-      {lb.items.map((item) => (
+      {items.map((item) => (
         <TimePickerOption
           key={item.value}
           value={item.value}
@@ -998,16 +1025,17 @@ export const TimePicker = (props: TimePickerProps) => {
     className: wcn(
       timePickerClassNames.surface,
       'wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8',
+      motionClassName,
     ),
     locked: {
       ...placement,
-      'data-state': 'open',
-      // No presence phase: the list mounts open (a part cannot pretend otherwise).
-      'data-presence': undefined,
+      'data-state': popup.exiting ? 'closed' : 'open',
+      // The presence phase, and `inert` while the surface exits (a part cannot pretend otherwise).
+      'data-presence': popup.presenceProps['data-presence'],
+      inert: popup.presenceProps.inert,
       role: undefined,
       id: undefined,
       hidden: undefined,
-      inert: undefined,
       'aria-hidden': undefined,
     },
   });
@@ -1165,7 +1193,7 @@ export const TimePicker = (props: TimePickerProps) => {
             {errorMessage}
           </p>
         )}
-        {!open && allOptions.length > 0 && renderListbox(true)}
+        {!open && !popup.exiting && allOptions.length > 0 && renderListbox(true)}
         <span role="status" className="wave:sr-only">
           {statusMessage}
         </span>
@@ -1178,10 +1206,12 @@ export const TimePicker = (props: TimePickerProps) => {
           required={validates}
           onInvalid={() => inputRef.current?.focus()}
         />
-        {open && (
+        {popup.mounted && (
           <Portal layerId={layerId}>
             <div {...surfaceProps} style={surfaceStyle} ref={surfaceRefs}>
-              {hasMatches ? (
+              {popup.exiting ? (
+                renderListbox(false, popup.heldItems)
+              ) : hasMatches ? (
                 renderListbox(false)
               ) : (
                 <div

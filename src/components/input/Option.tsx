@@ -15,10 +15,12 @@ import {
   mergeSlotProps,
   type SlotPart,
 } from '../../lib/slotProps';
+import { popupMotion } from '../../lib/motion';
 import { forcedColors } from '../../lib/styles';
-import type { PopupPositioningOptions } from '../../lib/types';
+import type { MotionSlot, PopupPositioningOptions } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { useDismiss } from '../../hooks/useDismiss';
 import type { DismissReason } from '../../hooks/useDismiss';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
@@ -32,6 +34,7 @@ import {
   type UseListboxResult,
 } from '../../hooks/useListbox';
 import { Portal } from '../portal/Portal';
+import { usePickerSurfacePresence } from './pickerPresence';
 
 /* ------------------------------------------------------------------ */
 /*  Option                                                             */
@@ -842,6 +845,19 @@ export interface ListboxSurfaceProps {
    */
   surfaceClassName?: string;
   /**
+   * The popup surface's motion. By default it fades in and slides 4px away from its anchor, on the
+   * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
+   * 100 ms with an accelerating curve (the list stays in the surface while it exits); under
+   * reduced motion it appears and disappears at once. The list does not fade out when its options
+   * changed as it closed (a filter reset by the selection), nor does the empty message. `null`
+   * turns the motion off (the surface still renders its `data-presence` phases, which then end at
+   * once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's popup `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
+  /**
    * Attributes spread onto the list element before the listbox's own (`role`, `id`, `tabIndex`,
    * `aria-multiselectable`, `aria-activedescendant` and `hidden` win, also where the listbox
    * renders none of the last two): `data-*` and other `aria-*` attributes, `style`, and handlers,
@@ -868,6 +884,8 @@ export interface ListboxSurfaceParts {
  * options (spread from `listbox.getListboxProps()`), rendered `hidden` in place inside your
  * picker while the list is not shown, so the options register and their ids exist from the first
  * render, and in a portaled surface placed by {@link useListboxPopup} while it is, never in both.
+ * The surface mounts through the presence core (`data-presence`, `data-state`): the list stays in
+ * it while it fades out and moves back into the picker when the exit ends.
  * While the listbox is open with nothing to show, the surface shows `emptyContent` instead, if
  * any. A press on the surface keeps focus on your combobox. It provides the listbox's context to
  * the options, so it needs no {@link ListboxProvider}.
@@ -899,6 +917,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
     showCheck = true,
     listClassName,
     surfaceClassName,
+    motion,
     listProps,
     children,
   } = props;
@@ -920,7 +939,23 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
   } = (listProps ?? {}) as ListboxSurfaceListProps & { className?: unknown };
   const { ref: listboxRef, ...listboxProps } = listbox.getListboxProps();
   const listRef = useMergedRefs<HTMLUListElement>(listRefProp, listboxRef, parts?.list?.ref);
-  const surfaceMergedRef = useMergedRefs<HTMLElement>(surfaceRef, parts?.surface?.ref);
+
+  // The surface mounts and unmounts through the presence core, and its list stays in it while it
+  // exits, held as it was last shown (the options of an exit are the children of the last shown
+  // render: a data-mode picker renders none once closed). A closed listbox never leaves a surface
+  // behind: the text typed before closing survives it.
+  const showEmpty = open && !expanded && emptyContent !== undefined && emptyContent !== null;
+  const {
+    mounted,
+    exiting,
+    ref: presenceRef,
+    presenceProps,
+  } = usePickerSurfacePresence(expanded ? 'list' : showEmpty ? 'empty' : null, listbox.items);
+  const motionClassName = useMotionClasses(motion, popupMotion);
+  const surfaceMergedRef = useMergedRefs<HTMLElement>(surfaceRef, parts?.surface?.ref, presenceRef);
+  const [heldChildren, setHeldChildren] = React.useState(children);
+  if (expanded && heldChildren !== children) setHeldChildren(children);
+  const listInSurface = expanded || exiting;
 
   const list = (
     <OptionCheckContext.Provider value={showCheck}>
@@ -945,50 +980,52 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
               onMouseDown: composeEventHandlers(listMouseDown, listboxProps.onMouseDown),
               'aria-label': ariaLabel,
               'aria-labelledby': ariaLabelledBy,
-              hidden: !expanded || undefined,
+              hidden: !listInSurface || undefined,
             },
           })}
           ref={listRef}
         >
-          {children}
+          {exiting ? heldChildren : children}
         </ul>
       </ListboxProvider>
     </OptionCheckContext.Provider>
   );
 
-  // A closed listbox never leaves a surface behind: the text typed before closing survives it.
-  const showEmpty = open && !expanded && emptyContent !== undefined && emptyContent !== null;
-  if (!expanded && !showEmpty) return list;
+  if (!mounted) return list;
 
   const { style: positionStyle, ...placement } = floatingProps;
   const surfaceProps = mergeSlotProps(parts?.surface, {
     className: wcn(
       listboxSurfaceClassNames.root,
       'wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4',
+      motionClassName,
       surfaceClassName,
     ),
     locked: {
       ...placement,
       'data-wave-listbox-surface': '',
+      'data-state': exiting ? 'closed' : 'open',
+      // The presence phase, and `inert` while the surface exits (a part cannot pretend otherwise).
+      'data-presence': presenceProps['data-presence'],
+      inert: presenceProps.inert,
       onMouseDown: preventMouseDown,
       role: undefined,
       id: undefined,
       hidden: undefined,
-      inert: undefined,
       'aria-hidden': undefined,
     },
   });
 
   return (
     <>
-      {!expanded && list}
+      {!listInSurface && list}
       <Portal layerId={layerId}>
         <div
           {...surfaceProps}
           style={lockPositionStyle(surfaceProps.style, positionStyle)}
           ref={surfaceMergedRef}
         >
-          {expanded ? list : emptyContent}
+          {listInSurface ? list : emptyContent}
         </div>
       </Portal>
     </>

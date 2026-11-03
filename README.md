@@ -2356,7 +2356,7 @@ export function Details() {
 
 ### Enter and exit motion
 
-Dialog, Drawer, NavDrawer, Menu, Popover, InfoButton, Tooltip, TeachingPopover, Accordion, Tree, Nav, the toasts and MessageBarGroup animate in and out by default, with Fluent's motion tokens, and TabList, Carousel and ProgressBar take motion options. The listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover (and a popup of your own on `ListboxSurface`) do not animate yet ([ROADMAP §8.5](docs/ROADMAP.md#85-follow-ups-outside-the-gap-list)). The guide's "Component Motion" section lists the curves and every class.
+Dialog, Drawer, NavDrawer, Menu, Popover, InfoButton, Tooltip, TeachingPopover, the listbox popups of Combobox, Dropdown, TagPicker and TimePicker (and a popup of your own on `ListboxSurface`), the DatePicker calendar, the AvatarGroup overflow popup, Accordion, Tree, Nav, the toasts and MessageBarGroup animate in and out by default, with Fluent's motion tokens, and TabList, Carousel and ProgressBar take motion options. The pickers, the calendar and the AvatarGroup take `motion` like Popover does; a picker's list stays in its popup while it fades out (so its option ids stay valid), and a list whose options changed as it closed, or the "No matches" row, leaves at once. The guide's "Component Motion" section lists the curves and every class.
 
 | Part | Motion | In | Out |
 |---|---|---|---|

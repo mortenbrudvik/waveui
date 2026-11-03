@@ -12,6 +12,7 @@ import {
 } from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
+import { motionCases } from './_motion';
 import { MountedOptions } from './_mountedOptions';
 import { PEOPLE, TEN_THOUSAND_PEOPLE } from './_people';
 
@@ -394,4 +395,29 @@ export const SizesAndAppearances: Story = {
       )}
     />
   ),
+};
+
+/** The Motion story's popup: it zooms in from 95% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `Combobox motion`. By default the list fades in and slides 4px away from the field, on the side it opened on, over 200ms, and fades out and slides back over 100ms (the list stays in the popup while it exits, so its option ids stay valid; a list whose options changed as it closed leaves at once). `null` turns it off; a class string replaces it (here a zoom).
+ * The popup stays in place, `inert`, while it exits; focus is already back where it was. Under
+ * reduced motion every popup appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionPopups(args) {
+    return (
+      <div className="flex flex-wrap gap-4">
+        {motionCases(fadeAndZoom).map(({ label, motion }) => (
+          <Combobox key={label} {...args} aria-label={label} motion={motion} placeholder={label}>
+            <Option value="cat">Cat</Option>
+            <Option value="dog">Dog</Option>
+            <Option value="fish">Fish</Option>
+          </Combobox>
+        ))}
+      </div>
+    );
+  },
 };
