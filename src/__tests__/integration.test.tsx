@@ -3957,7 +3957,7 @@ describe('menus and commands across components', () => {
       advance(1000);
       expect(card).toBeInTheDocument();
       expect(menuNamed('Contact')).toBeInTheDocument();
-      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true]);
 
       await user.keyboard('{Escape}');
       expect(queryMenuNamed('Contact')).not.toBeInTheDocument();

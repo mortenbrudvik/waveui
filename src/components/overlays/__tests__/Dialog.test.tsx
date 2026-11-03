@@ -2204,7 +2204,13 @@ describe('Dialog', () => {
         OpenChangeDetails<ModalOpenChangeReason>
       >();
       expectTypeOf<DialogOpenChangeDetails['reason']>().toEqualTypeOf<
-        'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press' | 'focus-outside' | 'parent-closed'
+        | 'trigger'
+        | 'close'
+        | 'close-button'
+        | 'escape'
+        | 'outside-press'
+        | 'focus-outside'
+        | 'parent-closed'
       >();
       type Handler = NonNullable<DialogProps['onOpenChange']>;
       expectTypeOf<Parameters<Handler>[1]>().toEqualTypeOf<DialogOpenChangeDetails>();

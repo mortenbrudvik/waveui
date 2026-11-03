@@ -163,7 +163,7 @@ export const SLOT_PROPS_KEYS = {
   menuItemRadioClassNames: ['content', 'shortcut'],
   menuItemSwitchClassNames: ['content', 'shortcut', 'track', 'thumb'],
   menuItemLinkClassNames: ['content', 'shortcut'],
-  tooltipClassNames: ['content'],
+  tooltipClassNames: ['content', 'beak'],
   teachingPopoverClassNames: ['beak', 'closeButton', 'dot', 'backButton', 'nextButton'],
   teachingPopoverCarouselNavClassNames: ['button', 'indicator'],
   infoButtonClassNames: ['info', 'beak'],

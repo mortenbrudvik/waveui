@@ -20,6 +20,8 @@ type GlobalStore = Record<symbol, unknown>;
  * - `'announcer'` — the live-region announcer (`useAnnounce`);
  * - `'orderedSurfaces'` — the open surfaces whose keyboard order `usePopoverTabOrder` manages
  *   (`Popover.shared.tsx`);
+ * - `'tooltips'` — the hide functions of the open tooltips, so showing one hides the others
+ *   (`Tooltip.tsx`);
  * - `'toasterHandles'` — the state of every `createToaster()` handle (`toaster.ts`);
  * - `'warnings'` and `'missing-context'` — the warn-once keys and the logged missing-context
  *   texts (`dev.ts`).

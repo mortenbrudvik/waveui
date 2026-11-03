@@ -1372,10 +1372,14 @@ export const popoverContentClassNames = {
   title: 'wave-popover-content__title',
 } as const;
 
-/** Tooltip: `root` on the span around your child; `content` on the portaled tooltip. */
+/**
+ * Tooltip: `root` on the span around your child; `content` on the portaled tooltip; `beak` on its
+ * arrow (`withArrow`).
+ */
 export const tooltipClassNames = {
   root: 'wave-tooltip',
   content: 'wave-tooltip__content',
+  beak: 'wave-tooltip__beak',
 } as const;
 
 /**

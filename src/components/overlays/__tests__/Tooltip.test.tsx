@@ -1566,7 +1566,7 @@ describe('Tooltip — slotProps', () => {
   });
 
   it('types the part for its element, and takes no children', () => {
-    expectTypeOf<keyof TooltipSlotProps>().toEqualTypeOf<'content'>();
+    expectTypeOf<keyof TooltipSlotProps>().toEqualTypeOf<'content' | 'beak'>();
     expectTypeOf<NonNullable<TooltipSlotProps['content']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLSpanElement> | undefined
     >();

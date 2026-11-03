@@ -568,6 +568,14 @@ describe('usePopupPosition — fallbackPlacements and hideWhenDetached', () => {
     expect(screen.getByTestId('floating').style.visibility).not.toBe('hidden');
   });
 
+  it('never takes an anchor without a box for detached (nothing to clip)', async () => {
+    boxes.reference = { x: 500, y: -500, width: 0, height: 0 };
+    let last: UsePopupPositionResult | null = null;
+    render(<Popup hideWhenDetached onResult={(r) => (last = r)} />);
+    await waitFor(() => expect(last!.isPositioned).toBe(true));
+    expect(screen.getByTestId('floating').style.visibility).not.toBe('hidden');
+  });
+
   it('does not hide a detached anchor by default', async () => {
     boxes.reference = { x: 500, y: -500, width: 200, height: 20 };
     let last: UsePopupPositionResult | null = null;
