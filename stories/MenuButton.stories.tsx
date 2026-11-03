@@ -89,3 +89,23 @@ export const CustomMenuIcon: Story = {
     menuIcon: <span className="text-wave-caption-1">▾</span>,
   },
 };
+
+/** `shape` rounds the corners: the default radius, a pill or square. */
+export const Shapes: Story = {
+  argTypes: {
+    shape: { control: false },
+  },
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      <MenuButton {...args} shape="rounded">
+        rounded
+      </MenuButton>
+      <MenuButton {...args} shape="circular">
+        circular
+      </MenuButton>
+      <MenuButton {...args} shape="square">
+        square
+      </MenuButton>
+    </div>
+  ),
+};

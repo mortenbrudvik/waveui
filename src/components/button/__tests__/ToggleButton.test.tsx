@@ -60,9 +60,10 @@ describe('ToggleButton', () => {
     vi.restoreAllMocks();
   });
 
-  testSystemProps(ToggleButton, {
+  testSystemProps<ToggleButtonProps<React.ElementType>>(ToggleButton, {
     expectedTag: 'button',
     displayName: 'ToggleButton',
+    polymorphic: true,
     defaultProps: { children: 'Bold' },
     conflictingClass: { className: 'px-8', overrides: 'wave:px-3' },
     a11yVariants: [
@@ -870,6 +871,110 @@ describe('ToggleButton', () => {
       // @ts-expect-error isAccessible is a boolean
       const element = <ToggleButton isAccessible="yes">Bold</ToggleButton>;
       expect(element).toBeTruthy();
+    });
+  });
+
+  describe('shape (buttons-1)', () => {
+    it('renders no data-shape by default and the shape classes when set', () => {
+      render(
+        <>
+          <ToggleButton>Plain</ToggleButton>
+          <ToggleButton shape="circular">Round</ToggleButton>
+          <ToggleButton shape="square" pressed>
+            Square
+          </ToggleButton>
+        </>,
+      );
+      expect(screen.getByRole('button', { name: 'Plain' })).not.toHaveAttribute('data-shape');
+      const round = screen.getByRole('button', { name: 'Round' });
+      expect(round).toHaveClass('wave:rounded-full');
+      expect(round).toHaveAttribute('data-shape', 'circular');
+      const square = screen.getByRole('button', { name: 'Square' });
+      expect(square).toHaveClass('wave:rounded-none', 'wave:bg-selected');
+      expect(square).toHaveAttribute('data-shape', 'square');
+    });
+  });
+
+  describe('polymorphic `as` (buttons-11)', () => {
+    it('renders another element and keeps the toggle behaviour (a div is a button)', async () => {
+      const user = userEvent.setup();
+      const onPressedChange = vi.fn();
+      render(
+        <ToggleButton as="div" onPressedChange={onPressedChange}>
+          Bold
+        </ToggleButton>,
+      );
+      const toggle = screen.getByRole('button', { name: 'Bold' });
+      expect(toggle.tagName).toBe('DIV');
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      expect(onPressedChange).toHaveBeenCalledTimes(1);
+      expect(onPressedChange).toHaveBeenCalledWith(true);
+      await user.keyboard('{Enter}');
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('an anchor with href is a link: no aria-pressed, with one development warning', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const user = userEvent.setup();
+      render(
+        <ToggleButton as="a" href="#bold">
+          Bold
+        </ToggleButton>,
+      );
+      const link = screen.getByRole('link', { name: 'Bold' });
+      expect(link).toHaveAttribute('href', '#bold');
+      expect(link).not.toHaveAttribute('aria-pressed');
+      await user.click(link);
+      expect(link).toHaveAttribute('data-pressed', '');
+      expect(warn.mock.calls).toEqual([[roleStateWarning('link')]]);
+    });
+
+    it('an anchor with role="button" reports aria-pressed; role="checkbox" aria-checked', async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <ToggleButton as="a" href="#a" role="button">
+            Pin
+          </ToggleButton>
+          <ToggleButton as="span" role="checkbox" defaultPressed>
+            Grid
+          </ToggleButton>
+        </>,
+      );
+      const pin = screen.getByRole('button', { name: 'Pin' });
+      expect(pin).toHaveAttribute('aria-pressed', 'false');
+      await user.click(pin);
+      expect(pin).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('checkbox', { name: 'Grid' })).toBeChecked();
+    });
+
+    it('renders a custom component', () => {
+      const Custom = ({ to, ...rest }: React.ComponentProps<'button'> & { to: string }) => (
+        <button type="button" data-to={to} {...rest} />
+      );
+      render(
+        <ToggleButton as={Custom} to="/x" pressed>
+          Bold
+        </ToggleButton>,
+      );
+      const button = screen.getByRole('button', { name: 'Bold' });
+      expect(button).toHaveAttribute('data-to', '/x');
+      expect(button).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('types the props of the rendered element; onChange stays a type error', () => {
+      expectTypeOf<ToggleButtonProps<'a'>['href']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<ToggleButtonProps['pressed']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<ToggleButtonProps['onPressedChange']>().toEqualTypeOf<
+        ((pressed: boolean) => void) | undefined
+      >();
+      // @ts-expect-error href belongs to an anchor, not to the default button
+      const withHref = <ToggleButton href="#x">Bold</ToggleButton>;
+      // @ts-expect-error a button has no change event: use onPressedChange
+      const withChange = <ToggleButton onChange={() => {}}>Bold</ToggleButton>;
+      expect([withHref, withChange]).toHaveLength(2);
     });
   });
 });

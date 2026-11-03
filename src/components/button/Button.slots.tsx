@@ -29,6 +29,7 @@ const buttonOwnPropKeys = {
   as: true,
   appearance: true,
   size: true,
+  shape: true,
   icon: true,
   iconPosition: true,
   disabledFocusable: true,

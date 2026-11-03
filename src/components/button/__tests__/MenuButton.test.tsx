@@ -2,13 +2,14 @@ import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { Button } from '../Button';
 import { MenuButton } from '../MenuButton';
 import type { MenuButtonProps } from '../MenuButton';
 import { buttonClassName, buttonSizeClasses } from '../buttonStyles';
 import { buttonClassNames, menuButtonClassNames } from '../../../lib/classNames';
 import { testSystemProps, testFocusEvents, testNoImplicitSubmit } from '../../../test-utils';
-import type { Appearance, Size, Slot } from '../../../lib/types';
+import type { Appearance, Shape, Size, Slot } from '../../../lib/types';
 import { composeStories } from '@storybook/react';
 import * as stories from '../../../../stories/MenuButton.stories';
 
@@ -69,9 +70,10 @@ describe('MenuButton', () => {
     vi.restoreAllMocks();
   });
 
-  testSystemProps(MenuButton, {
+  testSystemProps<MenuButtonProps<React.ElementType>>(MenuButton, {
     expectedTag: 'button',
     displayName: 'MenuButton',
+    polymorphic: true,
     defaultProps: { children: 'Actions' },
     a11yVariants: [
       { name: 'disabled', props: { disabled: true } },
@@ -119,9 +121,24 @@ describe('MenuButton', () => {
       );
     });
 
-    it('omits aria-expanded when expanded is not set', () => {
+    it('reports aria-expanded="false" when expanded is not set (buttons-12)', () => {
       render(<MenuButton>Actions</MenuButton>);
-      expect(screen.getByRole('button', { name: 'Actions' })).not.toHaveAttribute('aria-expanded');
+      expect(screen.getByRole('button', { name: 'Actions' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+
+    it('keeps the default for a forwarded unset aria-expanded (buttons-12)', () => {
+      render(<MenuButton aria-expanded={undefined}>Actions</MenuButton>);
+      expect(screen.getByRole('button', { name: 'Actions' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+
+    it('renders aria-expanded="false" in the server markup (buttons-12)', () => {
+      expect(renderToString(<MenuButton>Actions</MenuButton>)).toContain('aria-expanded="false"');
     });
   });
 
@@ -733,6 +750,68 @@ describe('MenuButton', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       expect(trigger).toHaveAttribute('aria-expanded', 'false');
       expect(trigger).toHaveFocus();
+    });
+  });
+
+  describe('shape (buttons-1)', () => {
+    it('keeps the default radius and renders no data-shape without shape', () => {
+      render(<MenuButton>Actions</MenuButton>);
+      const button = screen.getByRole('button', { name: 'Actions' });
+      expect(button).not.toHaveAttribute('data-shape');
+      expect(button).toHaveClass('wave:rounded');
+      expect(button.className).not.toMatch(/wave:rounded-(full|none)/);
+    });
+
+    it.each([
+      ['circular', 'wave:rounded-full'],
+      ['square', 'wave:rounded-none'],
+    ] as const)('shape="%s" replaces the radius and renders data-shape', (shape, cls) => {
+      render(<MenuButton shape={shape}>Actions</MenuButton>);
+      const button = screen.getByRole('button', { name: 'Actions' });
+      expect(button).toHaveClass(cls);
+      expect(button).not.toHaveClass('wave:rounded');
+      expect(button).toHaveAttribute('data-shape', shape);
+    });
+  });
+
+  describe('polymorphic `as` (buttons-11)', () => {
+    it('renders as an anchor with its attributes, menu semantics and the chevron', () => {
+      render(
+        <MenuButton as="a" href="#menu">
+          Actions
+        </MenuButton>,
+      );
+      const link = screen.getByRole('link', { name: 'Actions' });
+      expect(link).toHaveAttribute('href', '#menu');
+      expect(link).toHaveAttribute('aria-haspopup', 'menu');
+      expect(link).toHaveAttribute('aria-expanded', 'false');
+      expect(link).toHaveClass(menuButtonClassNames.root, buttonClassNames.root);
+    });
+
+    it('renders a custom component and types its props', () => {
+      const Custom = ({ to, ...rest }: React.ComponentProps<'a'> & { to: string }) => (
+        <a href={to} {...rest} />
+      );
+      render(
+        <MenuButton as={Custom} to="#x" expanded>
+          Actions
+        </MenuButton>,
+      );
+      expect(screen.getByRole('link', { name: 'Actions' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      // @ts-expect-error `to` is required by the custom component
+      const missing = <MenuButton as={Custom}>Actions</MenuButton>;
+      expect(missing).toBeTruthy();
+    });
+
+    it('types the props of the rendered element', () => {
+      expectTypeOf<MenuButtonProps<'a'>['href']>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<MenuButtonProps<'a'>['shape']>().toEqualTypeOf<Shape | undefined>();
+      // @ts-expect-error href belongs to an anchor, not to the default button
+      const element = <MenuButton href="#x">Actions</MenuButton>;
+      expect(element).toBeTruthy();
     });
   });
 });

@@ -11,7 +11,14 @@ import {
   testNoImplicitSubmit,
   renderWithProviders,
 } from '../../../test-utils';
-import type { Appearance, IconPosition, Size, Slot, SlotRenderFunction } from '../../../lib/types';
+import type {
+  Appearance,
+  IconPosition,
+  Shape,
+  Size,
+  Slot,
+  SlotRenderFunction,
+} from '../../../lib/types';
 import { buttonClassNames } from '../../../lib/classNames';
 
 const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
@@ -1465,7 +1472,7 @@ describe('Button', () => {
 
     it('ButtonOwnProps holds only the component-specific props', () => {
       expectTypeOf<keyof ButtonOwnProps>().toEqualTypeOf<
-        'appearance' | 'size' | 'icon' | 'iconPosition' | 'disabled' | 'disabledFocusable'
+        'appearance' | 'size' | 'shape' | 'icon' | 'iconPosition' | 'disabled' | 'disabledFocusable'
       >();
       expectTypeOf<ButtonProps['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<ButtonProps<'a'>['disabledFocusable']>().toEqualTypeOf<boolean | undefined>();
@@ -1478,6 +1485,68 @@ describe('Button', () => {
       expectTypeOf<ButtonProps<'a'>['iconPosition']>().toEqualTypeOf<IconPosition | undefined>();
       // @ts-expect-error iconPosition is 'before' | 'after'
       const element = <Button iconPosition="end">Open</Button>;
+      expect(element).toBeTruthy();
+    });
+  });
+
+  describe('shape (buttons-1)', () => {
+    it('keeps the default radius and renders no data-shape without shape', () => {
+      render(<Button>Save</Button>);
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).not.toHaveAttribute('data-shape');
+      expect(button).toHaveClass('wave:rounded');
+    });
+
+    it('shape="rounded" is the default radius, with data-shape', () => {
+      render(<Button shape="rounded">Save</Button>);
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).toHaveClass('wave:rounded');
+      expect(button).toHaveAttribute('data-shape', 'rounded');
+    });
+
+    it.each([
+      ['circular', 'wave:rounded-full'],
+      ['square', 'wave:rounded-none'],
+    ] as const)('shape="%s" replaces the radius and renders data-shape', (shape, cls) => {
+      render(<Button shape={shape}>Save</Button>);
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).toHaveClass(cls);
+      expect(button).not.toHaveClass('wave:rounded');
+      expect(button).toHaveAttribute('data-shape', shape);
+    });
+
+    it("a consumer radius class still replaces the shape's", () => {
+      render(
+        <Button shape="circular" className="rounded-lg">
+          Save
+        </Button>,
+      );
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).toHaveClass('rounded-lg');
+      expect(button).not.toHaveClass('wave:rounded-full');
+    });
+
+    it('makes an icon-only button a circle and works with `as`', () => {
+      render(
+        <>
+          <Button shape="circular" icon={<PaperclipIcon />} aria-label="Attach" />
+          <Button as="a" href="#x" shape="square">
+            Docs
+          </Button>
+        </>,
+      );
+      expect(screen.getByRole('button', { name: 'Attach' })).toHaveClass(
+        'wave:rounded-full',
+        'wave:h-8',
+        'wave:w-8',
+      );
+      expect(screen.getByRole('link', { name: 'Docs' })).toHaveClass('wave:rounded-none');
+    });
+
+    it('is typed as a Shape', () => {
+      expectTypeOf<ButtonProps['shape']>().toEqualTypeOf<Shape | undefined>();
+      // @ts-expect-error shape is 'rounded' | 'circular' | 'square'
+      const element = <Button shape="pill">Save</Button>;
       expect(element).toBeTruthy();
     });
   });

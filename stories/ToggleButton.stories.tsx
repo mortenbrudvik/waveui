@@ -134,3 +134,37 @@ export const Controlled: Story = {
     );
   },
 };
+
+/** `shape` rounds the corners: the default radius, a pill or square (also while pressed). */
+export const Shapes: Story = {
+  argTypes: {
+    shape: { control: false },
+  },
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      <ToggleButton {...args} shape="rounded">
+        rounded
+      </ToggleButton>
+      <ToggleButton {...args} shape="circular" defaultPressed>
+        circular
+      </ToggleButton>
+      <ToggleButton {...args} shape="square">
+        square
+      </ToggleButton>
+    </div>
+  ),
+};
+
+/** `as` renders another element: a `div` gets `role="button"`, a tab stop and Enter/Space activation. */
+export const AsDiv: Story = {
+  render: (args) => (
+    <ToggleButton
+      as="div"
+      appearance={args.appearance}
+      size={args.size}
+      onPressedChange={args.onPressedChange}
+    >
+      Bold (div)
+    </ToggleButton>
+  ),
+};

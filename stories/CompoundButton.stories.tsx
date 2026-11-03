@@ -101,3 +101,36 @@ export const Sizes: Story = {
     </div>
   ),
 };
+
+/** `shape` rounds the corners: the default radius, a pill or square. */
+export const Shapes: Story = {
+  argTypes: {
+    shape: { control: false },
+  },
+  render: (args) => (
+    <div className="flex items-start gap-2">
+      <CompoundButton {...args} shape="rounded" secondaryText="rounded">
+        Rounded
+      </CompoundButton>
+      <CompoundButton {...args} shape="circular" secondaryText="circular">
+        Circular
+      </CompoundButton>
+      <CompoundButton {...args} shape="square" secondaryText="square">
+        Square
+      </CompoundButton>
+    </div>
+  ),
+};
+
+/**
+ * `secondaryText` and `contentContainer` are slots: `secondaryText` takes a slot object for the
+ * second line (`as`, `className`, attributes), `contentContainer` one for the column around both
+ * lines. Both merge over `slotProps` and keep the text that names the button.
+ */
+export const SlotObjects: Story = {
+  args: {
+    secondaryText: { children: 'Free for 30 days', className: 'italic' },
+    contentContainer: { className: 'gap-0.5', 'data-testid': 'column' },
+    children: 'Create account',
+  },
+};

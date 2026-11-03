@@ -4,8 +4,9 @@ import { splitButtonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { mergeProps } from '../../lib/mergeProps';
+import { useId } from '../../hooks/useId';
 import { slotRendersContent } from '../../lib/slot';
-import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
+import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { unwrapButtonGlyph, withPartClass } from './Button.slots';
 
@@ -79,15 +80,26 @@ export interface SplitButtonProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Corner shape of the whole split button (Fluent's `shape`): the outer corners of the two halves
+   * are rounded (`rounded`, the default radius), fully round (`circular`) or square, and the
+   * corners where they meet stay square. Renders `data-shape` while it is set, on the group and on
+   * both halves.
+   * @default 'rounded'
+   */
+  shape?: Shape;
   /** Click handler for the primary action button. */
   onClick?: React.MouseEventHandler<HTMLButtonElement>;
   /** Click handler for the menu (chevron) button. */
   onMenuClick?: React.MouseEventHandler<HTMLButtonElement>;
   /**
-   * Accessible name of the menu button (it shows only a chevron). Localize it.
+   * Accessible name of the menu button (it shows only a chevron). Localize it. `null` leaves
+   * the built-in name out: the menu half is then named by the primary action's name (it points
+   * `aria-labelledby` at the primary button), which is how Fluent names it. An `aria-label` or
+   * `aria-labelledby` in `menuButtonProps` wins over both.
    * @default 'More options'
    */
-  menuButtonLabel?: string;
+  menuButtonLabel?: string | null;
   /**
    * Props for the menu button: `aria-expanded`, `aria-controls`, `id`, handlers (`onKeyDown` for
    * ArrowDown/ArrowUp), `ref` for focus restoration, … Pass the render-prop props of
@@ -155,6 +167,7 @@ const halfClasses = 'wave:relative wave:min-h-6 wave:focus-visible:z-10';
 export const SplitButton = ({
   appearance = 'outline',
   size = 'medium',
+  shape,
   disabled = false,
   disabledFocusable = false,
   icon,
@@ -172,13 +185,23 @@ export const SplitButton = ({
   ref,
   ...props
 }: SplitButtonProps) => {
+  const generatedPrimaryId = useId('split-button-primary');
   const primary = mergeProps(
     { 'aria-describedby': ariaDescribedBy, onClick } as SplitButtonMenuButtonProps,
     primaryActionButtonProps,
   );
+  // `menuButtonLabel={null}`: the menu half is named by the primary action (an `id` of its own,
+  // else a generated one), unless `menuButtonProps` names it itself.
+  const namedByPrimary =
+    menuButtonLabel === null &&
+    !menuButtonProps?.['aria-label'] &&
+    !menuButtonProps?.['aria-labelledby'];
+  const primaryId = primary.id ?? (namedByPrimary ? generatedPrimaryId : undefined);
   const menu = mergeProps(
     {
-      'aria-label': menuButtonLabel,
+      ...(menuButtonLabel === null
+        ? { 'aria-labelledby': namedByPrimary ? primaryId : undefined }
+        : { 'aria-label': menuButtonLabel }),
       'aria-haspopup': 'menu',
       onClick: onMenuClick,
     } as SplitButtonMenuButtonProps,
@@ -217,14 +240,17 @@ export const SplitButton = ({
   return (
     <div
       ref={ref}
+      data-shape={shape}
       {...props}
       role={role ?? 'group'}
       className={wcn(splitButtonClassNames.root, 'wave:inline-flex wave:items-stretch', className)}
     >
       <Button
         {...primary}
+        id={primaryId}
         appearance={appearance}
         size={size}
+        shape={shape}
         disabled={!primaryFocusable && (disabled || Boolean(primary.disabled))}
         disabledFocusable={primaryFocusable}
         icon={withPartClass(icon, splitButtonClassNames.icon)}
@@ -242,6 +268,7 @@ export const SplitButton = ({
         {...menu}
         appearance={appearance}
         size={size}
+        shape={shape}
         disabled={!menuFocusable && (disabled || Boolean(menu.disabled))}
         disabledFocusable={menuFocusable}
         icon={withPartClass(

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { CompoundButton } from '../CompoundButton';
@@ -18,6 +18,7 @@ import {
   sortAttributes,
 } from '../../../test-utils';
 import type { Appearance, IconPosition, Size, Slot } from '../../../lib/types';
+import type { SlotObject } from '../../../lib/slot';
 
 const HOVER_GATE = 'not-disabled:not-aria-disabled:hover:';
 const ACTIVE_GATE = 'not-disabled:not-aria-disabled:active:';
@@ -552,11 +553,13 @@ describe('CompoundButton', () => {
         | 'secondaryText'
         | 'appearance'
         | 'size'
+        | 'shape'
         | 'disabled'
         | 'disabledFocusable'
         | 'icon'
         | 'iconPosition'
         | 'slotProps'
+        | 'contentContainer'
       >();
       expectTypeOf<CompoundButtonProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
       expectTypeOf<CompoundButtonProps<'a'>['iconPosition']>().toEqualTypeOf<
@@ -895,5 +898,297 @@ describe('CompoundButton — slotProps', () => {
     >();
     // @ts-expect-error -- a part takes no children: `children` and `secondaryText` are its content
     void (<CompoundButton slotProps={{ primaryText: { children: 'Other' } }}>Send</CompoundButton>);
+  });
+
+  describe('shape (buttons-1)', () => {
+    it('renders no data-shape by default and the shape when set, with or without text', () => {
+      render(
+        <>
+          <CompoundButton secondaryText="Details">Plain</CompoundButton>
+          <CompoundButton shape="circular" secondaryText="Details">
+            Round
+          </CompoundButton>
+          <CompoundButton shape="square" icon="★" aria-label="Star" />
+        </>,
+      );
+      expect(screen.getByRole('button', { name: /^Plain/ })).not.toHaveAttribute('data-shape');
+      const round = screen.getByRole('button', { name: /^Round/ });
+      expect(round).toHaveClass('wave:rounded-full');
+      expect(round).toHaveAttribute('data-shape', 'circular');
+      const star = screen.getByRole('button', { name: 'Star' });
+      expect(star).toHaveClass('wave:rounded-none');
+      expect(star).toHaveAttribute('data-shape', 'square');
+    });
+  });
+
+  describe('secondaryText as a slot (buttons-7)', () => {
+    const secondaryOf = (button: HTMLElement) =>
+      button.querySelector<HTMLElement>(`.${compoundButtonClassNames.secondaryText}`);
+
+    it('a slot object styles and re-elements the second line, whose text still names the button', () => {
+      const ref = React.createRef<HTMLElement>();
+      render(
+        <CompoundButton
+          secondaryText={{
+            as: 'em',
+            children: 'Free for 30 days',
+            className: 'my-secondary',
+            style: { color: 'blue' },
+            ref,
+            'data-part': 'second',
+          }}
+        >
+          Create account
+        </CompoundButton>,
+      );
+      const button = screen.getByRole('button', { name: /^Create account\s*Free for 30 days$/ });
+      const second = secondaryOf(button)!;
+      expect(second.tagName).toBe('EM');
+      expect(ref.current).toBe(second);
+      expect(second.classList[0]).toBe(compoundButtonClassNames.secondaryText);
+      expect(second).toHaveClass('wave:text-caption-1', 'my-secondary');
+      expect(second).toHaveStyle({ color: 'rgb(0, 0, 255)' });
+      expect(second).toHaveAttribute('data-part', 'second');
+    });
+
+    it('merges over slotProps.secondaryText: classes, handlers and refs of both; the locks stay', () => {
+      const slotRef = React.createRef<HTMLElement>();
+      const partRef = React.createRef<HTMLSpanElement>();
+      const calls: string[] = [];
+      render(
+        <CompoundButton
+          secondaryText={{
+            children: 'Details',
+            className: 'my-slot',
+            ref: slotRef,
+            onFocus: () => calls.push('slot'),
+            'aria-label': 'replaced',
+            hidden: true,
+          }}
+          slotProps={{
+            secondaryText: {
+              className: 'my-part',
+              ref: partRef,
+              onFocus: () => calls.push('part'),
+              'data-part': 'x',
+            },
+          }}
+        >
+          Main
+        </CompoundButton>,
+      );
+      const button = screen.getByRole('button', { name: /^Mains*Details$/ });
+      const second = secondaryOf(button)!;
+      expect(second).toHaveClass('my-part', 'my-slot');
+      expect(slotRef.current).toBe(second);
+      expect(partRef.current).toBe(second);
+      expect(second).toHaveAttribute('data-part', 'x');
+      expect(second).not.toHaveAttribute('aria-label');
+      expect(second).not.toHaveAttribute('hidden');
+      fireEvent.focus(second);
+      expect(calls).toEqual(['part', 'slot']);
+    });
+
+    it('does not call a click handler of the slot object while the button is disabled', () => {
+      const onSecondClick = vi.fn();
+      const onClick = vi.fn();
+      const { rerender } = render(
+        <CompoundButton
+          secondaryText={{ children: 'Details', onClick: onSecondClick }}
+          onClick={onClick}
+        >
+          Main
+        </CompoundButton>,
+      );
+      fireEvent.click(screen.getByText('Details'));
+      expect(onSecondClick).toHaveBeenCalledTimes(1);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      rerender(
+        <CompoundButton
+          disabledFocusable
+          secondaryText={{ children: 'Details', onClick: onSecondClick }}
+          onClick={onClick}
+        >
+          Main
+        </CompoundButton>,
+      );
+      fireEvent.click(screen.getByText('Details'));
+      expect(onSecondClick).toHaveBeenCalledTimes(1);
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('a render function renders the second line in place of its element', () => {
+      render(
+        <CompoundButton
+          secondaryText={{
+            children: (Component, props) => (
+              <Component {...props} data-from-function="">
+                Computed
+              </Component>
+            ),
+          }}
+        >
+          Main
+        </CompoundButton>,
+      );
+      const second = screen.getByText('Computed');
+      expect(second).toHaveAttribute('data-from-function', '');
+      expect(second).toHaveClass(compoundButtonClassNames.secondaryText);
+    });
+
+    it('content that renders nothing renders no line; a slot object always renders one', () => {
+      const { container, rerender } = render(
+        <CompoundButton secondaryText="">Main</CompoundButton>,
+      );
+      expect(container.querySelector(`.${compoundButtonClassNames.secondaryText}`)).toBeNull();
+      rerender(<CompoundButton secondaryText={{ className: 'x' }}>Main</CompoundButton>);
+      expect(container.querySelector(`.${compoundButtonClassNames.secondaryText}`)).not.toBeNull();
+    });
+
+    it('plain content renders exactly as before (a span with the stable class)', () => {
+      render(<CompoundButton secondaryText={<b>Bold</b>}>Main</CompoundButton>);
+      const second = screen.getByText('Bold').parentElement!;
+      expect(second.tagName).toBe('SPAN');
+      expect(second).toHaveClass(compoundButtonClassNames.secondaryText);
+    });
+
+    it('is typed as a slot', () => {
+      expectTypeOf<CompoundButtonProps['secondaryText']>().toEqualTypeOf<
+        Slot<'span'> | undefined
+      >();
+      // @ts-expect-error a slot object takes the attributes of a span
+      const element = <CompoundButton secondaryText={{ href: '/x' }}>Main</CompoundButton>;
+      expect(element).toBeTruthy();
+    });
+  });
+
+  describe('contentContainer as a slot (buttons-7)', () => {
+    const containerOf = (button: HTMLElement) =>
+      button.querySelector<HTMLElement>(`.${compoundButtonClassNames.contentContainer}`);
+
+    it('a slot object re-elements and styles the column of text', () => {
+      const ref = React.createRef<HTMLElement>();
+      render(
+        <CompoundButton
+          secondaryText="Details"
+          contentContainer={{ as: 'strong', className: 'my-column', ref, 'data-part': 'column' }}
+        >
+          Main
+        </CompoundButton>,
+      );
+      const button = screen.getByRole('button', { name: /^Mains*Details$/ });
+      const column = containerOf(button)!;
+      expect(column.tagName).toBe('STRONG');
+      expect(ref.current).toBe(column);
+      expect(column.classList[0]).toBe(compoundButtonClassNames.contentContainer);
+      expect(column).toHaveClass('wave:flex-col', 'my-column');
+      expect(column).toHaveAttribute('data-part', 'column');
+      expect(column).toHaveAttribute('data-wave-compound-content', '');
+      expect(within(column).getByText('Main')).toHaveClass(compoundButtonClassNames.primaryText);
+      expect(within(column).getByText('Details')).toHaveClass(
+        compoundButtonClassNames.secondaryText,
+      );
+    });
+
+    it('merges over slotProps.contentContainer and keeps the marker locked', () => {
+      const slotRef = React.createRef<HTMLElement>();
+      const partRef = React.createRef<HTMLSpanElement>();
+      render(
+        <CompoundButton
+          contentContainer={{
+            className: 'my-slot',
+            ref: slotRef,
+            'data-wave-compound-content': 'overridden',
+          }}
+          slotProps={{
+            contentContainer: { className: 'my-part', ref: partRef, 'data-part': 'x' },
+          }}
+        >
+          Main
+        </CompoundButton>,
+      );
+      const column = containerOf(screen.getByRole('button', { name: 'Main' }))!;
+      expect(column).toHaveClass('my-part', 'my-slot');
+      expect(slotRef.current).toBe(column);
+      expect(partRef.current).toBe(column);
+      expect(column).toHaveAttribute('data-part', 'x');
+      expect(column).toHaveAttribute('data-wave-compound-content', '');
+    });
+
+    it('a render function receives the two lines as props.children', () => {
+      render(
+        <CompoundButton
+          secondaryText="Details"
+          contentContainer={{
+            children: (Component, props) => (
+              <Component {...props} data-from-function="">
+                {props.children}
+              </Component>
+            ),
+          }}
+        >
+          Main
+        </CompoundButton>,
+      );
+      const column = containerOf(screen.getByRole('button', { name: /^Mains*Details$/ }))!;
+      expect(column).toHaveAttribute('data-from-function', '');
+      expect(column).toHaveClass(compoundButtonClassNames.contentContainer);
+      expect(within(column).getByText('Main')).toBeInTheDocument();
+      expect(within(column).getByText('Details')).toBeInTheDocument();
+    });
+
+    it('ignores node children (the lines are its content) and blocks clicks while disabled', () => {
+      const onColumnClick = vi.fn();
+      const { rerender } = render(
+        <CompoundButton
+          contentContainer={{ children: 'ignored', onClick: onColumnClick }}
+          secondaryText="Details"
+        >
+          Main
+        </CompoundButton>,
+      );
+      expect(screen.queryByText('ignored')).toBeNull();
+      fireEvent.click(screen.getByText('Main'));
+      expect(onColumnClick).toHaveBeenCalledTimes(1);
+      rerender(
+        <CompoundButton
+          disabled
+          contentContainer={{ onClick: onColumnClick }}
+          secondaryText="Details"
+        >
+          Main
+        </CompoundButton>,
+      );
+      fireEvent.click(screen.getByText('Main'));
+      expect(onColumnClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('draws no column for an icon-only button', () => {
+      const { container } = render(
+        <CompoundButton icon="★" aria-label="Star" contentContainer={{ className: 'x' }} />,
+      );
+      expect(container.querySelector(`.${compoundButtonClassNames.contentContainer}`)).toBeNull();
+    });
+
+    it('has no accessibility violations with both slots filled', async () => {
+      render(
+        <CompoundButton
+          contentContainer={{ as: 'span', className: 'x' }}
+          secondaryText={{ children: 'Details', className: 'y' }}
+        >
+          Main
+        </CompoundButton>,
+      );
+      await expectNoA11yViolations();
+    });
+
+    it('is typed as a slot object of a span', () => {
+      expectTypeOf<CompoundButtonProps['contentContainer']>().toEqualTypeOf<
+        SlotObject<'span'> | undefined
+      >();
+      // @ts-expect-error a bare node is not a slot object: the lines are its content
+      const element = <CompoundButton contentContainer="x">Main</CompoundButton>;
+      expect(element).toBeTruthy();
+    });
   });
 });
