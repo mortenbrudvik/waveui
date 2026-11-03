@@ -99,6 +99,8 @@ interface DragState {
   lastWidth: number;
   /** The animation frame that will apply the latest position, while one is waiting. */
   frame: number | null;
+  /** Removes the document listeners that end the drag when the handle stops getting events. */
+  removeListeners: () => void;
 }
 
 /**
@@ -111,7 +113,9 @@ interface DragState {
  * the maximum one. A double click calls `onReset`. The handle is a Tab stop (`tabIndex` 0), so the
  * keys work in a static table; a grid that manages its own tab stops overrides `tabIndex`. The
  * handle carries `data-grid-auxiliary`, so a grid's cell navigation does not take it for the
- * cell's own widget.
+ * cell's own widget. A drag whose end never reaches the handle (a browser that stops sending
+ * pointer events to a captured handle) ends at a `pointerup` or `pointercancel` on the document,
+ * or at the next press of the same pointer, which applies the width it last moved to.
  *
  * It keeps no width: spread the result of `useTableColumnSizing`'s `getResizeHandleProps(columnId)`
  * onto it, or pass `width`, `minWidth` and `onResize` from your own state.
@@ -162,6 +166,7 @@ const TableResizeHandle = ({
     if (!drag) return;
     if (drag.frame !== null) window.cancelAnimationFrame(drag.frame);
     drag.frame = null;
+    drag.removeListeners();
     if (flush) applyDrag();
     dragRef.current = null;
     setDragging(false);
@@ -172,10 +177,47 @@ const TableResizeHandle = ({
   const cancelDragOnUnmount = useEventCallback(() => endDrag(false));
   React.useLayoutEffect(() => cancelDragOnUnmount, [cancelDragOnUnmount]);
 
+  /**
+   * A press that ended a stale drag and landed elsewhere (a browser that kept the pointer captured
+   * by the handle retargeted it here): it starts no drag of its own.
+   */
+  const strayPressRef = React.useRef<Event | null>(null);
+
   const startDrag = useEventCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || !event.isPrimary || dragRef.current) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (strayPressRef.current === event.nativeEvent) return;
+    const element = event.currentTarget;
+    element.setPointerCapture(event.pointerId);
+    // Some browsers stop sending pointer events to a captured handle (WebKit, in a right-to-left
+    // table wider than its wrapper): the drag then never sees its end. The document catches an
+    // end that reaches it, and a later press by the same pointer ends a drag that is still open.
+    const doc = element.ownerDocument;
+    const endOnRelease = (release: PointerEvent) => {
+      if (release.pointerId === dragRef.current?.pointerId) endDrag(release.type === 'pointerup');
+    };
+    const endOnPress = (press: PointerEvent) => {
+      const drag = dragRef.current;
+      // A press by another pointer (a second finger) leaves the drag as it is.
+      if (!drag || press.pointerId !== drag.pointerId) return;
+      const landed =
+        typeof doc.elementFromPoint === 'function'
+          ? doc.elementFromPoint(press.clientX, press.clientY)
+          : (press.target as Node | null);
+      if (landed instanceof Node && landed !== element && !element.contains(landed)) {
+        strayPressRef.current = press;
+      }
+      if (element.hasPointerCapture(drag.pointerId)) element.releasePointerCapture(drag.pointerId);
+      endDrag(true);
+    };
+    doc.addEventListener('pointerup', endOnRelease);
+    doc.addEventListener('pointercancel', endOnRelease);
+    doc.addEventListener('pointerdown', endOnPress, true);
     dragRef.current = {
+      removeListeners: () => {
+        doc.removeEventListener('pointerup', endOnRelease);
+        doc.removeEventListener('pointercancel', endOnRelease);
+        doc.removeEventListener('pointerdown', endOnPress, true);
+      },
       pointerId: event.pointerId,
       startX: event.clientX,
       startWidth: width,

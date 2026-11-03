@@ -364,6 +364,155 @@ describe('Table.ResizeHandle', () => {
       expect(handle()).not.toHaveAttribute('data-dragging');
     });
 
+    describe('a drag whose end never reaches the handle', () => {
+      // WebKit, right to left, in a table wider than its wrapper: after the first move the handle
+      // gets no `pointermove`, `pointerup` or `lostpointercapture` while it still holds the capture.
+      const documentEvent = (type: 'pointerUp' | 'pointerCancel' | 'pointerDown', init = {}) =>
+        fireEvent[type](document, { pointerId: 1, pointerType: 'mouse', isPrimary: true, ...init });
+
+      it('ends when a pointerup reaches the document, applying the move that waits', () => {
+        const { onResize } = renderHandle();
+        down('mouse');
+        move('mouse', 140);
+        documentEvent('pointerUp');
+        expect(handle()).not.toHaveAttribute('data-dragging');
+        expect(onResize).toHaveBeenCalledTimes(1);
+        expect(onResize).toHaveBeenCalledWith(240, { event: expect.any(Event) });
+        // Nothing moves it afterwards.
+        move('mouse', 300);
+        flushFrames();
+        expect(onResize).toHaveBeenCalledTimes(1);
+      });
+
+      it('ends without applying a move when a pointercancel reaches the document', () => {
+        const { onResize } = renderHandle();
+        down('mouse');
+        move('mouse', 140);
+        documentEvent('pointerCancel');
+        expect(handle()).not.toHaveAttribute('data-dragging');
+        flushFrames();
+        expect(onResize).not.toHaveBeenCalled();
+      });
+
+      it('ends at the next press of the same pointer, applying the move and releasing the capture', () => {
+        const { onResize } = renderHandle();
+        const outside = document.createElement('button');
+        document.body.append(outside);
+        try {
+          down('mouse');
+          move('mouse', 140);
+          fireEvent.pointerDown(outside, {
+            pointerId: 1,
+            pointerType: 'mouse',
+            isPrimary: true,
+            button: 0,
+            clientX: 20,
+          });
+          expect(handle()).not.toHaveAttribute('data-dragging');
+          expect(handle().hasPointerCapture(1)).toBe(false);
+          expect(onResize).toHaveBeenCalledTimes(1);
+          expect(onResize).toHaveBeenCalledWith(240, { event: expect.any(Event) });
+          flushFrames();
+          expect(onResize).toHaveBeenCalledTimes(1);
+        } finally {
+          outside.remove();
+        }
+      });
+
+      it('starts no drag from a press that landed elsewhere and was retargeted to the handle', () => {
+        const { onResize } = renderHandle();
+        const outside = document.createElement('button');
+        document.body.append(outside);
+        // jsdom has no layout: say where the pointer is.
+        Object.defineProperty(document, 'elementFromPoint', {
+          configurable: true,
+          value: () => outside,
+        });
+        try {
+          down('mouse');
+          move('mouse', 140);
+          // The browser kept the capture, so the press reaches the handle although it is elsewhere.
+          down('mouse', { clientX: 20 });
+          expect(handle()).not.toHaveAttribute('data-dragging');
+          move('mouse', 90);
+          flushFrames();
+          expect(onResize).toHaveBeenCalledTimes(1);
+          expect(onResize).toHaveBeenCalledWith(240, { event: expect.any(Event) });
+        } finally {
+          Reflect.deleteProperty(document, 'elementFromPoint');
+          outside.remove();
+        }
+      });
+
+      it('lets a new press on the handle itself start a new drag', () => {
+        const { onResize } = renderHandle();
+        down('mouse');
+        move('mouse', 140);
+        // The release never came; the user presses the handle again.
+        down('mouse', { clientX: 300 });
+        expect(handle()).toHaveAttribute('data-dragging');
+        expect(onResize).toHaveBeenCalledTimes(1);
+        move('mouse', 310);
+        flushFrames();
+        expect(onResize).toHaveBeenLastCalledWith(210, { event: expect.any(Event) });
+      });
+
+      it('leaves a drag alone when another pointer presses or releases', () => {
+        const { onResize } = renderHandle();
+        down('mouse');
+        documentEvent('pointerDown', { pointerId: 2, pointerType: 'touch' });
+        documentEvent('pointerUp', { pointerId: 2, pointerType: 'touch' });
+        expect(handle()).toHaveAttribute('data-dragging');
+        move('mouse', 140);
+        flushFrames();
+        expect(onResize).toHaveBeenCalledWith(240, { event: expect.any(Event) });
+      });
+
+      it('listens on the document only while a drag is under way', () => {
+        const add = vi.spyOn(document, 'addEventListener');
+        const remove = vi.spyOn(document, 'removeEventListener');
+        const pointerTypes = (spy: typeof add) =>
+          spy.mock.calls.map((call) => call[0]).filter((type) => type.startsWith('pointer'));
+        renderHandle();
+        expect(pointerTypes(add)).toEqual([]);
+        down('mouse');
+        expect(pointerTypes(add).sort()).toEqual(['pointercancel', 'pointerdown', 'pointerup']);
+        expect(pointerTypes(remove)).toEqual([]);
+        up('mouse');
+        expect(pointerTypes(remove).sort()).toEqual(['pointercancel', 'pointerdown', 'pointerup']);
+      });
+
+      it('removes the document listeners when the handle unmounts mid-drag', () => {
+        const remove = vi.spyOn(document, 'removeEventListener');
+        const { unmount, onResize } = renderHandle();
+        down('mouse');
+        move('mouse', 140);
+        unmount();
+        expect(
+          remove.mock.calls
+            .map((call) => call[0])
+            .filter((type) => type.startsWith('pointer'))
+            .sort(),
+        ).toEqual(['pointercancel', 'pointerdown', 'pointerup']);
+        flushFrames();
+        expect(onResize).not.toHaveBeenCalled();
+      });
+
+      it('works in StrictMode: one call for the drag', () => {
+        const onResize = vi.fn();
+        render(
+          <React.StrictMode>
+            <Table.ResizeHandle width={200} minWidth={80} onResize={onResize} />
+          </React.StrictMode>,
+        );
+        down('mouse');
+        move('mouse', 140);
+        documentEvent('pointerUp');
+        expect(onResize).toHaveBeenCalledTimes(1);
+        expect(handle()).not.toHaveAttribute('data-dragging');
+      });
+    });
+
     it('applies the pending move when the pointer is released, and nothing after the release', () => {
       const { onResize } = renderHandle();
       down('mouse');
