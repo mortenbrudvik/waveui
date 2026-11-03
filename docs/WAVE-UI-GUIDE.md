@@ -202,6 +202,10 @@ Three families, Fluent's three stacks (`fontFamilyBase`, `fontFamilyMonospace`, 
 
 The class is your Tailwind build's, and `./utilities`' (Wave's components write the step with Wave's prefix: `wave:text-body-1`). `cn()` knows the classes: `cn('text-wave-body-1', 'text-wave-muted-foreground')` keeps both (size and color), and `cn('text-wave-body-1', 'text-sm')` keeps only the last size; it knows 0.x's names (`text-body-1`) too.
 
+### Text Layout and Decoration
+
+`Text` takes Fluent's layout and decoration props: `wrap={false}` keeps one line, `truncate` cuts a line at its box with an ellipsis (it draws an inline block unless `block` is set, because an inline box never clips), `italic`, `underline` and `strikethrough` (both lines when both are set), `align` (`start`, `center`, `end`, `justify`; it needs a block box, so pair it with `block` for a `<span>`) and `block`. A consumer class of the same kind (`not-italic`, `text-end`) replaces the library's.
+
 ### Font Weights
 
 `Text` and `Label` take `weight: 'regular' | 'medium' | 'semibold' | 'bold'` (the `TextWeight` type), Fluent's four weights. Unset, `Text` uses its variant's ramp weight: semibold from `subtitle-2` up, inherited for the caption and body variants; pass `weight="regular"` for a regular-weight title.

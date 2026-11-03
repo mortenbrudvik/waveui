@@ -67,3 +67,44 @@ export const VerticalWithText: Story = {
     ),
   ],
 };
+
+/** `appearance` picks the line: the border color, a fainter line, a firmer one or the brand color. */
+export const Appearances: Story = {
+  argTypes: { appearance: { control: false } },
+  render: (args) => (
+    <div className="flex w-96 flex-col gap-4">
+      {(['default', 'subtle', 'strong', 'brand'] as const).map((appearance) => (
+        <Divider key={appearance} {...args} appearance={appearance}>
+          {appearance}
+        </Divider>
+      ))}
+    </div>
+  ),
+};
+
+/** `inset` stops the line 12px short of both ends of its container. */
+export const Inset: Story = {
+  render: (args) => (
+    <div className="w-96">
+      <Divider {...args} />
+      <Divider {...args} inset />
+      <Divider {...args} inset>
+        Inset with a label
+      </Divider>
+    </div>
+  ),
+};
+
+/** `alignContent` puts the label at the start or the end, with a short line on that side. */
+export const AlignContent: Story = {
+  argTypes: { alignContent: { control: false } },
+  render: (args) => (
+    <div className="flex w-96 flex-col gap-4">
+      {(['start', 'center', 'end'] as const).map((alignContent) => (
+        <Divider key={alignContent} {...args} alignContent={alignContent}>
+          {alignContent}
+        </Divider>
+      ))}
+    </div>
+  ),
+};

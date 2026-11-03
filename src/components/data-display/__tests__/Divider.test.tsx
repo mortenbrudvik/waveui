@@ -4,7 +4,7 @@ import { renderToString } from 'react-dom/server';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Divider } from '../Divider';
-import type { DividerOwnProps, DividerProps } from '../Divider';
+import type { DividerAppearance, DividerOwnProps, DividerProps } from '../Divider';
 import { dividerClassNames } from '../../../lib/classNames';
 import type { Orientation } from '../../../lib/types';
 import {
@@ -232,6 +232,174 @@ describe('Divider', () => {
       }
       expectTypeOf<SectionDividerProps>().toHaveProperty('orientation');
     });
+  });
+});
+
+describe('Divider — appearance, inset and alignContent (divider-1, divider-2, divider-3)', () => {
+  const BORDERS: Record<DividerAppearance, string> = {
+    default: 'wave:border-border',
+    subtle: 'wave:border-border/50',
+    brand: 'wave:border-primary',
+    strong: 'wave:border-stroke',
+  };
+
+  it.each(Object.keys(BORDERS) as DividerAppearance[])(
+    'appearance "%s" draws its border on a plain, a vertical and a labelled divider',
+    (appearance) => {
+      render(
+        <>
+          <Divider appearance={appearance} data-testid="plain" />
+          <Divider appearance={appearance} orientation="vertical" data-testid="vertical" />
+          <Divider appearance={appearance} data-testid="labelled">
+            OR
+          </Divider>
+        </>,
+      );
+      for (const id of ['plain', 'vertical']) {
+        expect(screen.getByTestId(id)).toHaveClass(BORDERS[appearance]);
+        expect(screen.getByTestId(id)).toHaveAttribute('data-appearance', appearance);
+      }
+      const labelled = screen.getByTestId('labelled');
+      expect(labelled).toHaveAttribute('data-appearance', appearance);
+      for (const line of labelled.querySelectorAll(`.${dividerClassNames.line}`)) {
+        expect(line).toHaveClass(BORDERS[appearance]);
+      }
+    },
+  );
+
+  it('renders data-appearance="default" when none is given, and only the default border', () => {
+    render(<Divider data-testid="d" />);
+    expect(screen.getByTestId('d')).toHaveAttribute('data-appearance', 'default');
+    expect(screen.getByTestId('d')).toHaveClass('wave:border-border');
+    expect(screen.getByTestId('d')).not.toHaveClass('wave:border-primary', 'wave:border-stroke');
+  });
+
+  it('draws the defaults for a value outside the unions (untyped code)', () => {
+    render(
+      <Divider
+        data-testid="d"
+        // @ts-expect-error not an appearance
+        appearance="loud"
+        // @ts-expect-error not an alignment
+        alignContent="left"
+      >
+        OR
+      </Divider>,
+    );
+    expect(screen.getByTestId('d')).toHaveAttribute('data-appearance', 'default');
+    expect(screen.getByTestId('d')).toHaveAttribute('data-align-content', 'center');
+  });
+
+  it('inset is a boolean attribute, absent when off, with room along the length', () => {
+    render(
+      <>
+        <Divider data-testid="off" />
+        <Divider inset data-testid="plain" />
+        <Divider inset orientation="vertical" data-testid="vertical" />
+        <Divider inset data-testid="labelled">
+          OR
+        </Divider>
+        <Divider inset orientation="vertical" data-testid="vertical-labelled">
+          OR
+        </Divider>
+      </>,
+    );
+    expect(screen.getByTestId('off')).not.toHaveAttribute('data-inset');
+    for (const id of ['plain', 'vertical', 'labelled', 'vertical-labelled']) {
+      expect(screen.getByTestId(id)).toHaveAttribute('data-inset', '');
+    }
+    expect(screen.getByTestId('plain')).toHaveClass('wave:mx-3', 'wave:w-[calc(100%-1.5rem)]');
+    expect(screen.getByTestId('vertical')).toHaveClass('wave:my-3');
+    expect(screen.getByTestId('labelled')).toHaveClass('wave:px-3');
+    expect(screen.getByTestId('vertical-labelled')).toHaveClass('wave:py-3');
+    expect(screen.getByTestId('off')).not.toHaveClass('wave:mx-3');
+  });
+
+  it('alignContent puts the short line on that side, and nothing is short for center', () => {
+    const shortOf = (id: string) =>
+      Array.from(screen.getByTestId(id).querySelectorAll(`.${dividerClassNames.line}`)).map(
+        (line) => line.classList.contains('wave:max-w-2'),
+      );
+    render(
+      <>
+        <Divider data-testid="center">OR</Divider>
+        <Divider alignContent="start" data-testid="start">
+          OR
+        </Divider>
+        <Divider alignContent="end" data-testid="end">
+          OR
+        </Divider>
+      </>,
+    );
+    expect(shortOf('center')).toEqual([false, false]);
+    expect(shortOf('start')).toEqual([true, false]);
+    expect(shortOf('end')).toEqual([false, true]);
+    expect(screen.getByTestId('center')).toHaveAttribute('data-align-content', 'center');
+    expect(screen.getByTestId('start')).toHaveAttribute('data-align-content', 'start');
+    expect(screen.getByTestId('end')).toHaveAttribute('data-align-content', 'end');
+  });
+
+  it('a vertical labelled divider caps its short line by height', () => {
+    render(
+      <Divider orientation="vertical" alignContent="end" data-testid="d">
+        OR
+      </Divider>,
+    );
+    const lines = screen.getByTestId('d').querySelectorAll(`.${dividerClassNames.line}`);
+    expect(lines[0]).not.toHaveClass('wave:max-h-2');
+    expect(lines[1]).toHaveClass('wave:max-h-2');
+  });
+
+  it('alignContent is ignored without a label, and none of the props reach the element', () => {
+    render(<Divider alignContent="start" data-testid="d" />);
+    expect(screen.getByTestId('d')).not.toHaveAttribute('data-align-content');
+    for (const name of ['appearance', 'inset', 'aligncontent', 'alignContent']) {
+      expect(screen.getByTestId('d')).not.toHaveAttribute(name);
+    }
+  });
+
+  it('the line part reaches both lines of an aligned divider, with the short side capped', () => {
+    render(
+      <Divider alignContent="start" slotProps={{ line: { className: 'mine' } }} data-testid="d">
+        OR
+      </Divider>,
+    );
+    const lines = screen.getByTestId('d').querySelectorAll(`.${dividerClassNames.line}`);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toHaveClass('mine', 'wave:max-w-2');
+    expect(lines[1]).toHaveClass('mine');
+    expect(lines[1]).not.toHaveClass('wave:max-w-2');
+  });
+
+  it('start is the first line in right-to-left layouts too (the lines follow the direction)', () => {
+    renderWithProviders(
+      <Divider alignContent="start" data-testid="d">
+        OR
+      </Divider>,
+      { dir: 'rtl' },
+    );
+    const lines = screen.getByTestId('d').querySelectorAll(`.${dividerClassNames.line}`);
+    expect(lines[0]).toHaveClass('wave:max-w-2');
+  });
+
+  it('has no axe violations in each appearance, inset and aligned', async () => {
+    const { container } = render(
+      <>
+        <Divider appearance="brand" inset />
+        <Divider appearance="subtle" alignContent="end">
+          Section
+        </Divider>
+      </>,
+    );
+    await expectNoA11yViolations(container);
+  });
+
+  it('types: the unions are closed', () => {
+    expectTypeOf<DividerOwnProps['appearance']>().toEqualTypeOf<DividerAppearance | undefined>();
+    expectTypeOf<DividerOwnProps['alignContent']>().toEqualTypeOf<
+      'start' | 'center' | 'end' | undefined
+    >();
+    expectTypeOf<DividerOwnProps['inset']>().toEqualTypeOf<boolean | undefined>();
   });
 });
 

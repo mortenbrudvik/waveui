@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Text** takes Fluent's layout and decoration props: `wrap`, `truncate`, `italic`, `underline`, `strikethrough`, `align` and `block` (closes `text-1`, `text-2` and `text-5`).
+- **Divider** takes `appearance` (`default`, `subtle`, `strong`, `brand`), `inset` and `alignContent` (`start`, `center`, `end`), with `data-appearance`, `data-inset` and, on a labelled divider, `data-align-content` (closes `divider-1`, `divider-2` and `divider-3`). `DividerAppearance` is a new exported type.
+
 ### Fixed
 
 - **PresenceBadge** no longer throws for a status that is neither a member of `PresenceStatus` nor one of the removed 0.x names (a misspelled name, different casing, `null` from server data): it draws `'offline'` and, in development, warns once. A throw there unmounted the whole Persona or Avatar around it. A throw from the development warning itself (a console that throws) now surfaces instead of being swallowed with the missing-`process` case.

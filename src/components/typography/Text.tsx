@@ -27,6 +27,38 @@ export interface TextOwnProps {
    * @default 'base'
    */
   font?: 'base' | 'monospace' | 'numeric';
+  /**
+   * Whether the text wraps. `false` keeps it on one line (`white-space: nowrap`), and a line
+   * longer than its box then overflows it; add `truncate` to cut it with an ellipsis. Fluent's
+   * `wrap`.
+   * @default true
+   */
+  wrap?: boolean;
+  /**
+   * Cuts a line that does not fit its box with an ellipsis. It keeps the text on one line (as
+   * `wrap={false}` does) and clips the overflow, so the element needs a width to cut at: it is
+   * drawn as an inline block unless `block` is set, because a plain inline box never clips.
+   * Fluent's `truncate`.
+   */
+  truncate?: boolean;
+  /** Draws the text in italics. Fluent's `italic`. */
+  italic?: boolean;
+  /** Draws a line under the text. With `strikethrough` both lines show. Fluent's `underline`. */
+  underline?: boolean;
+  /** Draws a line through the text. With `underline` both lines show. Fluent's `strikethrough`. */
+  strikethrough?: boolean;
+  /**
+   * Aligns the text inside its box: `'start'` and `'end'` follow the writing direction, `'center'`
+   * and `'justify'` do not. It has an effect on a block box, so pair it with `block` for a span.
+   * Fluent's `align`.
+   */
+  align?: 'start' | 'center' | 'end' | 'justify';
+  /**
+   * Draws the element as a block box that takes the full width, instead of the inline box of a
+   * `<span>`. Fluent's `block`.
+   * @default false
+   */
+  block?: boolean;
 }
 
 /**
@@ -62,6 +94,13 @@ const weightClasses: Record<TextWeight, string> = {
   bold: 'wave:font-bold',
 };
 
+const alignClasses: Record<NonNullable<TextOwnProps['align']>, string> = {
+  start: 'wave:text-start',
+  center: 'wave:text-center',
+  end: 'wave:text-end',
+  justify: 'wave:text-justify',
+};
+
 const fontClasses: Record<Exclude<NonNullable<TextOwnProps['font']>, 'base'>, string> = {
   monospace: 'wave:font-wave-mono',
   numeric: 'wave:font-wave-numeric',
@@ -81,7 +120,21 @@ const fontClasses: Record<Exclude<NonNullable<TextOwnProps['font']>, 'base'>, st
  * <Text variant="caption-1" className="text-muted-foreground">Last saved 2 minutes ago</Text>
  */
 export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
-  const { as, variant = 'body-1', weight, font, className, ...rest } = props as TextImplProps;
+  const {
+    as,
+    variant = 'body-1',
+    weight,
+    font,
+    wrap,
+    truncate,
+    italic,
+    underline,
+    strikethrough,
+    align,
+    block,
+    className,
+    ...rest
+  } = props as TextImplProps;
 
   const Component: React.ElementType = as ?? 'span';
   return (
@@ -92,6 +145,17 @@ export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
         variantClasses[variant],
         weight !== undefined && Object.hasOwn(weightClasses, weight) && weightClasses[weight],
         font && font !== 'base' && Object.hasOwn(fontClasses, font) && fontClasses[font],
+        block && 'wave:block',
+        wrap === false && 'wave:whitespace-nowrap',
+        // The ellipsis needs a box that clips: an inline box never does, so it is an inline block.
+        truncate && 'wave:max-w-full wave:truncate',
+        truncate && !block && 'wave:inline-block wave:align-bottom',
+        italic && 'wave:italic',
+        // Both decoration lines in one declaration: the two utilities set one property.
+        underline && strikethrough && 'wave:[text-decoration-line:underline_line-through]',
+        underline && !strikethrough && 'wave:underline',
+        strikethrough && !underline && 'wave:line-through',
+        align !== undefined && Object.hasOwn(alignClasses, align) && alignClasses[align],
         className,
       )}
     />

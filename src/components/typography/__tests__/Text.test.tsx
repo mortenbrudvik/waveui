@@ -259,6 +259,111 @@ describe('Text', () => {
     });
   });
 
+  describe('layout and decoration (text-1, text-2, text-5)', () => {
+    const classesOf = (text: string) => Array.from(screen.getByText(text).classList);
+
+    it('adds none of them by default', () => {
+      render(<Text>Plain</Text>);
+      expect(
+        classesOf('Plain').filter((c) =>
+          /^wave:(block|inline-block|whitespace|truncate|max-w|italic|underline|line-through|\[text-decoration|text-(start|center|end|justify))/.test(
+            c,
+          ),
+        ),
+      ).toEqual([]);
+    });
+
+    it('wrap={false} keeps one line, wrap={true} adds nothing', () => {
+      const { rerender } = render(<Text wrap={false}>Line</Text>);
+      expect(screen.getByText('Line')).toHaveClass('wave:whitespace-nowrap');
+      rerender(<Text wrap>Line</Text>);
+      expect(screen.getByText('Line')).not.toHaveClass('wave:whitespace-nowrap');
+    });
+
+    it('truncate clips with an ellipsis in an inline block, or in the block box it is given', () => {
+      const { rerender } = render(<Text truncate>Long</Text>);
+      expect(screen.getByText('Long')).toHaveClass(
+        'wave:truncate',
+        'wave:max-w-full',
+        'wave:inline-block',
+      );
+      rerender(
+        <Text truncate block>
+          Long
+        </Text>,
+      );
+      expect(screen.getByText('Long')).toHaveClass('wave:truncate', 'wave:block');
+      expect(screen.getByText('Long')).not.toHaveClass('wave:inline-block');
+    });
+
+    it('italic, underline and strikethrough each draw their own look', () => {
+      render(
+        <>
+          <Text italic>I</Text>
+          <Text underline>U</Text>
+          <Text strikethrough>S</Text>
+        </>,
+      );
+      expect(screen.getByText('I')).toHaveClass('wave:italic');
+      expect(screen.getByText('U')).toHaveClass('wave:underline');
+      expect(screen.getByText('U')).not.toHaveClass('wave:line-through');
+      expect(screen.getByText('S')).toHaveClass('wave:line-through');
+    });
+
+    it('underline with strikethrough draws both lines through one declaration', () => {
+      render(
+        <Text underline strikethrough>
+          Both
+        </Text>,
+      );
+      expect(screen.getByText('Both')).toHaveClass(
+        'wave:[text-decoration-line:underline_line-through]',
+      );
+      expect(screen.getByText('Both')).not.toHaveClass('wave:underline');
+      expect(screen.getByText('Both')).not.toHaveClass('wave:line-through');
+    });
+
+    it.each(['start', 'center', 'end', 'justify'] as const)('align "%s"', (align) => {
+      render(<Text align={align}>Aligned</Text>);
+      expect(screen.getByText('Aligned')).toHaveClass(`wave:text-${align}`);
+    });
+
+    it('block draws a block box', () => {
+      render(<Text block>Box</Text>);
+      expect(screen.getByText('Box')).toHaveClass('wave:block');
+    });
+
+    it('the new props never reach the element', () => {
+      render(
+        <Text wrap={false} truncate italic underline strikethrough align="center" block>
+          Own
+        </Text>,
+      );
+      const el = screen.getByText('Own');
+      for (const name of [
+        'wrap',
+        'truncate',
+        'italic',
+        'underline',
+        'strikethrough',
+        'align',
+        'block',
+      ]) {
+        expect(el).not.toHaveAttribute(name);
+      }
+    });
+
+    it('a consumer class of the same kind replaces them', () => {
+      render(
+        <Text italic align="center" className="not-italic text-end">
+          Mine
+        </Text>,
+      );
+      expect(screen.getByText('Mine')).not.toHaveClass('wave:italic');
+      expect(screen.getByText('Mine')).not.toHaveClass('wave:text-center');
+    });
+  });
+
   describe('types (button-provider#8, #27, layout#16)', () => {
     it('is polymorphic: props follow `as`', () => {
       const labelRef = React.createRef<HTMLLabelElement>();
@@ -293,7 +398,18 @@ describe('Text', () => {
       expectTypeOf<MyTextProps>().toHaveProperty('extra');
       expectTypeOf<TextProps>().toEqualTypeOf<TextProps<'span'>>();
       expectTypeOf<TextProps['ref']>().toEqualTypeOf<React.Ref<HTMLSpanElement> | undefined>();
-      expectTypeOf<keyof TextOwnProps>().toEqualTypeOf<'variant' | 'weight' | 'font'>();
+      expectTypeOf<keyof TextOwnProps>().toEqualTypeOf<
+        | 'variant'
+        | 'weight'
+        | 'font'
+        | 'wrap'
+        | 'truncate'
+        | 'italic'
+        | 'underline'
+        | 'strikethrough'
+        | 'align'
+        | 'block'
+      >();
       expectTypeOf<NonNullable<TextOwnProps['weight']>>().toEqualTypeOf<TextWeight>();
     });
   });

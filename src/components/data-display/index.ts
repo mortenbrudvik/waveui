@@ -47,7 +47,7 @@ export { Persona } from './Persona';
 export type { PersonaProps, PersonaSize } from './Persona';
 
 export { Divider } from './Divider';
-export type { DividerProps, DividerOwnProps } from './Divider';
+export type { DividerProps, DividerOwnProps, DividerAppearance } from './Divider';
 
 export { InfoButton } from './InfoButton';
 export type { InfoButtonProps } from './InfoButton';
