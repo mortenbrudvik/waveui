@@ -287,13 +287,18 @@ describe('Combobox', () => {
       expect(combobox()).toHaveValue('Apple');
     });
 
-    it('Home and End stay with the text caret', async () => {
+    it('Home, End and the horizontal arrows move the text caret and clear the highlight (APG)', async () => {
       const user = userEvent.setup();
       renderCombobox();
       await user.click(combobox());
-      await user.keyboard('{ArrowDown}{ArrowDown}');
-      await user.keyboard('{Home}');
-      expect(activeOption()).toHaveTextContent('Beta');
+      for (const key of ['{Home}', '{End}', '{ArrowLeft}', '{ArrowRight}']) {
+        await user.keyboard('{ArrowDown}{ArrowDown}');
+        expect(activeOption()).toHaveTextContent('Beta');
+        await user.keyboard(key);
+        expect(activeOption()).toBeNull();
+        expect(combobox()).not.toHaveAttribute('aria-activedescendant');
+        expect(combobox()).toHaveAttribute('aria-expanded', 'true');
+      }
     });
 
     it('Enter in a closed Combobox submits the surrounding form (input-pickers#11)', async () => {

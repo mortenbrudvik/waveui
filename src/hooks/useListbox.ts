@@ -984,6 +984,9 @@ function hasText(element: EventTarget): boolean {
 /** Ctrl/Cmd shortcuts that change the text: cut, paste, undo, redo. */
 const TEXT_SHORTCUTS: ReadonlySet<string> = new Set(['x', 'v', 'z', 'y']);
 
+/** The keys that move the caret of a text input. */
+const CARET_KEYS: ReadonlySet<string> = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
+
 /**
  * Editable: whether a keydown edits the text of the combobox input — printable characters (AltGr,
  * i.e. Ctrl+Alt, included), Backspace/Delete, the cut/paste/undo/redo shortcuts and the
@@ -1071,8 +1074,9 @@ export const OPTION_STATE_LOCKS = {
  * - **Keys (APG).** Editable: ArrowDown/ArrowUp open (selected, else first/last) and move;
  *   Alt+ArrowDown opens without moving; Alt+ArrowUp closes; Enter commits the active option (with
  *   the listbox closed Enter is not prevented, so forms submit); Escape closes (closed + text:
- *   `onClearDraft`); Tab closes; Home/End/printable keys stay with the input (text-editing keys
- *   clear the highlight, see above). Select-only:
+ *   `onClearDraft`); Tab closes; Home/End, ArrowLeft/ArrowRight and printable keys stay with the
+ *   input (text-editing keys and caret keys clear the highlight and `aria-activedescendant`, which
+ *   returns visual focus to the textbox as the APG editable combobox does). Select-only:
  *   ArrowDown/ArrowUp/Home/End/typeahead open and position (a closed typeahead starts from the
  *   selected option; characters typed with AltGr, i.e. Ctrl+Alt on Windows, count); PageUp/PageDown
  *   jump 10; Enter/Space open or commit (always prevented on keydown, Space also on keyup, so a
@@ -1359,6 +1363,13 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     // typing never commits an option highlighted before the edit.
     if (mode === 'editable' && open && editsText(event)) {
       ad.setActiveValue(highlightOnFilter ? (navigationValues[0] ?? null) : null);
+    }
+    // Editable: a key that moves the caret (ArrowLeft, ArrowRight, Home, End, with Shift or Ctrl
+    // too) is the input's, and returns visual focus to the textbox as the APG editable combobox
+    // does: the highlight and `aria-activedescendant` are cleared, so a screen reader does not read
+    // an option while the caret moves through the text. Alt+Arrow keys open and close the list.
+    if (mode === 'editable' && open && !event.altKey && CARET_KEYS.has(event.key)) {
+      if (activeValue !== null) ad.setActiveValue(null);
     }
     // The range keys of a standalone multi-select list, before Ctrl and Meta are left to the page.
     if (standalone && multiselect && onSelectRange && handleRangeKey(event)) return;
