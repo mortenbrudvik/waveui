@@ -276,6 +276,27 @@ describe('useSelection', () => {
     expect(onChange).toHaveBeenLastCalledWith(['a', 'b'], { event: undefined, id: 'b' });
   });
 
+  it('keeps working, with the right details, after the consumer callback threw', () => {
+    const onChange = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('consumer failure');
+      })
+      .mockImplementation(() => {});
+    const { result } = renderHook(() =>
+      useSelection({ selectionMode: 'multiple', onSelectedItemsChange: onChange }),
+    );
+    const first = clickEvent();
+    const second = clickEvent();
+    expect(() => act(() => result.current.toggle('a', first))).toThrow('consumer failure');
+    act(() => result.current.toggle('b', second));
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenLastCalledWith(expect.arrayContaining(['b']), {
+      event: second,
+      id: 'b',
+    });
+  });
+
   describe('types', () => {
     it('requires selectionMode and gives the callback a mutable string[]', () => {
       // @ts-expect-error selectionMode is required

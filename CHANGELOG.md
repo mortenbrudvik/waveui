@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **PresenceBadge** no longer throws for a status that is neither a member of `PresenceStatus` nor one of the removed 0.x names (a misspelled name, different casing, `null` from server data): it draws `'offline'` and, in development, warns once. A throw there unmounted the whole Persona or Avatar around it. A throw from the development warning itself (a console that throws) now surfaces instead of being swallowed with the missing-`process` case.
+- **`useSelection`** clears the details of a change in a `finally`, so a throw from the update or from `onSelectedItemsChange` leaves nothing for a later change to report.
+
+### Documentation
+
+- `Input`'s `slotProps.root` JSDoc says that, where the root is the `<input>` itself, a tab stop or roving marker goes through `slotProps.input`.
+
 ## [1.0.0] - 2026-11-03
 
 The first stable release and the API freeze: Phase 14 of the [roadmap](docs/ROADMAP.md). From 1.0.0 on, semantic versioning covers the exports of the package entry, the documented props and their `data-*` state attributes, the stable `wave-*` classes of the class-name registry, the `--wave-*` tokens, the namespaced theme keys and the CSS entries of the `exports` map; Wave's own `wave:` utility classes and the modules the entry does not export are internal. 1.0 ends the 0.x compromises at once. It makes every change 0.18 announced: everything 0.x deprecated is removed (P14-02), `Image.alt` is required (P14-03), Badge and CounterBadge `color="important"` is Fluent's neutral high-emphasis color (P14-05), a TimePicker without `format` follows the hour cycle of the browser's language (P14-06), and the `details` argument of every change callback is required. And it makes four breaks that no 0.x release announced, chosen after 0.18 shipped and without a 0.19 to announce them (the roadmap's announce-first rule is waived for them; [Upgrading to 1.0](docs/UPGRADING-TO-1.0.md) and a migration codemod stand in for the notice): every class the components draw carries the prefix `wave:` and an app's Tailwind build gets Wave's theme keys under `wave` (`bg-wave-primary`), so nothing of Wave's styling collides with an app's any more (P14-01); `ref` reaches the focusable element of twelve form controls, whose wrapper is the new `slotProps.root` (P14-04, reversing 0.18's decision to keep `ref` on the root); the package is ES modules only; and the 0.4 ramp names `--brand-N` and `--grey-N` no longer re-theme Wave. It closes the four gaps of Phase 14: `foundation-9`, `foundation-10`, `badge-1` and `timepicker-3`. Nothing is added but what these changes need. Read "Upgrading from 0.18" before upgrading.

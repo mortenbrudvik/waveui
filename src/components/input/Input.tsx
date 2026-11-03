@@ -207,7 +207,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
      * shapes this part sets no `role`, `tabIndex` and the roving markers (`data-roving-container`,
      * `data-roving-disabled`, `data-roving-value`, `aria-disabled`): in a toolbar or another roving
      * container the root is never a control of its own and never hides the input from the arrow
-     * order.
+     * order. Where the root is the `<input>` itself, give such an attribute through `input`.
      */
     root?: SlotPartWithRef<'span', HTMLElement>;
     /**

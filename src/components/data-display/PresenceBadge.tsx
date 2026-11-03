@@ -23,6 +23,7 @@ export interface PresenceBadgeProps extends React.HTMLAttributes<HTMLSpanElement
    * `'oof'`, still draw `'do-not-disturb'` and `'out-of-office'` when they come from code that no
    * type checker reads (server data, JavaScript), with a development warning once per name: a
    * bridge that may go in 2.0, so map such data to the new names.
+   * Any other value (a misspelled name, `null`) draws `'offline'`, with a development warning once.
    * @default 'available'
    */
   status?: PresenceStatus;
@@ -151,25 +152,38 @@ export const PresenceBadge = ({
   slotProps,
   ...props
 }: PresenceBadgeProps) => {
-  // A removed name from untyped code draws its new name (on the server too).
+  // A removed name from untyped code draws its new name; any other value that no type checker
+  // caught (server data, `null`) draws `'offline'`, so the badge never throws (on the server too).
   const oldName = Object.hasOwn(RENAMED_STATUSES, statusProp) ? statusProp : undefined;
-  const status = oldName ? RENAMED_STATUSES[oldName] : statusProp;
+  const resolved = oldName ? RENAMED_STATUSES[oldName] : statusProp;
+  const unknown = !Object.hasOwn(statusStyles, resolved);
+  const status: PresenceStatus = unknown ? 'offline' : resolved;
   React.useEffect(() => {
-    // Written out so a bundler replaces it and a production bundle drops the warning and its
-    // text; without `process` (an unbundled import in a browser) the read throws and it is skipped.
+    // Written out so a bundler replaces it and a production bundle drops the warnings and their
+    // text; without `process` (an unbundled import in a browser) the read throws a
+    // ReferenceError and they are skipped. Any other error, such as one thrown by a strict
+    // console, is not swallowed.
     try {
-      if (process.env.NODE_ENV !== 'production' && oldName) {
-        warnOnce(
-          `PresenceBadge:status:${oldName}`,
-          `PresenceBadge: status '${oldName}' was removed in 1.0; the badge draws ` +
-            `'${RENAMED_STATUSES[oldName]}' for it. Use '${RENAMED_STATUSES[oldName]}': this ` +
-            'fallback for server data and untyped code may be removed in 2.0.',
-        );
+      if (process.env.NODE_ENV !== 'production') {
+        if (oldName) {
+          warnOnce(
+            `PresenceBadge:status:${oldName}`,
+            `PresenceBadge: status '${oldName}' was removed in 1.0; the badge draws ` +
+              `'${RENAMED_STATUSES[oldName]}' for it. Use '${RENAMED_STATUSES[oldName]}': this ` +
+              'fallback for server data and untyped code may be removed in 2.0.',
+          );
+        } else if (unknown) {
+          warnOnce(
+            'PresenceBadge:status-unknown',
+            `PresenceBadge: status '${String(resolved)}' is not a presence status; the badge ` +
+              `draws 'offline'. Use one of ${Object.keys(statusStyles).join(', ')}.`,
+          );
+        }
       }
-    } catch {
-      // No `process`: see above.
+    } catch (error) {
+      if (!(error instanceof ReferenceError)) throw error; // No `process`: see above.
     }
-  }, [oldName]);
+  }, [oldName, unknown, resolved]);
   const avatarBadgeSize = React.useContext(AvatarBadgeSizeContext);
   const size = sizeProp ?? avatarBadgeSize ?? 'medium';
   const { glyph, Icon, className: statusClassName } = statusStyles[status];

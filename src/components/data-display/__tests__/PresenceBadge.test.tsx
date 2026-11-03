@@ -283,6 +283,76 @@ describe('PresenceBadge', () => {
       }
     });
 
+    describe('a value that is no status at all', () => {
+      const unknownMessage = (value: string) =>
+        `[WaveUI] PresenceBadge: status '${value}' is not a presence status; the badge draws ` +
+        "'offline'. Use one of available, busy, away, offline, do-not-disturb, out-of-office.";
+
+      it.each([['DND'], ['Busy '], ['constructor'], ['null']])(
+        "draws %j as 'offline' instead of throwing, and warns once in development",
+        (value) => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          try {
+            render(
+              <React.StrictMode>
+                <PresenceBadge status={untyped(value)} />
+              </React.StrictMode>,
+            );
+            const badge = screen.getByRole('img', { name: 'Offline' });
+            expect(badge).toHaveAttribute('data-status', 'offline');
+            expect(warn.mock.calls).toEqual([[unknownMessage(value)]]);
+          } finally {
+            warn.mockRestore();
+          }
+        },
+      );
+
+      it('draws null as offline, and the same on the server', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          const asNull = null as unknown as PresenceStatus;
+          const html = renderToString(<PresenceBadge status={asNull} />);
+          expect(html).toBe(renderToString(<PresenceBadge status="offline" />));
+          render(<PresenceBadge status={asNull} />);
+          expect(screen.getByRole('img', { name: 'Offline' })).toHaveAttribute(
+            'data-status',
+            'offline',
+          );
+          expect(warn.mock.calls).toEqual([[unknownMessage('null')]]);
+        } finally {
+          warn.mockRestore();
+        }
+      });
+
+      it('draws offline in production without a warning', () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          render(<PresenceBadge status={untyped('DND')} />);
+          expect(screen.getByRole('img', { name: 'Offline' })).toBeInTheDocument();
+          expect(warn).not.toHaveBeenCalled();
+        } finally {
+          warn.mockRestore();
+          vi.unstubAllEnvs();
+        }
+      });
+
+      it('lets an error thrown by the warning itself surface', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {
+          throw new Error('console is strict');
+        });
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          expect(() => render(<PresenceBadge status={untyped('DND')} />)).toThrow(
+            'console is strict',
+          );
+        } finally {
+          warn.mockRestore();
+          error.mockRestore();
+        }
+      });
+    });
+
     it('keeps the old names out of the type', () => {
       // @ts-expect-error -- `'dnd'` is removed in 1.0: use `'do-not-disturb'`
       void (<PresenceBadge status="dnd" />);
