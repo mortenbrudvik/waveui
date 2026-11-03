@@ -66,3 +66,19 @@ export const RightToLeft: Story = {
     </div>
   ),
 };
+
+/**
+ * `orientation="vertical"` runs the rail up with the minimum at the bottom (Fluent UI's
+ * `vertical`). The slider is as wide as its thumb and 8rem tall; give it another height with
+ * `className`.
+ */
+export const Vertical: Story = {
+  render: (args) => (
+    <div className="flex items-end gap-8">
+      <Slider {...args} orientation="vertical" size="small" aria-label="Small volume" />
+      <Slider {...args} orientation="vertical" aria-label="Medium volume" />
+      <Slider {...args} orientation="vertical" className="h-48" aria-label="Tall volume" />
+      <Slider {...args} orientation="vertical" disabled aria-label="Disabled volume" />
+    </div>
+  ),
+};

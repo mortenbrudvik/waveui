@@ -4,7 +4,13 @@ import { describe, it, expect, vi, expectTypeOf } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { Slider, type SliderProps, type SliderSize } from '../Slider';
 import { forcedColors } from '../../../lib/styles';
-import { testSystemProps, testFocusEvents } from '../../../test-utils';
+import type { Orientation } from '../../../lib/types';
+import {
+  testSystemProps,
+  testFocusEvents,
+  renderWithProviders,
+  expectNoA11yViolations,
+} from '../../../test-utils';
 import { renderWithFieldContext } from '../../../test-utils-field';
 
 /** The fill variable of a slider: the share of the rail up to the thumb. */
@@ -467,5 +473,100 @@ describe('size (Phase 4 D10, D14)', () => {
     expect(slider()).toHaveAttribute('data-size', 'medium');
     expect(slider()).toHaveClass('wave:[&::-webkit-slider-thumb]:h-5');
     expect(slider()).not.toHaveClass('wave:h-6');
+  });
+});
+
+describe('orientation (form-basic-30)', () => {
+  const slider = () => screen.getByRole('slider', { name: 'Volume' });
+
+  it('is horizontal by default and says so, with no aria-orientation', () => {
+    render(<Slider aria-label="Volume" />);
+    expect(slider()).toHaveAttribute('data-orientation', 'horizontal');
+    expect(slider()).not.toHaveAttribute('aria-orientation');
+    expect(slider()).toHaveClass('wave:w-full');
+    expect(slider()).not.toHaveClass('wave:[writing-mode:vertical-lr]');
+  });
+
+  it('vertical: a vertical writing mode, the minimum at the bottom, as wide as the thumb', () => {
+    render(<Slider aria-label="Volume" orientation="vertical" />);
+    expect(slider()).toHaveAttribute('data-orientation', 'vertical');
+    expect(slider()).toHaveAttribute('aria-orientation', 'vertical');
+    expect(slider()).toHaveClass(
+      'wave:h-32',
+      'wave:w-5',
+      'wave:[writing-mode:vertical-lr]',
+      'wave:[direction:rtl]',
+      'wave:[&::-webkit-slider-runnable-track]:w-1',
+      'wave:[&::-moz-range-track]:w-1',
+      'wave:[&::-webkit-slider-thumb]:h-5',
+      'wave:[&::-moz-range-thumb]:h-5',
+    );
+    expect(slider()).not.toHaveClass('wave:w-full', 'wave:[&::-webkit-slider-runnable-track]:h-1');
+    expect(slider().className).toContain('to_top');
+    expect(slider().className).not.toContain('to_right');
+    expect(slider().className).not.toContain('wave-rtl');
+  });
+
+  it('vertical small: a 16px thumb on a 2px rail, 24px wide', () => {
+    render(<Slider aria-label="Volume" orientation="vertical" size="small" />);
+    expect(slider()).toHaveClass(
+      'wave:w-6',
+      'wave:[&::-webkit-slider-runnable-track]:w-0.5',
+      'wave:[&::-webkit-slider-thumb]:h-4',
+      'wave:[&::-webkit-slider-thumb]:[margin-block-start:-0.4375rem]',
+    );
+    expect(slider()).not.toHaveClass('wave:h-6');
+    expect(slider()).toHaveAttribute('data-size', 'small');
+  });
+
+  it('keeps the fill variable, the value and onValueChange', () => {
+    const onValueChange = vi.fn();
+    render(
+      <Slider
+        aria-label="Volume"
+        orientation="vertical"
+        defaultValue={25}
+        onValueChange={onValueChange}
+      />,
+    );
+    expect(slider().style.getPropertyValue('--wave-slider-progress')).toBe('25%');
+    fireEvent.change(slider(), { target: { value: '80' } });
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(80);
+    expect(slider().style.getPropertyValue('--wave-slider-progress')).toBe('80%');
+  });
+
+  it('a className height replaces the default height', () => {
+    render(<Slider aria-label="Volume" orientation="vertical" className="h-48" />);
+    expect(slider()).toHaveClass('h-48');
+    expect(slider()).not.toHaveClass('wave:h-32');
+  });
+
+  it('does not leak orientation to the input as an attribute', () => {
+    render(<Slider aria-label="Volume" orientation="vertical" />);
+    expect(slider()).not.toHaveAttribute('orientation');
+  });
+
+  it('renders the same on the server and does not mirror in RTL', () => {
+    expect(
+      renderToString(<Slider aria-label="Volume" orientation="vertical" defaultValue={25} />),
+    ).toContain('data-orientation="vertical"');
+    renderWithProviders(<Slider aria-label="Volume" orientation="vertical" />, { dir: 'rtl' });
+    expect(slider().className).not.toContain('wave-rtl');
+  });
+
+  it('passes axe vertical and disabled', async () => {
+    render(
+      <>
+        <Slider aria-label="Volume" orientation="vertical" />
+        <Slider aria-label="Muted" orientation="vertical" disabled />
+      </>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types', () => {
+    expectTypeOf<SliderProps['orientation']>().toEqualTypeOf<Orientation | undefined>();
+    // @ts-expect-error not an orientation
+    render(<Slider aria-label="Volume" orientation="diagonal" />);
   });
 });
