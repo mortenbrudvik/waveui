@@ -9,7 +9,7 @@ import {
   VOID_ELEMENTS,
 } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
-import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
+import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/types';
 import { useButtonSemantics } from './Button.semantics';
 import { buttonClassName } from './buttonStyles';
 
@@ -27,6 +27,13 @@ export interface ButtonOwnProps {
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Corner shape (Fluent's `shape`): `rounded` is the default corner radius, `circular` a pill
+   * (a circle on an icon-only button) and `square` has no rounding. Renders `data-shape` while
+   * it is set. In a SplitButton, the shape of both halves is the SplitButton's.
+   * @default 'rounded'
+   */
+  shape?: Shape;
   /**
    * Icon slot rendered before the label (after it with `iconPosition="after"`). Decorative: it
    * renders with `aria-hidden="true"` (a slot object can override it). An icon-only button needs
@@ -126,6 +133,7 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
     as,
     appearance = 'outline',
     size = 'medium',
+    shape,
     icon,
     iconPosition = 'before',
     disabled = false,
@@ -211,12 +219,13 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
 
   return (
     <Component
+      data-shape={shape}
       {...elementProps}
       {...handlers}
       ref={ref}
       className={wcn(
         buttonClassNames.root,
-        buttonClassName({ appearance, size, disabled: showDisabledLook, iconOnly }),
+        buttonClassName({ appearance, size, shape, disabled: showDisabledLook, iconOnly }),
         hasIcon && hasLabel && 'wave:gap-1.5',
         className,
       )}

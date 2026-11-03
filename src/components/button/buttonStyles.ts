@@ -18,7 +18,7 @@
  */
 import { wcn } from '../../lib/cn';
 import { focusRing, forcedColors } from '../../lib/styles';
-import type { Appearance, Size } from '../../lib/types';
+import type { Appearance, Shape, Size } from '../../lib/types';
 
 /**
  * Layout, typography, focus ring and color transition shared by every button. `no-underline`
@@ -50,6 +50,15 @@ export const buttonIconOnlySizeClasses: Record<Size, string> = {
   medium: 'wave:h-8 wave:w-8 wave:px-0 wave:text-body-1',
   large: 'wave:h-10 wave:w-10 wave:px-0 wave:text-body-2',
   'extra-large': 'wave:h-12 wave:w-12 wave:px-0 wave:text-[18px]/[24px]',
+};
+
+/**
+ * Corner classes per shape other than the default `rounded` (the base's `rounded`): a pill or
+ * circle, and square corners. Layered after the base, so they replace its radius.
+ */
+export const buttonShapeClasses: Partial<Record<Shape, string>> = {
+  circular: 'wave:rounded-full',
+  square: 'wave:rounded-none',
 };
 
 /**
@@ -129,6 +138,8 @@ export interface ButtonClassNameOptions {
   appearance?: Appearance;
   /** @default 'medium' */
   size?: Size;
+  /** Corner shape: the default `rounded` keeps the base radius. @default 'rounded' */
+  shape?: Shape;
   /** Adds the disabled look. @default false */
   disabled?: boolean;
   /** Square, icon-only sizing without a minimum width. @default false */
@@ -152,6 +163,7 @@ export interface ButtonClassNameOptions {
 export function buttonClassName({
   appearance = 'outline',
   size = 'medium',
+  shape,
   disabled = false,
   iconOnly = false,
   pressed = false,
@@ -160,6 +172,7 @@ export function buttonClassName({
   return wcn(
     buttonBaseClasses,
     iconOnly ? buttonIconOnlySizeClasses[size] : buttonSizeClasses[size],
+    shape && buttonShapeClasses[shape],
     buttonAppearanceClasses[appearance],
     pressed && (accessible ? buttonPressedAccessibleClasses : buttonPressedClasses)[appearance],
     pressed && buttonPressedForcedColors,

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { Button, Tooltip } from '../src';
-import type { ButtonProps, Size } from '../src';
+import type { ButtonProps, Shape, Size } from '../src';
 import { appearanceArgType, iconPositionArgType, sizeArgType } from './_helpers';
 
 /** Decorative inline icon (the Button hides its icon slot from assistive technology). */
@@ -172,4 +172,31 @@ export const DisabledLink: AnchorStory = {
     children: 'Read the docs',
     disabled: true,
   },
+};
+
+const shapes: Shape[] = ['rounded', 'circular', 'square'];
+
+/** `shape` rounds the corners: the default radius, a pill (a circle when icon-only) or square. */
+export const Shapes: Story = {
+  argTypes: {
+    shape: { control: false },
+  },
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      {shapes.map((shape) => (
+        <Button key={shape} {...args} shape={shape}>
+          {shape}
+        </Button>
+      ))}
+      {shapes.map((shape) => (
+        <Button
+          key={`${shape}-icon`}
+          {...args}
+          shape={shape}
+          icon={<PaperclipIcon />}
+          aria-label={`Attach (${shape})`}
+        />
+      ))}
+    </div>
+  ),
 };
