@@ -15,6 +15,7 @@ export {
   type RadioGroupProps,
   type RadioGroupItemProps,
   type RadioItemProps,
+  type RadioLabelPosition,
 } from './RadioGroup';
 export {
   useRadioGroupContext,

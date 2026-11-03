@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { reportMissingContext } from '../../lib/dev';
 import { isOwnEvent } from '../../lib/events';
+import type { LabelPosition } from '../../lib/types';
 
 /*
  * The context a `RadioGroup` gives its items, and the public hooks that read it for content and
@@ -8,6 +9,12 @@ import { isOwnEvent } from '../../lib/events';
  * `useRadioGroupItem`, the props of a radio element. The context object and its full value stay
  * internal (R11). Imports no component: `RadioGroup.tsx` imports this module, never the reverse.
  */
+
+/**
+ * Where a `RadioGroup.Item` draws its label: `after` the radio, in the reading direction (the
+ * default), or `below` it, centred (Fluent UI's `Radio` `labelPosition`, which also has `before`).
+ */
+export type RadioLabelPosition = Extract<LabelPosition, 'after' | 'below'>;
 
 /** What a `RadioGroup` gives its items. Internal: the public hooks return narrow views of it. */
 export interface RadioGroupItemsContextValue {
@@ -23,6 +30,8 @@ export interface RadioGroupItemsContextValue {
   select: (value: string) => void;
   /** Roving tab index of an item. */
   getTabIndex: (value: string) => 0 | -1;
+  /** The group's label position, which an item's own `labelPosition` replaces. */
+  labelPosition: RadioLabelPosition;
 }
 
 /** Internal: provided by `RadioGroup`, read through the hooks of this module. */
@@ -37,6 +46,7 @@ const INERT_CONTEXT: RadioGroupItemsContextValue = {
   disabled: false,
   select: noop,
   getTabIndex: () => -1,
+  labelPosition: 'after',
 };
 
 /**
@@ -60,6 +70,8 @@ export interface RadioItemState {
   tabIndex: 0 | -1;
   /** The group's selection. */
   select: (value: string) => void;
+  /** The group's label position, which an item's own `labelPosition` replaces. */
+  labelPosition: RadioLabelPosition;
 }
 
 /**
@@ -79,6 +91,7 @@ export function useRadioItemState(
     disabled: isDisabled,
     tabIndex: isDisabled ? -1 : group.getTabIndex(value),
     select: group.select,
+    labelPosition: group.labelPosition,
   };
 }
 
