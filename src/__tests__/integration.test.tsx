@@ -891,6 +891,8 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useNavListChildCheck',
       'markNavPart',
       'getNavPartKind',
+      'markButton',
+      'isButtonType',
       'NavDrawerContext',
       'NavDrawerLayoutContext',
       'TagPickerRoot',
