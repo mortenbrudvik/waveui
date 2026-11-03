@@ -18,6 +18,9 @@ describe('createToaster on the server (P3-08, D33)', () => {
       dispatchToast: vi.fn<(first: unknown, second?: unknown) => string>(() => ''),
       dismissToast: vi.fn<(id: string) => void>(),
       dismissAllToasts: vi.fn<() => void>(),
+      updateToast: vi.fn<(update: unknown) => void>(),
+      pauseToast: vi.fn<(id: string) => void>(),
+      playToast: vi.fn<(id: string) => void>(),
     };
     const binding = bindToasterHandle(appToaster, {}, controller);
     expect(binding.status).toBe('bound');

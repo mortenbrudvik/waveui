@@ -363,8 +363,10 @@ import type {
   ToasterShortcuts,
   ToastFooterProps,
   ToastOptions,
+  Politeness,
   ToastPosition,
   ToastProps,
+  ToastStatusChangeHandler,
   ToastTitleProps,
   toggleButtonClassNames,
   ToggleButtonProps,
@@ -1411,6 +1413,12 @@ describe('0.8 notifications, color, trees and class names from the package entry
       status?: Status;
       statusLabel?: string;
       announcement?: string;
+      politeness?: Politeness;
+      position?: ToastPosition;
+      priority?: number;
+      pauseOnHover?: boolean;
+      pauseOnWindowBlur?: boolean;
+      onStatusChange?: ToastStatusChangeHandler;
     }>();
 
     expectTypeOf<ToastProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
