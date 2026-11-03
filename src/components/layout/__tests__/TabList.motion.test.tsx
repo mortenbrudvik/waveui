@@ -21,7 +21,7 @@ import {
   vi,
   type MockInstance,
 } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TabList, type TabListProps } from '../TabList';
 import { tabIndicatorMotion } from '../../../lib/motion';
@@ -120,9 +120,13 @@ let requestFrame: MockInstance<typeof window.requestAnimationFrame>;
 let cancelFrame: MockInstance<typeof window.cancelAnimationFrame>;
 let warn: MockInstance<typeof console.warn>;
 let error: MockInstance<typeof console.error>;
+let getComputedStyleSpy: MockInstance<typeof window.getComputedStyle>;
+/** The computed style of a tab's after pseudo-element (its line), by tab. */
+let lineStyles: WeakMap<Element, Partial<CSSStyleDeclaration>>;
 
 beforeEach(() => {
   frames = new Map();
+  lineStyles = new WeakMap();
   let nextId = 0;
   requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
     nextId += 1;
@@ -134,6 +138,16 @@ beforeEach(() => {
   });
   warn = vi.spyOn(console, 'warn');
   error = vi.spyOn(console, 'error');
+  // jsdom cannot compute the style of a pseudo-element (it logs "Not implemented"): answer with
+  // the element's own style, which has no translate or scale, unless a test gives the line's.
+  const computedStyle = window.getComputedStyle.bind(window);
+  getComputedStyleSpy = vi
+    .spyOn(window, 'getComputedStyle')
+    .mockImplementation((element, pseudo) =>
+      pseudo !== undefined && pseudo !== null && lineStyles.has(element)
+        ? (lineStyles.get(element) as CSSStyleDeclaration)
+        : computedStyle(element),
+    );
 });
 
 afterEach(() => {
@@ -540,5 +554,114 @@ describe('TabList - sliding indicator (spec §9.2, R12)', () => {
         await expectNoA11yViolations();
       },
     );
+  });
+});
+
+describe('TabList - a reselection while the line slides (1.1)', () => {
+  /** A `transitionend` of a tab's after pseudo-element, as a browser dispatches it. */
+  function endLineTransition(target: Element) {
+    const event = createEvent.transitionEnd(target);
+    Object.defineProperty(event, 'pseudoElement', { value: '::after' });
+    fireEvent(target, event);
+  }
+  const pseudoCalls = () =>
+    getComputedStyleSpy.mock.calls.filter(([, pseudo]) => pseudo !== undefined && pseudo !== null);
+
+  it('starts the next slide from the line’s visible box, not from the tab it slides to', async () => {
+    const user = userEvent.setup();
+    render(tabList());
+    layOut(ROW);
+    await user.click(tab('Tab B'));
+    runFrames();
+    // The line over B is mid-slide: it has moved 40px of its way and is 80% of B's width.
+    lineStyles.set(tab('Tab B'), { translate: '-40px', scale: '0.8 1' });
+    await user.click(tab('Tab C'));
+    // The line is seen from 80 - 40 = 40, 100 * 0.8 = 80 long; C is at 200, 50 wide.
+    expect(offset(tab('Tab C'))).toBe('-160px');
+    expect(scale(tab('Tab C'))).toBe('1.6');
+    expect(pseudoCalls()).toEqual([[tab('Tab B'), '::after']]);
+    runFrames();
+    expect(offset(tab('Tab C'))).toBe('');
+  });
+
+  it('reads one value for both axes of a uniform scale, and the vertical axes of a vertical list', async () => {
+    const user = userEvent.setup();
+    render(tabList({ orientation: 'vertical' }));
+    layOut(COLUMN);
+    await user.click(tab('Tab B'));
+    runFrames();
+    // B is at 48, 32 high: translate "0px -8px" serializes as given, scale "0.5" is uniform.
+    lineStyles.set(tab('Tab B'), { translate: '0px -8px', scale: '0.5' });
+    await user.click(tab('Tab C'));
+    // Seen from 48 - 8 = 40, 32 * 0.5 = 16 long; C is at 88, 40 high.
+    expect(offset(tab('Tab C'))).toBe('-48px');
+    expect(scale(tab('Tab C'))).toBe('0.4');
+  });
+
+  it('ignores a computed value that is not a pixel length or a number', async () => {
+    const user = userEvent.setup();
+    render(tabList());
+    layOut(ROW);
+    await user.click(tab('Tab B'));
+    runFrames();
+    lineStyles.set(tab('Tab B'), { translate: 'none', scale: 'none' });
+    await user.click(tab('Tab C'));
+    expect(offset(tab('Tab C'))).toBe('-120px');
+    expect(scale(tab('Tab C'))).toBe('2');
+  });
+
+  it('reads nothing once the line’s transition has ended: the tab’s own box is the start', async () => {
+    const user = userEvent.setup();
+    render(tabList());
+    layOut(ROW);
+    await user.click(tab('Tab B'));
+    runFrames();
+    endLineTransition(tab('Tab B'));
+    lineStyles.set(tab('Tab B'), { translate: '-40px', scale: '0.8 1' });
+    await user.click(tab('Tab C'));
+    expect(offset(tab('Tab C'))).toBe('-120px');
+    expect(scale(tab('Tab C'))).toBe('2');
+    expect(pseudoCalls()).toEqual([]);
+  });
+
+  it('a transition of something else does not end it, and a cancelled one does', async () => {
+    const user = userEvent.setup();
+    render(tabList());
+    layOut(ROW);
+    await user.click(tab('Tab B'));
+    runFrames();
+    // The tab's own color transition (no pseudo-element) leaves the line sliding.
+    fireEvent.transitionEnd(tab('Tab B'));
+    lineStyles.set(tab('Tab B'), { translate: '-40px', scale: '0.8 1' });
+    await user.click(tab('Tab C'));
+    expect(offset(tab('Tab C'))).toBe('-160px');
+    runFrames();
+    const cancel = createEvent.transitionCancel(tab('Tab C'));
+    Object.defineProperty(cancel, 'pseudoElement', { value: '::after' });
+    fireEvent(tab('Tab C'), cancel);
+    await user.click(tab('Tab A'));
+    // From C's own box (200, 50 wide) to A (0, 60 wide).
+    expect(offset(tab('Tab A'))).toBe('200px');
+    expect(scale(tab('Tab A'))).toBe(String(50 / 60));
+  });
+
+  it('composes your onTransitionEnd and onTransitionCancel', () => {
+    const onTransitionEnd = vi.fn();
+    const onTransitionCancel = vi.fn();
+    render(tabList({ onTransitionEnd, onTransitionCancel }));
+    endLineTransition(tab('Tab A'));
+    const cancel = createEvent.transitionCancel(tab('Tab A'));
+    fireEvent(tab('Tab A'), cancel);
+    expect(onTransitionEnd).toHaveBeenCalledTimes(1);
+    expect(onTransitionCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the browser for no pseudo-element style while no slide has started', async () => {
+    const user = userEvent.setup();
+    render(tabList());
+    // No layout: the tabs have no size, so nothing slides and nothing is read.
+    await user.click(tab('Tab B'));
+    await user.click(tab('Tab C'));
+    expect(pseudoCalls()).toEqual([]);
   });
 });
