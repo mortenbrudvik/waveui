@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useInsertionEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useId } from './useId';
 import {
+  dismissDescendantLayers,
   getTopmostLayer,
   registerLayer,
   type DismissReason,
@@ -108,6 +109,11 @@ export function DismissLayerProvider(props: {
  *   portal and layer register, and keeps the layer open. Focus that is back inside the tree by
  *   then keeps it open too.
  *
+ * **Closing with its parent.** When a layer closes while its component stays mounted (a surface
+ * that exits, or one kept mounted), every layer opened from inside it closes too, topmost first,
+ * with the reason `parent-closed`; an unmounting component closes nothing (what it renders
+ * unmounts with it).
+ *
  * A layer's tree is its `refs`, the portal wrappers rendered inside it, its descendant layers and
  * the `[data-wave-focus-trap-allow]` regions (toasts). Parentage follows the React tree: wrap the surface in
  * `Portal layerId={layerId}` (or {@link DismissLayerProvider}) so layers opened inside it become
@@ -128,6 +134,17 @@ export function useDismiss(options: UseDismissOptions): DismissLayer {
   });
 
   const { open } = options;
+
+  // Whether the component is unmounting: declared before the registering effect, so on an unmount
+  // its cleanup runs first (cleanups run in declaration order) and the layer's does not close the
+  // popups opened from it, which unmount with it.
+  const unmountingRef = useRef(false);
+  useLayoutEffect(() => {
+    unmountingRef.current = false;
+    return () => {
+      unmountingRef.current = true;
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -154,7 +171,14 @@ export function useDismiss(options: UseDismissOptions): DismissLayer {
       },
       onDismiss: (reason, event) => latest.current.options.onDismiss(reason, event),
     };
-    return registerLayer(record);
+    const unregister = registerLayer(record);
+    return () => {
+      // The layer closes while the component stays mounted (it exits, or stays kept mounted):
+      // the popups opened from it close with it, before the layer leaves the stack that names
+      // them its descendants.
+      if (!unmountingRef.current) dismissDescendantLayers(layerId, new Event('parent-closed'));
+      unregister();
+    };
   }, [open, layerId]);
 
   return useMemo(

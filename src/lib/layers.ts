@@ -29,8 +29,12 @@ export const Z_INDEX = {
  */
 export type LayerKind = 'modal' | 'dialog' | 'popover' | 'menu' | 'listbox' | 'tooltip' | 'toast';
 
-/** Why a popup layer is dismissed: Escape, a press outside it, or focus moving outside it. */
-export type DismissReason = 'escape' | 'outside-press' | 'focus-outside';
+/**
+ * Why a popup layer is dismissed: Escape, a press outside it, focus moving outside it, or the layer
+ * it was opened from closing (`parent-closed`: a Popover or Menu opened inside a Dialog that closes
+ * closes with it).
+ */
+export type DismissReason = 'escape' | 'outside-press' | 'focus-outside' | 'parent-closed';
 
 /** A registered layer. Getters are allowed, so fields can read the latest options. */
 export interface LayerRecord {
@@ -438,6 +442,24 @@ export function registerLayer(record: LayerRecord): () => void {
     if (state.stack.length === 0) removeListeners(state);
     notifySubscribers(state);
   };
+}
+
+/**
+ * Dismisses every open layer opened from inside the layer `layerId` (its descendants, topmost
+ * first) with the reason `parent-closed`. A surface calls it as its own layer closes, while the
+ * layer is still registered, so the popups opened from it close with it instead of staying on
+ * screen over the page, or over a surface that is still exiting. It reaches each descendant's
+ * `onDismiss` once; a descendant that has already closed is no longer in the stack.
+ */
+export function dismissDescendantLayers(layerId: string, event: Event): void {
+  const state = getState();
+  const descendants = state.stack.filter(
+    (layer) => layer.id !== layerId && isDescendantOf(state, layer, layerId),
+  );
+  for (const layer of sortTopmostFirst(descendants)) {
+    // An earlier layer's onDismiss may already have unregistered this one.
+    if (state.stack.includes(layer)) layer.onDismiss('parent-closed', event);
+  }
 }
 
 // ---------------------------------------------------------------------------

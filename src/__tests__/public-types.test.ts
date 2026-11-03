@@ -868,7 +868,7 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<DialogModalType | undefined>();
     expectTypeOf<DialogOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<ModalOpenChangeReason>().toEqualTypeOf<
-      'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press'
+      'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press' | 'focus-outside' | 'parent-closed'
     >();
     expectTypeOf<DialogOpenChangeDetails['reason']>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<DialogOpenChangeDetails>().toEqualTypeOf<
@@ -1157,7 +1157,9 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     >();
     expectTypeOf<typeof useListboxPopup>().parameter(0).toEqualTypeOf<UseListboxPopupOptions>();
     expectTypeOf<typeof useListboxPopup>().returns.toEqualTypeOf<UseListboxPopupResult>();
-    expectTypeOf<DismissReason>().toEqualTypeOf<'escape' | 'outside-press' | 'focus-outside'>();
+    expectTypeOf<DismissReason>().toEqualTypeOf<
+      'escape' | 'outside-press' | 'focus-outside' | 'parent-closed'
+    >();
     expectTypeOf<UseListboxPopupOptions['onDismiss']>().toEqualTypeOf<
       (reason: DismissReason) => void
     >();

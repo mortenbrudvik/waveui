@@ -27,6 +27,14 @@ export interface UseModalLayerOptions extends Omit<UseDismissOptions, 'kind'> {
   triggerRef?: React.RefObject<HTMLElement | null>;
   /** Consumer override for the focus-restore target. */
   finalFocusRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Light dismiss of a `non-modal` surface: a press outside its tree and focus moving outside it
+   * dismiss it (`outside-press`, `focus-outside`), as they do a popover. Its elements
+   * (`refs`, and the opener it is placed after) are inside; the page is not. Ignored for `modal`
+   * and `alert`, which keep their own rules.
+   * @default false
+   */
+  lightDismiss?: boolean;
 }
 
 /**
@@ -45,7 +53,7 @@ export interface UseModalLayerOptions extends Omit<UseDismissOptions, 'kind'> {
  *
  * `modalType: 'alert'` composes the same with `outsidePress: false`. `modalType: 'non-modal'`
  * registers a `dialog` layer (Escape only from inside its tree, no outside press, no focus-outside
- * dismissal), keeps the trap, the isolation and the scroll lock off, moves focus in on open with
+ * dismissal unless `lightDismiss` asks for them), keeps the trap, the isolation and the scroll lock off, moves focus in on open with
  * the trap's initial-focus rule (`useInitialFocus`) and restores focus only when it is inside the
  * surface (or in a layer opened from it) at close, or was lost to `<body>` from there. Every hook
  * is always called and keys on `open`: a `modalType` that changes while open applies at once (the
@@ -69,6 +77,7 @@ export function useModalLayer(options: UseModalLayerOptions): DismissLayer {
     initialFocus,
     triggerRef,
     finalFocusRef,
+    lightDismiss = false,
     ...dismissOptions
   } = options;
   const { open } = options;
@@ -81,8 +90,8 @@ export function useModalLayer(options: UseModalLayerOptions): DismissLayer {
           ...dismissOptions,
           kind: 'dialog',
           escape: 'inside',
-          outsidePress: false,
-          focusOutside: false,
+          outsidePress: lightDismiss,
+          focusOutside: lightDismiss,
         }
       : {
           ...dismissOptions,

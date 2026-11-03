@@ -337,6 +337,7 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   stepperStepClassNames: ['icon'],
   dialogContentClassNames: ['backdrop', 'titleAction', 'closeButton'],
   dialogTitleClassNames: ['action'],
+  dialogFooterClassNames: ['startActions'],
   drawerClassNames: ['backdrop', 'titleAction', 'closeButton'],
   drawerHeaderTitleClassNames: ['action'],
   // `primaryAction` fills `primaryButton`; `secondaryAction` fills `secondaryButton`.

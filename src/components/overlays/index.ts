@@ -15,6 +15,7 @@ export type {
   DialogContentProps,
   DialogFooterProps,
   DialogTitleProps,
+  DialogTitleElement,
   DialogTriggerProps,
   DialogTriggerRenderProps,
   DialogCloseProps,

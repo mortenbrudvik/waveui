@@ -55,23 +55,28 @@ export function useModalOpenState(
 
 /**
  * The `onDismiss` of a modal root's layer (`useModalLayer`): Escape and a backdrop press ask the
- * root to close, with their reason and event. `focus-outside` never reaches a modal layer (only a
- * layer registered with `focusOutside: true` gets it), so it is ignored with a development warning.
+ * root to close, with their reason and event, and so does the close of the layer the modal was
+ * opened from (`parent-closed`). `focus-outside` reaches the layer only with `lightDismiss` (a
+ * non-modal surface that opted into it) and asks to close then; otherwise it never reaches a
+ * modal layer and is ignored with a development warning.
  *
  * @param requestOpen       The root's request function, from {@link useModalOpenState}.
  * @param componentName     The public name for the warning, e.g. `'Dialog'`.
  * @param afterOutsidePress Called right after an `outside-press` request (see
  *                          {@link useBackdropPress}).
+ * @param lightDismiss      Whether a `focus-outside` dismissal closes the surface.
  */
 export function useModalDismiss(
   requestOpen: ModalRequestOpen,
   componentName: string,
   afterOutsidePress?: () => void,
+  lightDismiss = false,
 ): (reason: DismissReason, event: Event) => void {
   return React.useCallback(
     (reason: DismissReason, event: Event) => {
       switch (reason) {
         case 'escape':
+        case 'parent-closed':
           requestOpen(false, { reason, event });
           break;
         case 'outside-press':
@@ -79,6 +84,10 @@ export function useModalDismiss(
           afterOutsidePress?.();
           break;
         case 'focus-outside':
+          if (lightDismiss) {
+            requestOpen(false, { reason, event });
+            break;
+          }
           warnOnce(
             `${componentName}:focus-outside`,
             `${componentName} ignored a focus-outside dismissal: a modal surface does not close when focus leaves it.`,
@@ -91,7 +100,7 @@ export function useModalDismiss(
         }
       }
     },
-    [requestOpen, componentName, afterOutsidePress],
+    [requestOpen, componentName, afterOutsidePress, lightDismiss],
   );
 }
 
