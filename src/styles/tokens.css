@@ -272,6 +272,19 @@
   --wave-palette-steel-tint: #cad5de;
   --wave-palette-steel-tint-foreground: #405d76;
   --wave-palette-steel-border: var(--wave-palette-steel);
+  /* Chart series: ten categorical colours made for charts, in the order a chart gives them to
+     its series (3:1 on the page and on cards; every pair of the set stays apart for colour-vision
+     deficiencies). High contrast has one colour, white: a second encoding tells the series apart. */
+  --wave-chart-1: #0183fc;
+  --wave-chart-2: #958506;
+  --wave-chart-3: #5e0ebc;
+  --wave-chart-4: #a1000a;
+  --wave-chart-5: #047c5b;
+  --wave-chart-6: #904f9b;
+  --wave-chart-7: #a05402;
+  --wave-chart-8: #00556f;
+  --wave-chart-9: #872550;
+  --wave-chart-10: #729066;
   --wave-backdrop: rgb(0 0 0 / 0.4);
 
   /* Elevation: Fluent's ambient 0.12 / key 0.14 shadows, the 0.16 literals */
@@ -441,6 +454,19 @@
   --wave-palette-steel-tint: #2f4557;
   --wave-palette-steel-tint-foreground: #9fb8cc;
   --wave-palette-steel-border: var(--wave-palette-steel);
+  /* Chart series: ten categorical colours made for charts, in the order a chart gives them to
+     its series (3:1 on the page and on cards; every pair of the set stays apart for colour-vision
+     deficiencies). High contrast has one colour, white: a second encoding tells the series apart. */
+  --wave-chart-1: #8abdfe;
+  --wave-chart-2: #ead32e;
+  --wave-chart-3: #9c72ff;
+  --wave-chart-4: #fe584d;
+  --wave-chart-5: #3ba882;
+  --wave-chart-6: #bf7bc9;
+  --wave-chart-7: #ff902c;
+  --wave-chart-8: #8edeff;
+  --wave-chart-9: #ffa8c5;
+  --wave-chart-10: #9dbc90;
   --wave-backdrop: rgb(0 0 0 / 0.5);
 
   /* Elevation: Fluent's dark shadows, ambient 0.24 / key 0.28 (the same offsets and blurs) */
@@ -608,6 +634,19 @@
   --wave-palette-steel-tint: #000000;
   --wave-palette-steel-tint-foreground: #ffffff;
   --wave-palette-steel-border: var(--wave-palette-steel);
+  /* Chart series: ten categorical colours made for charts, in the order a chart gives them to
+     its series (3:1 on the page and on cards; every pair of the set stays apart for colour-vision
+     deficiencies). High contrast has one colour, white: a second encoding tells the series apart. */
+  --wave-chart-1: #ffffff;
+  --wave-chart-2: #ffffff;
+  --wave-chart-3: #ffffff;
+  --wave-chart-4: #ffffff;
+  --wave-chart-5: #ffffff;
+  --wave-chart-6: #ffffff;
+  --wave-chart-7: #ffffff;
+  --wave-chart-8: #ffffff;
+  --wave-chart-9: #ffffff;
+  --wave-chart-10: #ffffff;
   --wave-backdrop: rgb(0 0 0 / 0.8);
 
   /* Elevation: as dark */
@@ -777,6 +816,16 @@
   --color-wave-palette-steel-tint: var(--wave-palette-steel-tint);
   --color-wave-palette-steel-tint-foreground: var(--wave-palette-steel-tint-foreground);
   --color-wave-palette-steel-border: var(--wave-palette-steel-border);
+  --color-wave-chart-1: var(--wave-chart-1);
+  --color-wave-chart-2: var(--wave-chart-2);
+  --color-wave-chart-3: var(--wave-chart-3);
+  --color-wave-chart-4: var(--wave-chart-4);
+  --color-wave-chart-5: var(--wave-chart-5);
+  --color-wave-chart-6: var(--wave-chart-6);
+  --color-wave-chart-7: var(--wave-chart-7);
+  --color-wave-chart-8: var(--wave-chart-8);
+  --color-wave-chart-9: var(--wave-chart-9);
+  --color-wave-chart-10: var(--wave-chart-10);
   --color-wave-backdrop: var(--wave-backdrop);
 
   /* Brand ramp (for designers; components use the semantic colors) */

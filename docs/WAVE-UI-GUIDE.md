@@ -542,16 +542,16 @@ export const Details = ({ open }: { open: boolean }) => (
 - **Server rendering.** On the server and while hydrating the element renders `entered` (or `exited`), so a hydrated element does not replay its enter motion (with the enter gated as above); `appear` runs it only for an element mounted on the client after hydration.
 - **Options.** `unmountOnExit={false}` keeps an exited element mounted, `hidden` and `inert`, so its state (a typed value, a scroll position) survives; `onEntered` and `onExited` report the end of a phase, once per phase (StrictMode included; `onExited` from the commit that unmounts or hides the element).
 - **The hook.** `const { isMounted, ref, presenceProps } = usePresence(open)`: render the element while `isMounted`, pass it `ref` (merge it with your own through `useMergedRefs`) and spread `presenceProps`. Destructure the result, since `eslint-plugin-react-hooks` treats the whole object as a ref once its `ref` is passed on. `<Presence>` does the same for a single child element (or calls a render function with the result).
-- **Where it is used.** Every overlay and disclosure with motion (not yet the listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover: [ROADMAP §8.5](ROADMAP.md#85-follow-ups-outside-the-gap-list)): `Menu.Popover` (root menus and submenus), Popover.Content, the InfoButton note, the Tooltip surface, the TeachingPopover surface, `Dialog.Content` and every Drawer and NavDrawer panel and backdrop (overlay or inline), the collapse elements of Accordion, Tree and Nav, the toast containers and the bars of a MessageBarGroup, each with a default motion (below). With `unmountOnClose={false}` a Dialog or Drawer stays mounted `exited`, `hidden` and `inert` once its motion ends; otherwise the closed surface unmounts then. Every top-level element of their portal carries the presence attributes.
+- **Where it is used.** Every overlay and disclosure with motion: `Menu.Popover` (root menus and submenus), Popover.Content, the InfoButton note, the listbox popups of Combobox, Dropdown, TagPicker and TimePicker (and `ListboxSurface`), the DatePicker calendar, the AvatarGroup overflow popup, the Tooltip surface, the TeachingPopover surface, `Dialog.Content` and every Drawer and NavDrawer panel and backdrop (overlay or inline), the collapse elements of Accordion, Tree and Nav, the toast containers and the bars of a MessageBarGroup, each with a default motion (below). With `unmountOnClose={false}` a Dialog or Drawer stays mounted `exited`, `hidden` and `inert` once its motion ends; otherwise the closed surface unmounts then. Every top-level element of their portal carries the presence attributes.
 - **Browser support.** `@starting-style` needs Chrome and Edge 117+, Safari 17.5+ or Firefox 129+; older browsers show the element at once, and the exit still runs.
 
 ### Component Motion
 
-Since 0.15 the overlays and disclosures in the table below ship an enter and exit motion; the listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover still appear and disappear at once ([ROADMAP §8.5](ROADMAP.md#85-follow-ups-outside-the-gap-list)). All of it lives in one internal, server-safe module, `src/lib/motion.ts`: one plain string literal per recipe (a record of literals where a recipe depends on the edge or the size), which the components compose at run time. The conventions gate keeps every `data-[presence=…]` class in that module (`presence-class`) and every `starting:` class gated on the entering phase (`starting-gate`); `src/lib/__tests__/motion.test.ts` compiles every class and checks the tokens, the reduced-motion counterparts and the rules below; and `verify-dist` proves that an import of only `Button` holds no recipe and no presence class.
+Since 0.15 the overlays and disclosures in the table below ship an enter and exit motion (the listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover since 1.1). All of it lives in one internal, server-safe module, `src/lib/motion.ts`: one plain string literal per recipe (a record of literals where a recipe depends on the edge or the size), which the components compose at run time. The conventions gate keeps every `data-[presence=…]` class in that module (`presence-class`) and every `starting:` class gated on the entering phase (`starting-gate`); `src/lib/__tests__/motion.test.ts` compiles every class and checks the tokens, the reduced-motion counterparts and the rules below; and `verify-dist` proves that an import of only `Button` holds no recipe and no presence class.
 
 | Surface | Properties | In | Out |
 |---|---|---|---|
-| `Popover.Content`, `Menu.Popover` and submenus, InfoButton note | opacity, and a 4px `translate` away from the anchor by `data-side` (starts 4px toward it; the exit slides back) | 200ms `normal`, `decelerate-mid` | 100ms `faster`, `accelerate-min` |
+| `Popover.Content`, `Menu.Popover` and submenus, InfoButton note, the listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar, the AvatarGroup overflow popup | opacity, and a 4px `translate` away from the anchor by `data-side` (starts 4px toward it; the exit slides back) | 200ms `normal`, `decelerate-mid` | 100ms `faster`, `accelerate-min` |
 | TeachingPopover surface | as the popups (with a target or a Trigger: fade and slide; in place, without `data-side`, only the fade) | as above | as above |
 | Tooltip | opacity | 100ms `faster`, `easy-ease` | 100ms `faster`, `easy-ease` |
 | Dialog surface | opacity and `scale` 0.85 → 1 | 250ms `gentle`, `decelerate-mid` | 200ms `normal`, `accelerate-min` |
@@ -1018,7 +1018,7 @@ The context is public through a hook and a provider, never as the context object
 - **Context mode** (`openOnContext` on Menu and Popover): the trigger's child is a context-menu region, not a popup button. A cloned child or wrapper span receives the forwarded props and, of the trigger's own, only its id, ref and context-gesture handlers (`useTriggerElement` with `omitStateAria`); a render-prop child still receives every member, and the `aria-haspopup`, `aria-expanded` and `aria-controls` it spreads are removed from its element after each commit, with a development warning. The surface is not labelled by the region: it needs `aria-label` (Popover also `title`). The element focused at the gesture is the first focus-return target; an opening without a gesture (a controlled `open`) forgets it. A pointer gesture closes the surface on a scroll that moves the region or the element under the pointer (while that element has a box); a keyboard gesture, on one that moves the focused row (the region, when it had focus itself). A Menu in context mode ignores a focus move into the region that a right-button, Ctrl+, touch or pen press causes (the row it focuses before the `contextmenu` event moves the menu there); any other focus move into the region closes it.
 - **`target`** (`Menu.Popover`, and the `Popover` root next to `side` and `align`) takes a `PopupTarget`: an element held in state or a `VirtualElement` (`{ getBoundingClientRect, contextElement? }`, an inline object is fine). The positioning reference is the context anchor while a context gesture opened the surface, else `target`, else the trigger; a `target` element counts as inside for outside presses. `Popover`, `Menu.Popover` and TeachingPopover take the same `PopupTargetInput` (an element held in state, a `VirtualElement` or a ref object, read after each render of the popup) unifies them.
 - **Submenus.** A `<Menu>` rendered in a menu list at the list's portal depth (`PortalDepthContext`) is a submenu; a Menu inside a Popover or Dialog opened from an item (a portal in between) is a root menu. Every close of a menu first closes its open submenu, innermost first, and a submenu's open state is its own and its parent's, so a parent that closes, by any path, takes its submenus with it in the same commit.
-- **Motion.** Every overlay surface with motion (not yet the listbox popups of Combobox, Dropdown, TagPicker and TimePicker, the DatePicker calendar and the AvatarGroup popover: [ROADMAP §8.5](ROADMAP.md#85-follow-ups-outside-the-gap-list)) mounts through the presence core: `usePresence(open, { appear: true, unmountOnExit })` for the surfaces that report themselves closed until hydration (Dialog, overlay drawers, Menu, Popover, Tooltip, InfoButton, TeachingPopover), no `appear` for in-flow content. It renders while `isMounted`, spreads `presenceProps` on every top-level element of its portal and puts the presence ref on the element its recipe animates; everything else (layers, trap, isolation, scroll lock, `useRestoreFocus`, `usePopupPosition`, surface registration, hover intent) keys on `open`. Focus inside a positioned surface that closes moves out in the closing commit (`useFocusBeforeClose`, internal; give it and `useRestoreFocus` the same targets in the same order). Popups render `data-state` (`open`, `closed` while exiting) and `data-side`, which picks the slide direction in CSS; their recipes never transition `transform`. The classes come from `src/lib/motion.ts` through `useMotionClasses(slot, recipe)` (see [Component Motion](#component-motion)).
+- **Motion.** Every overlay surface with motion mounts through the presence core: `usePresence(open, { appear: true, unmountOnExit })` for the surfaces that report themselves closed until hydration (Dialog, overlay drawers, Menu, Popover, Tooltip, InfoButton, TeachingPopover), no `appear` for in-flow content. It renders while `isMounted`, spreads `presenceProps` on every top-level element of its portal and puts the presence ref on the element its recipe animates; everything else (layers, trap, isolation, scroll lock, `useRestoreFocus`, `usePopupPosition`, surface registration, hover intent) keys on `open`. Focus inside a positioned surface that closes moves out in the closing commit (`useFocusBeforeClose`, internal; give it and `useRestoreFocus` the same targets in the same order). Popups render `data-state` (`open`, `closed` while exiting) and `data-side`, which picks the slide direction in CSS; their recipes never transition `transform`. The classes come from `src/lib/motion.ts` through `useMotionClasses(slot, recipe)` (see [Component Motion](#component-motion)).
 - Clicks and keys from a portal opened inside an item (a Popover in a `Menu.Item`, a popup from a List action) bubble through the React tree; the item's own handling ignores events whose target is outside it in the DOM (C-COMPOSE), while the consumer's handlers still receive them (a disabled `Menu.Item` calls no `onClick`, as a disabled button).
 
 ### Pattern 10: Stable Class Names
@@ -2597,7 +2597,7 @@ export function ConfirmDelete({ onDelete }: { onDelete: () => void }) {
 | Show thousands of rows, items or options | `virtualWindow` (from `useVirtualWindow`) on `DataGrid`, `List`, `Listbox`, `Combobox`, `Dropdown`; `FlatTree` for trees (chapter 12) |
 | Keep table state outside the DOM | `useTableFeatures` with `useTableSort`, `useTableSelection`, `useTableColumnSizing`; `useSelection` |
 | Re-brand the app, or give a panel its own accent | `WaveProvider tokens` with `createBrandTokens` (chapter 10) |
-| Draw a chart in the theme's colors | A chart library with `chartPalette` and `waveTokens` (chapter 13) |
+| Draw a chart in the theme's colors | A chart library with `chartSeries` and `waveTokens` (chapter 13) |
 | Style or wire an inner part of a component | `slotProps` (its part tables in chapter 14); a leaf's named slot, with a render function to replace its element |
 | A radio card, a menu item, a MessageBar action or a DataGrid cell of your own | `useRadioGroupItem`, `useMenuContext` and `useMenuListContext`, `useMessageBarContext`, the DataGrid hooks (chapter 14's recipes) |
 | A third-party control in a Field, or a field layout of your own | Field's function child; `useFieldContext`, `FieldContextProvider` |
@@ -2770,11 +2770,46 @@ What the adapter must keep, and what it costs:
 
 ## 13. Charts with WaveUI
 
-WaveUI ships no chart component (building charts is a non-goal of the [roadmap](ROADMAP.md#13-non-goals)). It ships the colors a chart needs, in the order a chart uses them, and this recipe for drawing with a chart library. A chart library draws either SVG, which reads a CSS variable as it is, or a canvas, which needs the colors resolved first; the Storybook page **Guides/Charts** (`stories/Charts.stories.tsx`) runs one of each, the same bar chart in Recharts and in Chart.js, with everything below.
+WaveUI ships no chart component (building charts is a non-goal of the [roadmap](ROADMAP.md#13-non-goals)). It ships the colors a chart needs (`chartSeries`, ten colors made for charts, and `chartPalette`, the persona hues), in the order a chart uses them, and this recipe for drawing with a chart library. A chart library draws either SVG, which reads a CSS variable as it is, or a canvas, which needs the colors resolved first; the Storybook page **Guides/Charts** (`stories/Charts.stories.tsx`) runs one of each, the same bar chart in Recharts and in Chart.js, with everything below.
+
+### Series Colors: `chartSeries`
+
+`chartSeries` lists ten colors made for charts, `chart1` to `chart10` (`--wave-chart-1` to `--wave-chart-10`, `bg-wave-chart-1`, …), in the order a categorical chart gives them to its series. Read them through `waveTokens`, so the series follow the theme and the provider's `tokens`:
+
+```ts
+import { chartSeries, waveTokens } from '@mortenbrudvik/waveui';
+
+const seriesColors = chartSeries.map((name) => waveTokens[name]);
+// ['var(--wave-chart-1)', 'var(--wave-chart-2)', …]
+```
+
+| Series | Token | Hue | Light | Dark |
+|---|---|---|---|---|
+| 1 | `chart-1` | blue | `#0183fc` | `#8abdfe` |
+| 2 | `chart-2` | olive | `#958506` | `#ead32e` |
+| 3 | `chart-3` | violet | `#5e0ebc` | `#9c72ff` |
+| 4 | `chart-4` | red | `#a1000a` | `#fe584d` |
+| 5 | `chart-5` | green | `#047c5b` | `#3ba882` |
+| 6 | `chart-6` | orchid | `#904f9b` | `#bf7bc9` |
+| 7 | `chart-7` | orange | `#a05402` | `#ff902c` |
+| 8 | `chart-8` | deep teal | `#00556f` | `#8edeff` |
+| 9 | `chart-9` | raspberry | `#872550` | `#ffa8c5` |
+| 10 | `chart-10` | sage | `#729066` | `#9dbc90` |
+
+High contrast draws every series white (`#ffffff`), as it does the [persona palette](#persona-palette).
+
+The set is tested as a set (`tokens.chart.test.ts`), in the light and dark themes:
+
+- **Each mark is seen.** Every color is 3:1 or more on `background` and on `card` (WCAG 1.4.11).
+- **Every pair stays apart.** Every pair of the ten differs by at least 7 (OKLab ΔE × 100) for full color vision and under simulated protanopia, deuteranopia and tritanopia (Machado 2009 at full severity). The twelve fills of `chartPalette` have a worst pair of about 3.2; Fluent's chart package ships a palette of 40 hex colors (`DataVizPalette`) that is not made of theme tokens.
+- **Few series read best.** The first five differ by at least 9 and the first three by at least 15, so a chart with a handful of series keeps the widest gaps. The first series is blue in both themes.
+- **One ink for the patterns.** The stories ink their fill patterns in the `background` token, which reads on every one of the ten (3:1 or more) in every theme: white stripes in light, dark stripes on the pale fills of dark, black on the white fills of high contrast.
+
+Beyond ten series the colors wrap; at that point, and whenever the chart has to read without color (high contrast, a print-out), give each series a second encoding: a pattern, a marker or a direct label. A color that appears twice in a chart (a series past the tenth) needs one in every theme.
 
 ### Series Colors: `chartPalette`
 
-`chartPalette` lists the 12 [palette](#persona-palette) fills as token names, in the order a categorical chart gives them to its series: `paletteBlue`, `palettePurple`, `paletteBrown`, `paletteTeal`, `paletteRed`, `paletteNavy`, `palettePumpkin`, `paletteSteel`, `paletteGold`, `paletteLavender`, `paletteForest`, `paletteMagenta`. Read the colors through `waveTokens`, so the series follow the theme and the provider's `tokens`:
+Use `chartPalette` where a chart's series should match the persona hues of Avatars and tags on the same page. It lists the 12 [palette](#persona-palette) fills as token names, in the order a categorical chart gives them to its series: `paletteBlue`, `palettePurple`, `paletteBrown`, `paletteTeal`, `paletteRed`, `paletteNavy`, `palettePumpkin`, `paletteSteel`, `paletteGold`, `paletteLavender`, `paletteForest`, `paletteMagenta`. Read the colors through `waveTokens`, so the series follow the theme and the provider's `tokens`:
 
 ```ts
 import { chartPalette, waveTokens } from '@mortenbrudvik/waveui';
@@ -2811,9 +2846,9 @@ SVG takes a `var()` as a `fill` or a `stroke` as it is: pass the `waveTokens` va
 
 ```tsx
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { chartPalette, waveTokens } from '@mortenbrudvik/waveui';
+import { chartSeries, waveTokens } from '@mortenbrudvik/waveui';
 
-const seriesColors = chartPalette.map((name) => waveTokens[name]);
+const seriesColors = chartSeries.map((name) => waveTokens[name]);
 const regions = ['north', 'south', 'east'] as const;
 
 export function SalesChart({ data }: { data: Record<string, string | number>[] }) {
@@ -2834,12 +2869,12 @@ export function SalesChart({ data }: { data: Record<string, string | number>[] }
 }
 ```
 
-A pattern is an SVG `<pattern>` whose background is the fill and whose lines are the fill's `-foreground` token, given to the series as `url(#id)`. Keep the SVG that holds the patterns in the layout at zero size (`width={0} height={0}`), not `display: none`, under which its patterns do not paint:
+A pattern is an SVG `<pattern>` whose background is the fill and whose lines are the `background` token (every `chartSeries` color is 3:1 on it; with `chartPalette`, ink the lines in the fill's `-foreground` token), given to the series as `url(#id)`. Keep the SVG that holds the patterns in the layout at zero size (`width={0} height={0}`), not `display: none`, under which its patterns do not paint:
 
 ```tsx
 <pattern id={id} width={8} height={8} patternUnits="userSpaceOnUse">
-  <rect width={8} height={8} fill={waveTokens.paletteBlue} />
-  <path d="M0,8 l8,-8" stroke={waveTokens.paletteBlueForeground} strokeWidth={1.5} />
+  <rect width={8} height={8} fill={waveTokens.chart1} />
+  <path d="M0,8 l8,-8" stroke={waveTokens.background} strokeWidth={1.5} />
 </pattern>
 // <Bar dataKey="north" fill={`url(#${id})`} />
 ```
@@ -2861,9 +2896,9 @@ What the Recharts story (Recharts 3.10) found:
 A canvas paints with resolved colors and cannot read a `var()` (ECharts with its canvas renderer is the same case). Resolve each token at draw time from an element inside the provider, so the value is the theme's and the overrides' of that moment, and draw again when the theme changes:
 
 ```ts
-import { chartPalette, waveTokens, type WaveTokenName } from '@mortenbrudvik/waveui';
+import { chartSeries, waveTokens, type WaveTokenName } from '@mortenbrudvik/waveui';
 
-/** The custom property a token reads: '--wave-palette-blue' for 'paletteBlue'. */
+/** The custom property a token reads: '--wave-chart-1' for 'chart1'. */
 const property = (name: WaveTokenName) => waveTokens[name].slice('var('.length, -1);
 
 /** The token's value at `element`: the theme and the overrides around it, now. */
@@ -2871,7 +2906,7 @@ export const resolveToken = (element: Element, name: WaveTokenName) =>
   getComputedStyle(element).getPropertyValue(property(name)).trim();
 
 // The series colors of a chart drawn on `canvas`:
-// chartPalette.map((name) => resolveToken(canvas, name))
+// chartSeries.map((name) => resolveToken(canvas, name))
 
 /** Calls `redraw` whenever the theme or the overrides around `canvas` change; returns the cleanup. */
 export function watchTheme(canvas: HTMLCanvasElement, redraw: () => void): () => void {
@@ -2895,12 +2930,13 @@ export function watchTheme(canvas: HTMLCanvasElement, redraw: () => void): () =>
 
 ### High Contrast and Forced Colors
 
-- **The high-contrast theme** (`theme="high-contrast"`) paints every palette fill white with black `-foreground`, so the second encoding is what tells the series apart there. Ink the patterns in each fill's `-foreground` token, as the stories do: black on the white fills of high contrast, and readable on the fill in light and dark (the `foreground` token would be white on white).
+- **The high-contrast theme** (`theme="high-contrast"`) paints every chart series and palette fill white, so the second encoding is what tells the series apart there. Ink the patterns in the `background` token, as the stories do (a persona-palette fill takes its `-foreground` token): black on the white fills of high contrast, and readable on the fill in light and dark (the `foreground` token would be white on white).
 - **Forced colors** (Windows High Contrast, `forced-colors: active`) replace author colors with the user's. The stories read the media query (`matchMedia('(forced-colors: active)')`, through `useSyncExternalStore`) and then draw as the high-contrast theme does, in system colors: every mark `CanvasText` with its pattern in `Canvas`, grid lines `GrayText`; the chart's frame sets `forced-color-adjust: none`, so these colors stay as drawn. The Chart.js story resolves each system color to a value through the computed `color` of a probe element before it paints.
 
 ### Accessibility
 
 - **An image with a name and a description.** Wrap the chart in an element with `role="img"`, an `aria-label` that says what it shows, and `aria-describedby` pointing at visible text with the takeaway (the stories: "North sells the most in every quarter; Online grows the fastest").
+- **Hide the chart's own markup inside the frame.** ARIA makes the children of an `img` presentational, but Chromium's accessibility tree keeps an SVG chart's surface (its tick labels are text) and an HTML legend list, so a screen reader may read them after the image's name and description. Put `aria-hidden="true"` on an element around the chart and its legend inside the frame, as the stories do (a canvas chart has nothing to hide). The data table, outside the frame, carries the values.
 - **A data table.** Give the data as a native `<table>` with a caption and row and column headers, in the accessibility tree at all times: visually hidden (`sr-only`) behind a "Show the data table" Switch, as in the stories, or always shown. It is the keyboard and screen-reader route to the values, which is why the library's own keyboard layer stays off. The stories use a plain `<table>`: a horizontally scrolling WaveUI `Table` makes its wrapper a focusable region, an invisible Tab stop inside a visually hidden box.
 - **Never color alone.** Every series has its second encoding (above), in the legend too.
 - **Direction.** The stories do not mirror their charts for right-to-left pages; in a right-to-left layout reverse the category axis and the legend through the library's own options.
@@ -3690,7 +3726,7 @@ How the library's components add a part, for contributors; the [Phase 13 spec](s
 `WaveProvider` (plus the `Portal` utility)
 
 **Theming** (utilities)
-`createBrandTokens`, `waveTokens`, `chartPalette`, `getTokenStyle`, `getThemeClassName` (chapters 10 and 13)
+`createBrandTokens`, `waveTokens`, `chartPalette`, `chartSeries`, `getTokenStyle`, `getThemeClassName` (chapters 10 and 13)
 
 **Motion** (utility)
 `Presence` (`usePresence` is its hook form)
@@ -3815,7 +3851,7 @@ not-disabled:not-aria-disabled:active:bg-wave-subtle-pressed
 | `src/hooks/useDismiss.ts`, `src/lib/layers.ts` | Layered Escape and outside-press dismissal (internal; the `DismissReason` type is public) |
 | `src/components/provider/WaveProvider.tsx` | Theme provider |
 | `src/components/portal/Portal.tsx` | Themed portal (it carries the provider's token overrides) |
-| `src/lib/tokens.ts`, `src/lib/waveTokens.ts` | `getTokenStyle` and the token types; `waveTokens` and `chartPalette` (public, server-safe) |
+| `src/lib/tokens.ts`, `src/lib/waveTokens.ts` | `getTokenStyle` and the token types; `waveTokens`, `chartPalette` and `chartSeries` (public, server-safe) |
 | `src/lib/brand.ts` | `createBrandTokens` and the brand types (public, server-safe) |
 | `stories/Charts.stories.tsx` | The chart recipes of chapter 13 (Recharts, Chart.js) |
 | `src/test-utils.ts`, `src/test-utils-field.tsx` | Shared test helpers |
