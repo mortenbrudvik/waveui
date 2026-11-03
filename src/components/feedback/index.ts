@@ -59,4 +59,12 @@ export type {
   ToastDispatchOptions,
   ToastController,
   ToastPosition,
+  ToasterOffset,
+  ToastAppearance,
+  ToastAnnouncement,
+  ToastDismissReason,
+  ToastStatus,
+  ToastStatusChangeDetails,
+  ToastStatusChangeHandler,
+  ToastUpdate,
 } from './Toast';

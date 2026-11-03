@@ -37,6 +37,8 @@ export type ToasterHandle = ToastController;
 interface QueuedDispatch {
   id: string;
   run: (controller: ToastController) => void;
+  /** An update, pause or play for the toast of `id`, which runs after its dispatch. */
+  followUp?: boolean;
 }
 
 /** The internal state of a handle, never reachable from the handle itself. */
@@ -60,8 +62,10 @@ const handleRegistry = getGlobalRegistry('toasterHandles', () => ({
  *
  * - `dispatchToast` returns the id at once: `toastId`, or one the handle generates.
  * - Before a Toaster binds the handle, dispatches wait in its queue, in dispatch order (a dispatch
- *   with the id of a waiting one replaces it in place); `dismissToast` removes a waiting toast and
- *   `dismissAllToasts` empties the queue. The Toaster that binds takes the queue.
+ *   with the id of a waiting one replaces it in place, and the updates and pauses that waited for
+ *   the older one); `updateToast`, `pauseToast` and `playToast` wait behind the dispatch of their
+ *   toast; `dismissToast` removes a waiting toast and `dismissAllToasts` empties the queue. The
+ *   Toaster that binds takes the queue.
  *
  * @example
  * export const appToaster = createToaster();
@@ -79,15 +83,28 @@ export function createToaster(): ToasterHandle {
     dispatchCount += 1;
     return `${prefix}-${dispatchCount}`;
   };
-  const send = (id: string, run: (controller: ToastController) => void): string => {
+  const send = (
+    id: string,
+    run: (controller: ToastController) => void,
+    followUp = false,
+  ): string => {
     if (typeof window === 'undefined') return id;
     if (state.controller) {
       run(state.controller);
       return id;
     }
-    const index = state.queue.findIndex((call) => call.id === id);
-    if (index === -1) state.queue.push({ id, run });
-    else state.queue[index] = { id, run };
+    if (followUp) {
+      state.queue.push({ id, run, followUp });
+      return id;
+    }
+    const index = state.queue.findIndex((call) => call.id === id && !call.followUp);
+    if (index === -1) {
+      state.queue.push({ id, run });
+    } else {
+      // The new dispatch replaces the old one and what waited for it.
+      state.queue[index] = { id, run };
+      state.queue = state.queue.filter((call) => call.id !== id || !call.followUp);
+    }
     return id;
   };
 
@@ -120,6 +137,16 @@ export function createToaster(): ToasterHandle {
     dismissAllToasts() {
       if (state.controller) state.controller.dismissAllToasts();
       else state.queue = [];
+    },
+    updateToast(update) {
+      if (typeof update?.toastId !== 'string') return;
+      send(update.toastId, (controller) => controller.updateToast(update), true);
+    },
+    pauseToast(id) {
+      send(id, (controller) => controller.pauseToast(id), true);
+    },
+    playToast(id) {
+      send(id, (controller) => controller.playToast(id), true);
     },
   };
   handleRegistry.states.set(handle, state);
