@@ -832,7 +832,9 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<DropdownProps['labels']>().toEqualTypeOf<DropdownLabels | undefined>();
     expectTypeOf<DropdownLabels['clear']>().toEqualTypeOf<string | undefined>();
     expectTypeOf<TimePickerProps['expandIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
-    expectTypeOf<TimePickerInvalidReason>().toEqualTypeOf<'unparseable' | 'out-of-range'>();
+    expectTypeOf<TimePickerInvalidReason>().toEqualTypeOf<
+      'unparseable' | 'out-of-range' | 'not-listed'
+    >();
     expectTypeOf<NonNullable<TimePickerProps['onInvalidInput']>>().toEqualTypeOf<
       (text: string, reason: TimePickerInvalidReason) => void
     >();

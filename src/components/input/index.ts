@@ -1,5 +1,5 @@
 export { Input, type InputProps, type InputErrorMessageProps } from './Input';
-export { Textarea, type TextareaProps } from './Textarea';
+export { Textarea, type TextareaProps, type TextareaResize } from './Textarea';
 export { Field, type FieldProps } from './Field';
 export {
   Checkbox,
@@ -15,6 +15,7 @@ export {
   type RadioGroupProps,
   type RadioGroupItemProps,
   type RadioItemProps,
+  type RadioLabelPosition,
 } from './RadioGroup';
 export {
   useRadioGroupContext,

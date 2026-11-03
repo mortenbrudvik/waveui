@@ -24,7 +24,10 @@ import {
   RadioGroupContext,
   useRadioItemState,
   type RadioGroupItemsContextValue,
+  type RadioLabelPosition,
 } from './RadioGroup.context';
+
+export type { RadioLabelPosition };
 
 function warnDuplicateValue(value: string): void {
   warnOnce(
@@ -55,6 +58,14 @@ export interface RadioGroupProps extends Omit<
    * @default 'vertical'
    */
   orientation?: Orientation;
+  /**
+   * Where the items draw their label, unless an item sets its own `labelPosition`: `after` the
+   * radio (the default) or `below` it. `orientation="horizontal"` with `labelPosition="below"` is
+   * Fluent UI's `layout="horizontal-stacked"`; `orientation` stands for the rest of its `layout`
+   * (`vertical`, `horizontal`).
+   * @default 'after'
+   */
+  labelPosition?: RadioLabelPosition;
   /** Disables every item of the group. */
   disabled?: boolean;
   /**
@@ -76,6 +87,7 @@ const RadioGroupRoot = ({
   defaultValue,
   onValueChange,
   orientation = 'vertical',
+  labelPosition = 'after',
   disabled = false,
   name,
   required,
@@ -156,8 +168,8 @@ const RadioGroupRoot = ({
   };
 
   const contextValue = React.useMemo<RadioGroupItemsContextValue>(
-    () => ({ value, disabled, select: setValue, getTabIndex }),
-    [value, disabled, setValue, getTabIndex],
+    () => ({ value, disabled, select: setValue, getTabIndex, labelPosition }),
+    [value, disabled, setValue, getTabIndex, labelPosition],
   );
 
   return (
@@ -223,6 +235,13 @@ export interface RadioItemProps extends Omit<
   label?: React.ReactNode;
   /** Whether the radio item is disabled and non-interactive (also when the group is disabled). */
   disabled?: boolean;
+  /**
+   * Where the label sits: `after` the radio (the default, with the radio on the label's first
+   * line) or `below` it, centred. Default: the group's `labelPosition`, else `'after'`. The root
+   * carries it as `data-label-position`.
+   * @default the group's `labelPosition`
+   */
+  labelPosition?: RadioLabelPosition;
   /** Class name of the item's root `<label>` element. */
   className?: string;
   /**
@@ -303,6 +322,7 @@ export function RadioItem({
   value,
   label,
   disabled,
+  labelPosition: labelPositionProp,
   className,
   labelClassName,
   onClick,
@@ -317,7 +337,14 @@ export function RadioItem({
     disabled: isDisabled,
     tabIndex,
     select,
+    labelPosition: groupLabelPosition,
   } = useRadioItemState('RadioItem', value, disabled);
+  // A value outside the two (untyped code) is skipped, like one outside a size.
+  const labelPosition =
+    labelPositionProp === 'after' || labelPositionProp === 'below'
+      ? labelPositionProp
+      : groupLabelPosition;
+  const below = labelPosition === 'below';
   const hasChildren = slotRendersContent(children);
   React.useEffect(() => {
     if (hasChildren) {
@@ -350,7 +377,7 @@ export function RadioItem({
       // style overrides (C-NATIVE).
       'wave:flex wave:h-[18px] wave:w-[18px] wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:border wave:bg-transparent wave:p-0 wave:transition-colors wave:motion-reduce:transition-none',
       // Centred on the 20px first line of the label text.
-      hasLabel && 'wave:mt-px',
+      hasLabel && !below && 'wave:mt-px',
       focusRing,
       selected ? 'wave:border-2 wave:border-primary' : 'wave:border-stroke-accessible',
       // Forced colors: the focusable circle keeps system colors (its focus outline stays
@@ -389,6 +416,7 @@ export function RadioItem({
     className: wcn(
       radioGroupItemClassNames.label,
       'wave:text-body-1 wave:text-foreground',
+      below && 'wave:text-center',
       labelClassName,
     ),
     // The text names the control through aria-labelledby: an aria-label would replace it. The
@@ -400,8 +428,10 @@ export function RadioItem({
     className: wcn(
       radioGroupItemClassNames.root,
       // items-start: the radio lines up with the first line of a label that wraps or has a
-      // second line, not with its middle.
-      'wave:inline-flex wave:items-start wave:gap-2 wave:select-none',
+      // second line, not with its middle; below, the radio and the label are centred in a column.
+      below
+        ? 'wave:inline-flex wave:flex-col wave:items-center wave:gap-2 wave:select-none'
+        : 'wave:inline-flex wave:items-start wave:gap-2 wave:select-none',
       // The dimmed look lifts while a focus ring shows inside the root (a link's in the label; a
       // disabled radio never takes focus): opacity would dim the ring below 3:1.
       isDisabled
@@ -412,7 +442,12 @@ export function RadioItem({
     // The root holds the radio: a part neither hides it nor takes it out of reach, nor sends the
     // label's clicks to another element through a `for`, nor makes it a composite that hides the
     // radio from the group's arrow order, an item or a second tab stop.
-    locked: { htmlFor: undefined, ...HIDDEN_PART_LOCKS, ...ROVING_PART_LOCKS },
+    locked: {
+      htmlFor: undefined,
+      ...HIDDEN_PART_LOCKS,
+      ...ROVING_PART_LOCKS,
+      'data-label-position': labelPosition,
+    },
     // The label passes a click to the radio, which is not selected while disabled.
     blockHandlers: isDisabled ? BLOCK_CLICK : undefined,
   });

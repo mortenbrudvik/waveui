@@ -49,10 +49,10 @@ import {
   DEFAULT_TIME_STEP,
   generateTimeOptions,
   localeTimeFormat,
-  minutesToTime,
-  minutesToValue,
   normalizeTimeStep,
-  timeToMinutes,
+  secondsToTime,
+  secondsToValue,
+  timeToSeconds,
   type TimeFormat,
 } from './dateUtils';
 import { useInputLook } from './inputLook';
@@ -135,7 +135,7 @@ TimePickerOption.displayName = 'TimePickerOption';
 /* ------------------------------------------------------------------ */
 
 /** Why typed text was not accepted (see {@link TimePickerProps.onInvalidInput}). */
-export type TimePickerInvalidReason = 'unparseable' | 'out-of-range';
+export type TimePickerInvalidReason = 'unparseable' | 'out-of-range' | 'not-listed';
 
 /**
  * The TimePicker's built-in texts, for localization. Each member is optional and falls back to its
@@ -176,6 +176,11 @@ export interface TimePickerLabels {
    * or after ${min}.`; only `max`: `Enter a time on or before ${max}.`)
    */
   outOfRange?: (min: string | undefined, max: string | undefined) => string;
+  /**
+   * Message for a time that is not one of the listed times, with `freeform={false}`.
+   * @default 'Choose a time from the list.'
+   */
+  notListed?: string;
 }
 
 const defaultInvalidTimeLabel = (format: string) => `Enter a time in the format ${format}.`;
@@ -211,6 +216,45 @@ export interface TimePickerProps extends Omit<
    * @default the hour cycle of the browser's language (`'12h'` on the server and while hydrating)
    */
   format?: '12h' | '24h';
+  /**
+   * Shows and accepts seconds (Fluent UI's `showSeconds`): the value is `HH:mm:ss`, the input and
+   * the options read `1:30:00 PM` or `13:30:00`, and typed seconds are kept (`2:00:15 PM`). The
+   * options stay `step` minutes apart, on whole minutes. A controlled `value` of `HH:mm` still
+   * selects its option and is reported back as `HH:mm:ss` when the user picks another. Without
+   * it a time's seconds are dropped.
+   * @default false
+   */
+  showSeconds?: boolean;
+  /**
+   * Text of a time, for the options and the input (Fluent UI's `formatDateToTimeString`, taking
+   * the time as the picker's `HH:mm` or, with `showSeconds`, `HH:mm:ss` value rather than a
+   * `Date`). It replaces `format`'s text, so the typed text is read by `parseTime` (the default
+   * reader understands `13:30` and `1:30 PM`, which your format may not look like). An inline
+   * function makes the options again on every render: keep its identity (a constant, or
+   * `useCallback`). With it the message for text that is not a time (`labels.invalidTime`) is
+   * given an example of the format, `formatTime('13:45')`, in place of the pattern.
+   * @default the text of `format`
+   */
+  formatTime?: (value: string) => string;
+  /**
+   * Reads typed text into a time (Fluent UI's `validateFreeFormTime`, answering with the value
+   * rather than an error type): return the `HH:mm` (or `HH:mm:ss`, `h:mm AM`) time the text
+   * stands for, or `null` for text that is not a time, which is kept and reported as
+   * `'unparseable'`. The time is still checked against `minTime`/`maxTime` (and the list, with
+   * `freeform={false}`). Typing also filters the list by the options' labels and values. Pass it
+   * with `formatTime` for a format the default reader does not know (`13h30`).
+   * @default the reader of `13:30`, `13:30:15` and `1:30 PM`
+   */
+  parseTime?: (text: string) => string | null | undefined;
+  /**
+   * Whether a complete typed time that is not in the list can be selected (Fluent UI's
+   * `freeform`, which defaults to `false` there). With `false` only the listed times can be: a
+   * complete typed time that is not listed is kept and reported as `'not-listed'` (a time
+   * outside `minTime`/`maxTime` is still `'out-of-range'`); picking an option, Enter on the
+   * option typing made active and erasing the text work as before.
+   * @default true
+   */
+  freeform?: boolean;
   /**
    * Minutes between options. A non-finite or non-positive value falls back to 30 (development
    * warning); fractions are floored.
@@ -441,11 +485,6 @@ function browserLanguage(): string | undefined {
   return typeof navigator === 'undefined' ? undefined : navigator.language;
 }
 
-function displayTime(value: string, format: TimeFormat): string {
-  const minutes = timeToMinutes(value);
-  return Number.isNaN(minutes) ? value : minutesToTime(minutes, format);
-}
-
 /** Whether an option matches the (trimmed, lower-case) typed text: by label or `HH:mm` value. */
 function matchesQuery(item: ListboxItem, text: string): boolean {
   return item.label.toLowerCase().includes(text) || item.value.includes(text);
@@ -488,6 +527,9 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   outside the bounds are still displayed in `format`. Without `format` the times follow the
  *   hour cycle of the browser's language; the server HTML and the hydration render show 12-hour
  *   times, so a server-rendered app passes `format` for the same output on the server.
+ * - `showSeconds` adds seconds (the value becomes `HH:mm:ss`); `formatTime` and `parseTime` replace
+ *   how times are written and read; `freeform={false}` limits the selection to the listed times
+ *   (a complete typed time that is not listed is `'not-listed'`).
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
  *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
@@ -510,9 +552,13 @@ export const TimePicker = (props: TimePickerProps) => {
     defaultValue,
     onValueChange,
     format: formatProp,
+    showSeconds = false,
+    formatTime,
+    parseTime,
+    freeform = true,
     step = DEFAULT_TIME_STEP,
     minTime = '00:00',
-    maxTime = '23:59',
+    maxTime: maxTimeProp,
     placeholder = 'Select a time',
     disabled = false,
     size: sizeProp,
@@ -570,6 +616,36 @@ export const TimePicker = (props: TimePickerProps) => {
     [followsLocale],
   );
   const format = formatProp ?? localeFormat;
+  // The latest time of the day: with seconds the default runs to the last second.
+  const maxTime = maxTimeProp ?? (showSeconds ? '23:59:59' : '23:59');
+
+  /* ---- reading and writing times ---------------------------------- */
+
+  // Seconds since midnight of a time in any spelling of the default reader, whole minutes
+  // without `showSeconds`; `NaN` when it is no time.
+  const readTime = React.useCallback(
+    (text: string) => {
+      const seconds = timeToSeconds(text);
+      return showSeconds ? seconds : Math.floor(seconds / 60) * 60;
+    },
+    [showSeconds],
+  );
+  // Typed text: through `parseTime` when given, whose answer is read as any time.
+  const readTyped = React.useCallback(
+    (text: string) => {
+      if (!parseTime) return readTime(text);
+      const read = parseTime(text);
+      return typeof read === 'string' ? readTime(read) : NaN;
+    },
+    [parseTime, readTime],
+  );
+  const toValue = (seconds: number) => secondsToValue(seconds, showSeconds);
+  /** The text of a `HH:mm[:ss]` value; a value that is no time shows as it is. */
+  const displayTime = (value: string): string => {
+    const seconds = readTime(value);
+    if (Number.isNaN(seconds)) return value;
+    return formatTime ? formatTime(toValue(seconds)) : secondsToTime(seconds, format, showSeconds);
+  };
 
   const [selectedValue, setSelectedValue] = useControllable<string>(
     valueProp,
@@ -580,13 +656,13 @@ export const TimePicker = (props: TimePickerProps) => {
   /* ---- options, step and bounds ---------------------------------- */
 
   const stepValid = normalizeTimeStep(step).valid;
-  const minMinutes = timeToMinutes(minTime);
-  const maxMinutes = timeToMinutes(maxTime);
+  const minSeconds = readTime(minTime);
+  const maxSeconds = readTime(maxTime);
   const boundsValid =
-    !Number.isNaN(minMinutes) && !Number.isNaN(maxMinutes) && minMinutes <= maxMinutes;
+    !Number.isNaN(minSeconds) && !Number.isNaN(maxSeconds) && minSeconds <= maxSeconds;
   const allOptions = React.useMemo(
-    () => generateTimeOptions(step, minTime, maxTime, format),
-    [step, minTime, maxTime, format],
+    () => generateTimeOptions(step, minTime, maxTime, format, { showSeconds, formatTime }),
+    [step, minTime, maxTime, format, showSeconds, formatTime],
   );
 
   // Once per invalid value and page (C-DEV), not once per instance and effect run.
@@ -670,13 +746,15 @@ export const TimePicker = (props: TimePickerProps) => {
 
   // A complete time in any spelling the commit accepts (`2:00pm`, `09:00 AM`, `14:00:00`) keeps its
   // own option, so it stays listed and active, as Enter and blur commit it.
+  const typedValue = React.useMemo(() => {
+    const seconds = readTyped(query.trim());
+    return Number.isNaN(seconds) ? null : secondsToValue(seconds, showSeconds);
+  }, [query, readTyped, showSeconds]);
   const filter = React.useMemo(() => {
     const text = query.trim().toLowerCase();
     if (!text) return undefined;
-    const minutes = timeToMinutes(text);
-    const exact = Number.isNaN(minutes) ? null : minutesToValue(minutes);
-    return (item: ListboxItem) => item.value === exact || matchesQuery(item, text);
-  }, [query]);
+    return (item: ListboxItem) => item.value === typedValue || matchesQuery(item, text);
+  }, [query, typedValue]);
 
   /**
    * The option that typing `text` makes active. A complete time (`2:00 PM`, `14:00`) activates its
@@ -688,9 +766,9 @@ export const TimePicker = (props: TimePickerProps) => {
   const getTypedActiveValue = (text: string): string | null => {
     const needle = text.trim().toLowerCase();
     if (!needle) return null;
-    const minutes = timeToMinutes(text);
-    if (!Number.isNaN(minutes)) {
-      const exact = minutesToValue(minutes);
+    const seconds = readTyped(text);
+    if (!Number.isNaN(seconds)) {
+      const exact = toValue(seconds);
       return allOptions.some((item) => item.value === exact) ? exact : null;
     }
     const match =
@@ -702,13 +780,16 @@ export const TimePicker = (props: TimePickerProps) => {
   // Opening without typing activates the selected option only when it is in the list. An empty,
   // off-grid or out-of-range value activates nothing (ArrowDown/ArrowUp start at the first/last
   // option), so Enter on a freshly opened list commits nothing and the surrounding form submits.
+  // With seconds a controlled `HH:mm` selects its `HH:mm:ss` option.
+  const selectedKey = React.useMemo(() => {
+    if (!showSeconds || !selectedValue) return selectedValue;
+    const seconds = timeToSeconds(selectedValue);
+    return Number.isNaN(seconds) ? selectedValue : secondsToValue(seconds, true);
+  }, [selectedValue, showSeconds]);
   const selectedInList =
-    selectedValue !== '' && allOptions.some((item) => item.value === selectedValue);
+    selectedKey !== '' && allOptions.some((item) => item.value === selectedKey);
 
-  const selectedValues = React.useMemo(
-    () => (selectedValue ? [selectedValue] : []),
-    [selectedValue],
-  );
+  const selectedValues = React.useMemo(() => (selectedKey ? [selectedKey] : []), [selectedKey]);
 
   const commitValue = (next: string) => {
     setSelectedValue(next);
@@ -725,10 +806,12 @@ export const TimePicker = (props: TimePickerProps) => {
       commitValue('');
       return null;
     }
-    const minutes = timeToMinutes(text);
-    if (Number.isNaN(minutes)) return 'unparseable';
-    if (!boundsValid || minutes < minMinutes || minutes > maxMinutes) return 'out-of-range';
-    commitValue(minutesToValue(minutes));
+    const seconds = readTyped(text);
+    if (Number.isNaN(seconds)) return 'unparseable';
+    if (!boundsValid || seconds < minSeconds || seconds > maxSeconds) return 'out-of-range';
+    const value = toValue(seconds);
+    if (!freeform && !allOptions.some((item) => item.value === value)) return 'not-listed';
+    commitValue(value);
     return null;
   };
 
@@ -775,7 +858,7 @@ export const TimePicker = (props: TimePickerProps) => {
   });
 
   const displayLabel = selectedValue
-    ? (lb.getItem(selectedValue)?.label ?? displayTime(selectedValue, format))
+    ? (lb.getItem(selectedKey)?.label ?? displayTime(selectedValue))
     : '';
   // Read-only pickers offer no clear action (the value cannot change).
   const showClear = clearable && !readOnly && selectedValue !== '';
@@ -979,14 +1062,18 @@ export const TimePicker = (props: TimePickerProps) => {
 
   let errorMessage = '';
   if (showOwnError && invalid === 'unparseable') {
-    errorMessage = (labels?.invalidTime ?? defaultInvalidTimeLabel)(
-      format === '24h' ? 'HH:mm' : 'h:mm AM',
-    );
+    // The pattern of the format; a `formatTime` of your own has none, so it gets an example.
+    const pattern = formatTime
+      ? formatTime(showSeconds ? '13:45:30' : '13:45')
+      : `${format === '24h' ? 'HH:mm' : 'h:mm'}${showSeconds ? ':ss' : ''}${format === '24h' ? '' : ' AM'}`;
+    errorMessage = (labels?.invalidTime ?? defaultInvalidTimeLabel)(pattern);
+  } else if (showOwnError && invalid === 'not-listed') {
+    errorMessage = labels?.notListed ?? 'Choose a time from the list.';
   } else if (showOwnError) {
     // Bounds the consumer did not set are `undefined`, not the defaults.
     errorMessage = (labels?.outOfRange ?? defaultOutOfRangeLabel)(
-      props.minTime === undefined ? undefined : displayTime(minTime, format),
-      props.maxTime === undefined ? undefined : displayTime(maxTime, format),
+      props.minTime === undefined ? undefined : displayTime(minTime),
+      maxTimeProp === undefined ? undefined : displayTime(maxTime),
     );
   }
   // aria-controls must name a listbox that is actually mounted. The closed list is inline only

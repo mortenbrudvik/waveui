@@ -3,7 +3,7 @@ import { sliderClassNames } from '../../lib/classNames';
 import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { focusRing, forcedColors } from '../../lib/styles';
-import type { Size } from '../../lib/types';
+import type { Orientation, Size } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
@@ -44,6 +44,16 @@ export interface SliderProps extends Omit<
    * @default 'medium'
    */
   size?: SliderSize;
+  /**
+   * Direction of the rail (Fluent UI's `vertical` flag, named as the other components name it):
+   * `horizontal`, or `vertical`, which runs the rail up with the minimum at the bottom, sets
+   * `aria-orientation="vertical"` and gives the slider a default height of 8rem (set another with
+   * `className="h-48"`; a vertical slider is as wide as its thumb). The up and right arrow keys
+   * raise the value in both. A vertical slider does not mirror in a right-to-left page. It needs a browser that lays a range input out in a vertical
+   * writing mode (recent Chrome, Edge, Firefox and Safari); an older one draws it horizontally.
+   * @default 'horizontal'
+   */
+  orientation?: Orientation;
   /** Ref to the `<input type="range">` element. */
   ref?: React.Ref<HTMLInputElement>;
 }
@@ -100,12 +110,57 @@ const SLIDER_SIZE: Readonly<
 };
 
 /**
+ * The vertical twin of {@link SLIDER_SIZE}: the rail's thickness is its width (a vertical writing
+ * mode turns the rail's length into its height), the fill runs up from the minimum at the bottom
+ * (no right-to-left variant: the input sets its own direction), and the WebKit thumb is pulled
+ * back by half the difference of the two thicknesses along the block axis, `margin-block-start`.
+ */
+const SLIDER_VERTICAL: Readonly<
+  Record<
+    SliderSize,
+    { rail: readonly string[]; thumbWebkit: string; thumbMoz: string; box: string }
+  >
+> = {
+  medium: {
+    rail: [
+      'wave:[&::-webkit-slider-runnable-track]:w-1 wave:[&::-webkit-slider-runnable-track]:rounded-full wave:[&::-webkit-slider-runnable-track]:bg-stroke-accessible',
+      'wave:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_top,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
+      'wave:[&::-moz-range-track]:w-1 wave:[&::-moz-range-track]:rounded-full wave:[&::-moz-range-track]:bg-stroke-accessible',
+      'wave:[&::-moz-range-progress]:w-1 wave:[&::-moz-range-progress]:rounded-full wave:[&::-moz-range-progress]:bg-primary',
+    ],
+    thumbWebkit:
+      'wave:[&::-webkit-slider-thumb]:[margin-block-start:-0.5rem] wave:[&::-webkit-slider-thumb]:h-5 wave:[&::-webkit-slider-thumb]:w-5 wave:[&::-webkit-slider-thumb]:appearance-none wave:[&::-webkit-slider-thumb]:rounded-full wave:[&::-webkit-slider-thumb]:border-2 wave:[&::-webkit-slider-thumb]:border-background wave:[&::-webkit-slider-thumb]:bg-primary wave:[&::-webkit-slider-thumb]:shadow',
+    thumbMoz: SLIDER_SIZE.medium.thumbMoz,
+    box: 'wave:w-5',
+  },
+  small: {
+    rail: [
+      'wave:[&::-webkit-slider-runnable-track]:w-0.5 wave:[&::-webkit-slider-runnable-track]:rounded-full wave:[&::-webkit-slider-runnable-track]:bg-stroke-accessible',
+      'wave:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_top,var(--wave-primary)_var(--wave-slider-progress),var(--wave-stroke-accessible)_var(--wave-slider-progress))]',
+      'wave:[&::-moz-range-track]:w-0.5 wave:[&::-moz-range-track]:rounded-full wave:[&::-moz-range-track]:bg-stroke-accessible',
+      'wave:[&::-moz-range-progress]:w-0.5 wave:[&::-moz-range-progress]:rounded-full wave:[&::-moz-range-progress]:bg-primary',
+    ],
+    thumbWebkit:
+      'wave:[&::-webkit-slider-thumb]:[margin-block-start:-0.4375rem] wave:[&::-webkit-slider-thumb]:h-4 wave:[&::-webkit-slider-thumb]:w-4 wave:[&::-webkit-slider-thumb]:appearance-none wave:[&::-webkit-slider-thumb]:rounded-full wave:[&::-webkit-slider-thumb]:border-2 wave:[&::-webkit-slider-thumb]:border-background wave:[&::-webkit-slider-thumb]:bg-primary wave:[&::-webkit-slider-thumb]:shadow',
+    thumbMoz: SLIDER_SIZE.small.thumbMoz,
+    box: 'wave:w-6',
+  },
+};
+
+/**
  * Forced colors, after `forcedColors.rangeInput` (which draws the whole rail in CanvasText): the
  * filled part in Highlight; a disabled rail stays GrayText, without the fill.
  */
 const forcedColorsFill = [
   'wave:forced-colors:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,Highlight_var(--wave-slider-progress),CanvasText_var(--wave-slider-progress))]',
   'wave:forced-colors:wave-rtl:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_left,Highlight_var(--wave-slider-progress),CanvasText_var(--wave-slider-progress))]',
+  'wave:forced-colors:[&::-moz-range-progress]:bg-[Highlight]',
+  'wave:forced-colors:disabled:[&::-webkit-slider-runnable-track]:bg-none wave:forced-colors:disabled:[&::-moz-range-progress]:bg-[GrayText]',
+];
+
+/** {@link forcedColorsFill} for a vertical rail: the fill runs up, with no right-to-left twin. */
+const forcedColorsFillVertical = [
+  'wave:forced-colors:[&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_top,Highlight_var(--wave-slider-progress),CanvasText_var(--wave-slider-progress))]',
   'wave:forced-colors:[&::-moz-range-progress]:bg-[Highlight]',
   'wave:forced-colors:disabled:[&::-webkit-slider-runnable-track]:bg-none wave:forced-colors:disabled:[&::-moz-range-progress]:bg-[GrayText]',
 ];
@@ -120,6 +175,7 @@ const forcedColorsFill = [
  * the server HTML), including the browser's snapping to `step` and a form reset.
  *
  * `size` (`small`, `medium`) sets the thumb and rail dimensions; the input carries `data-size`.
+ * `orientation="vertical"` runs the rail up (see its docs); the input carries `data-orientation`.
  * Slider does not read a surrounding `Field`'s size or a `WaveProvider`'s input defaults.
  *
  * @example
@@ -135,6 +191,7 @@ export const Slider = ({
   max,
   step,
   size: sizeProp,
+  orientation: orientationProp,
   form,
   onChange,
   onValueChange,
@@ -151,7 +208,9 @@ export const Slider = ({
   // Any other value (an unknown string or a number from untyped code) resolves to medium, so the
   // classes and `data-size` always agree; `size` never reaches the input.
   const size: SliderSize = sizeProp === 'small' ? 'small' : 'medium';
-  const sizeClasses = SLIDER_SIZE[size];
+  const vertical = orientationProp === 'vertical';
+  const sizeClasses = vertical ? SLIDER_VERTICAL[size] : SLIDER_SIZE[size];
+  const boxClasses = vertical ? SLIDER_VERTICAL[size].box : undefined;
 
   const fieldProps = useFieldControl(
     {
@@ -212,9 +271,13 @@ export const Slider = ({
       type="range"
       className={wcn(
         sliderClassNames.root,
-        'wave:w-full wave:cursor-pointer wave:appearance-none wave:bg-transparent',
+        vertical
+          ? // A vertical writing mode, the minimum at the bottom; as wide as its thumb, 8rem tall.
+            'wave:h-32 wave:cursor-pointer wave:appearance-none wave:bg-transparent wave:[writing-mode:vertical-lr] wave:[direction:rtl]'
+          : 'wave:w-full wave:cursor-pointer wave:appearance-none wave:bg-transparent',
         // A 24px-tall input at the small size, the rail centred in it (D14).
-        size === 'small' && 'wave:h-6',
+        !vertical && size === 'small' && 'wave:h-6',
+        boxClasses,
         sizeClasses.rail,
         sizeClasses.thumbWebkit,
         sizeClasses.thumbMoz,
@@ -223,7 +286,7 @@ export const Slider = ({
         // Forced colors replace the author backgrounds of the rail and thumb with Canvas: give
         // every part a system color instead.
         forcedColors.rangeInput,
-        forcedColorsFill,
+        vertical ? forcedColorsFillVertical : forcedColorsFill,
         className,
       )}
       style={{ ...style, [PROGRESS_VAR]: renderedProgress } as React.CSSProperties}
@@ -234,6 +297,8 @@ export const Slider = ({
       step={step}
       form={form}
       data-size={size}
+      data-orientation={vertical ? 'vertical' : 'horizontal'}
+      aria-orientation={vertical ? 'vertical' : undefined}
       {...props}
       {...fieldProps}
       onChange={handleChange}

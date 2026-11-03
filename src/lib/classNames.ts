@@ -429,10 +429,15 @@ export const textareaClassNames = {
   errorMessage: 'wave-textarea__error-message',
 } as const;
 
-/** Select: `root` on the `<select>`; `errorMessage` on the message after it, as Input's. */
+/**
+ * Select: `root` on the `<select>`; `errorMessage` on the message after it, as Input's; with an
+ * `icon`, `wrapper` on the `<span>` around the select and the icon, and `icon` on the icon span.
+ */
 export const selectClassNames = {
   root: 'wave-select',
   errorMessage: 'wave-select__error-message',
+  wrapper: 'wave-select__wrapper',
+  icon: 'wave-select__icon',
 } as const;
 
 /**

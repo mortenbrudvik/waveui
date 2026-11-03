@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Textarea, type TextareaProps } from '../Textarea';
+import { Textarea, type TextareaProps, type TextareaResize } from '../Textarea';
 import { inputInvalid } from '../../../lib/styles';
 import {
   testSystemProps,
@@ -240,5 +240,84 @@ describe('Textarea', () => {
         );
       },
     );
+  });
+
+  describe('resize (form-basic-13)', () => {
+    it('resizes vertically by default, as before', () => {
+      render(<Textarea aria-label="Notes" />);
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveClass('wave:resize-y');
+    });
+
+    it.each([
+      ['none', 'wave:resize-none'],
+      ['vertical', 'wave:resize-y'],
+      ['horizontal', 'wave:resize-x'],
+      ['both', 'wave:resize'],
+    ] as const)('resize="%s" draws %s and no other resize class', (resize, expected) => {
+      render(<Textarea aria-label="Notes" resize={resize} />);
+      const classes = screen.getByRole('textbox', { name: 'Notes' }).className.split(' ');
+      expect(classes.filter((name) => /^wave:resize/.test(name))).toEqual([expected]);
+    });
+
+    it('a consumer resize class replaces the prop value', () => {
+      render(<Textarea aria-label="Notes" resize="none" className="resize-x" />);
+      const textarea = screen.getByRole('textbox', { name: 'Notes' });
+      expect(textarea).toHaveClass('resize-x');
+      expect(textarea).not.toHaveClass('wave:resize-none');
+    });
+
+    it('falls back to vertical for a value outside the four (untyped code)', () => {
+      // @ts-expect-error resize takes the four directions only
+      render(<Textarea aria-label="Notes" resize="diagonal" />);
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveClass('wave:resize-y');
+    });
+
+    it('types the prop', () => {
+      expectTypeOf<TextareaProps['resize']>().toEqualTypeOf<TextareaResize | undefined>();
+      expectTypeOf<TextareaResize>().toEqualTypeOf<'none' | 'vertical' | 'horizontal' | 'both'>();
+    });
+  });
+
+  describe('onValueChange (form-basic-15)', () => {
+    it('calls onValueChange with the string value next to the native onChange', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const onValueChange = vi.fn();
+      render(<Textarea aria-label="Notes" onChange={onChange} onValueChange={onValueChange} />);
+      await user.type(screen.getByRole('textbox', { name: 'Notes' }), 'hey');
+      expect(onChange).toHaveBeenCalledTimes(3);
+      expect(onChange.mock.calls[0][0]).toHaveProperty('target');
+      expect(onValueChange).toHaveBeenCalledTimes(3);
+      expect(onValueChange).toHaveBeenLastCalledWith('hey');
+    });
+
+    it('supports the controlled example with onValueChange', async () => {
+      const user = userEvent.setup();
+      function Example() {
+        const [note, setNote] = React.useState('');
+        return (
+          <>
+            <Textarea aria-label="Notes" value={note} onValueChange={setNote} />
+            <output>{note}</output>
+          </>
+        );
+      }
+      render(<Example />);
+      await user.type(screen.getByRole('textbox', { name: 'Notes' }), 'a{Enter}b');
+      expect(screen.getByRole('status')).toHaveTextContent(/a\s*b/);
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveValue('a\nb');
+    });
+
+    it('fires onValueChange once per change in StrictMode', () => {
+      const onValueChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Textarea aria-label="Notes" onValueChange={onValueChange} />
+        </React.StrictMode>,
+      );
+      fireEvent.change(screen.getByRole('textbox', { name: 'Notes' }), { target: { value: 'x' } });
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+      expect(onValueChange).toHaveBeenCalledWith('x');
+    });
   });
 });

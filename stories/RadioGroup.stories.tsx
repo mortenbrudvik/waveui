@@ -56,6 +56,26 @@ export const Horizontal: Story = {
   ),
 };
 
+/**
+ * `labelPosition="below"` stacks each radio above its label: with `orientation="horizontal"` it is
+ * Fluent UI's `layout="horizontal-stacked"`. An item's own `labelPosition` replaces the group's.
+ */
+export const HorizontalStacked: Story = {
+  args: {
+    'aria-label': 'Size',
+    orientation: 'horizontal',
+    labelPosition: 'below',
+    defaultValue: 'medium',
+  },
+  render: (args) => (
+    <RadioGroup {...args}>
+      <RadioItem value="small" label="Small" />
+      <RadioItem value="medium" label="Medium" />
+      <RadioItem value="large" label="Large" />
+    </RadioGroup>
+  ),
+};
+
 /** `RadioGroup.Item` is the dotted form of `RadioItem` (use the flat names from Server Components). */
 export const DottedItems: Story = {
   args: {

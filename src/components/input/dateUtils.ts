@@ -521,10 +521,10 @@ const TIME_24H = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
 const TIME_12H = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?$/i;
 
 /**
- * Minutes since midnight of a time string: `HH:mm`, `H:mm`, `HH:mm:ss` (seconds ignored) or a
- * 12-hour time such as `9:00 AM`, `12:30 pm`, `11:59 p.m.`. `NaN` when invalid.
+ * Seconds since midnight of a time string: `HH:mm`, `H:mm`, `HH:mm:ss` or a 12-hour time such as
+ * `9:00 AM`, `9:00:30 AM`, `12:30 pm`, `11:59 p.m.`. `NaN` when invalid.
  */
-export function timeToMinutes(text: string): number {
+export function timeToSeconds(text: string): number {
   const value = text.trim();
   const twelve = TIME_12H.exec(value);
   const match = twelve ?? TIME_24H.exec(value);
@@ -540,7 +540,16 @@ export function timeToMinutes(text: string): number {
   } else if (hours > 23) {
     return NaN;
   }
-  return hours * 60 + minutes;
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+/**
+ * Minutes since midnight of a time string: `HH:mm`, `H:mm`, `HH:mm:ss` (seconds ignored) or a
+ * 12-hour time such as `9:00 AM`, `12:30 pm`, `11:59 p.m.`. `NaN` when invalid.
+ */
+export function timeToMinutes(text: string): number {
+  const seconds = timeToSeconds(text);
+  return Number.isNaN(seconds) ? NaN : Math.floor(seconds / 60);
 }
 
 /** `HH:mm` (24-hour, zero-padded): the TimePicker value format. */
@@ -556,6 +565,25 @@ export function minutesToTime(minutes: number, format: TimeFormat): string {
   const period = hours >= 12 ? 'PM' : 'AM';
   const hours12 = hours % 12 === 0 ? 12 : hours % 12;
   return `${hours12}:${pad(minutes % 60, 2)} ${period}`;
+}
+
+/** `HH:mm:ss`, or `HH:mm` without `withSeconds` (the seconds dropped): a TimePicker value. */
+export function secondsToValue(seconds: number, withSeconds: boolean): string {
+  const hours = Math.floor(seconds / 3600) % 24;
+  const minutes = Math.floor(seconds / 60) % 60;
+  const time = `${pad(hours, 2)}:${pad(minutes, 2)}`;
+  return withSeconds ? `${time}:${pad(seconds % 60, 2)}` : time;
+}
+
+/** Display text of a time: `13:00:30` (`'24h'`) or `1:00:30 PM` (`'12h'`), seconds only with `withSeconds`. */
+export function secondsToTime(seconds: number, format: TimeFormat, withSeconds: boolean): string {
+  if (format === '24h') return secondsToValue(seconds, withSeconds);
+  const hours = Math.floor(seconds / 3600) % 24;
+  const minutes = Math.floor(seconds / 60) % 60;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 === 0 ? 12 : hours % 12;
+  const time = `${hours12}:${pad(minutes, 2)}`;
+  return `${withSeconds ? `${time}:${pad(seconds % 60, 2)}` : time} ${period}`;
 }
 
 /** The TimePicker step fallback for invalid values. */
@@ -579,24 +607,39 @@ export interface TimeOption {
   label: string;
 }
 
+/** Options of {@link generateTimeOptions}. */
+export interface TimeOptionsConfig {
+  /** Values and labels carry seconds (`HH:mm:ss`), and the bounds keep theirs. */
+  showSeconds?: boolean;
+  /** Label of a value (`HH:mm` or `HH:mm:ss`) in place of the `format` text. */
+  formatTime?: (value: string) => string;
+}
+
 /**
  * The options from `minTime` to `maxTime` (inclusive) every `step` minutes. The step is guarded
  * with {@link normalizeTimeStep} (the loop always terminates); invalid or reversed bounds give
- * `[]`.
+ * `[]`. Without `showSeconds` the bounds' seconds are dropped.
  */
 export function generateTimeOptions(
   step: number,
   minTime: string,
   maxTime: string,
   format: TimeFormat,
+  config: TimeOptionsConfig = {},
 ): TimeOption[] {
-  const increment = normalizeTimeStep(step).step;
-  const min = timeToMinutes(minTime);
-  const max = timeToMinutes(maxTime);
+  const { showSeconds = false, formatTime } = config;
+  const increment = normalizeTimeStep(step).step * 60;
+  const whole = (seconds: number) => (showSeconds ? seconds : Math.floor(seconds / 60) * 60);
+  const min = whole(timeToSeconds(minTime));
+  const max = whole(timeToSeconds(maxTime));
   if (Number.isNaN(min) || Number.isNaN(max) || min > max) return [];
   const options: TimeOption[] = [];
-  for (let minutes = min; minutes <= max; minutes += increment) {
-    options.push({ value: minutesToValue(minutes), label: minutesToTime(minutes, format) });
+  for (let seconds = min; seconds <= max; seconds += increment) {
+    const value = secondsToValue(seconds, showSeconds);
+    options.push({
+      value,
+      label: formatTime ? formatTime(value) : secondsToTime(seconds, format, showSeconds),
+    });
   }
   return options;
 }

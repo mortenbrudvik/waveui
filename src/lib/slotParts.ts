@@ -294,8 +294,8 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   inputClassNames: ['contentBefore', 'contentAfter', 'errorMessage'],
   // `errorMessageProps` fills `errorMessage`.
   textareaClassNames: ['errorMessage'],
-  // `errorMessageProps` fills `errorMessage`.
-  selectClassNames: ['errorMessage'],
+  // `errorMessageProps` fills `errorMessage`; `icon` fills `icon`.
+  selectClassNames: ['errorMessage', 'icon'],
   fieldClassNames: ['validationMessageIcon'],
   // `dismiss` fills `dismissIcon`.
   searchBoxClassNames: ['contentBefore', 'contentAfter', 'dismissIcon'],
@@ -354,6 +354,12 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
 
 /** The parts that get no `slotProps` key, each with its reason (R3, R4). */
 export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
+  {
+    component: 'selectClassNames',
+    key: 'wrapper',
+    reason:
+      "the `<span>` that Select draws around the select and its `icon` only while there is an icon: layout for the icon's position, while the `<select>` keeps `ref`, `className` and the props",
+  },
   {
     component: 'avatarGroupClassNames',
     key: 'overflowButton',

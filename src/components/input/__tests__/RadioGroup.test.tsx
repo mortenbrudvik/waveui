@@ -1397,7 +1397,8 @@ describe('RadioGroup.Item — slotProps', () => {
   const EVERY_PART: ItemSlotProps = { root: {}, indicator: {}, label: {} };
 
   it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
-    // Captured from 17abc07: the merged props may put the class before the locked attributes.
+    // Captured from 17abc07: the merged props may put the class before the locked attributes. The
+    // root's `data-label-position` is the one intended change since (1.1).
     expect(
       sortAttributes(
         renderToString(
@@ -1415,7 +1416,7 @@ describe('RadioGroup.Item — slotProps', () => {
     ).toBe(
       [
         '<div aria-label="Choice" aria-orientation="vertical" class="wave-radio-group wave:relative wave:flex wave:flex-col wave:gap-2" data-roving-container="" role="radiogroup">',
-        '<label class="wave-radio-group-item wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer">',
+        '<label class="wave-radio-group-item wave:inline-flex wave:items-start wave:gap-2 wave:select-none wave:cursor-pointer" data-label-position="after">',
         '<button aria-checked="true" aria-labelledby="radio-item-label-_R_3H1_" class="wave-radio-group-item__indicator wave:flex wave:h-[18px] wave:w-[18px] wave:shrink-0 wave:items-center wave:justify-center wave:rounded-full wave:bg-transparent wave:p-0 wave:transition-colors wave:motion-reduce:transition-none wave:mt-px wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:border-2 wave:border-primary wave:forced-colors:border-[Highlight]" data-roving-value="a" id="radio-item-_R_3_" role="radio" style="color:red" tabindex="0" title="t" type="button">',
         '<span aria-hidden="true" class="wave:block wave:h-2 wave:w-2 wave:rounded-full wave:bg-primary wave:forced-colors:bg-[Highlight] wave:forced-colors:text-[HighlightText] wave:forced-colors:forced-color-adjust-none">',
         '</span>',
@@ -1982,5 +1983,125 @@ describe('RadioGroup.Item — slotProps', () => {
         expect(order).toEqual(['b', 'c', 'a']);
       },
     );
+  });
+});
+
+describe('RadioGroup labelPosition (form-basic-20)', () => {
+  const rootOf = (name: string) => radio(name).closest('label') as HTMLElement;
+
+  it('draws every label after the radio by default, and says so on the root', () => {
+    render(<RadioGroup aria-label="Letters">{twoItems}</RadioGroup>);
+    for (const name of ['Alpha', 'Beta']) {
+      expect(rootOf(name)).toHaveAttribute('data-label-position', 'after');
+      expect(rootOf(name)).toHaveClass('wave:items-start');
+      expect(rootOf(name)).not.toHaveClass('wave:flex-col');
+      expect(radio(name)).toHaveClass('wave:mt-px');
+    }
+  });
+
+  it('labelPosition="below" on an item stacks the radio above its label', () => {
+    render(
+      <RadioGroup aria-label="Letters">
+        <RadioItem value="a" label="Alpha" labelPosition="below" />
+        <RadioItem value="b" label="Beta" />
+      </RadioGroup>,
+    );
+    const root = rootOf('Alpha');
+    expect(root).toHaveAttribute('data-label-position', 'below');
+    expect(root).toHaveClass('wave:flex-col', 'wave:items-center');
+    expect(root).not.toHaveClass('wave:items-start');
+    expect(radio('Alpha')).not.toHaveClass('wave:mt-px');
+    expect(screen.getByText('Alpha')).toHaveClass('wave:text-center');
+    expect(Array.from(root.children)).toEqual([radio('Alpha'), screen.getByText('Alpha')]);
+    // The other item keeps the default.
+    expect(rootOf('Beta')).toHaveAttribute('data-label-position', 'after');
+  });
+
+  it('a group labelPosition is the default of its items and an item replaces it', () => {
+    render(
+      <RadioGroup aria-label="Letters" labelPosition="below" orientation="horizontal">
+        <RadioItem value="a" label="Alpha" />
+        <RadioItem value="b" label="Beta" labelPosition="after" />
+      </RadioGroup>,
+    );
+    expect(rootOf('Alpha')).toHaveAttribute('data-label-position', 'below');
+    expect(rootOf('Beta')).toHaveAttribute('data-label-position', 'after');
+    expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(screen.getByRole('radiogroup')).toHaveClass('wave:flex-row');
+  });
+
+  it('a value outside the two falls back to the group (untyped code)', () => {
+    render(
+      <RadioGroup aria-label="Letters" labelPosition="below">
+        {/* @ts-expect-error only `after` and `below` */}
+        <RadioItem value="a" label="Alpha" labelPosition="above" />
+      </RadioGroup>,
+    );
+    expect(rootOf('Alpha')).toHaveAttribute('data-label-position', 'below');
+  });
+
+  it('keeps the name, selection and arrow keys of the stacked layout', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <RadioGroup
+        aria-label="Letters"
+        orientation="horizontal"
+        labelPosition="below"
+        onValueChange={onValueChange}
+      >
+        {twoItems}
+      </RadioGroup>,
+    );
+    await user.click(screen.getByText('Beta'));
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith('b');
+    expect(radio('Beta')).toHaveAttribute('aria-checked', 'true');
+    await user.keyboard('{ArrowLeft}');
+    expect(radio('Alpha')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('keeps the data attribute with the root part: it is locked', () => {
+    render(
+      <RadioGroup aria-label="Letters">
+        <RadioItem
+          value="a"
+          label="Alpha"
+          labelPosition="below"
+          slotProps={{ root: { 'data-label-position': 'after' } as never }}
+        />
+      </RadioGroup>,
+    );
+    expect(rootOf('Alpha')).toHaveAttribute('data-label-position', 'below');
+  });
+
+  it('renders on the server and in RTL', () => {
+    expect(
+      renderToString(
+        <RadioGroup aria-label="Letters" labelPosition="below" defaultValue="a">
+          <RadioItem value="a" label="Alpha" />
+        </RadioGroup>,
+      ),
+    ).toContain('data-label-position="below"');
+    renderWithProviders(
+      <RadioGroup aria-label="Letters" labelPosition="below" orientation="horizontal">
+        {twoItems}
+      </RadioGroup>,
+      { dir: 'rtl' },
+    );
+    expect(rootOf('Alpha')).toHaveAttribute('data-label-position', 'below');
+  });
+
+  it('passes axe stacked', async () => {
+    render(
+      <RadioGroup aria-label="Letters" labelPosition="below" orientation="horizontal">
+        {twoItems}
+      </RadioGroup>,
+    );
+    await expectNoA11yViolations();
+  });
+
+  it('types the props', () => {
+    expectTypeOf<RadioGroupProps['labelPosition']>().toEqualTypeOf<'after' | 'below' | undefined>();
+    expectTypeOf<RadioItemProps['labelPosition']>().toEqualTypeOf<'after' | 'below' | undefined>();
   });
 });
