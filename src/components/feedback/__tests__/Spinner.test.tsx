@@ -3,13 +3,15 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
-import { Spinner } from '../Spinner';
-import type { SpinnerAppearance, SpinnerProps } from '../Spinner';
+import { Spinner, SpinnerContextProvider } from '../Spinner';
+import type { SpinnerAppearance, SpinnerProps, SpinnerSize } from '../Spinner';
+import type { LabelPosition } from '../../../lib/types';
 import { spinnerClassNames } from '../../../lib/classNames';
 import {
   expectInertSlotProps,
   expectNoA11yViolations,
   openingTags,
+  renderWithProviders,
   testSystemProps,
 } from '../../../test-utils';
 
@@ -455,6 +457,166 @@ describe('Spinner', () => {
 
   it('SpinnerProps carries ref (C-REF)', () => {
     expectTypeOf<SpinnerProps['ref']>().toEqualTypeOf<React.Ref<HTMLSpanElement> | undefined>();
+  });
+});
+
+describe('Spinner — size scale, label position, label content and context', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const ringClasses = (root: HTMLElement) => ringOf(root)?.className ?? '';
+
+  it("keeps the pixel sizes of the 0.x names and adds Fluent's extra-tiny, tiny and huge", () => {
+    const expected: Array<[SpinnerSize, string]> = [
+      ['extra-tiny', 'wave:w-4'],
+      ['tiny', 'wave:w-5'],
+      ['extra-small', 'wave:w-3'],
+      ['small', 'wave:w-4'],
+      ['medium', 'wave:w-6'],
+      ['large', 'wave:w-9'],
+      ['huge', 'wave:w-11'],
+      ['extra-large', 'wave:w-12'],
+    ];
+    for (const [size, width] of expected) {
+      const view = render(<Spinner size={size} data-testid="sp" />);
+      const ring = ringOf(screen.getByTestId('sp'));
+      expect(ring).toHaveClass(width, width.replace('w-', 'h-'));
+      view.unmount();
+    }
+  });
+
+  it('renders a size outside the scale (untyped code) as medium', () => {
+    render(<Spinner size={'colossal' as SpinnerSize} data-testid="sp" />);
+    expect(ringOf(screen.getByTestId('sp'))).toHaveClass('wave:w-6', 'wave:h-6');
+  });
+
+  describe('SpinnerContextProvider', () => {
+    it("gives a Spinner without a size the provider's size", () => {
+      render(
+        <SpinnerContextProvider size="tiny">
+          <Spinner data-testid="sp" />
+        </SpinnerContextProvider>,
+      );
+      expect(ringClasses(screen.getByTestId('sp'))).toContain('wave:w-5');
+    });
+
+    it("lets the Spinner's own size win and the nearest provider answer", () => {
+      render(
+        <SpinnerContextProvider size="tiny">
+          <Spinner size="large" data-testid="own" />
+          <SpinnerContextProvider size="huge">
+            <Spinner data-testid="inner" />
+          </SpinnerContextProvider>
+          <SpinnerContextProvider>
+            <Spinner data-testid="empty" />
+          </SpinnerContextProvider>
+        </SpinnerContextProvider>,
+      );
+      expect(ringClasses(screen.getByTestId('own'))).toContain('wave:w-9');
+      expect(ringClasses(screen.getByTestId('inner'))).toContain('wave:w-11');
+      // A provider without a size gives none: the default applies.
+      expect(ringClasses(screen.getByTestId('empty'))).toContain('wave:w-6');
+    });
+
+    it('renders no element and has a display name', () => {
+      const { container } = render(
+        <SpinnerContextProvider size="small">
+          <i />
+        </SpinnerContextProvider>,
+      );
+      expect(container.innerHTML).toBe('<i></i>');
+      expect(SpinnerContextProvider.displayName).toBe('SpinnerContextProvider');
+    });
+  });
+
+  describe('labelPosition', () => {
+    const cases: Array<[LabelPosition, string]> = [
+      ['after', 'wave:flex-row'],
+      ['before', 'wave:flex-row-reverse'],
+      ['below', 'wave:flex-col'],
+      ['above', 'wave:flex-col-reverse'],
+    ];
+    it.each(cases)(
+      '%s lays the root out as %s and renders data-label-position',
+      (position, cls) => {
+        render(<Spinner labelPosition={position} labelVisible data-testid="sp" />);
+        const root = screen.getByTestId('sp');
+        expect(root).toHaveAttribute('data-label-position', position);
+        expect(root).toHaveClass(cls);
+      },
+    );
+
+    it('defaults to after and keeps the DOM order (ring, then label) in every position', () => {
+      render(<Spinner data-testid="sp" />);
+      expect(screen.getByTestId('sp')).toHaveAttribute('data-label-position', 'after');
+      for (const position of ['before', 'above', 'below'] as const) {
+        const view = render(<Spinner labelPosition={position} data-testid={position} />);
+        const root = screen.getByTestId(position);
+        expect(root.children[0]).toHaveAttribute('data-wave-spinner-ring');
+        expect(root.children[1]).toHaveAttribute('data-wave-spinner-label');
+        view.unmount();
+      }
+    });
+
+    it('reads an unknown position (untyped code) as after', () => {
+      render(<Spinner labelPosition={'sideways' as LabelPosition} data-testid="sp" />);
+      expect(screen.getByTestId('sp')).toHaveAttribute('data-label-position', 'after');
+    });
+
+    it('puts a before label at the start in right-to-left too (the reversed row follows direction)', () => {
+      renderWithProviders(<Spinner labelPosition="before" labelVisible data-testid="sp" />, {
+        dir: 'rtl',
+      });
+      expect(screen.getByTestId('sp')).toHaveClass('wave:flex-row-reverse');
+    });
+  });
+
+  describe('label content', () => {
+    it('announces and shows a ReactNode label', async () => {
+      render(
+        <Spinner
+          label={
+            <>
+              Loading <strong>results</strong>
+            </>
+          }
+          labelVisible
+          data-testid="sp"
+        />,
+      );
+      await React.act(nextFrame);
+      const root = screen.getByTestId('sp');
+      expect(root).toHaveTextContent('Loading results');
+      expect(root.querySelector('strong')).not.toBeNull();
+    });
+
+    it('names a progressbar by a string label, and warns once without a name for other content', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<Spinner role="progressbar" label="Fetching" />);
+      expect(screen.getByRole('progressbar', { name: 'Fetching' })).toBeInTheDocument();
+      expect(warn).not.toHaveBeenCalled();
+      render(<Spinner role="progressbar" label={<b>Fetching</b>} aria-label="Named" />);
+      expect(warn).not.toHaveBeenCalled();
+      render(<Spinner role="progressbar" label={<b>Fetching</b>} data-testid="unnamed" />);
+      await React.act(nextFrame);
+      expect(screen.getByTestId('unnamed')).not.toHaveAttribute('aria-label');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('`role="progressbar"` needs an accessible name');
+    });
+  });
+
+  it('has no accessibility violations with a visible label below a tiny ring', async () => {
+    render(<Spinner size="tiny" labelPosition="below" labelVisible label="Saving" />);
+    await React.act(nextFrame);
+    await expectNoA11yViolations();
+  });
+
+  it('types the new props', () => {
+    expectTypeOf<SpinnerProps['size']>().toEqualTypeOf<SpinnerSize | undefined>();
+    expectTypeOf<SpinnerProps['labelPosition']>().toEqualTypeOf<LabelPosition | undefined>();
+    expectTypeOf<SpinnerProps['label']>().toEqualTypeOf<React.ReactNode>();
+    expectTypeOf<'extra-tiny' | 'tiny' | 'huge' | 'medium'>().toExtend<SpinnerSize>();
   });
 });
 

@@ -12,8 +12,14 @@ export type { MessageBarGroupProps } from './MessageBarGroup';
 export { ProgressBar } from './ProgressBar';
 export type { ProgressBarProps, ProgressBarColor } from './ProgressBar';
 
-export { Spinner } from './Spinner';
-export type { SpinnerProps, SpinnerAppearance } from './Spinner';
+export { Spinner, SpinnerContextProvider } from './Spinner';
+export type {
+  SpinnerProps,
+  SpinnerAppearance,
+  SpinnerSize,
+  SpinnerContextValue,
+  SpinnerContextProviderProps,
+} from './Spinner';
 
 export { Skeleton, SkeletonGroup } from './Skeleton';
 export type { SkeletonProps, SkeletonGroupProps } from './Skeleton';
