@@ -917,12 +917,14 @@ export const accordionItemClassNames = { root: 'wave-accordion-item' } as const;
 
 /**
  * Accordion.Trigger: `root` on the `<button>`; `heading` on the heading element around it (`<h1>`
- * to `<h6>`, from `headingLevel`); `expandIcon` on the chevron `<svg>`.
+ * to `<h6>`, from `headingLevel`); `expandIcon` on the chevron `<svg>` (a `<span>` around a custom
+ * `expandIcon`); `icon` on the leading icon `<span>`.
  */
 export const accordionTriggerClassNames = {
   root: 'wave-accordion-trigger',
   heading: 'wave-accordion-trigger__heading',
   expandIcon: 'wave-accordion-trigger__expand-icon',
+  icon: 'wave-accordion-trigger__icon',
 } as const;
 
 /**
