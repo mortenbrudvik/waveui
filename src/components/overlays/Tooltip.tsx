@@ -12,6 +12,7 @@ import {
   STATE_ARIA,
   unwrapFragment,
 } from '../../lib/renderTrigger';
+import { withFragmentRefs } from '../../lib/fragmentRefs';
 import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { MotionSlot, PopupAlign, PopupPositioningOptions, PopupSide } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -474,7 +475,11 @@ export const Tooltip = ({
   if (!childIsFallback || relationship === 'description') {
     triggerProps[attribute] = joinIds(childProps[attribute] as string | undefined, tooltipId);
   }
-  const child = renderTrigger(target, triggerProps, { componentName: 'Tooltip' });
+  // A `<Fragment ref>` around the target keeps its ref: the element goes back inside it.
+  const child = withFragmentRefs(
+    children,
+    renderTrigger(target, triggerProps, { componentName: 'Tooltip' }),
+  );
   useRelationshipTarget(wrapperRef, tooltipId, relationship, childIsFallback);
 
   // The surface's props are merged only while it is mounted. The presence attributes are present

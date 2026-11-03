@@ -10,6 +10,7 @@ import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
 import { mergeProps } from '../../lib/mergeProps';
 import { isCloneableElement, unwrapFragment } from '../../lib/renderTrigger';
+import { withFragmentRefs } from '../../lib/fragmentRefs';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -844,11 +845,15 @@ export const OverflowItem = ({
     );
     // The hidden display wins over the child's own style, as it does over the consumer's.
     const mergedStyle = merged.style as React.CSSProperties | undefined;
-    return React.cloneElement(childElement, {
-      ...merged,
-      ref: mergedRef,
-      style: isHidden ? { ...mergedStyle, display: 'none' } : mergedStyle,
-    } as Record<string, unknown>);
+    // A `<Fragment ref>` around the element keeps its ref: the element goes back inside it.
+    return withFragmentRefs(
+      children,
+      React.cloneElement(childElement, {
+        ...merged,
+        ref: mergedRef,
+        style: isHidden ? { ...mergedStyle, display: 'none' } : mergedStyle,
+      } as Record<string, unknown>),
+    );
   }
 
   return (
