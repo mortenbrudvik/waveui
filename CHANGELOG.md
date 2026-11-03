@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Badge** takes the `ghost` appearance (the color as text alone), `shape` (`circular`, `rounded`, `square`), the `tiny` size (a 6px dot with no content), and an `icon` slot with `iconPosition` (`before`, `after`), with `data-shape` and `data-size` and the stable class `wave-badge__icon` (closes `badge-3`, `badge-4`, `badge-5` and `badge-6`). `BadgeAppearance` gains `'ghost'`, and `BadgeSize` (`'tiny'` and `Size`) is a new exported type.
 - **CounterBadge** takes the `ghost` appearance, `shape` and `size` (`extra-small` to `extra-large`; a `dot` stays 6px), with `data-shape` and `data-size` (closes `counterbadge-4`).
 - **PresenceBadge** takes the statuses `blocked` and `unknown` (each with a glyph of its own) and the `outOfOffice` modifier, which draws the out-of-office arrow in the status's color and names the badge "<status>, out of office" (closes `presence-1` and `presence-2`). `PresenceStatus` gains `'blocked'` and `'unknown'`, so a `switch` over it that has no `default` needs the two cases. `presence-4` is not changed: see the roadmap.
+- **Buttons**: `shape` (`rounded`, `circular`, `square`; default `rounded`) on Button, ToggleButton, MenuButton, CompoundButton and SplitButton and the Toolbar buttons, with `data-shape` while it is set (closes `buttons-1`). ToggleButton and MenuButton are polymorphic (`as`), with the new types `ToggleButtonOwnProps` and `MenuButtonOwnProps` (closes `buttons-11`). `CompoundButton`'s `secondaryText` takes a slot object and the new `contentContainer` slot object re-elements the text column; both merge over `slotProps` (closes `buttons-7`). `SplitButton` `menuButtonLabel={null}` names the menu half by the primary action through `aria-labelledby` (closes `buttons-14`). `Link` takes `background` (`default`, `brand`, `inverted`; new type `LinkBackground`) with `data-background` (closes `buttons-18`).
+
+### Changed
+
+- **MenuButton** always reports `aria-expanded`: `"false"` unless `expanded`, a `Menu.Trigger` or your own `aria-expanded` says otherwise (closes `buttons-12`).
+- **ToggleButton** rendered as an anchor with `href` and no `role` no longer renders `aria-pressed` (not allowed on a link) and warns in development.
 
 ### Fixed
 
