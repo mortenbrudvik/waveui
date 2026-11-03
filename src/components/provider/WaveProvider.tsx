@@ -3,6 +3,7 @@ import { wcn } from '../../lib/cn';
 import { warnOnce } from '../../lib/dev';
 import { waveProviderClassNames } from '../../lib/classNames';
 import { getThemeClassName, isWaveTheme, WAVE_THEMES, type WaveTheme } from '../../lib/theme';
+import { resetTokenStyle } from '../../lib/tokenDefaults';
 import {
   collectTokenStyle,
   mergeTokenOverrides,
@@ -77,11 +78,12 @@ export interface WaveProviderProps extends React.HTMLAttributes<HTMLDivElement> 
    *
    * A nested provider merges its overrides over the enclosing provider's, key by key: an omitted
    * `tokens` inherits them all, and a key whose value is `undefined` inherits that key. `null`
-   * clears the inherited overrides of the tokens the theme declares (the semantic colours, shadows,
-   * palette) and of the subtree's overlays; theme-independent tokens (the brand and grey ramps,
-   * font families, stacking order, motion durations and curves) of an enclosing provider still
-   * reach the subtree's own elements through the CSS cascade, and the theme's colours built on the
-   * brand ramp follow them there. A nested provider that sets another `theme` inherits the
+   * resets the subtree to the stylesheet's tokens: the inherited overrides of the tokens the theme
+   * declares (the semantic colours, shadows, palette) are cleared, and so are those of the
+   * theme-independent tokens (the brand and grey ramps, font families, stacking order, motion
+   * durations and curves), for which the root writes the stylesheet's own values (the library's:
+   * a re-brand of `:root` in your stylesheet that an enclosing provider overrode is not
+   * restored), also for the subtree's overlays. A nested provider that sets another `theme` inherits the
    * overrides too, so set an override of a semantic colour (`primary`) in the provider that sets
    * the theme it was chosen for. A whole brand ramp is better made with `createBrandTokens` than
    * written by hand.
@@ -148,8 +150,9 @@ export interface WaveContextValue {
   tokens: WaveTokenOverrides;
   /**
    * The inline style that applies `tokens`, as the provider's root and, unless
-   * `applyStylesToPortals` is `false`, its portals carry it; `undefined` when there is nothing to
-   * set (also outside a provider).
+   * `applyStylesToPortals` is `false`, its portals carry it; under `tokens={null}` it holds the
+   * stylesheet's values of the theme-independent tokens that the providers above overrode (the
+   * reset). `undefined` when there is nothing to set (also outside a provider).
    */
   tokenStyle: TokenStyle | undefined;
   /** Whether portals carry `tokenStyle` (`true` outside a provider). */
@@ -219,9 +222,9 @@ export function useWaveTheme(): WaveContextValue {
  * - `tokens` overrides design tokens in the subtree with inline custom properties on the root
  *   (rendered on the server too) and on every portal of the subtree, unless
  *   `applyStylesToPortals` is `false`. A nested provider merges its overrides over the enclosing
- *   provider's key by key, also when it sets another `theme`; `tokens={null}` clears them for the
- *   tokens the theme declares and for the overlays, while the theme-independent ones of an
- *   enclosing provider still reach the subtree through the CSS cascade. An override whose key is
+ *   provider's key by key, also when it sets another `theme`; `tokens={null}` resets the subtree
+ *   to the stylesheet's tokens, writing the stylesheet's own value of each theme-independent token
+ *   that an enclosing provider overrode. An override whose key is
  *   not a camelCase identifier is skipped with a development warning, and so is a value unless it
  *   is a finite number or CSS text without `;`, `{`, `}` or `url(` with balanced quotes,
  *   parentheses, square brackets and comments and no `!` or backslash outside strings and
@@ -261,7 +264,15 @@ export const WaveProvider = ({
   const [tokens, setTokens] = React.useState(mergedTokens);
   if (!sameTokens(tokens, mergedTokens)) setTokens(mergedTokens);
   // Collected without warnings during render; the skipped entries are reported from an effect.
-  const { style: tokenStyle, invalid } = React.useMemo(() => collectTokenStyle(tokens), [tokens]);
+  // `tokens={null}` also writes the stylesheet's value of each theme-independent token that the
+  // providers above overrode, which the theme class on this root cannot reset (it does not declare
+  // them) and the cascade would otherwise carry in.
+  const reset = tokensProp === null;
+  const { style: tokenStyle, invalid } = React.useMemo(() => {
+    const collected = collectTokenStyle(tokens);
+    const resetStyle = reset ? resetTokenStyle(parent.tokens) : undefined;
+    return resetStyle ? { style: resetStyle, invalid: collected.invalid } : collected;
+  }, [tokens, reset, parent.tokens]);
 
   React.useEffect(() => {
     // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a

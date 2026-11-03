@@ -252,10 +252,9 @@ describe('WaveProvider tokens: nesting', () => {
   });
 
   // Asserts the context, the root's style attribute and the portal only: jsdom does not cascade
-  // custom properties, and the theme-independent tokens (ramps, font families, stacking order,
-  // motion) of the outer root still reach the inner subtree's own elements in a browser (a check of
-  // the real-browser pass).
-  it('null clears the inherited overrides from the context, the root style and the portal', () => {
+  // custom properties, so that the reset values win over the outer root's in a browser is a check
+  // of the real-browser pass.
+  it('null clears the inherited overrides from the context and resets the theme-independent ones', () => {
     let inner: WaveContextValue | undefined;
     render(
       <WaveProvider tokens={BRAND}>
@@ -267,10 +266,133 @@ describe('WaveProvider tokens: nesting', () => {
         </WaveProvider>
       </WaveProvider>,
     );
+    // The context is cleared; `brand80` is theme-independent, so the root and its portal write the
+    // stylesheet's value of it. `paletteRedTint` is declared by the theme class, which resets it.
     expect(inner?.tokens).toEqual({});
+    expect(inner?.tokenStyle).toEqual({ '--wave-brand-80': '#0f6cbd' });
+    expect(customProperties(screen.getByTestId('inner'))).toEqual({ '--wave-brand-80': '#0f6cbd' });
+    expect(customProperties(wrapperOf(screen.getByText('Cleared')))).toEqual({
+      '--wave-brand-80': '#0f6cbd',
+    });
+  });
+
+  it('null writes the stylesheet value of every inherited theme-independent token, in the inherited order', () => {
+    const { container } = render(
+      <WaveProvider
+        tokens={{
+          primary: '#115ea3',
+          fontFamily: 'Inter, sans-serif',
+          zOverlay: 2000,
+          durationFast: '10ms',
+          curveLinear: 'ease',
+          grey98: '#fff',
+          brand160: '#eee',
+        }}
+      >
+        <WaveProvider tokens={null}>Content</WaveProvider>
+      </WaveProvider>,
+    );
+    const inner = root(root(container));
+    expect(customProperties(inner)).toEqual({
+      '--wave-font-family':
+        "'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif",
+      '--wave-z-overlay': '1000',
+      '--wave-duration-fast': '150ms',
+      '--wave-curve-linear': 'cubic-bezier(0, 0, 1, 1)',
+      '--wave-grey-98': '#fafafa',
+      '--wave-brand-160': '#ebf3fc',
+    });
+  });
+
+  it('null with only theme tokens inherited, or nothing inherited, writes nothing', () => {
+    const { container } = render(
+      <WaveProvider tokens={{ primary: '#115ea3', paletteRedTint: '#fde7e9' }}>
+        <WaveProvider tokens={null} data-testid="theme-only">
+          <WaveProvider tokens={null} data-testid="nothing">
+            Content
+          </WaveProvider>
+        </WaveProvider>
+      </WaveProvider>,
+    );
+    expect(screen.getByTestId('theme-only')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('nothing')).not.toHaveAttribute('style');
+    expect(root(container)).toHaveAttribute('style');
+  });
+
+  it('null twice in a row resets once: the second root inherits the first root’s values', () => {
+    let inner: WaveContextValue | undefined;
+    render(
+      <WaveProvider tokens={BRAND}>
+        <WaveProvider tokens={null} data-testid="first">
+          <WaveProvider tokens={null} data-testid="second">
+            <Capture onValue={(value) => (inner = value)} />
+          </WaveProvider>
+        </WaveProvider>
+      </WaveProvider>,
+    );
+    expect(customProperties(screen.getByTestId('first'))).toEqual({ '--wave-brand-80': '#0f6cbd' });
+    // Nothing is inherited at the second root (the first one cleared the context), and the first
+    // root's values reach it through the cascade.
+    expect(screen.getByTestId('second')).not.toHaveAttribute('style');
     expect(inner?.tokenStyle).toBeUndefined();
-    expect(screen.getByTestId('inner')).not.toHaveAttribute('style');
-    expect(customProperties(wrapperOf(screen.getByText('Cleared')))).toEqual({});
+  });
+
+  it('a provider below a null one that overrides again writes its own value', () => {
+    render(
+      <WaveProvider tokens={BRAND}>
+        <WaveProvider tokens={null}>
+          <WaveProvider tokens={{ brand80: '#0e700e' }} data-testid="below">
+            Content
+          </WaveProvider>
+        </WaveProvider>
+      </WaveProvider>,
+    );
+    expect(customProperties(screen.getByTestId('below'))).toEqual({ '--wave-brand-80': '#0e700e' });
+  });
+
+  it('null keeps its reset out of the portals with applyStylesToPortals={false}, and keeps the identity of the style', () => {
+    const seen: (WaveContextValue | undefined)[] = [];
+    function Probe() {
+      seen.push(useWaveTheme());
+      return null;
+    }
+    const tree = (
+      <WaveProvider tokens={BRAND} applyStylesToPortals={false}>
+        <WaveProvider tokens={null}>
+          <Probe />
+          <Portal>
+            <span>Plain</span>
+          </Portal>
+        </WaveProvider>
+      </WaveProvider>
+    );
+    const { rerender } = render(tree);
+    expect(customProperties(wrapperOf(screen.getByText('Plain')))).toEqual({});
+    rerender(tree);
+    expect(seen.at(-1)?.tokenStyle).toBe(seen[0]?.tokenStyle);
+  });
+
+  it('null renders the reset into the server markup too', () => {
+    expect(
+      renderToString(
+        <WaveProvider tokens={{ brand80: '#c43e00' }}>
+          <WaveProvider tokens={null}>Content</WaveProvider>
+        </WaveProvider>,
+      ),
+    ).toContain('style="--wave-brand-80:#0f6cbd"');
+  });
+
+  it('null does not reset a key whose value is undefined, and skips an invalid inherited override', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { container } = render(
+      <WaveProvider tokens={untyped({ brand80: undefined, brand70: 'red;x', 'not-a-token': 'x' })}>
+        <WaveProvider tokens={null}>Content</WaveProvider>
+      </WaveProvider>,
+    );
+    // `brand70` is inherited (as given) though the outer provider skipped it, so the reset writes
+    // its stylesheet value; `brand80: undefined` was never an override; `not-a-token` is no name.
+    expect(customProperties(root(root(container)))).toEqual({ '--wave-brand-70': '#115ea3' });
+    expect(warn.mock.calls).toEqual([[VALUE_WARNING('brand70')], [NAME_WARNING('not-a-token')]]);
   });
 
   it('an omitted map, and a key whose value is undefined, inherit', () => {
