@@ -5,6 +5,12 @@ import { Field, TimePicker } from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
 
+const formatHours = (value: string) => value.replace(':', 'h');
+const parseHours = (text: string) => {
+  const match = /^(\d{1,2})h(\d{2})$/.exec(text.trim());
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
+};
+
 const meta = {
   title: 'Components/Input/TimePicker',
   component: TimePicker,
@@ -143,4 +149,29 @@ export const SizesAndAppearances: Story = {
       )}
     />
   ),
+};
+
+/** `showSeconds` writes the value as `HH:mm:ss` and accepts typed seconds; the list stays on whole minutes. */
+export const Seconds: Story = {
+  args: { showSeconds: true, format: '24h', defaultValue: '09:30:15' },
+};
+
+/**
+ * `formatTime` writes a time and `parseTime` reads typed text: here `9h30`. Keep both stable
+ * (module-level functions or `useCallback`): an inline `formatTime` makes the options on every
+ * render.
+ */
+export const CustomFormat: Story = {
+  args: {
+    formatTime: formatHours,
+    parseTime: parseHours,
+    minTime: '08:00',
+    maxTime: '12:00',
+    defaultValue: '09:30',
+  },
+};
+
+/** `freeform={false}` limits the selection to the listed times: `9:15` is reported as `'not-listed'`. */
+export const ListedTimesOnly: Story = {
+  args: { freeform: false, format: '24h', onInvalidInput: fn() },
 };
