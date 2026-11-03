@@ -27,7 +27,13 @@ export type {
 } from './Spinner';
 
 export { Skeleton, SkeletonGroup } from './Skeleton';
-export type { SkeletonProps, SkeletonGroupProps } from './Skeleton';
+export type {
+  SkeletonProps,
+  SkeletonGroupProps,
+  SkeletonSize,
+  SkeletonAnimation,
+  SkeletonAppearance,
+} from './Skeleton';
 
 export {
   Toast,
