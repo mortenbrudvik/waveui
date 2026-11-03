@@ -107,7 +107,10 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   transparent while it slides 8px in from beyond the stack's edge (from below at the bottom,
  *   from above at the top). It exits over the normal duration (200 ms) with the easy-ease curve:
  *   the toast fades out in place first, then the track and the margin close after a delay of the
- *   same normal duration, so the toasts around it glide together once it has faded. The margin
+ *   same normal duration, so the toasts around it glide together once it has faded. The container
+ *   clips while it exits, but the clip itself waits out that delay (a discrete `overflow`
+ *   transition), so the toast's shadow shows while it fades; a browser that does not transition
+ *   `overflow` clips from the first frame, as 0.15 did. The margin
  *   makes up for the gap the region keeps after each toast, so nothing moves when the exited
  *   container unmounts. Under reduced motion nothing is transitioned, so the delay goes too.
  * - `messageBarGroupItemStructure`, the element around each bar of a MessageBarGroup (not motion:
@@ -283,9 +286,9 @@ export const toastStructure =
  * that edge together, 250 ms; it fades out over 200 ms, then closes over 200 ms more.
  */
 export const toastMotion: Readonly<Record<'top' | 'bottom', string>> = {
-  top: 'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:-translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
+  top: 'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:transition-[grid-template-rows,margin-bottom,opacity,translate,overflow] wave:data-[presence=exiting]:[transition-behavior:allow-discrete] wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s,var(--wave-duration-normal)] wave:motion-reduce:transition-none wave:motion-reduce:data-[presence=exiting]:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:-translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
   bottom:
-    'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
+    'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:transition-[grid-template-rows,margin-bottom,opacity,translate,overflow] wave:data-[presence=exiting]:[transition-behavior:allow-discrete] wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s,var(--wave-duration-normal)] wave:motion-reduce:transition-none wave:motion-reduce:data-[presence=exiting]:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
 };
 
 /**
