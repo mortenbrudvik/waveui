@@ -275,23 +275,30 @@ export const WaveProvider = ({
   }, [tokens, reset, parent.tokens]);
 
   React.useEffect(() => {
+    const report = () => {
+      for (const { key, reason } of invalid) {
+        warnOnce(
+          `WaveProvider:tokens:${reason}:${key}`,
+          `WaveProvider: \`tokens\` skips \`${key}\`: ` +
+            (reason === 'name'
+              ? 'not a token name (the CSS variable in camelCase without `--wave-`, such as `primaryForeground`).'
+              : 'its value must be a finite number, or CSS text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without `!` or a backslash outside strings and comments.'),
+        );
+      }
+    };
     // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
-    // production bundle then drops the warnings and their text. Without a bundler and without
-    // `process` (an unbundled import in a browser), the read throws and the warnings are skipped.
+    // production bundle then drops the warnings and their text (the catch is unreachable once the
+    // read is replaced, and goes with it). Without a bundler and without `process` (an unbundled
+    // import in a browser) the read throws, development is assumed and they are reported, as
+    // `lib/dev` does for its own.
+    let reported = false;
     try {
       if (process.env.NODE_ENV !== 'production') {
-        for (const { key, reason } of invalid) {
-          warnOnce(
-            `WaveProvider:tokens:${reason}:${key}`,
-            `WaveProvider: \`tokens\` skips \`${key}\`: ` +
-              (reason === 'name'
-                ? 'not a token name (the CSS variable in camelCase without `--wave-`, such as `primaryForeground`).'
-                : 'its value must be a finite number, or CSS text with balanced quotes, brackets and comments, without `;`, `{`, `}` or `url(`, and without `!` or a backslash outside strings and comments.'),
-          );
-        }
+        reported = true;
+        report();
       }
     } catch {
-      // No `process`: see above.
+      if (!reported) report();
     }
   }, [invalid]);
 

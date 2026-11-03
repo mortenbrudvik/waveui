@@ -377,12 +377,18 @@ function rampFromStops(ramp: BrandRamp): BrandTokens {
     );
   }
   // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
-  // production bundle then drops the check and its table. Without a bundler and without
-  // `process` (an unbundled import in a browser), the read throws and the check is skipped.
+  // production bundle then drops the check and its table (the catch is unreachable once the read
+  // is replaced, and goes with it). Without a bundler and without `process` (an unbundled import
+  // in a browser) the read throws, development is assumed and the check runs, as `lib/dev` does
+  // for its warnings.
+  let checked = false;
   try {
-    if (process.env.NODE_ENV !== 'production') checkBrandRamp(used);
+    if (process.env.NODE_ENV !== 'production') {
+      checked = true;
+      checkBrandRamp(used);
+    }
   } catch {
-    // No `process`: see above.
+    if (!checked) checkBrandRamp(used);
   }
   return tokens;
 }

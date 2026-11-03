@@ -863,6 +863,21 @@ describe('WaveProvider tokens: development warnings', () => {
     });
   });
 
+  it('warns without a `process` global too, once per key (an unbundled import in a browser)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('process', undefined);
+    try {
+      render(
+        <WaveProvider tokens={untyped({ 'brand-80': '#c43e00', fontFamily: "'Segoe UI" })}>
+          Content
+        </WaveProvider>,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(warn.mock.calls).toEqual([[NAME_WARNING('brand-80')], [VALUE_WARNING('fontFamily')]]);
+  });
+
   it('logs nothing while rendering on the server', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const html = renderToString(
