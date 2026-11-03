@@ -5,7 +5,7 @@ export { CompoundButton } from './CompoundButton';
 export type { CompoundButtonProps, CompoundButtonOwnProps } from './CompoundButton';
 
 export { ToggleButton } from './ToggleButton';
-export type { ToggleButtonProps } from './ToggleButton';
+export type { ToggleButtonProps, ToggleButtonOwnProps } from './ToggleButton';
 
 export { SplitButton } from './SplitButton';
 export type {
@@ -15,10 +15,10 @@ export type {
 } from './SplitButton';
 
 export { MenuButton } from './MenuButton';
-export type { MenuButtonProps } from './MenuButton';
+export type { MenuButtonProps, MenuButtonOwnProps } from './MenuButton';
 
 export { Link } from './Link';
-export type { LinkProps, LinkOwnProps, LinkAppearance } from './Link';
+export type { LinkProps, LinkOwnProps, LinkAppearance, LinkBackground } from './Link';
 
 export {
   Toolbar,
