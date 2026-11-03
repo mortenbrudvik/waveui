@@ -69,6 +69,19 @@ export interface ListboxSelectDetails {
   event: Event;
 }
 
+/**
+ * Second argument of {@link UseListboxOptions.onSelectRange}: the options a range key selects or
+ * deselects, and the event behind it.
+ */
+export interface ListboxRangeDetails {
+  /** The options of `values`, in list order. */
+  items: readonly ListboxItem[];
+  /** `true`: select them; `false`: deselect them (Ctrl+A on a list whose options are all selected). */
+  select: boolean;
+  /** The key event behind the change. */
+  event: Event;
+}
+
 /** Options of {@link useListbox}. */
 export interface UseListboxOptions {
   /**
@@ -184,6 +197,18 @@ export interface UseListboxOptions {
    * default), so you can clear the typed text. Not handled when omitted.
    */
   onClearDraft?: () => void;
+  /**
+   * Standalone and `multiselect` only: turns on the optional range keys of the APG listbox
+   * pattern and is called with the values they select or deselect. Shift+ArrowDown and
+   * Shift+ArrowUp move to the next or previous option and toggle it (through `onSelect`, as a
+   * click does); Shift+Space selects the options from the most recently selected one to the
+   * active one; Ctrl+Shift+Home and Ctrl+Shift+End select the active option and every option up
+   * to the first or the last, and move there; Ctrl+A (Cmd+A) selects every enabled option, or,
+   * when they all are selected already, deselects them. Only options that are navigable (not
+   * filtered out or hidden) and enabled are named; `values` holds the ones whose state changes,
+   * in list order. Without it the keys keep their plain meaning (the arrows move, Space toggles).
+   */
+  onSelectRange?: (values: readonly string[], details: ListboxRangeDetails) => void;
 }
 
 /** Props for the combobox element (spread them; see {@link UseListboxResult.getComboboxProps}). */
@@ -1106,6 +1131,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     onScrollToItem,
     idPrefix,
     onClearDraft,
+    onSelectRange,
   } = options;
 
   const standalone = mode === 'standalone';
@@ -1196,10 +1222,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   });
   const { activeValue, activeDescendantId } = ad;
 
+  // The option a range key (Shift+Space) extends from: the one most recently selected by a commit.
+  const anchorRef = useRef<string | null>(null);
+
   const commit = useEventCallback(
     (value: string, reason: 'select' | 'tab', event: Event, fallbackItem?: ListboxItem): void => {
       const item = itemByValue.get(value) ?? fallbackItem;
       if (!item || item.disabled) return;
+      if (multiselect && !selectedSet.has(value)) anchorRef.current = value;
       onSelect(value, { item, event });
       // Standalone and multi-select commits keep the list as it is, on the committed option.
       if (standalone || (multiselect && reason === 'select')) {
@@ -1241,7 +1271,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // event parameter of its own (useTypeahead is unchanged by this hook).
   const keyEventRef = useRef<Event | null>(null);
 
-  const { onTypeahead } = useTypeahead({
+  const { onTypeahead, isSearching } = useTypeahead({
     getItems: () =>
       navigable.map((item) => ({
         value: item.value,
@@ -1255,6 +1285,70 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     },
   });
 
+  /**
+   * The range keys (see {@link UseListboxOptions.onSelectRange}). Returns whether the key was
+   * handled; one that does not apply (no active option, an unrelated key) is left to the plain
+   * keys.
+   */
+  const handleRangeKey = (event: React.KeyboardEvent): boolean => {
+    if (!onSelectRange || event.altKey) return false;
+    const { key, shiftKey } = event;
+    const modifier = event.ctrlKey || event.metaKey;
+    const activeIndex = activeValue === null ? -1 : navigationValues.indexOf(activeValue);
+    const itemOf = (value: string) => itemByValue.get(value) as ListboxItem;
+    const enabled = (value: string) => !itemByValue.get(value)?.disabled;
+    const report = (values: readonly string[], select: boolean) => {
+      if (values.length === 0) return;
+      onSelectRange(values, { items: values.map(itemOf), select, event: event.nativeEvent });
+    };
+    // The enabled options of `values` that are not selected yet.
+    const unselected = (values: readonly string[]) =>
+      values.filter((value) => enabled(value) && !selectedSet.has(value));
+
+    if (modifier && !shiftKey && key.toLowerCase() === 'a') {
+      event.preventDefault();
+      const everyEnabled = navigationValues.filter(enabled);
+      const missing = unselected(everyEnabled);
+      if (missing.length > 0) report(missing, true);
+      else report(everyEnabled, false);
+      return true;
+    }
+    if (modifier && shiftKey && (key === 'Home' || key === 'End')) {
+      event.preventDefault();
+      const target =
+        key === 'Home' ? navigationValues[0] : navigationValues[navigationValues.length - 1];
+      if (target === undefined) return true;
+      const range =
+        activeIndex === -1
+          ? [target]
+          : key === 'Home'
+            ? navigationValues.slice(0, activeIndex + 1)
+            : navigationValues.slice(activeIndex);
+      ad.setActiveValue(target);
+      report(unselected(range), true);
+      return true;
+    }
+    if (modifier || !shiftKey || activeIndex === -1) return false;
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
+      event.preventDefault();
+      const next = navigationValues[activeIndex + (key === 'ArrowDown' ? 1 : -1)];
+      if (next === undefined) return true;
+      ad.setActiveValue(next);
+      commit(next, 'select', event.nativeEvent);
+      return true;
+    }
+    if (key === ' ' && !isSearching()) {
+      event.preventDefault();
+      const anchorIndex =
+        anchorRef.current === null ? -1 : navigationValues.indexOf(anchorRef.current);
+      const from = Math.min(anchorIndex === -1 ? activeIndex : anchorIndex, activeIndex);
+      const to = Math.max(anchorIndex === -1 ? activeIndex : anchorIndex, activeIndex);
+      report(unselected(navigationValues.slice(from, to + 1)), true);
+      return true;
+    }
+    return false;
+  };
+
   const onKeyDown = useEventCallback((event: React.KeyboardEvent) => {
     if (event.defaultPrevented || event.nativeEvent.isComposing) return;
     // Every open change and commit below comes from this key, so its native event is always
@@ -1266,6 +1360,8 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     if (mode === 'editable' && open && editsText(event)) {
       ad.setActiveValue(highlightOnFilter ? (navigationValues[0] ?? null) : null);
     }
+    // The range keys of a standalone multi-select list, before Ctrl and Meta are left to the page.
+    if (standalone && multiselect && onSelectRange && handleRangeKey(event)) return;
     const altGraph = isAltGraphCharacter(event);
     if ((event.ctrlKey && !altGraph) || event.metaKey) return;
     const { key, altKey } = event;
