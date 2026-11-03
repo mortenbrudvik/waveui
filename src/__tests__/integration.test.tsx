@@ -630,6 +630,7 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useTableSelection',
       'useTableColumnSizing',
       'useFlatTree',
+      'useNavDrawerToggle',
     ]) {
       expect(barrel[name], name).toBeTypeOf('function');
     }

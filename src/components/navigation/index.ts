@@ -90,6 +90,14 @@ export type {
   NavDrawerFooterProps,
 } from './NavDrawer';
 
+export { useNavDrawerToggle } from './NavDrawer.toggle';
+export type {
+  UseNavDrawerToggleOptions,
+  UseNavDrawerToggleResult,
+  NavDrawerToggleHamburgerProps,
+  NavDrawerToggleDrawerProps,
+} from './NavDrawer.toggle';
+
 export { Hamburger } from './Hamburger';
 export type { HamburgerProps } from './Hamburger';
 

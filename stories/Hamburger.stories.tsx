@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Hamburger, Nav, NavDrawer } from '../src';
+import { Hamburger, Nav, NavDrawer, useNavDrawerToggle } from '../src';
 
 /** A locally drawn grid glyph (tokens only: it takes the text colour). */
 const GridGlyph = () => (
@@ -121,6 +121,31 @@ export const InNavDrawer: Story = {
             </NavDrawer.Body>
           </NavDrawer>
         </div>
+      </div>
+    );
+  },
+};
+
+/**
+ * `useNavDrawerToggle` wires the page's Hamburger to a NavDrawer: the open state, `aria-expanded`,
+ * `aria-controls` (while open), `aria-haspopup="dialog"` for an overlay, the toggle and
+ * `finalFocusRef`, so focus returns to the Hamburger when the drawer closes. Spread `hamburgerProps`
+ * on the Hamburger and `drawerProps` on the NavDrawer.
+ */
+export const WithToggleHook: Story = {
+  render: function WithToggleHookStory() {
+    const { hamburgerProps, drawerProps } = useNavDrawerToggle({ type: 'overlay' });
+    return (
+      <div className="flex h-80 flex-col overflow-hidden rounded-md border border-wave-border">
+        <div className="border-b border-wave-border p-2">
+          <Hamburger {...hamburgerProps} aria-label="Show navigation" />
+        </div>
+        <NavDrawer {...drawerProps} defaultValue="home">
+          <NavDrawer.Body>
+            <Nav.Item value="home">Home</Nav.Item>
+            <Nav.Item value="reports">Reports</Nav.Item>
+          </NavDrawer.Body>
+        </NavDrawer>
       </div>
     );
   },

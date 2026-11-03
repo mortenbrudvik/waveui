@@ -206,6 +206,11 @@ import type {
   MenuListContextValue,
   MenuPopoverProps,
   MenuProps,
+  MenuOpenChangeDetails,
+  MenuOpenChangeReason,
+  NavCategoryToggleDetails,
+  NavDensity,
+  NavSelectDetails,
   MenuSplitGroup,
   MenuSplitGroupProps,
   MenuTriggerProps,
@@ -1710,8 +1715,15 @@ describe('0.11 tags, drawers and the app shell from the package entry', () => {
     expectTypeOf<NavDrawerProps['size']>().toEqualTypeOf<DrawerSize | undefined>();
     expectTypeOf<NavDrawerProps['type']>().toEqualTypeOf<DrawerType | undefined>();
     expectTypeOf<NavDrawerProps['onItemSelect']>().toEqualTypeOf<
-      ((value: string) => void) | undefined
+      ((value: string, details?: NavSelectDetails) => void) | undefined
     >();
+    expectTypeOf<NavDrawerProps['density']>().toEqualTypeOf<NavDensity | undefined>();
+    expectTypeOf<NavDensity>().toEqualTypeOf<'small' | 'medium'>();
+    expectTypeOf<NavCategoryToggleDetails>().toEqualTypeOf<{
+      event: Event;
+      category: string;
+      open: boolean;
+    }>();
     expectTypeOf<NavDrawerProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
     expectTypeOf<NavDrawerHeaderProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
     expectTypeOf<NavDrawerFooterProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
@@ -2397,6 +2409,32 @@ describe('0.18 customization surface from the package entry', () => {
     expectTypeOf<UseRadioGroupItemResult['props']['role']>().toEqualTypeOf<'radio'>();
     expectTypeOf<UseRadioGroupItemResult['props']['tabIndex']>().toEqualTypeOf<0 | -1>();
     expectTypeOf<UseRadioGroupItemResult['checked']>().toEqualTypeOf<boolean>();
+  });
+
+  it('Menu onOpenChange: an optional details argument with a reason and the event', () => {
+    expectTypeOf<MenuProps['onOpenChange']>().toEqualTypeOf<
+      ((open: boolean, details?: MenuOpenChangeDetails) => void) | undefined
+    >();
+    expectTypeOf<MenuOpenChangeDetails>().toEqualTypeOf<{
+      reason: MenuOpenChangeReason;
+      event: Event;
+    }>();
+    expectTypeOf<MenuOpenChangeReason>().toEqualTypeOf<
+      | 'trigger-click'
+      | 'trigger-key'
+      | 'hover'
+      | 'context-menu'
+      | 'item-click'
+      | 'tab'
+      | 'arrow-key'
+      | 'escape'
+      | 'outside-press'
+      | 'focus-outside'
+      | 'scroll'
+      | 'parent'
+    >();
+    // A callback written for one argument still fits.
+    expectTypeOf<(open: boolean) => void>().toExtend<NonNullable<MenuProps['onOpenChange']>>();
   });
 
   it('useMenuContext and useMenuListContext, narrow views of a Menu and its list', () => {
