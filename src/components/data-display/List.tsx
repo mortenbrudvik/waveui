@@ -18,6 +18,7 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { ownsArrowKeys, useRovingTabIndex } from '../../hooks/useRovingTabIndex';
+import { useTypeahead, type TypeaheadItem } from '../../hooks/useTypeahead';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { ListRegistry, type ListFocusLoss } from './List.registry';
 
@@ -87,7 +88,7 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    * rendered one by the browser (`scrollIntoView`, nearest), which the window follows, one that is
    * not rendered through the window's `scrollToIndex`, and focused once it renders. An item that a
    * pointer press focuses is not scrolled. Typeahead matches the labels of the rendered items
-   * only.
+   * only, unless `getItemLabel` gives the label of every item.
    *
    * Selection covers every value: the values of items that are not rendered stay selected, and
    * `onSelectionChange` reports them (a list without a window drops the values of items it no
@@ -111,6 +112,18 @@ export interface ListProps<M extends ListSelectionMode = ListSelectionMode> exte
    * counts as its whole part, and one below 0 (or not finite) as 0.
    */
   count?: number;
+  /**
+   * The text of the item at an index, for typeahead over every item of a windowed list (with
+   * `virtualWindow` and `count`; ignored without them): typed characters move focus to the next
+   * item, from the focused one and wrapping around, whose label starts with them (case-insensitive,
+   * as in a list without a window), whether or not it is rendered. A target that is not rendered
+   * is scrolled into view and focused once it renders, as a key's target is. It is called for
+   * every index of the list while a character is typed (up to `count` calls per key), so keep it
+   * cheap, and return `null`, `undefined` or an empty string for an item that typeahead skips.
+   * Without it a windowed list matches the labels of its rendered items only. Fluent has no
+   * counterpart (its List has no typeahead).
+   */
+  getItemLabel?: (index: number) => string | null | undefined;
   /** Whether list items can be selected.
    * @default false
    */
@@ -673,6 +686,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     checkmark = false,
     virtualWindow,
     count,
+    getItemLabel,
     className,
     children,
     ref,
@@ -745,6 +759,22 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   // A windowed list keeps the focused item rendered outside the window, so a focused item scrolled
   // away keeps focus and its Tab stop, and the item a key moved to until it is focused.
   const [windowFocus] = React.useState(() => new WindowFocusStore());
+  // Typeahead over every item of a windowed list: the labels come from `getItemLabel`.
+  const windowedLabels = windowed && getItemLabel !== undefined && itemCount > 7;
+  const typeaheadTargetRef = React.useRef<number | null>(null);
+  const { onTypeahead, isSearching } = useTypeahead({
+    getItems: () => {
+      const labels: TypeaheadItem[] = [];
+      for (let index = 0; index < itemCount; index++) {
+        const text = getItemLabel?.(index);
+        if (text) labels.push({ value: String(index), text });
+      }
+      return labels;
+    },
+    onMatch: (value) => {
+      typeaheadTargetRef.current = Number(value);
+    },
+  });
   const { focused: focusedIndex, pending: pendingIndex } = React.useSyncExternalStore(
     windowFocus.subscribe,
     windowFocus.getSnapshot,
@@ -810,8 +840,9 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
     activeValue: selectable ? tabStopValue : null,
     orientation: 'vertical',
     onFocusMove: windowed ? followRovingFocus : undefined,
-    // A windowed list counts its items from `count` (most of them are not rendered).
-    typeahead: (windowed ? itemCount : (registered?.count ?? 0)) > 7,
+    // A windowed list counts its items from `count` (most of them are not rendered); with
+    // `getItemLabel` it matches them itself, over every item.
+    typeahead: windowedLabels ? false : (windowed ? itemCount : (registered?.count ?? 0)) > 7,
     // A list without selection returns to the item that last had focus. While focus is in a
     // windowed list, the focused item is its Tab stop (it stays rendered, scrolled away or not).
     tabStop: selectable && !(windowed && focusedIndex !== null) ? 'active' : 'last-focused',
@@ -879,18 +910,28 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
    */
   const handleWindowKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
     if (!activeWindow || event.defaultPrevented || itemCount === 0) return;
-    if (event.ctrlKey || event.altKey || event.metaKey) return;
     const root = event.currentTarget;
     // A key from a popup is the popup's; a text field keeps its keys.
     if (!root.contains(event.target as Node) || ownsArrowKeys(event.target)) return;
     const current = getWindowItemIndex(root, event.target);
-    const target = getWindowKeyTarget(
-      event.key,
-      windowFocus.getSnapshot().pending ?? current,
-      itemCount,
-    );
-    if (target === undefined) return;
-    event.preventDefault();
+    const from = windowFocus.getSnapshot().pending ?? current;
+    let target: number | undefined;
+    if (windowedLabels) {
+      // Typeahead over the labels of every item: a typed character is consumed (also by a search
+      // that matches nothing), and a match is the key's target.
+      typeaheadTargetRef.current = null;
+      if (onTypeahead(event, from === null ? null : String(from))) {
+        event.preventDefault();
+        target = typeaheadTargetRef.current ?? undefined;
+        if (target === undefined) return;
+      }
+    }
+    if (target === undefined) {
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+      target = getWindowKeyTarget(event.key, from, itemCount);
+      if (target === undefined) return;
+      event.preventDefault();
+    }
     if (target === current) {
       windowFocus.update({ pending: null });
       activeWindow.scrollToIndex(target, { align: 'auto' });
@@ -916,6 +957,13 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
   const internalKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
     if (windowed) handleWindowKeyDown(event);
     rovingKeyDown(event);
+  });
+  // A Space that continues a search over every item belongs to the search, not to the focused
+  // item (the roving tab index does this for the items it renders): it is handled in the capture
+  // phase, before the item's own handler.
+  const internalKeyDownCapture = useEventCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (windowedLabels && event.key === ' ' && isSearching()) handleWindowKeyDown(event);
+    rovingKeyDownCapture(event);
   });
 
   // Switching between list and grid semantics changes the root and item elements (`ul`/`li` ↔
@@ -1124,7 +1172,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
         onKeyDown={navigable ? composeEventHandlers(onKeyDown, internalKeyDown) : onKeyDown}
         onKeyDownCapture={
           navigable
-            ? composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture)
+            ? composeEventHandlers(onKeyDownCapture, internalKeyDownCapture)
             : onKeyDownCapture
         }
         onFocus={
@@ -1716,7 +1764,7 @@ ListActionCell.displayName = 'ListActionCell';
  *   the Tab stop while focus is in the list, each item carries its place in the whole list, and
  *   the values selected outside the window stay selected. The keys move by index over the whole
  *   list (ArrowUp/ArrowDown, Home/End, and PageUp/PageDown by ten), scrolling the target into view
- *   before focusing it, rendered or not; typeahead matches the rendered items. Its structure
+ *   before focusing it, rendered or not; typeahead matches the rendered items, or every item with `getItemLabel`. Its structure
  *   never follows the rendered items: a selectable windowed list is a listbox unless
  *   `navigationMode="composite"` pins the grid (pin it when items have actions; a development
  *   warning says so).
