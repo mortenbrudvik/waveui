@@ -4,6 +4,8 @@ export type {
   MessageBarTitleProps,
   MessageBarActionsProps,
   MessageBarContextValue,
+  MessageBarShape,
+  MessageBarPoliteness,
 } from './MessageBar';
 
 export { MessageBarGroup } from './MessageBarGroup';

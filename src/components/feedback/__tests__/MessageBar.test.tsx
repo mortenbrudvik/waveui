@@ -5,7 +5,7 @@ import { renderToString } from 'react-dom/server';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MessageBar } from '../MessageBar';
-import type { MessageBarProps } from '../MessageBar';
+import type { MessageBarPoliteness, MessageBarProps, MessageBarShape } from '../MessageBar';
 import { MessageBarGroup } from '../MessageBarGroup';
 import { StatusIcon, StatusText } from '../MessageBar.status';
 import { Button } from '../../button/Button';
@@ -137,6 +137,120 @@ describe('MessageBar', () => {
       );
       expect(screen.getByRole('status')).toHaveTextContent('Message');
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('shape (messagebar-4)', () => {
+    it('defaults to rounded and renders data-shape', () => {
+      render(<MessageBar data-testid="bar">Message</MessageBar>);
+      const bar = screen.getByTestId('bar');
+      expect(bar).toHaveAttribute('data-shape', 'rounded');
+      expect(bar).toHaveClass('wave:rounded');
+      expect(bar).not.toHaveClass('wave:rounded-none');
+    });
+
+    it('removes the corners of a square bar, in every status', () => {
+      for (const status of statuses) {
+        const view = render(
+          <MessageBar status={status} shape="square" data-testid="bar">
+            Message
+          </MessageBar>,
+        );
+        const bar = screen.getByTestId('bar');
+        expect(bar).toHaveAttribute('data-shape', 'square');
+        expect(bar).toHaveClass('wave:rounded-none');
+        expect(bar).not.toHaveClass('wave:rounded');
+        view.unmount();
+      }
+    });
+
+    it('lets a className of the consumer replace the corners', () => {
+      render(
+        <MessageBar shape="square" className="rounded-xl" data-testid="bar">
+          Message
+        </MessageBar>,
+      );
+      expect(screen.getByTestId('bar')).toHaveClass('rounded-xl');
+      expect(screen.getByTestId('bar')).not.toHaveClass('wave:rounded-none');
+    });
+
+    it('reads an unknown shape (untyped code) as rounded', () => {
+      render(
+        <MessageBar shape={'circular' as 'square'} data-testid="bar">
+          Message
+        </MessageBar>,
+      );
+      expect(screen.getByTestId('bar')).toHaveAttribute('data-shape', 'rounded');
+    });
+
+    it('types shape as rounded or square', () => {
+      expectTypeOf<MessageBarShape>().toEqualTypeOf<'rounded' | 'square'>();
+      expectTypeOf<MessageBarProps['shape']>().toEqualTypeOf<MessageBarShape | undefined>();
+    });
+  });
+
+  describe('politeness (messagebar-5)', () => {
+    it.each([
+      ['info', 'assertive', 'alert'],
+      ['success', 'assertive', 'alert'],
+      ['warning', 'polite', 'status'],
+      ['error', 'polite', 'status'],
+      ['info', 'polite', 'status'],
+      ['error', 'assertive', 'alert'],
+    ] as const)('status %s with politeness="%s" renders role="%s"', (status, politeness, role) => {
+      render(
+        <MessageBar status={status} politeness={politeness}>
+          Message
+        </MessageBar>,
+      );
+      expect(screen.getByRole(role)).toHaveTextContent('Message');
+    });
+
+    it('leaves the role to the status without it, and to a role of the consumer with it', () => {
+      render(
+        <>
+          <MessageBar status="warning">Warning</MessageBar>
+          <MessageBar status="info" politeness="assertive" role="region" aria-label="Notice">
+            Region
+          </MessageBar>
+        </>,
+      );
+      expect(screen.getByText(/Warning$/).closest('[role]')).toHaveAttribute('role', 'alert');
+      expect(screen.getByRole('region', { name: 'Notice' })).toBeInTheDocument();
+    });
+
+    it('reads an unknown politeness (untyped code) as the status default', () => {
+      render(
+        <MessageBar status="error" politeness={'off' as 'polite'}>
+          Message
+        </MessageBar>,
+      );
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+
+    it('does not pass politeness to the element', () => {
+      render(
+        <MessageBar politeness="assertive" data-testid="bar">
+          Message
+        </MessageBar>,
+      );
+      expect(screen.getByTestId('bar')).not.toHaveAttribute('politeness');
+    });
+
+    it('has no accessibility violations (square, assertive info bar)', async () => {
+      render(
+        <MessageBar shape="square" politeness="assertive">
+          Message
+        </MessageBar>,
+      );
+      await expectNoA11yViolations();
+    });
+
+    it('types politeness', () => {
+      expectTypeOf<MessageBarPoliteness>().toEqualTypeOf<'polite' | 'assertive'>();
+      expectTypeOf<MessageBarProps['politeness']>().toEqualTypeOf<
+        MessageBarPoliteness | undefined
+      >();
     });
   });
 
