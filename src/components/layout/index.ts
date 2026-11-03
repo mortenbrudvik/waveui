@@ -2,6 +2,8 @@ export { Card, CardHeader, CardPreview, CardBody, CardFooter } from './Card';
 export type {
   CardProps,
   CardAppearance,
+  CardFocusMode,
+  CardSelectionDetails,
   CardOwnProps,
   CardHeaderProps,
   CardHeaderOwnProps,

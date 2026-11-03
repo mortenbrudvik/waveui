@@ -220,3 +220,66 @@ export const FloatingActionWithCheckbox: Story = {
     );
   },
 };
+
+/** `disabled`: a dimmed card that does not select; a selectable one leaves the tab order. */
+export const Disabled: Story = {
+  render: () => (
+    <div className="flex gap-4">
+      <Card style={{ width: 240 }} disabled onSelect={fn()} selected={false}>
+        <Card.Header title="Disabled card" subtitle="Cannot be selected" />
+      </Card>
+      <Card style={{ width: 240 }} disabled selectionControl="checkbox" selected onSelect={fn()}>
+        <Card.Header title="Disabled with checkbox" />
+        <Card.Footer>
+          <Button disabled>Details</Button>
+        </Card.Footer>
+      </Card>
+    </div>
+  ),
+};
+
+/**
+ * `defaultSelected` lets the card keep its own selected state, and `onSelectionChange` reports the
+ * new state with the event that asked for it.
+ */
+export const UncontrolledSelection: Story = {
+  render: function UncontrolledSelectionCard() {
+    const [last, setLast] = React.useState('no change yet');
+    return (
+      <div className="flex flex-col gap-3" style={{ width: 360 }}>
+        <Card
+          defaultSelected={false}
+          onSelectionChange={(selected, { event }) => setLast(`${selected} by ${event.type}`)}
+        >
+          <Card.Header title="Uncontrolled card" subtitle="Click, or press Enter or Space" />
+        </Card>
+        <p className="text-wave-body-1">Last change: {last}</p>
+      </div>
+    );
+  },
+};
+
+/**
+ * `focusMode` makes the card a focus group for the controls inside it: `no-tab` (Enter enters, Tab
+ * is trapped until Escape), `tab-exit` (Tab leaves past the last control) or `tab-only` (one more
+ * tab stop, no key taken).
+ */
+export const FocusModes: Story = {
+  render: () => (
+    <div className="flex flex-col gap-4" style={{ width: 360 }}>
+      {(['off', 'no-tab', 'tab-exit', 'tab-only'] as const).map((focusMode) => (
+        <Card
+          key={focusMode}
+          focusMode={focusMode}
+          aria-label={`Card with focus mode ${focusMode}`}
+        >
+          <Card.Header title={`focusMode="${focusMode}"`} />
+          <Card.Footer>
+            <Button>Open</Button>
+            <Button>Share</Button>
+          </Card.Footer>
+        </Card>
+      ))}
+    </div>
+  ),
+};
