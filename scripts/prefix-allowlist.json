@@ -81,6 +81,7 @@
   "src/lib/focus.ts": ["collapse", "hidden"],
   "src/lib/labelInName.ts": ["hidden"],
   "src/lib/nativeProps.ts": ["hidden"],
+  "src/lib/scrollbar.ts": ["hidden"],
   "src/lib/slotParts.ts": ["collapse", "container", "grid", "group", "inline"],
   "src/lib/waveTokens.ts": ["border", "ring"]
 }

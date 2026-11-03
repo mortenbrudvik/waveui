@@ -46,6 +46,40 @@ export type { TokenStyle, WaveTokenName, WaveTokenOverrides, WaveTokens } from '
 export { waveTokens, chartPalette } from './lib/waveTokens';
 export { createBrandTokens } from './lib/brand';
 export type { BrandRamp, BrandStop, BrandTokens } from './lib/brand';
+export {
+  DismissIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  SortArrowUpIcon,
+  SortArrowDownIcon,
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon,
+  CalendarIcon,
+  ClockIcon,
+  CheckIcon,
+  SubtractIcon,
+  SearchIcon,
+  InfoIcon,
+  SuccessIcon,
+  WarningIcon,
+  ErrorIcon,
+  StarIcon,
+  AddIcon,
+  PersonIcon,
+  NavigationIcon,
+  PresenceAvailableIcon,
+  PresenceBusyIcon,
+  PresenceAwayIcon,
+  PresenceOfflineIcon,
+  PresenceDndIcon,
+  PresenceOofIcon,
+  PresenceBlockedIcon,
+  PresenceUnknownIcon,
+} from './lib/icons';
+export type { IconProps, IconComponent } from './lib/icons';
+export { flipIconInRtl } from './lib/flipIcon';
 
 // Hooks
 export { useControllable } from './hooks/useControllable';
@@ -77,6 +111,18 @@ export type {
   UsePresenceOptions,
   UsePresenceResult,
 } from './hooks/usePresence';
+export { useTimeout } from './hooks/useTimeout';
+export { useAnimationFrame } from './hooks/useAnimationFrame';
+export { useScrollbarWidth, useApplyScrollbarWidth } from './hooks/useScrollbarWidth';
+export type {
+  UseScrollbarWidthOptions,
+  UseApplyScrollbarWidthOptions,
+} from './hooks/useScrollbarWidth';
+export { useObservedElement } from './hooks/useObservedElement';
+export type { ObservedElementProps } from './hooks/useObservedElement';
+export { useFocusObserved } from './hooks/useFocusObserved';
+export type { UseFocusObservedOptions } from './hooks/useFocusObserved';
+export type { ObservedElementRequest } from './lib/observedElements';
 export { useSelection } from './hooks/useSelection';
 export type {
   UseSelectionChangeDetails,

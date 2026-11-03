@@ -21,6 +21,8 @@ type GlobalStore = Record<symbol, unknown>;
  * - `'orderedSurfaces'` — the open surfaces whose keyboard order `usePopoverTabOrder` manages
  *   (`Popover.shared.tsx`);
  * - `'toasterHandles'` — the state of every `createToaster()` handle (`toaster.ts`);
+ * - `'observedElements'` — the elements by observed name and the focus requests waiting for
+ *   one (`observedElements.ts`);
  * - `'warnings'` and `'missing-context'` — the warn-once keys and the logged missing-context
  *   texts (`dev.ts`).
  *

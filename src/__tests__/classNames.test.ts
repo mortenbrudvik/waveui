@@ -7,6 +7,7 @@
  */
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
+import * as glyphs from '../lib/icons';
 import { cn, createWcn, wcn } from '../lib/cn';
 import { getStableClassNames } from '../test-utils';
 
@@ -198,11 +199,18 @@ function displayNameOf(value: object): string {
   return '';
 }
 
+/**
+ * The built-in glyphs the entry exports since 1.1 (`DismissIcon`, ...): an `<svg>` each, identified
+ * by its stable `data-wave-icon` attribute, not by a class (adding one would change the markup of
+ * every component that draws a glyph). They are not components in the sense of the registry.
+ */
+const GLYPH_ICONS: ReadonlySet<string> = new Set(Object.keys(glyphs));
+
 /** The entry's public components and their compound members, by flat name (`CardHeader`). */
 function publicComponents(): Map<string, object> {
   const found = new Map<string, object>();
   for (const [name, value] of Object.entries(entry)) {
-    if (!/^[A-Z]/.test(name) || !isComponentLike(value)) continue;
+    if (!/^[A-Z]/.test(name) || !isComponentLike(value) || GLYPH_ICONS.has(name)) continue;
     found.set(name, value);
     for (const key of Object.keys(value)) {
       const member: unknown = Reflect.get(value, key);
