@@ -119,3 +119,27 @@ export const Sizes: Story = {
     </div>
   ),
 };
+
+/** `shape` rounds the outer corners of both halves; the joint between them stays square. */
+export const Shapes: Story = {
+  argTypes: {
+    shape: { control: false },
+  },
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      <SplitButton {...args} shape="rounded" aria-label="Rounded save options" />
+      <SplitButton {...args} shape="circular" aria-label="Circular save options" />
+      <SplitButton {...args} shape="square" aria-label="Square save options" />
+    </div>
+  ),
+};
+
+/**
+ * `menuButtonLabel={null}` leaves out "More options": the menu half is named by the primary action
+ * (`aria-labelledby` points at it), as Fluent names it.
+ */
+export const NamedByPrimaryAction: Story = {
+  args: {
+    menuButtonLabel: null,
+  },
+};
