@@ -4,7 +4,12 @@ import { menuItemClassNames, menuItemLinkClassNames } from '../../lib/classNames
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { SlotPart } from '../../lib/slotProps';
 import type { Slot } from '../../lib/types';
-import { MenuItemRow, useMenuItemActivation, useMenuItemPlacementWarning } from './Menu.items';
+import {
+  MenuItemRow,
+  getMenuItemDisabledProps,
+  useMenuItemActivation,
+  useMenuItemPlacementWarning,
+} from './Menu.items';
 import { menuItemClasses } from './Menu.shared';
 
 /** The MenuItemLink's own props (the XOwnProps rule: component-specific props only). */
@@ -13,6 +18,10 @@ export interface MenuItemLinkOwnProps {
   icon?: Slot<'span'>;
   /** Keyboard shortcut text at the end of the item; the rules of `Menu.Item.shortcut`. */
   shortcut?: string;
+  /** Content at the end of the item instead of `shortcut`; the rules of `Menu.Item.secondaryContent`. */
+  secondaryContent?: React.ReactNode;
+  /** A second line under the label, the item's description; the rules of `Menu.Item.subText`. */
+  subText?: React.ReactNode;
   /**
    * Unavailable: `aria-disabled`, skipped by the arrow keys, never activated, and its click is
    * cancelled (`preventDefault()`, which router links respect). On the default `'a'` the `href`
@@ -22,6 +31,13 @@ export interface MenuItemLinkOwnProps {
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Unavailable but reachable by the keyboard: as `disabled` (`aria-disabled`, no `href` on the
+   * default `'a'`, never activated, the click cancelled) and marked `data-disabled-focusable`, so
+   * the arrow keys and typeahead keep visiting it; see `Menu.Item.disabledFocusable`.
+   * @default false
+   */
+  disabledFocusable?: boolean;
   /** Label of the link. */
   children: React.ReactNode;
   /**
@@ -57,6 +73,12 @@ export interface MenuItemLinkOwnProps {
      * tab index, and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `subText`, under the label, rendered while `subText` renders content (stable
+     * classes `wave-menu-item__sub-text` and `wave-menu-item-link__sub-text`). Locked: no role, tab index or roving container
+     * marker, and the menu's markers.
+     */
+    subText?: SlotPart<'span'>;
   };
 }
 
@@ -98,7 +120,10 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
     as,
     icon,
     shortcut,
+    secondaryContent,
+    subText,
     disabled = false,
+    disabledFocusable = false,
     children,
     className,
     onClick,
@@ -112,8 +137,13 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
 
   // Enter is the browser's (a link keeps Shift, Ctrl and Meta for a new window or tab); Space
   // clicks it. Every activation closes the popup menu: a navigation ends the menu's job.
-  const activation = useMenuItemActivation({
+  const { unavailable, ...disabledProps } = getMenuItemDisabledProps(
     disabled,
+    disabledFocusable,
+    rest['aria-disabled'],
+  );
+  const activation = useMenuItemActivation({
+    disabled: unavailable,
     persistOnClick: false,
     onClick,
     onKeyDown,
@@ -125,7 +155,7 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
   const ownRovingText = (rest as Record<string, unknown>)['data-roving-text'] !== undefined;
   // A disabled element link cannot navigate at all (middle click, "open in new tab" included); a
   // router link keeps what its own props render, and its prevented click stops it.
-  const disabledHref = disabled && typeof Component === 'string' ? { href: undefined } : null;
+  const disabledHref = unavailable && typeof Component === 'string' ? { href: undefined } : null;
 
   return (
     <Component
@@ -134,8 +164,7 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
       {...rest}
       {...disabledHref}
       ref={ref}
-      aria-disabled={disabled ? true : rest['aria-disabled']}
-      data-disabled={disabled ? '' : undefined}
+      {...disabledProps}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
       className={wcn(
@@ -150,14 +179,17 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
         icon={icon}
         label={children}
         shortcut={shortcut}
+        secondaryContent={secondaryContent}
+        subText={subText}
         markLabel={!ownRovingText}
         partClassNames={{
           icon: wcn(menuItemClassNames.icon, menuItemLinkClassNames.icon),
           content: wcn(menuItemClassNames.content, menuItemLinkClassNames.content),
           shortcut: wcn(menuItemClassNames.shortcut, menuItemLinkClassNames.shortcut),
+          subText: wcn(menuItemClassNames.subText, menuItemLinkClassNames.subText),
         }}
         parts={slotProps}
-        disabled={disabled}
+        disabled={unavailable}
       />
     </Component>
   );

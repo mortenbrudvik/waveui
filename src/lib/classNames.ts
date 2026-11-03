@@ -1095,8 +1095,8 @@ export const menuClassNames = { root: 'wave-menu' } as const;
 
 /**
  * Menu.Item: `root` on the `role="menuitem"` element; `checkmark` on the check column; `icon` on
- * the icon span; `content` on the label span; `shortcut` on the shortcut span;
- * `submenuIndicator` on the chevron `<svg>` of a submenu trigger.
+ * the icon span; `content` on the label span; `shortcut` on the shortcut span (it also holds
+ * `secondaryContent`); `subText` on the secondary line under the label; `submenuIndicator` on the chevron `<svg>` of a submenu trigger.
  */
 export const menuItemClassNames = {
   root: 'wave-menu-item',
@@ -1104,6 +1104,7 @@ export const menuItemClassNames = {
   icon: 'wave-menu-item__icon',
   content: 'wave-menu-item__content',
   shortcut: 'wave-menu-item__shortcut',
+  subText: 'wave-menu-item__sub-text',
   submenuIndicator: 'wave-menu-item__submenu-indicator',
 } as const;
 
@@ -1118,6 +1119,7 @@ export const menuItemCheckboxClassNames = {
   icon: 'wave-menu-item-checkbox__icon',
   content: 'wave-menu-item-checkbox__content',
   shortcut: 'wave-menu-item-checkbox__shortcut',
+  subText: 'wave-menu-item-checkbox__sub-text',
 } as const;
 
 /**
@@ -1130,6 +1132,7 @@ export const menuItemRadioClassNames = {
   icon: 'wave-menu-item-radio__icon',
   content: 'wave-menu-item-radio__content',
   shortcut: 'wave-menu-item-radio__shortcut',
+  subText: 'wave-menu-item-radio__sub-text',
 } as const;
 
 /**
@@ -1142,6 +1145,7 @@ export const menuItemSwitchClassNames = {
   icon: 'wave-menu-item-switch__icon',
   content: 'wave-menu-item-switch__content',
   shortcut: 'wave-menu-item-switch__shortcut',
+  subText: 'wave-menu-item-switch__sub-text',
   track: 'wave-menu-item-switch__track',
   thumb: 'wave-menu-item-switch__thumb',
 } as const;
@@ -1155,6 +1159,7 @@ export const menuItemLinkClassNames = {
   icon: 'wave-menu-item-link__icon',
   content: 'wave-menu-item-link__content',
   shortcut: 'wave-menu-item-link__shortcut',
+  subText: 'wave-menu-item-link__sub-text',
 } as const;
 
 /** Menu.Divider: `root` on the `role="separator"` element. */

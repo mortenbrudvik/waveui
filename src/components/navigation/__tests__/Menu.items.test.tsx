@@ -1324,7 +1324,7 @@ describe('Menu.Item — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof ItemSlotProps>().toEqualTypeOf<
-      'content' | 'shortcut' | 'submenuIndicator'
+      'content' | 'shortcut' | 'subText' | 'submenuIndicator'
     >();
     expectTypeOf<NonNullable<ItemSlotProps['content']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLSpanElement> | undefined

@@ -92,7 +92,10 @@ export const MenuSplitGroup = ({
     const action = items[0];
     const half = items[items.length - 1];
     const [from, to] = intent === 'next' ? [action, half] : [half, action];
-    if (event.target !== from || to.getAttribute('aria-disabled') === 'true') return;
+    // A disabled half the arrow keys skip stays where it is; a `disabledFocusable` one is reachable.
+    const skipped =
+      to.getAttribute('aria-disabled') === 'true' && !to.hasAttribute('data-disabled-focusable');
+    if (event.target !== from || skipped) return;
     event.preventDefault();
     to.focus();
   };
