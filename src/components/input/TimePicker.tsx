@@ -41,11 +41,13 @@ import {
 } from '../../hooks/useListbox';
 import type { ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import { PickerClearButton } from './PickerClearButton';
+import { renderListboxWindow, useShownListScroll } from './Option.data';
 import {
   DEFAULT_TIME_STEP,
   generateTimeOptions,
@@ -279,6 +281,19 @@ export interface TimePickerProps extends Omit<
    * become the glyph, with a development warning).
    */
   expandIcon?: Slot<'span'>;
+  /**
+   * Renders only the options in view of a long list of times (a step of one minute makes 1,440),
+   * plus an overscan, and spacers (`aria-hidden`, `data-virtual-spacer`) as tall as the options
+   * they stand for: pass the result of `useVirtualWindow({ itemSize })`, or an object of your own
+   * that implements `VirtualWindow`. The open list is the window's scroller (it scrolls within its
+   * own maximum height, 15rem), has no block padding while windowed, and no scroll anchoring of
+   * the browser; every option is exactly `itemSize` tall (the default option with one line of
+   * text is 32 pixels tall). The window counts the listed options: typing
+   * narrows it, as it narrows `aria-setsize`. The keys move over all of them, the active option
+   * stays rendered while it is scrolled away, and opening the list scrolls the active option, else
+   * the selected one, to the middle. A closed list renders no option. The server renders no list.
+   */
+  virtualWindow?: VirtualWindow;
   /**
    * Controlled open state of the list (never shown while `disabled` or `readOnly`). The list
    * renders only in the browser: an open picker is closed in the server HTML and opens once it has
@@ -522,6 +537,7 @@ export const TimePicker = (props: TimePickerProps) => {
     readOnly,
     clearable = false,
     expandIcon,
+    virtualWindow,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -760,6 +776,11 @@ export const TimePicker = (props: TimePickerProps) => {
     onSelect: (next) => commitValue(next),
     items: allOptions,
     filter,
+    // An active option that the window does not render: scrolled to by its index among the shown
+    // options, the window's count.
+    onScrollToItem: virtualWindow
+      ? (index) => virtualWindow.scrollToIndex(index, { align: 'auto' })
+      : undefined,
     // Typing sets the active option itself (getTypedActiveValue in handleInputChange), so an exact
     // typed time wins over an earlier substring match; highlightOnFilter would force the first one.
     autoHighlight: draft === null && selectedInList ? 'selected' : false,
@@ -774,6 +795,30 @@ export const TimePicker = (props: TimePickerProps) => {
           }
         : undefined,
   });
+
+  // The window scrolls the shown list only (the closed list in place is another, hidden element).
+  const listScrollRef = useMergedRefs<HTMLUListElement>(
+    expanded ? virtualWindow?.scrollRef : undefined,
+  );
+  useShownListScroll(
+    expanded,
+    virtualWindow,
+    lb.items,
+    lb.activeValue,
+    selectedValue ? [selectedValue] : [],
+  );
+  const selectedSet = React.useMemo(() => new Set(selectedValues), [selectedValues]);
+  const renderWindowOption = React.useCallback(
+    (item: ListboxItem) => (
+      <TimePickerOption
+        value={item.value}
+        label={item.label}
+        part={slotProps?.option}
+        checkIconPart={slotProps?.checkIcon}
+      />
+    ),
+    [slotProps?.option, slotProps?.checkIcon],
+  );
 
   const displayLabel = selectedValue
     ? (lb.getItem(selectedValue)?.label ?? displayTime(selectedValue, format))
@@ -949,8 +994,12 @@ export const TimePicker = (props: TimePickerProps) => {
       {...mergeSlotProps(slotProps?.listbox, {
         className: wcn(
           timePickerClassNames.listbox,
-          'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden',
+          'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:focus:outline-hidden',
+          // A window counts the options from the top of the list: no block padding, and the
+          // browser's scroll anchoring only fights the window.
+          virtualWindow ? 'wave:[overflow-anchor:none]' : 'wave:py-1',
         ),
+        ref: virtualWindow ? listScrollRef : undefined,
         locked: {
           inert: undefined,
           'aria-hidden': undefined,
@@ -964,15 +1013,28 @@ export const TimePicker = (props: TimePickerProps) => {
         },
       })}
     >
-      {lb.items.map((item) => (
-        <TimePickerOption
-          key={item.value}
-          value={item.value}
-          label={item.label}
-          part={slotProps?.option}
-          checkIconPart={slotProps?.checkIcon}
-        />
-      ))}
+      {virtualWindow
+        ? // The options of the window while the list shows; the closed list needs none.
+          !hidden &&
+          renderListboxWindow(
+            lb.items,
+            virtualWindow,
+            {
+              selected: selectedSet,
+              activeValue: lb.activeValue,
+              renderOption: renderWindowOption,
+            },
+            timePickerClassNames.spacer,
+          )
+        : lb.items.map((item) => (
+            <TimePickerOption
+              key={item.value}
+              value={item.value}
+              label={item.label}
+              part={slotProps?.option}
+              checkIconPart={slotProps?.checkIcon}
+            />
+          ))}
     </ul>
   );
 

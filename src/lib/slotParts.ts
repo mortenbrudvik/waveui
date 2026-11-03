@@ -397,6 +397,18 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
       'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
   },
   {
+    component: 'timePickerClassNames',
+    key: 'spacer',
+    reason:
+      'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
+  },
+  {
+    component: 'tagPickerClassNames',
+    key: 'spacer',
+    reason:
+      'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
+  },
+  {
     component: 'tagPickerClassNames',
     key: 'input',
     reason: 'the root of TagPicker.Input, which takes its props directly in the parts form (R3)',

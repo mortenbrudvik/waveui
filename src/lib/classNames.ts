@@ -602,7 +602,9 @@ export const dropdownClassNames = {
  * `expandIcon` on its glyph; `clearButton` on the clear button; `listbox` on the `role="listbox"`
  * list; `option` on each Option it renders (which also carries Option's classes); `createOption`
  * on the create option of `allowCreate`; `overflowCount` on the "+N" count of the single-line
- * layout; `surface` on the portaled popup; `emptyMessage` on the "No matches" row.
+ * layout; `surface` on the portaled popup; `emptyMessage` on the "No matches" row; `spacer` on
+ * each spacer element of the list with a `virtualWindow` (the elements that stand in for the
+ * options that are not rendered).
  */
 export const tagPickerClassNames = {
   root: 'wave-tag-picker',
@@ -618,6 +620,7 @@ export const tagPickerClassNames = {
   overflowCount: 'wave-tag-picker__overflow-count',
   surface: 'wave-tag-picker__surface',
   emptyMessage: 'wave-tag-picker__empty-message',
+  spacer: 'wave-tag-picker__spacer',
 } as const;
 
 /**
@@ -658,7 +661,8 @@ export const tagPickerOptionClassNames = {
  * on the clear button; `expandButton` on the expand button and `expandIcon` on its glyph;
  * `errorMessage` on the `role="alert"` message; `listbox` on the `role="listbox"` list; `option`
  * on each option; `checkIcon` on each option's check column; `surface` on the portaled popup;
- * `emptyMessage` on its status row.
+ * `emptyMessage` on its status row; `spacer` on each spacer element of the list with a
+ * `virtualWindow` (the elements that stand in for the options that are not rendered).
  */
 export const timePickerClassNames = {
   root: 'wave-time-picker',
@@ -672,6 +676,7 @@ export const timePickerClassNames = {
   checkIcon: 'wave-time-picker__check-icon',
   surface: 'wave-time-picker__surface',
   emptyMessage: 'wave-time-picker__empty-message',
+  spacer: 'wave-time-picker__spacer',
 } as const;
 
 /**
