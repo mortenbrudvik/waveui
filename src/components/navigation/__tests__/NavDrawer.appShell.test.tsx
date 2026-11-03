@@ -100,7 +100,7 @@ describe('NavDrawer App shell story', () => {
       await user.click(item('Reports'));
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(outer()).toHaveFocus();
-      expect(onValueChange.mock.calls).toEqual([['reports']]);
+      expect(onValueChange.mock.calls.map(([first]) => [first])).toEqual([['reports']]);
       expect(screen.getByRole('heading', { name: 'Reports' })).toBeInTheDocument();
 
       await user.click(outer());
@@ -108,7 +108,7 @@ describe('NavDrawer App shell story', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(outer()).toHaveFocus();
       expect(onValueChange).toHaveBeenCalledTimes(1);
-      expect(onItemSelect.mock.calls).toEqual([['reports'], ['reports']]);
+      expect(onItemSelect.mock.calls.map(([first]) => [first])).toEqual([['reports'], ['reports']]);
     });
   });
 

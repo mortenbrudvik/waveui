@@ -397,16 +397,16 @@ describe('NavDrawer', () => {
         </React.StrictMode>,
       );
       await user.click(button('Reports'));
-      expect(onValueChange.mock.calls).toEqual([['reports']]);
-      expect(onItemSelect.mock.calls).toEqual([['reports']]);
+      expect(onValueChange.mock.calls.map(([first]) => [first])).toEqual([['reports']]);
+      expect(onItemSelect.mock.calls.map(([first]) => [first])).toEqual([['reports']]);
       expect(button('Reports')).toHaveAttribute('aria-current', 'page');
       // The current item again: an activation, no change.
       await user.click(button('Reports'));
       expect(onValueChange).toHaveBeenCalledTimes(1);
-      expect(onItemSelect.mock.calls).toEqual([['reports'], ['reports']]);
+      expect(onItemSelect.mock.calls.map(([first]) => [first])).toEqual([['reports'], ['reports']]);
       // A footer item is a Nav item of the same drawer.
       await user.click(button('Help'));
-      expect(onValueChange.mock.calls).toEqual([['reports'], ['help']]);
+      expect(onValueChange.mock.calls.map(([first]) => [first])).toEqual([['reports'], ['help']]);
       expect(button('Reports')).not.toHaveAttribute('aria-current');
     });
 
@@ -463,7 +463,7 @@ describe('NavDrawer', () => {
         </NavDrawer>,
       );
       await user.click(button('Reports'));
-      expect(onValueChange).toHaveBeenCalledWith('reports');
+      expect(onValueChange).toHaveBeenCalledWith('reports', expect.anything());
       expect(button('Home')).toHaveAttribute('aria-current', 'page');
       rerender(
         <NavDrawer type="inline" defaultOpen value="reports" onValueChange={onValueChange}>
@@ -519,7 +519,7 @@ describe('NavDrawer', () => {
         </React.StrictMode>,
       );
       await user.click(button('Settings'));
-      expect(onOpenCategoriesChange.mock.calls).toEqual([[['settings']]]);
+      expect(onOpenCategoriesChange.mock.calls.map(([first]) => [first])).toEqual([[['settings']]]);
       expect(button('Profile')).toBeInTheDocument();
       unmount();
       const controlled = vi.fn();
@@ -534,7 +534,7 @@ describe('NavDrawer', () => {
         </NavDrawer>,
       );
       await user.click(button('Settings'));
-      expect(controlled).toHaveBeenCalledWith([]);
+      expect(controlled).toHaveBeenCalledWith([], expect.anything());
       expect(button('Settings')).toHaveAttribute('aria-expanded', 'true');
     });
 
@@ -1395,7 +1395,8 @@ describe('NavDrawer, NavDrawer.Body and NavDrawer.Footer — slotProps', () => {
     );
   /** The opening tags of the three parts at 234b990, named by the default label. */
   const PARTS_0_17 = [
-    '<nav aria-label="Navigation" class="wave-nav-drawer__nav wave:flex wave:min-h-0 wave:flex-1 wave:flex-col">',
+    // 1.1: the `<nav>` also renders its enumerated `data-density` (the only change since 234b990).
+    '<nav aria-label="Navigation" class="wave-nav-drawer__nav wave:flex wave:min-h-0 wave:flex-1 wave:flex-col" data-density="medium">',
     '<ul class="wave-nav-drawer-body__list wave:m-0 wave:list-none wave:p-0">',
     '<ul class="wave-nav-drawer-footer__list wave:m-0 wave:list-none wave:p-0">',
   ].join('\n');
@@ -1664,7 +1665,7 @@ describe('NavDrawer, NavDrawer.Body and NavDrawer.Footer — slotProps', () => {
     expect(onListClick).toHaveBeenCalledTimes(1);
     expect(onNavClick).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledTimes(1);
-    expect(onValueChange).toHaveBeenCalledWith('reports');
+    expect(onValueChange).toHaveBeenCalledWith('reports', expect.anything());
   });
 
   it('keeps the arrow order of an arrow-key body: its list is neither an entry nor a nested composite', async () => {

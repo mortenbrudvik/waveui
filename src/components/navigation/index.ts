@@ -58,6 +58,9 @@ export {
 } from './Nav';
 export type {
   NavProps,
+  NavDensity,
+  NavSelectDetails,
+  NavCategoryToggleDetails,
   NavCategoryProps,
   NavItemProps,
   NavItemOwnProps,

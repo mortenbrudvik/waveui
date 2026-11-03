@@ -239,7 +239,7 @@ describe('keyboard and pointer', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reports' }));
     expect(onValueChange).toHaveBeenCalledTimes(1);
-    expect(onValueChange).toHaveBeenCalledWith('reports');
+    expect(onValueChange).toHaveBeenCalledWith('reports', expect.anything());
   });
 
   it('keeps the actions of a disabled item enabled', async () => {

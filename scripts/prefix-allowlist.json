@@ -46,7 +46,7 @@
   "src/components/navigation/Menu.group.tsx": ["group"],
   "src/components/navigation/Menu.hooks.ts": ["static"],
   "src/components/navigation/Menu.items.tsx": ["static"],
-  "src/components/navigation/Menu.popover.tsx": ["hidden"],
+  "src/components/navigation/Menu.popover.tsx": ["absolute", "hidden"],
   "src/components/navigation/Menu.root.tsx": ["static"],
   "src/components/navigation/Menu.shared.ts": ["static"],
   "src/components/navigation/Menu.splitGroup.tsx": ["group"],
