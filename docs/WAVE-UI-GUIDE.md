@@ -711,12 +711,39 @@ Registered in the `@theme inline` block of `src/styles/tokens.css` for your clas
 
 ### Fluent System Icons (External Dependency)
 
-> Icons are **not bundled** for your use: Wave's own glyphs are internal. The recommended icon package is `@fluentui/react-icons` (from Microsoft's Fluent UI ecosystem), installed separately.
+> Wave bundles only the glyphs its own components draw (listed below). For a library of icons, the recommended package is `@fluentui/react-icons` (from Microsoft's Fluent UI ecosystem), installed separately.
 
 - **Package**: `@fluentui/react-icons` (optional, install separately)
 - **Catalog**: 4000+ icons
 - **Two styles**: Regular (outlined) and Filled (solid)
 - **Sizes**: 16px, 20px, 24px (default), 28px, 48px
+
+### Wave's Own Glyphs
+
+The glyphs Wave's components draw are exported, so an app can draw the same ones (a custom picker's calendar button, a status line that matches MessageBar). Each is an `<svg>` function component that paints with `currentColor`, takes every SVG attribute plus `size` (a number of pixels or a CSS length) and `title`, is hidden from assistive technology unless you pass a `title` (then it is a named `role="img"`), and carries a stable `data-wave-icon` attribute. A bundler keeps only the glyphs you import.
+
+| Group | Exports (`data-wave-icon`) |
+|---|---|
+| Actions | `DismissIcon` (`dismiss`), `AddIcon` (`add`), `SubtractIcon` (`subtract`), `CheckIcon` (`check`), `SearchIcon` (`search`), `NavigationIcon` (`navigation`, 20px) |
+| Chevrons and arrows | `ChevronDownIcon`, `ChevronUpIcon`, `ChevronLeftIcon`, `ChevronRightIcon`, `ChevronDoubleLeftIcon`, `ChevronDoubleRightIcon` (12px; `chevron-down`, …), `SortArrowUpIcon`, `SortArrowDownIcon` (`sort-arrow-up`, `sort-arrow-down`) |
+| Objects | `CalendarIcon`, `ClockIcon`, `StarIcon`, `PersonIcon` |
+| Status | `InfoIcon`, `SuccessIcon`, `WarningIcon`, `ErrorIcon` |
+| Presence | `PresenceAvailableIcon`, `PresenceBusyIcon`, `PresenceAwayIcon`, `PresenceOfflineIcon`, `PresenceDndIcon`, `PresenceOofIcon`, `PresenceBlockedIcon`, `PresenceUnknownIcon` (a 16px box that a badge's circle fills; pass `className="size-full"`) |
+
+The export names and the `data-wave-icon` values are part of the public API: a 1.x minor adds glyphs and never removes or renames one. `IconProps` and `IconComponent` are the types.
+
+**Mirroring in right-to-left layouts.** The chevrons, the double chevrons and `PresenceOofIcon` point along a physical direction, so mirror them where they mean "forward" or "back": `<ChevronRightIcon flipInRtl />` adds Wave's `wave-rtl` flip (the one the components use), which follows the element's own `dir`. Fluent's icon package marks directional icons when it creates them (`flipInRtl`); an icon of another library cannot be known to be directional, so say so: `flipIconInRtl(icon)` returns the element with the same flip class added to its `className`, for any element that takes one:
+
+```tsx
+import { Button, flipIconInRtl } from '@mortenbrudvik/waveui';
+import { ArrowRight20Regular } from '@fluentui/react-icons';
+
+<Button icon={flipIconInRtl(<ArrowRight20Regular />)} iconPosition="after">
+  Next
+</Button>;
+```
+
+The flip class comes with `./styles` and `./tailwind`; with `./utilities` alone, mirror with your own rule. Leave a glyph that has no direction (a check mark, a magnifier, a clock) as it is.
 
 ### Icon Usage Guidelines
 
@@ -2934,7 +2961,7 @@ export function watchTheme(canvas: HTMLCanvasElement, redraw: () => void): () =>
 - **An image with a name and a description.** Wrap the chart in an element with `role="img"`, an `aria-label` that says what it shows, and `aria-describedby` pointing at visible text with the takeaway (the stories: "North sells the most in every quarter; Online grows the fastest").
 - **A data table.** Give the data as a native `<table>` with a caption and row and column headers, in the accessibility tree at all times: visually hidden (`sr-only`) behind a "Show the data table" Switch, as in the stories, or always shown. It is the keyboard and screen-reader route to the values, which is why the library's own keyboard layer stays off. The stories use a plain `<table>`: a horizontally scrolling WaveUI `Table` makes its wrapper a focusable region, an invisible Tab stop inside a visually hidden box.
 - **Never color alone.** Every series has its second encoding (above), in the legend too.
-- **Direction.** The stories do not mirror their charts for right-to-left pages; in a right-to-left layout reverse the category axis and the legend through the library's own options.
+- **Direction.** A chart library draws its own axes and legend, and a canvas ignores the page's `dir`, so mirror them through the library's options when `WaveProvider dir="rtl"` (read it with `useWaveTheme().dir`): reverse the category axis and put the value axis on the right. The stories do (use the direction toolbar): Recharts `<XAxis reversed />` and `<YAxis orientation="right" />` (its legend and tooltip are HTML and follow `dir`), Chart.js `scales.x.reverse`, `scales.y.position: 'right'` and `rtl` plus `textDirection` on `plugins.legend` and `plugins.tooltip`.
 
 ### Fluent's Chart Packages
 
