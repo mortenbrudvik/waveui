@@ -43,10 +43,17 @@ export interface ContextMenuAnchor {
    * Kept through its close; an open without a gesture (a controlled open) forgets it.
    */
   opener: React.RefObject<HTMLElement | null>;
-  /** Compose onto the trigger. */
+  /**
+   * Compose onto the trigger. The pointer handlers time a long press of a touch or pen pointer,
+   * for browsers that fire no `contextmenu` for it (iOS Safari); they must be composed too.
+   */
   triggerHandlers: {
     onContextMenu: React.MouseEventHandler<HTMLElement>;
     onKeyDown: React.KeyboardEventHandler<HTMLElement>;
+    onPointerDown: React.PointerEventHandler<HTMLElement>;
+    onPointerMove: React.PointerEventHandler<HTMLElement>;
+    onPointerUp: React.PointerEventHandler<HTMLElement>;
+    onPointerCancel: React.PointerEventHandler<HTMLElement>;
   };
   /**
    * Compose onto the surface: while `enabled`, the browser's context menu never opens over it.
@@ -58,6 +65,28 @@ export interface ContextMenuAnchor {
 
 /** Pixels a gesture's reference element may move before an outside scroll closes the surface. */
 const SCROLL_TOLERANCE = 2;
+
+/**
+ * Milliseconds a touch or pen press is held before it is a long press of the hook's own. Longer
+ * than the roughly 500 ms after which the browsers that fire `contextmenu` for a long press fire
+ * it, so their event arrives first and cancels this timer: only a browser that fires none (iOS
+ * Safari) reaches it.
+ */
+const LONG_PRESS_MS = 600;
+
+/** Pixels a long press may drift before it is a drag or a scroll instead. */
+const LONG_PRESS_SLOP = 10;
+
+/** Milliseconds after a long press of the hook's own in which a `contextmenu` event is its echo. */
+const LONG_PRESS_ECHO_MS = 1000;
+
+/** A touch or pen press that waits to become a long press. */
+interface LongPress {
+  timer: ReturnType<typeof setTimeout>;
+  pointerId: number;
+  x: number;
+  y: number;
+}
 
 /** Whether a keydown is the keyboard context gesture: Shift+F10 or the ContextMenu key. */
 function isContextKey(event: React.KeyboardEvent): boolean {
@@ -129,7 +158,14 @@ interface Gesture {
  *    keyboard anchor, else the trigger. A scroll that moves none of them (a scroll in an unrelated
  *    panel) is ignored; inertial scrolling of the region's content that is still running at the
  *    right click moves the row, so it closes the surface.
- * 6. `anchor` and `origin` are replaced at the next gesture, not reset on close. `fromContext` is
+ * 6. **Long press.** A touch or pen press on the trigger (a primary pointer, not on an editable
+ *    field or an `aria-disabled` element) that is held for 600 ms without moving more than 10 px
+ *    is a pointer gesture at its point, like a `contextmenu` event: browsers that report no
+ *    `contextmenu` for a long press (iOS Safari) get the gesture this way. A browser that does
+ *    report it fires its event around 500 ms, which cancels the timer, and a `contextmenu` right
+ *    after a long press of the hook's own is its echo: prevented and ignored, so the surface opens
+ *    once. A release, a cancel (a scroll), a move or a disabled hook cancels the timer.
+ * 7. `anchor` and `origin` are replaced at the next gesture, not reset on close. `fromContext` is
  *    decided when `open` becomes `true`: `true` when a gesture of the hook caused that open, else
  *    `false`; a gesture while open makes it `true` (the surface moves to the gesture). It keeps its
  *    value while the surface is closed or exiting. `opener` is kept through the close too, and
@@ -228,9 +264,26 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
     [],
   );
 
+  const longPressRef = useRef<LongPress | null>(null);
+  const longPressFiredAtRef = useRef(Number.NEGATIVE_INFINITY);
+  const cancelLongPress = useCallback(() => {
+    if (longPressRef.current) clearTimeout(longPressRef.current.timer);
+    longPressRef.current = null;
+  }, []);
+  useEffect(() => {
+    if (!enabled) cancelLongPress();
+  }, [enabled, cancelLongPress]);
+  useEffect(() => cancelLongPress, [cancelLongPress]);
+
   const onTriggerContextMenu = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
       if (!enabled || event.defaultPrevented || !isOwnEvent(event)) return;
+      // The browser's own report of the long press: it comes first, or it echoes ours.
+      cancelLongPress();
+      if (Date.now() - longPressFiredAtRef.current < LONG_PRESS_ECHO_MS) {
+        event.preventDefault();
+        return;
+      }
       if (isDisabledTrigger(event) || isEditableTarget(event.target)) return;
       event.preventDefault();
       // The browser's contextmenu for the key press: the surface stays at its keyboard anchor.
@@ -248,7 +301,52 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
       );
       requestOpen('pointer', event.nativeEvent);
     },
-    [enabled, recordOpener, startGesture, requestOpen],
+    [enabled, recordOpener, startGesture, requestOpen, cancelLongPress],
+  );
+
+  const onTriggerPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      cancelLongPress();
+      if (!enabled || (event.pointerType !== 'touch' && event.pointerType !== 'pen')) return;
+      if (!event.isPrimary || !isOwnEvent(event)) return;
+      if (isDisabledTrigger(event) || isEditableTarget(event.target)) return;
+      const region = event.currentTarget;
+      const target = event.target as Element;
+      const native = event.nativeEvent;
+      const { clientX: x, clientY: y, pointerId } = event;
+      const timer = setTimeout(() => {
+        longPressRef.current = null;
+        longPressFiredAtRef.current = Date.now();
+        recordOpener(region.ownerDocument);
+        startGesture(
+          pointAnchor(x, y, region),
+          'pointer',
+          [region],
+          target === region ? undefined : target,
+        );
+        requestOpen('pointer', native);
+      }, LONG_PRESS_MS);
+      longPressRef.current = { timer, pointerId, x, y };
+    },
+    [enabled, recordOpener, startGesture, requestOpen, cancelLongPress],
+  );
+
+  const onTriggerPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      const press = longPressRef.current;
+      if (!press || press.pointerId !== event.pointerId) return;
+      if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > LONG_PRESS_SLOP) {
+        cancelLongPress();
+      }
+    },
+    [cancelLongPress],
+  );
+
+  const onTriggerPointerEnd = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      if (longPressRef.current?.pointerId === event.pointerId) cancelLongPress();
+    },
+    [cancelLongPress],
   );
 
   const onTriggerKeyDown = useCallback(
@@ -322,8 +420,21 @@ export function useContextMenuAnchor(options: UseContextMenuAnchorOptions): Cont
   }, [enabled, open, fromContext, trigger, layerId, requestClose]);
 
   const triggerHandlers = useMemo(
-    () => ({ onContextMenu: onTriggerContextMenu, onKeyDown: onTriggerKeyDown }),
-    [onTriggerContextMenu, onTriggerKeyDown],
+    () => ({
+      onContextMenu: onTriggerContextMenu,
+      onKeyDown: onTriggerKeyDown,
+      onPointerDown: onTriggerPointerDown,
+      onPointerMove: onTriggerPointerMove,
+      onPointerUp: onTriggerPointerEnd,
+      onPointerCancel: onTriggerPointerEnd,
+    }),
+    [
+      onTriggerContextMenu,
+      onTriggerKeyDown,
+      onTriggerPointerDown,
+      onTriggerPointerMove,
+      onTriggerPointerEnd,
+    ],
   );
   const surfaceHandlers = useMemo(
     () => ({ onContextMenu: onSurfaceContextMenu }),

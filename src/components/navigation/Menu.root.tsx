@@ -144,7 +144,8 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
   closeDelay?: number;
   /**
    * Make `Menu.Trigger` a context-menu region: a right click (a Ctrl+click on macOS, a long press
-   * where the browser reports one) opens the menu at the pointer, and Shift+F10 or the
+   * of a touch or pen pointer: 600 ms without moving, also in browsers that report no
+   * `contextmenu` for it, such as iOS Safari) opens the menu at the pointer, and Shift+F10 or the
    * ContextMenu key opens it at the focused element inside the region, instead of a click; a
    * second gesture while it is open moves it there. Focus returns to the element that had it.
    * The browser's context menu is suppressed there and inside the menu, except in text fields
@@ -152,7 +153,7 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
    * moves the region or the row of the gesture (the one under the pointer, or the focused one)
    * closes it. The trigger gets no `aria-haspopup`/`aria-expanded` (it is not a menu button; with
    * a render-prop child, do not spread them): name the menu with `aria-label` on `Menu.Popover`,
-   * and consider `aria-keyshortcuts="Shift+F10"` on the region. iOS Safari reports no long press.
+   * and consider `aria-keyshortcuts="Shift+F10"` on the region.
    * Ignored on a submenu; `openOnHover` is ignored with it.
    * @default false
    */

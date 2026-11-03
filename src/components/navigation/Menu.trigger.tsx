@@ -48,10 +48,29 @@ export type MenuTriggerProps = {
    * after each commit.
    */
   onContextMenu?: React.MouseEventHandler<HTMLElement>;
+  /**
+   * Context menus: a touch or pen press held for 600 ms (a long press), for browsers that report
+   * no `contextmenu` for it (iOS Safari); `onPointerMove` times it too.
+   */
+  onPointerDown?: React.PointerEventHandler<HTMLElement>;
+  /** Context menus: the end of a press (a release), which cancels a long press. */
+  onPointerUp?: React.PointerEventHandler<HTMLElement>;
+  /** Context menus: the cancel of a press (a scroll), which cancels a long press. */
+  onPointerCancel?: React.PointerEventHandler<HTMLElement>;
 };
 
 /** What a context-menu region's cloned child or wrapper span receives of the trigger's own props. */
-type ContextTriggerProps = Pick<MenuTriggerProps, 'id' | 'ref' | 'onKeyDown' | 'onContextMenu'>;
+type ContextTriggerProps = Pick<
+  MenuTriggerProps,
+  | 'id'
+  | 'ref'
+  | 'onKeyDown'
+  | 'onContextMenu'
+  | 'onPointerDown'
+  | 'onPointerMove'
+  | 'onPointerUp'
+  | 'onPointerCancel'
+>;
 
 const noop = () => {};
 
