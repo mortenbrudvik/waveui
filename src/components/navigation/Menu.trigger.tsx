@@ -162,14 +162,16 @@ export const MenuTrigger = ({ children, asChild, ref, ...rest }: MenuTriggerComp
     // A click on the trigger of a hover-opened menu pins it and focuses its first item, as on a
     // closed menu. A submenu trigger item never toggles its submenu closed: a click on an open one
     // focuses its first item again.
-    if (open && !isSubmenu && !isHoverOpen()) requestClose();
-    else openWithFocus('first');
+    const details = { reason: 'trigger-click', event: event.nativeEvent } as const;
+    if (open && !isSubmenu && !isHoverOpen()) requestClose(details);
+    else openWithFocus('first', details);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || isDisabledTrigger(event)) {
       return;
     }
+    const details = { reason: 'trigger-key', event: event.nativeEvent } as const;
     if (isSubmenu) {
       // "Next" (ArrowRight, ArrowLeft in RTL), Enter and Space open the submenu and focus its
       // first item. ArrowDown, ArrowUp and typeahead stay the parent list's.
@@ -180,25 +182,25 @@ export const MenuTrigger = ({ children, asChild, ref, ...rest }: MenuTriggerComp
       });
       if (intent === 'next' || event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        openWithFocus('first');
+        openWithFocus('first', details);
       }
       return;
     }
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        openWithFocus('first');
+        openWithFocus('first', details);
         break;
       case 'ArrowUp':
         event.preventDefault();
-        openWithFocus('last');
+        openWithFocus('last', details);
         break;
       case 'Enter':
       case ' ':
         // Handled here (not through the native click) so non-button children work too.
         event.preventDefault();
-        if (open && !isHoverOpen()) requestClose();
-        else openWithFocus('first');
+        if (open && !isHoverOpen()) requestClose(details);
+        else openWithFocus('first', details);
         break;
       default:
         break;

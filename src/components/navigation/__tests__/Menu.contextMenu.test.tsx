@@ -111,7 +111,7 @@ describe('Menu openOnContext', () => {
     );
     expect(fileMenu()).toBeInTheDocument();
     expect(item('Open')).toHaveFocus();
-    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
     await waitFor(() => expect(translateOf(fileMenu())).toEqual({ x: 100, y: 204 }));
     expect(fileMenu()).toHaveAttribute('data-side', 'bottom');
   });
@@ -160,18 +160,18 @@ describe('Menu openOnContext', () => {
       act(() => row('draft.md').focus());
       await act(async () => {});
       expect(fileMenu()).toBe(surface);
-      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
 
       fireEvent.contextMenu(row('draft.md'), point);
       expect(fileMenu()).toBe(surface);
       expect(item('Open')).toHaveFocus();
       await waitFor(() => expect(translateOf(fileMenu())).toEqual({ x: 150, y: 304 }));
-      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
       // Focus returns to the row of the second gesture.
       await user.keyboard('{Escape}');
       expect(queryFileMenu()).not.toBeInTheDocument();
       expect(row('draft.md')).toHaveFocus();
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     },
   );
 
@@ -360,7 +360,7 @@ describe('Menu openOnContext', () => {
       await user.click(row('notes.txt'));
       expect(queryFileMenu()).not.toBeInTheDocument();
       expect(row('notes.txt')).toHaveFocus();
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     });
 
     it('focus the app moves into the region closes it, also after a right click has ended', async () => {

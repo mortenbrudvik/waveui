@@ -26,6 +26,8 @@ export {
 } from './Menu';
 export type {
   MenuProps,
+  MenuOpenChangeDetails,
+  MenuOpenChangeReason,
   MenuItemProps,
   MenuDividerProps,
   MenuTriggerProps,

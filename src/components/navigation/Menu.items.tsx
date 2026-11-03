@@ -427,7 +427,7 @@ export function useMenuItemActivation({
     if (event.defaultPrevented || hasSubmenu) return;
     if (keepOpenOnSpace && clickFromSpaceRef.current) return;
     if (persistOnClick ?? list?.menu.persistOnItemClick ?? false) return;
-    list?.closeFromItem();
+    list?.closeFromItem(event.nativeEvent);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {

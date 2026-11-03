@@ -7,7 +7,7 @@ import { MenuItemCheckbox, MenuItemRadio, MenuItemSwitch } from './Menu.selectab
 import { MenuSplitGroup } from './Menu.splitGroup';
 import { MenuTrigger } from './Menu.trigger';
 
-export type { MenuProps } from './Menu.root';
+export type { MenuProps, MenuOpenChangeDetails, MenuOpenChangeReason } from './Menu.root';
 export type { MenuItemProps, MenuDividerProps } from './Menu.items';
 export type { MenuTriggerProps, MenuTriggerComponentProps } from './Menu.trigger';
 export type { MenuPopoverProps } from './Menu.popover';

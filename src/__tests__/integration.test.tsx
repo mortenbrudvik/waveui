@@ -3520,7 +3520,7 @@ describe('menus and commands across components', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       expect(button('File')).toHaveFocus();
       expect(button('File')).toHaveAttribute('aria-expanded', 'false');
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
 
       await openView(user);
       expect(checkedOf(checkbox('Gridlines'))).toBe('true');

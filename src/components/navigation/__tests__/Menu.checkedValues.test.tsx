@@ -249,6 +249,6 @@ describe('Menu persistOnItemClick', () => {
     await user.keyboard('{ArrowDown}{Enter}');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Actions' })).toHaveFocus();
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 });
