@@ -7,7 +7,12 @@ import { ProgressBar } from '../ProgressBar';
 import { Field } from '../../input/Field';
 import { Input } from '../../input/Input';
 import { createFieldControlIdClaim } from '../../../hooks/useFieldControl';
-import type { ProgressBarColor, ProgressBarProps } from '../ProgressBar';
+import type {
+  ProgressBarColor,
+  ProgressBarProps,
+  ProgressBarShape,
+  ProgressBarThickness,
+} from '../ProgressBar';
 import { progressBarClassNames } from '../../../lib/classNames';
 import { progressIndeterminateMotion } from '../../../lib/motion';
 import {
@@ -500,6 +505,86 @@ describe('ProgressBar', () => {
     it('types color as the four fill colors', () => {
       expectTypeOf<ProgressBarColor>().toEqualTypeOf<'brand' | 'success' | 'warning' | 'error'>();
       expectTypeOf<ProgressBarProps['color']>().toEqualTypeOf<ProgressBarColor | undefined>();
+    });
+  });
+
+  describe('thickness and shape', () => {
+    it('defaults to the 8px medium track with rounded corners and renders both as data attributes', () => {
+      render(<ProgressBar value={40} label="Upload" />);
+      const bar = screen.getByRole('progressbar', { name: 'Upload' });
+      expect(bar).toHaveAttribute('data-thickness', 'medium');
+      expect(bar).toHaveAttribute('data-shape', 'rounded');
+      expect(bar).toHaveClass('wave:h-2', 'wave:rounded-full');
+      expect(fillOf(bar)).toHaveClass('wave:rounded-full');
+    });
+
+    it('draws a large track 12px tall', () => {
+      render(<ProgressBar value={40} label="Upload" thickness="large" />);
+      const bar = screen.getByRole('progressbar', { name: 'Upload' });
+      expect(bar).toHaveAttribute('data-thickness', 'large');
+      expect(bar).toHaveClass('wave:h-3');
+      expect(bar).not.toHaveClass('wave:h-2');
+    });
+
+    it('squares the corners of the track and the fill, also while indeterminate', () => {
+      render(
+        <>
+          <ProgressBar value={40} label="Upload" shape="square" />
+          <ProgressBar label="Syncing" shape="square" />
+        </>,
+      );
+      for (const name of ['Upload', 'Syncing']) {
+        const bar = screen.getByRole('progressbar', { name });
+        expect(bar).toHaveAttribute('data-shape', 'square');
+        expect(bar).toHaveClass('wave:rounded-none');
+        expect(bar).not.toHaveClass('wave:rounded-full');
+        expect(fillOf(bar)).toHaveClass('wave:rounded-none');
+        expect(fillOf(bar)).not.toHaveClass('wave:rounded-full');
+      }
+    });
+
+    it('reads a value outside the unions (untyped code) as the default', () => {
+      render(
+        <ProgressBar
+          value={40}
+          label="Upload"
+          thickness={'huge' as ProgressBarThickness}
+          shape={'circular' as ProgressBarShape}
+        />,
+      );
+      const bar = screen.getByRole('progressbar', { name: 'Upload' });
+      expect(bar).toHaveAttribute('data-thickness', 'medium');
+      expect(bar).toHaveAttribute('data-shape', 'rounded');
+    });
+
+    it('lets a className of the consumer replace the height and the corners', () => {
+      render(
+        <ProgressBar
+          value={40}
+          label="Upload"
+          thickness="large"
+          shape="square"
+          className="h-1 rounded-sm"
+        />,
+      );
+      const bar = screen.getByRole('progressbar', { name: 'Upload' });
+      expect(bar).toHaveClass('h-1', 'rounded-sm');
+      expect(bar).not.toHaveClass('wave:h-3');
+      expect(bar).not.toHaveClass('wave:rounded-none');
+    });
+
+    it('has no accessibility violations (large and square)', async () => {
+      render(<ProgressBar value={40} label="Upload" thickness="large" shape="square" />);
+      await expectNoA11yViolations();
+    });
+
+    it('types thickness and shape', () => {
+      expectTypeOf<ProgressBarThickness>().toEqualTypeOf<'medium' | 'large'>();
+      expectTypeOf<ProgressBarShape>().toEqualTypeOf<'rounded' | 'square'>();
+      expectTypeOf<ProgressBarProps['thickness']>().toEqualTypeOf<
+        ProgressBarThickness | undefined
+      >();
+      expectTypeOf<ProgressBarProps['shape']>().toEqualTypeOf<ProgressBarShape | undefined>();
     });
   });
 

@@ -10,7 +10,12 @@ export { MessageBarGroup } from './MessageBarGroup';
 export type { MessageBarGroupProps } from './MessageBarGroup';
 
 export { ProgressBar } from './ProgressBar';
-export type { ProgressBarProps, ProgressBarColor } from './ProgressBar';
+export type {
+  ProgressBarProps,
+  ProgressBarColor,
+  ProgressBarThickness,
+  ProgressBarShape,
+} from './ProgressBar';
 
 export { Spinner, SpinnerContextProvider } from './Spinner';
 export type {

@@ -17,6 +17,8 @@ const meta = {
     value: { control: { type: 'range', min: 0, max: 100 } },
     max: { control: 'number' },
     color: { control: 'select', options: colors.map(([color]) => color) },
+    thickness: { control: 'inline-radio', options: ['medium', 'large'] },
+    shape: { control: 'inline-radio', options: ['rounded', 'square'] },
   },
   args: {
     label: 'Uploading files',
@@ -117,6 +119,25 @@ export const Motion: Story = {
       {motionCases(quarterSweep).map(({ label, motion }) => (
         <ProgressBar key={label} {...args} label={label} indeterminateMotion={motion} />
       ))}
+    </div>
+  ),
+};
+
+/**
+ * `thickness` sets the track's height (`medium` is 8px, `large` 12px) and `shape="square"` removes
+ * the rounded ends, for a bar that spans an edge of a card or the page.
+ */
+export const ThicknessAndShape: Story = {
+  args: {
+    value: 60,
+    showLabel: true,
+  },
+  render: ({ thickness: _thickness, shape: _shape, label: _label, ...args }) => (
+    <div className="flex w-80 flex-col gap-4">
+      <ProgressBar {...args} label="Medium, rounded" />
+      <ProgressBar {...args} label="Large, rounded" thickness="large" />
+      <ProgressBar {...args} label="Medium, square" shape="square" />
+      <ProgressBar {...args} label="Large, square" thickness="large" shape="square" />
     </div>
   ),
 };

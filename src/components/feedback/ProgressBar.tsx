@@ -5,13 +5,19 @@ import { isDev, warnOnce } from '../../lib/dev';
 import { progressIndeterminateMotion } from '../../lib/motion';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
-import type { MotionSlot, ValidationState } from '../../lib/types';
+import type { MotionSlot, Shape, ValidationState } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useId } from '../../hooks/useId';
 import { useMotionClasses } from '../../hooks/useMotion';
 
 /** Color of a {@link ProgressBar}'s fill. */
 export type ProgressBarColor = 'brand' | 'success' | 'warning' | 'error';
+
+/** Thickness of a {@link ProgressBar}'s track: `medium` (8px) or `large` (12px). */
+export type ProgressBarThickness = 'medium' | 'large';
+
+/** Corner shape of a {@link ProgressBar}'s track and fill. */
+export type ProgressBarShape = Extract<Shape, 'rounded' | 'square'>;
 
 /** Properties for the ProgressBar component. */
 export interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -50,6 +56,20 @@ export interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'brand'
    */
   color?: ProgressBarColor;
+  /**
+   * Height of the track: `medium` (8px) or `large` (12px). WaveUI's `medium` is the 8px bar of 0.x,
+   * thicker than Fluent's 2px `medium` (and its 4px `large`), so an app that wants Fluent's thin
+   * bar sets a `className` height. The bar carries `data-thickness` with the resolved value.
+   * Fluent's `thickness`.
+   * @default 'medium'
+   */
+  thickness?: ProgressBarThickness;
+  /**
+   * Corners of the track and the fill: `rounded` (fully rounded ends) or `square` (none), for a bar
+   * that spans an edge. The bar carries `data-shape` with the resolved value. Fluent's `shape`.
+   * @default 'rounded'
+   */
+  shape?: ProgressBarShape;
   /**
    * Replaces the motion of the indeterminate fill (no `value`): by default a fill two fifths of
    * the track wide sweeps across it, mirrored in right-to-left, and becomes a full-width pulse
@@ -103,6 +123,18 @@ const fillColorClasses: Record<ProgressBarColor, string> = {
   error: 'wave:bg-error',
 };
 
+/** The track's height per thickness. */
+const thicknessClasses: Record<ProgressBarThickness, string> = {
+  medium: 'wave:h-2',
+  large: 'wave:h-3',
+};
+
+/** The corners of the track and of the fill per shape. */
+const shapeClasses: Record<ProgressBarShape, { track: string; fill: string }> = {
+  rounded: { track: 'wave:rounded-full', fill: 'wave:rounded-full' },
+  square: { track: 'wave:rounded-none', fill: 'wave:rounded-none' },
+};
+
 /** The fill color a Field's validation state gives the bar (`none` keeps the default). */
 const fieldColors: Partial<Record<ValidationState, ProgressBarColor>> = {
   error: 'error',
@@ -139,7 +171,8 @@ function isName(value: unknown): value is string {
  * - Name it with `label` (or `aria-label` / `aria-labelledby`); `showLabel` shows the label above
  *   the bar.
  * - `value` is clamped to `0…max`; invalid numbers render an empty bar and warn in development.
- * - `color` picks the fill (`brand`, `success`, `warning`, `error`).
+ * - `color` picks the fill (`brand`, `success`, `warning`, `error`); `thickness` the track's height
+ *   (`medium` 8px, `large` 12px) and `shape` its corners (`rounded` or `square`).
  * - Inside a `Field`, the Field's label names a bar that has no name of its own, its validation
  *   message and hint describe the bar, and its validation state (error, warning, success) colors
  *   the fill unless `color` is set. A progress bar is never invalid or required: the
@@ -164,6 +197,8 @@ export const ProgressBar = ({
   label,
   showLabel,
   color,
+  thickness: thicknessProp = 'medium',
+  shape: shapeProp = 'rounded',
   indeterminateMotion,
   slotProps,
   id,
@@ -191,6 +226,13 @@ export const ProgressBar = ({
   // A context built before 0.6 has no validation state: read it from `invalid`.
   const fieldState = field ? (field.validationState ?? (field.invalid ? 'error' : 'none')) : 'none';
   const resolvedColor = color ?? fieldColors[fieldState] ?? 'brand';
+  // A value outside the unions (from untyped code) renders as the default instead of throwing.
+  const thickness: ProgressBarThickness = Object.hasOwn(thicknessClasses, thicknessProp ?? '')
+    ? thicknessProp
+    : 'medium';
+  const shape: ProgressBarShape = Object.hasOwn(shapeClasses, shapeProp ?? '')
+    ? shapeProp
+    : 'rounded';
   const isIndeterminate = value === undefined;
   // Called whatever the mode, so the hook order never changes when `value` appears.
   const indeterminateClasses = useMotionClasses(indeterminateMotion, progressIndeterminateMotion);
@@ -263,6 +305,8 @@ export const ProgressBar = ({
     'aria-valuemin': 0,
     'aria-valuemax': validMax ? max : 100,
     'data-color': resolvedColor,
+    'data-thickness': thickness,
+    'data-shape': shape,
   };
   // The consumer's id (or the control id Field passes to its first child), else its own id inside
   // a Field; the consumer's description, then the Field's validation message and hint.
@@ -288,7 +332,8 @@ export const ProgressBar = ({
   // style.
   const fillClassName = wcn(
     progressBarClassNames.bar,
-    'wave:h-full wave:rounded-full',
+    'wave:h-full',
+    shapeClasses[shape].fill,
     fillColorClasses[resolvedColor],
     forcedColors.selectedLeaf,
     isIndeterminate && wcn('wave:w-full', indeterminateClasses),
@@ -305,7 +350,9 @@ export const ProgressBar = ({
       ref={ref}
       className={wcn(
         progressBarClassNames.root,
-        'wave:h-2 wave:overflow-hidden wave:rounded-full wave:bg-track',
+        'wave:overflow-hidden wave:bg-track',
+        thicknessClasses[thickness],
+        shapeClasses[shape].track,
         'wave:forced-colors:border',
         forcedColors.border,
         className,
