@@ -730,3 +730,105 @@ export const TenThousandRows: StoryObj<TenThousandRowsArgs> = {
   },
   render: (args) => <TenThousandRowsGrid {...args} />,
 };
+
+/** `size` sets the density of the grid: medium (the default), small and extra-small. */
+export const Sizes: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-6">
+      {(['medium', 'small', 'extra-small'] as const).map((size) => (
+        <HeaderChildrenGrid
+          key={size}
+          {...args}
+          size={size}
+          selectionMode="multiple"
+          aria-label={`Team members, ${size}`}
+        />
+      ))}
+    </div>
+  ),
+};
+
+/** The grid of the focus stories: a button in every Role cell. */
+function FocusGrid({
+  cellFocusMode,
+  onSortChange,
+  ...args
+}: DataGridStoryArgs & { cellFocusMode?: boolean }) {
+  return (
+    <DataGrid defaultSort={null} onSortChange={onSortChange} {...args}>
+      <DataGrid.Header>
+        <DataGrid.Row>
+          <DataGrid.HeaderCell columnId="name" sortable>
+            Name
+          </DataGrid.HeaderCell>
+          <DataGrid.HeaderCell>Role</DataGrid.HeaderCell>
+          <DataGrid.HeaderCell>Location</DataGrid.HeaderCell>
+        </DataGrid.Row>
+      </DataGrid.Header>
+      <DataGrid.Body>
+        {MEMBERS.map((member, index) => (
+          <DataGrid.Row key={member.id} rowId={member.id}>
+            <DataGrid.Cell focusMode={cellFocusMode && index === 1 ? 'none' : undefined}>
+              {member.name}
+            </DataGrid.Cell>
+            <DataGrid.Cell focusMode={cellFocusMode && index === 2 ? 'group' : undefined}>
+              <Button size="small" appearance="subtle">
+                {`Edit ${member.name}`}
+              </Button>
+            </DataGrid.Cell>
+            <DataGrid.Cell>{member.location}</DataGrid.Cell>
+          </DataGrid.Row>
+        ))}
+      </DataGrid.Body>
+    </DataGrid>
+  );
+}
+
+/**
+ * `focusMode` sets how focus moves: `cell` (the default) one Tab stop and the arrow keys between
+ * cells, `row` one Tab stop on a body row with the arrow keys between rows, `none` no keys and no
+ * managed Tab stops. Try each in the controls.
+ */
+export const FocusModes: Story = {
+  args: { focusMode: 'row', selectionMode: 'multiple' },
+  argTypes: { focusMode: { control: 'inline-radio', options: ['cell', 'row', 'none'] } },
+  render: (args) => <FocusGrid {...args} />,
+};
+
+/**
+ * A cell's own `focusMode`: the arrow keys skip Bob's Name cell (`none`), and the Role cell of
+ * Carol is its own focus target although it holds a single button (`group`: Enter enters the
+ * button, Escape returns).
+ */
+export const CellFocusModes: Story = {
+  render: (args) => <FocusGrid {...args} cellFocusMode />,
+};
+
+/** A windowed grid with a `<tfoot>`: its row is numbered after the 10,000 members and navigated. */
+export const FooterRows: StoryObj<TenThousandRowsArgs> = {
+  args: { 'aria-label': 'Ten thousand members with a footer', itemSize: 44 },
+  render: ({ itemSize, ...args }) => {
+    const Grid = () => {
+      const virtualWindow = useVirtualWindow({ itemSize, scrollPaddingStart: itemSize });
+      return (
+        <DataGrid
+          items={TEN_THOUSAND_MEMBERS}
+          columns={TEN_THOUSAND_COLUMNS}
+          getRowId={memberId}
+          {...args}
+          virtualWindow={virtualWindow}
+          containerProps={{ className: 'h-120' }}
+        >
+          <tfoot>
+            <tr>
+              <td className="px-4 py-3 text-wave-body-1" colSpan={4}>
+                10,000 members
+              </td>
+            </tr>
+          </tfoot>
+        </DataGrid>
+      );
+    };
+    return <Grid />;
+  },
+};

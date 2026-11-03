@@ -68,7 +68,7 @@
   "src/components/table/DataGrid.tsx": ["grid", "select-all"],
   "src/components/table/DataGrid.window.tsx": ["grid", "table"],
   "src/components/table/Table.tsx": ["table"],
-  "src/components/table/useGridNavigation.ts": ["grid", "hidden", "table"],
+  "src/components/table/useGridNavigation.ts": ["grid", "group", "hidden", "table"],
   "src/components/table/useTableColumnSizing.ts": ["fixed", "resize"],
   "src/hooks/useAnnounce.ts": ["absolute", "hidden"],
   "src/hooks/useFocusTrap.ts": ["container"],

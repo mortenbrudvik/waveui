@@ -2111,6 +2111,7 @@ describe('0.16 data at scale from the package entry', () => {
     expectTypeOf<GridNavigationModel>().toEqualTypeOf<{
       rowCount: number;
       headerRowCount: number;
+      footerRowCount?: number;
       scrollToRow(index: number): void;
     }>();
   });

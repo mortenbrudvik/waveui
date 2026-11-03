@@ -1523,10 +1523,15 @@ export const teachingPopoverCarouselFooterClassNames = {
 // table
 // ---------------------------------------------------------------------------
 
-/** Table: `root` on the `<table>`; `container` on the scroll wrapper around it. */
+/**
+ * Table: `root` on the `<table>`; `container` on the scroll wrapper around it; `spacer` on each
+ * spacer row of a table with a `virtualWindow` (the rows that stand in for the rows that are not
+ * rendered).
+ */
 export const tableClassNames = {
   root: 'wave-table',
   container: 'wave-table__container',
+  spacer: 'wave-table__spacer',
 } as const;
 
 /** Table.Header: `root` on the `<thead>`. */

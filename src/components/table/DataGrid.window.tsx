@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { isElementOfType } from '../../lib/children';
 import { dataGridClassNames } from '../../lib/classNames';
 import { isDev, warnOnce } from '../../lib/dev';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -41,13 +42,44 @@ export function getWindowNavigationModel(
   virtualWindow: VirtualWindow | null,
   rowCount: number,
   headerRowCount: number,
+  footerRowCount = 0,
 ): GridNavigationModel | undefined {
   if (!virtualWindow) return undefined;
   return {
     rowCount,
     headerRowCount,
+    footerRowCount,
     scrollToRow: (index) => virtualWindow.scrollToIndex(index, { align: 'auto' }),
   };
+}
+
+/**
+ * The rows of a windowed grid's `<tfoot>` with their `aria-rowindex`, counted from `first` (the row
+ * after the last data row): every element child (also inside a Fragment) is one row, a `<tr>` takes
+ * the attribute and any other element (a `DataGrid.Row`) the row's place through its context.
+ */
+export function withFooterRowIndexes(children: React.ReactNode, first: number): React.ReactNode {
+  let position = first;
+  const visit = (nodes: React.ReactNode): React.ReactNode =>
+    React.Children.map(nodes, (child) => {
+      if (isElementOfType<{ children?: React.ReactNode }>(child, React.Fragment)) {
+        return React.cloneElement(child, undefined, visit(child.props.children));
+      }
+      if (!React.isValidElement(child)) return child;
+      const ariaRowIndex = position;
+      position += 1;
+      if (isElementOfType<React.HTMLAttributes<HTMLTableRowElement>>(child, 'tr')) {
+        return React.cloneElement(child, { 'aria-rowindex': ariaRowIndex });
+      }
+      return (
+        <DataGridWindowRowContext.Provider
+          value={{ index: undefined, ariaRowIndex, height: undefined }}
+        >
+          {child}
+        </DataGridWindowRowContext.Provider>
+      );
+    });
+  return visit(children);
 }
 
 /**

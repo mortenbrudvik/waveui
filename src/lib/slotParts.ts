@@ -495,6 +495,12 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
       'the root of TeachingPopover.Footer or TeachingPopover.CarouselFooter, which take their props directly in the children form (R3)',
   },
   {
+    component: 'tableClassNames',
+    key: 'spacer',
+    reason:
+      'a virtual spacer row: stands in for the body rows a windowed Table does not render, sized by the window',
+  },
+  {
     component: 'dataGridClassNames',
     key: 'spacer',
     reason:
