@@ -316,7 +316,9 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
      * `autoFocus`, `name`, `form` and `required` (the value is submitted by the Dropdown's
      * hidden input), `hidden`, `inert` and `aria-hidden` (a focusable control is never hidden).
      * Your handlers run before the Dropdown's: `preventDefault()` in your `onClick` keeps the
-     * list as it is, in your `onKeyDown` skips the listbox keys.
+     * list as it is, in your `onKeyDown` skips the listbox keys, in your `onPointerDown` keeps
+     * the press from focusing the button (WebKit does not focus a clicked `<button>`, so the
+     * Dropdown does, with the primary button, and the keys work after a mouse click).
      */
     button?: SlotPart<'button'>;
     /**
@@ -588,6 +590,16 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         )
       : displayText;
 
+  // WebKit (Safari) does not focus a `<button>` that a mouse press clicks, so the opened list would
+  // have no keyboard focus (Home, End, PageDown and typeahead do nothing): the press focuses it,
+  // as Chromium and Firefox do on mousedown. A programmatic focus after a pointer press shows no
+  // focus ring.
+  const focusOnPress = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    const button = event.currentTarget;
+    if (button.ownerDocument.activeElement !== button) button.focus({ preventScroll: true });
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
       // Open with nothing shown (no options): close, but leave Escape to an enclosing layer
@@ -686,6 +698,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
               autoFocus,
               tabIndex,
               onClick: () => setOpen((current) => !current),
+              onPointerDown: focusOnPress,
               onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
               onKeyUp: composeEventHandlers(onKeyUp, listbox.onKeyUp),
               onFocus,
