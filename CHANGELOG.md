@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **RadioGroup** and `RadioGroup.Item` take `labelPosition` (`after`, `below`; type `RadioLabelPosition`); `orientation="horizontal"` with `labelPosition="below"` is Fluent's `horizontal-stacked` (closes `form-basic-20`).
 - **Slider** takes `orientation="vertical"` (closes `form-basic-30`).
 - **TimePicker** takes `showSeconds` (value `HH:mm:ss`), `formatTime(value)`, `parseTime(text)` and `freeform` (`false` limits the selection to listed times and reports others as the new `'not-listed'` reason of `TimePickerInvalidReason`, with the message `labels.notListed`), closing `timepicker-2`, `timepicker-4` and `timepicker-5`. A `switch` over `TimePickerInvalidReason` that has no `default` needs the new case.
+- **Table** and **DataGrid** take `size` (`'medium'`, `'small'` or `'extra-small'`; type `TableSize`): it tightens the padding of cells, header cells, sort buttons and selection cells and sizes the media of `Table.CellLayout`, rendered as `data-size` (closes `table-1`). `Table.Row` takes `appearance` (`'none'`, `'brand'` or `'neutral'`; type `TableRowAppearance`), the fill of a selected DataGrid row for a row of your own state, rendered as `data-appearance` (closes `tr-1`).
+- **DataGrid** takes `focusMode` (`'cell'`, `'row'` or `'none'`; type `DataGridFocusMode`; Fluent's `row_unstable` is `'row'`, its `'composite'` has no counterpart), and `useGridNavigation` takes the same option (`GridNavigationFocusMode`), rendered as `data-focus-mode` (closes `dg-4`, except `'composite'`). `DataGrid.Cell` and `DataGrid.HeaderCell` take `focusMode` (`'cell'`, `'group'` or `'none'`; type `DataGridCellFocusMode`): `'none'` takes the cell and its widgets out of the arrow-key navigation, `'group'` makes the cell its own focus target (closes `dgc-1`).
+- **Table** takes `virtualWindow` and `Table.Body` takes `count` with a function child that returns the row at an index: only the rows in view render, between spacer rows (new class `wave-table__spacer`), with `aria-rowcount`, `aria-rowindex` and `data-row-index`. `GridNavigationModel` takes an optional `footerRowCount`.
 
 ### Changed
 
@@ -31,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **PresenceBadge** no longer throws for a status that is neither a member of `PresenceStatus` nor one of the removed 0.x names (a misspelled name, different casing, `null` from server data): it draws `'offline'` and, in development, warns once. A throw there unmounted the whole Persona or Avatar around it. A throw from the development warning itself (a console that throws) now surfaces instead of being swallowed with the missing-`process` case.
 - **`useSelection`** clears the details of a change in a `finally`, so a throw from the update or from `onSelectedItemsChange` leaves nothing for a later change to report.
+- The rows of a `<tfoot>` in a windowed **DataGrid** get `aria-rowindex`, are counted in `aria-rowcount` and are reached by the arrow keys, PageUp/PageDown and Ctrl+End.
+- A column resize drag whose end never reaches the handle (WebKit, right to left, a table wider than its wrapper) now ends at a `pointerup` or `pointercancel` on the document, or at the next press of the same pointer, instead of leaving `data-resizing` and `data-dragging` set.
 
 ### Documentation
 
