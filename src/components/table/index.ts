@@ -11,6 +11,8 @@ export {
   TableResizeHandle,
 } from './Table';
 export type {
+  TableRowAppearance,
+  TableSize,
   TableProps,
   TableHeaderProps,
   TableHeaderCellProps,
@@ -52,6 +54,8 @@ export type {
   DataGridRowSelectionCellProps,
   DataGridCellProps,
   DataGridSelectionAppearance,
+  DataGridFocusMode,
+  DataGridCellFocusMode,
   DataGridSelectionCellProps,
   DataGridSort,
   SortDirection,

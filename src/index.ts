@@ -143,6 +143,7 @@ export type {
   UseGridNavigationResult,
   GridNavigationHandlers,
   GridNavigationModel,
+  GridNavigationFocusMode,
 } from './components/table/useGridNavigation';
 export { getTabbableElements, getFirstTabbable, getLastTabbable } from './lib/focus';
 export { focusRing, focusRingInset, inputFocus, inputFocusWithin } from './lib/styles';

@@ -4,6 +4,7 @@ import type { SlotPart } from '../../lib/slotProps';
 import type { SelectionMode } from '../../lib/types';
 import { createSelectionStore, type SelectionStore } from './DataGrid.store';
 import type {
+  DataGridFocusMode,
   DataGridRowSelectionCellProps,
   DataGridSelectionAppearance,
   DataGridSort,
@@ -108,6 +109,8 @@ export interface DataGridContextValue {
   selectionAppearance: DataGridSelectionAppearance;
   /** `subtleSelection` of the grid. */
   subtleSelection: boolean;
+  /** `focusMode` of the grid. */
+  focusMode: DataGridFocusMode;
 }
 
 /** What a row tells its selection cell, the automatic one or a `DataGrid.SelectionCell` child. */
@@ -222,6 +225,7 @@ const INERT_CONTEXT: DataGridContextValue = {
   selectOnRowClick: false,
   selectionAppearance: 'brand',
   subtleSelection: false,
+  focusMode: 'cell',
 };
 const INERT_SORT_CONTEXT: DataGridSortContextValue = {
   sort: null,
