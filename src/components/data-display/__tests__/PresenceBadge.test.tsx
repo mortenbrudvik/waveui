@@ -379,7 +379,14 @@ describe('PresenceBadge', () => {
     it('types the Fluent names and the optional status; no aliases (removed in 1.0)', () => {
       expectTypeOf<PresenceBadgeProps['status']>().toEqualTypeOf<PresenceStatus | undefined>();
       expectTypeOf<PresenceStatus>().toEqualTypeOf<
-        'available' | 'busy' | 'away' | 'offline' | 'do-not-disturb' | 'out-of-office'
+        | 'available'
+        | 'busy'
+        | 'away'
+        | 'offline'
+        | 'do-not-disturb'
+        | 'out-of-office'
+        | 'blocked'
+        | 'unknown'
       >();
       expectTypeOf<'dnd'>().not.toExtend<PresenceStatus>();
       expectTypeOf<'oof'>().not.toExtend<PresenceStatus>();
