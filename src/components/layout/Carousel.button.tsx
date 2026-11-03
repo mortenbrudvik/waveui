@@ -44,7 +44,12 @@ export const CarouselButton = ({
       {...rest}
       {...focusableDisabledProps(disabled)}
       ref={ref}
-      onClick={preventIfDisabled(disabled, composeEventHandlers(onClick, go))}
+      onClick={preventIfDisabled(
+        disabled,
+        composeEventHandlers(onClick, (event: React.MouseEvent<HTMLButtonElement>) =>
+          go(event.nativeEvent),
+        ),
+      )}
       className={wcn(
         carouselButtonClassNames.root,
         CAROUSEL_CONTROL_BASE,

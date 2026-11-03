@@ -98,6 +98,24 @@ export interface CarouselLabels {
   slideRoleDescription?: string;
 }
 
+/**
+ * What changed a Carousel's active slide: `previous` and `next` (the Previous and Next buttons, a
+ * `Carousel.Button` included), `picker` (a button of the picker), `drag` (a pointer drag that
+ * ended), `keyboard` (an arrow key past the first or last slide of a page of several slides),
+ * `autoplay` (the rotation moving on) and `restart` (the rotation control starting again from the
+ * first slide after the rotation ended at the last).
+ */
+export type CarouselChangeReason =
+  'previous' | 'next' | 'picker' | 'drag' | 'keyboard' | 'autoplay' | 'restart';
+
+/** Second argument of `Carousel`'s `onValueChange`: what changed the active slide, and the event. */
+export interface CarouselChangeDetails {
+  /** What asked for the change. */
+  reason: CarouselChangeReason;
+  /** The DOM event behind it: the click, the pointer release or key press (an untrusted `autoplay` event for the rotation). */
+  event: Event;
+}
+
 /** Properties for the Carousel component. */
 export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
@@ -112,9 +130,11 @@ export interface CarouselProps extends React.HTMLAttributes<HTMLDivElement> {
   defaultValue?: number;
   /**
    * Called with the new index when the active slide changes (not when it stays the same): the
-   * first slide of the new page when `groupSize` is above 1.
+   * first slide of the new page when `groupSize` is above 1. The second argument says what caused
+   * the change and carries its event (Fluent UI's `onActiveIndexChange(event, { type, event })`,
+   * whose `type` is the `reason` here).
    */
-  onValueChange?: (index: number) => void;
+  onValueChange?: (index: number, details?: CarouselChangeDetails) => void;
   /**
    * How many slides one page shows: a number, or `'auto'` to show as many as fit the width of the
    * carousel (the slides keep their own width, which must be equal). Previous, Next, the picker
@@ -478,10 +498,24 @@ const CarouselRoot = ({
   ref,
   ...rest
 }: CarouselProps) => {
+  // The change in flight, held for `useControllable`'s change callback (called synchronously from
+  // the event path) and cleared after it.
+  const changeRef = React.useRef<CarouselChangeDetails | null>(null);
   const [storedIndex, setActiveIndex] = useControllable(
     controlledValue,
     defaultValue,
-    onValueChange,
+    (next: number) => onValueChange?.(next, changeRef.current ?? undefined),
+  );
+  /** Runs `change`, which sets the active slide, with its cause for `onValueChange`. */
+  const withChange = useEventCallback(
+    (reason: CarouselChangeReason, event: Event, change: () => void) => {
+      changeRef.current = { reason, event };
+      try {
+        change();
+      } finally {
+        changeRef.current = null;
+      }
+    },
   );
   const trackId = useId('carousel-slides');
   const [rootEl, setRootEl] = React.useState<HTMLDivElement | null>(null);
@@ -581,13 +615,13 @@ const CarouselRoot = ({
   const drag = useCarouselDrag({
     enabled: draggable && pages > 1,
     dir,
-    onCommit: (delta) => {
+    onCommit: (delta, event) => {
       if (delta === 1) {
-        if (!atEnd) goTo(index + size);
-        else if (loop) goTo(0);
+        if (!atEnd) goTo(index + size, 'drag', event);
+        else if (loop) goTo(0, 'drag', event);
       } else if (delta === -1) {
-        if (!atStart) goTo(index - size);
-        else if (loop) goTo(lastStart);
+        if (!atStart) goTo(index - size, 'drag', event);
+        else if (loop) goTo(lastStart, 'drag', event);
       }
     },
   });
@@ -596,20 +630,26 @@ const CarouselRoot = ({
   const rotating = hasRotation && !stopped && !pausedByPointer && !pausedByFocus;
 
   // Compares with the shown (clamped) index, so re-picking the visible slide reports nothing.
-  const goTo = (target: number) => {
-    if (target >= 0 && target < total && target !== index) setActiveIndex(target);
+  const goTo = (target: number, reason: CarouselChangeReason, event: Event) => {
+    if (target >= 0 && target < total && target !== index) {
+      withChange(reason, event, () => setActiveIndex(target));
+    }
   };
-  const goPrev = () => goTo(atStart ? lastStart : index - size);
-  const goNext = () => goTo(atEnd ? 0 : index + size);
+  const goPrev = (event: Event, reason: 'previous' | 'keyboard' = 'previous') =>
+    goTo(atStart ? lastStart : index - size, reason, event);
+  const goNext = (event: Event, reason: 'next' | 'keyboard' = 'next') =>
+    goTo(atEnd ? 0 : index + size, reason, event);
 
   // Reads the latest index at tick time (the updater's base), so the interval does not restart on
   // every slide or parent render and consecutive ticks chain even before a re-render.
   const advance = useEventCallback(() => {
-    setActiveIndex((prev) => {
-      const current = clampToPage(prev, size, total);
-      if (current < lastStart) return current + size;
-      return loop ? 0 : prev;
-    });
+    withChange('autoplay', new Event('autoplay'), () =>
+      setActiveIndex((prev) => {
+        const current = clampToPage(prev, size, total);
+        if (current < lastStart) return current + size;
+        return loop ? 0 : prev;
+      }),
+    );
   });
 
   React.useEffect(() => {
@@ -618,10 +658,10 @@ const CarouselRoot = ({
     return () => clearInterval(id);
   }, [rotating, autoPlayInterval, advance]);
 
-  const toggleRotation = () => {
+  const toggleRotation = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (stopped) {
       // Start: from the first slide when rotation had ended at the last one.
-      if (!loop && atEnd) goTo(0);
+      if (!loop && atEnd) goTo(0, 'restart', event.nativeEvent);
       setEndedAt(null);
       setUserPaused(false);
       setStartedFromControl(true);
@@ -703,7 +743,7 @@ const CarouselRoot = ({
         event.preventDefault();
         if (!nextDisabled) {
           pendingFocus.current = 'first';
-          goNext();
+          goNext(event.nativeEvent, 'keyboard');
         }
         return;
       }
@@ -711,7 +751,7 @@ const CarouselRoot = ({
         event.preventDefault();
         if (!prevDisabled) {
           pendingFocus.current = 'last';
-          goPrev();
+          goPrev(event.nativeEvent, 'keyboard');
         }
         return;
       }
@@ -721,8 +761,8 @@ const CarouselRoot = ({
 
   const previousLabel = labels?.previous ?? DEFAULT_PREVIOUS_LABEL;
   const nextLabel = labels?.next ?? DEFAULT_NEXT_LABEL;
-  const goPrevious = useEventCallback(() => goPrev());
-  const goToNext = useEventCallback(() => goNext());
+  const goPrevious = useEventCallback((event: Event) => goPrev(event));
+  const goToNext = useEventCallback((event: Event) => goNext(event));
   // What `Carousel.Button` reads (C-MEMO).
   const context = React.useMemo<CarouselContextValue>(
     () => ({
@@ -864,7 +904,9 @@ const CarouselRoot = ({
     const disabled = previous ? prevDisabled : nextDisabled;
     const label = previous ? previousLabel : nextLabel;
     const part = previous ? slotProps?.previousButton : slotProps?.nextButton;
-    const onClick = preventIfDisabled(disabled, previous ? goPrev : goNext);
+    const onClick = preventIfDisabled(disabled, (event: React.MouseEvent<HTMLButtonElement>) =>
+      previous ? goPrev(event.nativeEvent) : goNext(event.nativeEvent),
+    );
     const className = wcn(
       previous ? carouselClassNames.previousButton : carouselClassNames.nextButton,
       CAROUSEL_CONTROL_BASE,
@@ -1106,7 +1148,8 @@ const CarouselRoot = ({
               const active = start === index;
               const label = pageLabel(start);
               const current = active ? 'true' : undefined;
-              const onClick = () => goTo(start);
+              const onClick = (event: React.MouseEvent<HTMLButtonElement>) =>
+                goTo(start, 'picker', event.nativeEvent);
               const className = wcn(
                 carouselClassNames.pickerButton,
                 'wave:group wave:inline-flex wave:items-center wave:justify-center',

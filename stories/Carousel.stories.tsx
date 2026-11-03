@@ -288,3 +288,26 @@ export const Motion: Story = {
     </div>
   ),
 };
+
+/**
+ * `onValueChange` gets a second argument with the cause of the change (`previous`, `next`,
+ * `picker`, `drag`, `keyboard`, `autoplay` or `restart`) and its event.
+ */
+export const ChangeCause: Story = {
+  args: { draggable: true, loop: true, children: tintedSlides },
+  render: function ChangeCauseCarousel(args) {
+    const [last, setLast] = React.useState('no change yet');
+    return (
+      <div className="flex flex-col gap-3">
+        <Carousel
+          {...args}
+          onValueChange={(index, details) => {
+            args.onValueChange?.(index, details);
+            setLast(`slide ${index + 1}, caused by ${details?.reason}`);
+          }}
+        />
+        <p className="text-wave-body-1">Last change: {last}</p>
+      </div>
+    );
+  },
+};

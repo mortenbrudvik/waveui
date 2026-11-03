@@ -66,6 +66,8 @@ export type {
   CarouselAppearance,
   CarouselControlsLayout,
   CarouselMotion,
+  CarouselChangeReason,
+  CarouselChangeDetails,
 } from './Carousel';
 
 export {

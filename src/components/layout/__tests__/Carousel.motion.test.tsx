@@ -218,7 +218,7 @@ describe('fade (§9.1)', () => {
     expectHidden(third);
 
     await user.click(nextButton());
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
     expectHidden(first);
     expectShown(second);
     expectHidden(third);
@@ -448,7 +448,10 @@ describe('dragging (§9.1)', () => {
     // No duration either: without a transition list it would time every property.
     expect(el.style.transitionDuration).toBe('');
     release(el, 150);
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, {
+      reason: 'drag',
+      event: expect.objectContaining({ type: 'pointerup' }),
+    });
     expect(el).not.toHaveAttribute('data-dragging');
     expect(el.style.transform).toBe('translateX(-100%)');
     expect(el).toHaveClass(...motionClasses(carouselSlideMotion));
@@ -462,7 +465,7 @@ describe('dragging (§9.1)', () => {
     expect(el.style.transform).toBe('');
     expectShown(slideElements()[0]!);
     release(el, 150);
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
     expect(el).not.toHaveAttribute('data-dragging');
     expect(el.style.transform).toBe('');
     expectHidden(slideElements()[0]!);
