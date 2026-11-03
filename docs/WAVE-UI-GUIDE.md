@@ -219,6 +219,37 @@ The class is your Tailwind build's, and `./utilities`' (Wave's components write 
 
 Whether `medium` looks different depends on the faces the font ships: where a family has no face at weight 500, the browser draws a neighbouring face instead, and the engines do not pick the same one. On Windows 11, none of Segoe UI, Bahnschrift and Consolas has a 500 face: measured in the 0.17 exit browser pass, Firefox draws a `medium` Segoe UI or Bahnschrift line with the regular face, Chromium and WebKit with the semibold face, and all three draw Consolas with its regular face. So `medium` is distinct from both `regular` and `semibold` only where the font has a 500 face; with the default stacks on Windows it looks like one of them, depending on the browser, and `semibold` is the weight to use where the emphasis must show.
 
+**A real `medium`.** To make `medium` a face of its own, load a family that has a 500 face and put it first in the stack. WaveUI changes no stack for this (the stacks are Fluent's, and a family you load is a design decision), so the recipe is yours: declare the faces with `@font-face` in your stylesheet, then point the family token at them, on `:root` or through `WaveProvider tokens`.
+
+```css
+/* One variable font file covers every weight Text and Label ask for, 400 to 700 included. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --wave-font-family:
+    'Inter', 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto,
+    'Helvetica Neue', sans-serif;
+}
+```
+
+```tsx
+<WaveProvider
+  tokens={{
+    fontFamily: "'Inter', 'Segoe UI', 'Segoe UI Web (West European)', sans-serif",
+  }}
+>
+  <Text weight="medium">Distinct from regular and semibold</Text>
+</WaveProvider>
+```
+
+Notes: the `@font-face` rule belongs in a stylesheet, since an inline `style` (what `tokens` writes) cannot declare one, and `tokens` only names the family; with static font files, declare one rule per weight (400, 500, 600 and 700) under the same `font-family` name. Keep the Segoe UI entries after your family so a visitor whose font has not loaded yet, or is blocked, still gets the default look. The same works for the monospace and numeric families (`--wave-font-family-monospace`, `--wave-font-family-numeric`), whose default faces have no 500 weight either. Under a Content Security Policy, allow the font file's origin in `font-src`.
+
 ### Typography Best Practices
 
 - **body-1 (14px)** is the default for all UI text (`WaveProvider` sets it)
