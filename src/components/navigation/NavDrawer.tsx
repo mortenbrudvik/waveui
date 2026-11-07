@@ -36,12 +36,7 @@ import {
   useNavListChildCheck,
   type NavRovingContextValue,
 } from './Nav.context';
-import {
-  useNavRootState,
-  type NavDensity,
-  type NavProps,
-  type NavSelectDetails,
-} from './Nav.root';
+import { useNavRootState, type NavDensity, type NavProps, type NavSelectDetails } from './Nav.root';
 import {
   NavDrawerContext,
   NavDrawerLayoutContext,

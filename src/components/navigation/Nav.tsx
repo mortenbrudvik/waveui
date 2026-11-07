@@ -439,7 +439,11 @@ function renderIcon(
  * The vertical padding a `small` density sets: it replaces the medium row's, which stays in each
  * base string (so a medium row renders the classes it always did).
  */
-const smallPadding = { entry: 'wave:py-1', subEntry: 'wave:py-0.5', category: 'wave:py-1' } as const;
+const smallPadding = {
+  entry: 'wave:py-1',
+  subEntry: 'wave:py-0.5',
+  category: 'wave:py-1',
+} as const;
 
 const itemClasses = {
   small: smallPadding.entry,

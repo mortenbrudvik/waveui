@@ -195,7 +195,7 @@ function getSurfaceEntries(): Set<SurfaceEntry> {
 function collectOpenedFrom(layerId: string | null): HTMLElement[] {
   const elements: HTMLElement[] = [];
   const seen = new Set<string>();
-  for (let id = layerId; id !== null && !seen.has(id); ) {
+  for (let id = layerId; id !== null && !seen.has(id);) {
     seen.add(id);
     const layer = getLayer(id);
     if (!layer) break;

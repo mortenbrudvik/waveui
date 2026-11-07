@@ -58,10 +58,7 @@ export interface NavProps extends Omit<React.HTMLAttributes<HTMLElement>, 'defau
    * (Fluent's `onNavCategoryItemToggle(event, { categoryValue })`). `details` is optional in the
    * type for code written before it existed; WaveUI always passes it.
    */
-  onOpenCategoriesChange?: (
-    openCategories: string[],
-    details?: NavCategoryToggleDetails,
-  ) => void;
+  onOpenCategoriesChange?: (openCategories: string[], details?: NavCategoryToggleDetails) => void;
   /**
    * Keep at most one category open (Fluent's `multiple`, which is `true` by default): opening a
    * category closes the one that was open, and a Nav that starts with several open
@@ -127,8 +124,7 @@ export interface UseNavRootStateOptions {
   defaultOpenCategories: readonly string[] | undefined;
   /** Called with the new list of open category values (a new array) and the details. */
   onOpenCategoriesChange:
-    | ((openCategories: string[], details?: NavCategoryToggleDetails) => void)
-    | undefined;
+    ((openCategories: string[], details?: NavCategoryToggleDetails) => void) | undefined;
   /** At most one open category (`multiple` off). @default false */
   singleOpen?: boolean;
   /** How tightly the rows are set. @default 'medium' */
