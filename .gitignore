@@ -6,3 +6,5 @@ storybook-static/
 .playwright-mcp/
 .claude/settings.local.json
 .claude/worktrees/
+website/dist
+website/.astro

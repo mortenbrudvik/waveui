@@ -17,7 +17,9 @@ export default defineConfig({
     // Claude Code's git worktrees live in .claude/worktrees/ inside the checkout. Git ignores them
     // (.gitignore), Vitest does not: without this, a run in the main checkout also runs every
     // worktree's copy of the tests.
-    exclude: [...configDefaults.exclude, '.claude/worktrees/**'],
+    // website/ is an npm workspace with its own Vitest config (Astro's plugins and aliases); the
+    // library's run must not collect its tests (`npm run site:test` runs them).
+    exclude: [...configDefaults.exclude, '.claude/worktrees/**', 'website/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
