@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { usePresence, type PresenceAttributes } from '../../hooks/usePresence';
+import { usePlacedPresence } from '../../hooks/usePlacedPresence';
+import type { PresenceAttributes } from '../../hooks/usePresence';
 
 /**
  * What a picker's popup surface holds: the option list, the empty message ("No matches"), or
@@ -36,17 +37,29 @@ export interface PickerSurfacePresence<T> {
  *   filter was reset by the selection that closed it) would redraw with different rows while it
  *   fades: both unmount at once, as before.
  * - **`appear`.** The surface enters also when it mounts open, as Popover's does.
+ * - **Placement.** Through `usePlacedPresence`, a surface with the default motion mounts exited
+ *   and enters once floating-ui has placed it, so a popup that flips enters on the side it ends
+ *   up on. `list` and `empty` are one surface: switching between them while it is shown does not
+ *   re-arm it, and an exit never waits for a position.
  *
  * @param content - What the surface holds now; `null` while no surface is shown.
  * @param items - The shown items of the list, an array whose identity holds while its content does
  *   (`useListbox`'s `items`).
+ * @param placement - `placed`: the surface has its position (`isPositioned` of the picker's
+ *   positioning); `hold`: wait for it (the surface has the default `popupMotion`; `false` is plain
+ *   `usePresence(shown, { appear: true })`).
  */
 export function usePickerSurfacePresence<T>(
   content: PickerSurfaceContent,
   items: T,
+  placement: { placed: boolean; hold: boolean },
 ): PickerSurfacePresence<T> {
   const shown = content !== null;
-  const { isMounted, ref, presenceProps } = usePresence(shown, { appear: true });
+  const { isMounted, ref, presenceProps } = usePlacedPresence(
+    shown,
+    placement.placed,
+    placement.hold,
+  );
   // What the surface held when it was last shown (adjusted during render, C-HOOKS: it is state so
   // that the exit reads the last shown list without reading a ref).
   const [held, setHeld] = React.useState({ content, items });

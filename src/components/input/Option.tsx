@@ -739,6 +739,11 @@ export interface UseListboxPopupResult {
   surfaceRef: React.RefCallback<HTMLElement>;
   /** The surface's `data-side`, `data-align` and position style: pass them to {@link ListboxSurface}. */
   floatingProps: { 'data-side': string; 'data-align': string; style: React.CSSProperties };
+  /**
+   * The surface has its position (floating-ui has placed it). Pass it to {@link ListboxSurface}
+   * as `isPositioned`, so the surface enters on the side it ends up on after a flip.
+   */
+  isPositioned: boolean;
 }
 
 /**
@@ -770,7 +775,7 @@ export interface UseListboxPopupResult {
 export function useListboxPopup(options: UseListboxPopupOptions): UseListboxPopupResult {
   const { open, surfaceOpen, onDismiss, rootRef, anchorRef, positioning } = options;
   const surfaceElementRef = React.useRef<HTMLElement | null>(null);
-  const { setReference, setFloating, floatingProps } = usePopupPosition({
+  const { setReference, setFloating, floatingProps, isPositioned } = usePopupPosition({
     open: surfaceOpen,
     side: 'bottom',
     align: 'start',
@@ -786,7 +791,7 @@ export function useListboxPopup(options: UseListboxPopupOptions): UseListboxPopu
     focusOutside: true,
   });
   const surfaceRef = useMergedRefs<HTMLElement>(surfaceElementRef, setFloating);
-  return { layerId, setReference, surfaceRef, floatingProps };
+  return { layerId, setReference, surfaceRef, floatingProps, isPositioned };
 }
 
 /**
@@ -825,6 +830,12 @@ export interface ListboxSurfaceProps {
   surfaceRef: React.RefCallback<HTMLElement>;
   /** `floatingProps` from {@link useListboxPopup}: the surface's placement. */
   floatingProps: UseListboxPopupResult['floatingProps'];
+  /**
+   * `isPositioned` from {@link useListboxPopup}. With the default motion the surface then mounts
+   * transparent and enters once it is placed, so a popup that flips above its anchor slides away
+   * from it too. Without it the surface enters as it mounts, from the side it was asked for.
+   */
+  isPositioned?: boolean;
   /** The listbox is open (your open state). `emptyContent` shows only while it is. */
   open: boolean;
   /**
@@ -863,7 +874,7 @@ export interface ListboxSurfaceProps {
   surfaceClassName?: string;
   /**
    * The popup surface's motion. By default it fades in and slides 4px away from its anchor, on the
-   * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
+   * side it is placed on (after a flip, with `isPositioned`), over 200 ms with a decelerating curve, and fades out and slides back over
    * 100 ms with an accelerating curve (the list stays in the surface while it exits); under
    * reduced motion it appears and disappears at once. The list does not fade out when its options
    * changed as it closed (a filter reset by the selection), nor does the empty message. `null`
@@ -928,6 +939,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
     layerId,
     surfaceRef,
     floatingProps,
+    isPositioned,
     open,
     expanded,
     emptyContent,
@@ -964,13 +976,16 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
   // render: a data-mode picker renders none once closed). A closed listbox never leaves a surface
   // behind: the text typed before closing survives it.
   const showEmpty = open && !expanded && emptyContent !== undefined && emptyContent !== null;
+  const motionClassName = useMotionClasses(motion, popupMotion);
   const {
     mounted,
     exiting,
     ref: presenceRef,
     presenceProps,
-  } = usePickerSurfacePresence(expanded ? 'list' : showEmpty ? 'empty' : null, listbox.items);
-  const motionClassName = useMotionClasses(motion, popupMotion);
+  } = usePickerSurfacePresence(expanded ? 'list' : showEmpty ? 'empty' : null, listbox.items, {
+    placed: isPositioned ?? true,
+    hold: isPositioned !== undefined && motionClassName === popupMotion,
+  });
   const surfaceMergedRef = useMergedRefs<HTMLElement>(surfaceRef, parts?.surface?.ref, presenceRef);
   const [heldChildren, setHeldChildren] = React.useState(children);
   if (expanded && heldChildren !== children) setHeldChildren(children);

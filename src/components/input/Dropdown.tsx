@@ -555,7 +555,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
   });
 
   const expanded = open && listbox.items.length > 0;
-  const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+  const { layerId, setReference, surfaceRef, floatingProps, isPositioned } = useListboxPopup({
     positioning,
     open,
     surfaceOpen: expanded,
@@ -837,6 +837,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         layerId={layerId}
         surfaceRef={surfaceRef}
         floatingProps={floatingProps}
+        isPositioned={isPositioned}
         open={open}
         expanded={expanded}
         // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
