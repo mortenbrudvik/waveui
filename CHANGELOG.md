@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-11-07
+
+The first minor after the 1.0 freeze: it closes the Fluent UI v9 gap backlog of [docs/ROADMAP.md](docs/ROADMAP.md) (§8.2, §8.5 and §8.6) that the freeze allowed, and adds nothing breaking. Every addition is optional and defaults to the 1.0 behaviour, with the few exceptions under "Upgrading from 1.0". What stays open, and why, is in the roadmap's §8.1a.
+
+### Upgrading from 1.0
+
+Nothing needs to change. Three kinds of difference can show in code or markup that depends on exact details:
+
+1. **Widened unions.** `PresenceStatus` gains `'blocked'` and `'unknown'`, `TimePickerInvalidReason` gains `'not-listed'`, `SpinnerSize` gains three sizes, `ToastPosition` gains `'top'` and `'bottom'`, `DismissReason` and `ModalOpenChangeReason` gain `'parent-closed'`/`'focus-outside'`, and `ToastController` has three more members (`updateToast`, `pauseToast`, `playToast`). An exhaustive `switch` over one of these unions, or code that implements `ToastController` itself, needs the new cases.
+2. **Markup.** `MenuButton` always renders `aria-expanded`; `RadioGroup.Item` renders `data-label-position` and `Slider` renders `data-orientation`; a bare `Skeleton` is 16px tall; `ToggleButton` as an anchor with an `href` and no `role` no longer renders `aria-pressed`; a popup with the default motion is `data-presence="exited"` until it is placed; a Popover, Menu or other popup opened inside a Dialog or Drawer closes with it. Literal markup pins in your own tests may need a refresh.
+3. **Migration codemod.** `chart-1` to `chart-5` are names a stock shadcn/ui theme also defines, so the codemod now treats 22 names as shared (the 17 of 1.0 and these five).
 
 ### Added
 
@@ -85,6 +95,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - `Input`'s `slotProps.root` JSDoc says that, where the root is the `<input>` itself, a tab stop or roving marker goes through `slotProps.input`.
+
+### Size
+
+Against 1.0.0 as published on npm, measured with this release's build tools (`verify-dist`'s `measureImport`: a minified production Vite build of an entry that imports the names from `dist/index.mjs`, bare imports external, gzip by `node:zlib`; the stylesheets as built, gzip at level 9). Sizes are in bytes:
+
+| Import | 1.0.0 | 1.1.0 | Growth |
+|---|---|---|---|
+| `dist/styles.css` | 110,691 (16,555 gzip) | 123,260 (18,189 gzip) | +12,569 (+1,634 gzip) |
+| `dist/components.css` (internal) | 92,638 (13,299 gzip) | 104,544 (14,730 gzip) | +11,906 (+1,431 gzip) |
+| `dist/utilities.css` | 62,857 (6,786 gzip) | 65,869 (7,138 gzip) | +3,012 (+352 gzip) |
+| `dist/preflight.css` | 3,453 (1,272 gzip) | 3,453 (1,272 gzip) | 0 |
+| An import of only `Button` | 12,037 (4,033 gzip) | 12,425 (4,205 gzip) | +388 (+172 gzip) |
+| An import of only `MessageBar` | 30,070 (10,222 gzip) | 30,860 (10,553 gzip) | +790 (+331 gzip) |
+| An import of only `Tree` | 51,190 (17,427 gzip) | 55,392 (18,773 gzip) | +4,202 (+1,346 gzip) |
+| An import of only `Dialog` | 73,934 (24,667 gzip) | 75,973 (25,387 gzip) | +2,039 (+720 gzip) |
+| An import of `WaveProvider` and `Dialog` | 76,487 (25,640 gzip) | 80,310 (27,319 gzip) | +3,823 (+1,679 gzip) |
+| An import of only `DataGrid` | 72,123 (24,325 gzip) | 72,132 (24,521 gzip) | +9 (+196 gzip) |
+| An import of `usePresence` and `Presence` | 5,453 (2,341 gzip) | 5,648 (2,407 gzip) | +195 (+66 gzip) |
+| An import of only `useVirtualWindow` | 3,868 (1,817 gzip) | 6,933 (2,783 gzip) | +3,065 (+966 gzip) |
+| An import of only `createBrandTokens` | 3,630 (1,956 gzip) | 3,630 (1,956 gzip) | 0 |
+| An import of only `waveTokens` | 3,071 (969 gzip) | 3,142 (994 gzip) | +71 (+25 gzip) |
+| An import of only `Table` | 33,005 (11,100 gzip) | 33,949 (11,897 gzip) | +944 (+797 gzip) |
+| An import of only `cn` | 1,062 (532 gzip) | 1,062 (532 gzip) | 0 |
+| An import of only `mergeSlotProps` | 2,782 (1,344 gzip) | 2,782 (1,344 gzip) | 0 |
+| An import of only `getNativeElementProps` | 2,604 (1,214 gzip) | 2,604 (1,214 gzip) | 0 |
+| The npm package | 2,415,234 (537 files) | 2,678,799 (581 files) | +263,565 |
+
+- **Every component pays for `WaveProvider classNames`** (about 280 bytes in `Button`: the context read each component makes) and the stylesheets grow with the new utilities. `DataGrid` stays at its 1.0 size (+9 bytes) although it gained the row and cell focus modes, footer rows and the size variants.
+- **`useVirtualWindow`** grows by the measuring path (`measureItems`), which a fixed-size-only import cannot leave out; **`Tree`** by range selection, independent checks, open control and iterative cascades; **`Dialog`** by light dismiss, the title element, footer options and `mountNode`.
+- **Budgets:** `verify-dist` gates the ten imports from `Button` to `waveTokens` at their size measured at this release plus 512 bytes (192 gzip), and prints each against 0.18.1. Development warnings still ship in production bundles (`lib/dev` is a function call a minifier cannot fold); gating them behind the literal `process.env.NODE_ENV` check would save several KB in `DataGrid`, `Dialog` and `Tree` and is left for a later release.
+
+### Known limits
+
+- Real-browser checks of this release ran in Chromium (the popup motion, the Table and DataGrid modes, the Toaster, Tree, Accordion, Card, Dialog, Popover, Tooltip, Menu and Nav additions, and the charts in right-to-left layouts), with the vertical Slider, the DataGrid resize drag, the Combobox popup motion and the Dialog footer also in Firefox and WebKit. Not covered: real touch devices and the Android long-press `contextmenu` path, forced colors beyond the Tree row actions, the dark theme for the popup, Tree and Menu areas, the flipped enter of `Menu.Popover` submenus, InfoButton, TeachingPopover and the picker popups in Firefox, WebKit and right-to-left layouts, and the treegrid with a screen reader.
+- Still open (docs/ROADMAP.md §8.1a): the arrow keys between toasts (no screen-reader pattern), real `treegrid` roles in the nested `Tree` (use `FlatTree navigationMode="treegrid"`), sticky headers for option groups, and TagPicker option groups; `DataGrid focusMode="row"` is ignored with a `virtualWindow` (a development warning says so), and `focusMode="composite"` has no counterpart.
 
 ## [1.0.0] - 2026-11-03
 
