@@ -889,11 +889,11 @@ export const RECORDED_IMPORTS_1_0 = [
   record1_0('Button', ['Button'], { minified: 12425, gzip: 4205 }, COMPONENT_EXTERNALS),
   record1_0('MessageBar', ['MessageBar'], { minified: 30860, gzip: 10553 }, COMPONENT_EXTERNALS),
   record1_0('Tree', ['Tree'], { minified: 55392, gzip: 18773 }, COMPONENT_EXTERNALS),
-  record1_0('Dialog', ['Dialog'], { minified: 75951, gzip: 25376 }, PORTAL_EXTERNALS),
+  record1_0('Dialog', ['Dialog'], { minified: 75973, gzip: 25387 }, PORTAL_EXTERNALS),
   record1_0(
     'WaveProvider + Dialog',
     ['WaveProvider', 'Dialog'],
-    { minified: 80288, gzip: 27306 },
+    { minified: 80310, gzip: 27319 },
     PORTAL_EXTERNALS,
   ),
   record1_0('DataGrid', ['DataGrid'], { minified: 72132, gzip: 24521 }, PORTAL_EXTERNALS),
