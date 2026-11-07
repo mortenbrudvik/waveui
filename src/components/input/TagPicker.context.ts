@@ -129,6 +129,8 @@ export interface TagPickerContextValue {
   layerId: string;
   surfaceRef: UseListboxPopupResult['surfaceRef'];
   floatingProps: UseListboxPopupResult['floatingProps'];
+  /** Whether the popup has its position (the surface enters once it does). */
+  isPositioned: boolean;
   /** The listbox's name: TagPicker's (the List's own pair replaces it). */
   listLabel: { 'aria-label'?: string; 'aria-labelledby'?: string };
   triggerProps: TagPickerTriggerProps;

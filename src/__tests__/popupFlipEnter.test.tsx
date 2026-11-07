@@ -1,12 +1,21 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Popover } from '../components/overlays/Popover';
 import { Menu } from '../components/navigation/Menu';
 import { TeachingPopover } from '../components/overlays/TeachingPopover';
 import { InfoButton } from '../components/data-display/InfoButton';
 import { Button } from '../components/button/Button';
+import { Combobox } from '../components/input/Combobox';
+import { Dropdown } from '../components/input/Dropdown';
+import { ListboxSurface, Option, useListboxPopup } from '../components/input/Option';
+import { TagPicker } from '../components/input/TagPicker';
+import { TimePicker } from '../components/input/TimePicker';
+import { useListbox } from '../hooks/useListbox';
+import { useMergedRefs } from '../hooks/useMergedRefs';
+import { timePickerClassNames } from '../lib/classNames';
+import type { MotionSlot } from '../lib/types';
 import { popupMotion } from '../lib/motion';
 import { mockAnimations, renderWithProviders } from '../test-utils';
 
@@ -97,6 +106,8 @@ interface Observation {
 function observeSurface(): Observation {
   const observation: Observation = { phases: [], sides: [], resolutions: [] };
   const found: { surface: Element | null } = { surface: null };
+  // A surface gets its data-side before its data-presence when it spreads placement props first.
+  const earlier = new WeakMap<Element, string[]>();
   const setAttribute = Element.prototype.setAttribute;
   vi.spyOn(Element.prototype, 'setAttribute').mockImplementation(function (
     this: Element,
@@ -104,7 +115,13 @@ function observeSurface(): Observation {
     value: string,
   ) {
     setAttribute.call(this, name, value);
-    if (name === 'data-presence') found.surface ??= this;
+    if (name === 'data-side' && found.surface === null) {
+      earlier.set(this, [...(earlier.get(this) ?? []), value]);
+    }
+    if (name === 'data-presence' && found.surface === null) {
+      found.surface = this;
+      observation.sides.push(...(earlier.get(this) ?? []));
+    }
     if (this !== found.surface) return;
     if (name === 'data-side') observation.sides.push(value);
     if (name === 'data-presence') {
@@ -380,3 +397,267 @@ describe('a motion of your own keeps the entering phase at mount', () => {
 function popupMotionStart(): string[] {
   return popupMotion.split(' ').filter((word) => word.includes('data-[presence=exited]'));
 }
+
+describe('the listbox popups of the pickers — the enter follows the flip', () => {
+  const FRUITS = ['Apple', 'Banana', 'Cherry'];
+  const OPTIONS = FRUITS.map((label) => ({ value: label.toLowerCase(), label }));
+  const options = FRUITS.map((label) => (
+    <Option key={label} value={label.toLowerCase()}>
+      {label}
+    </Option>
+  ));
+
+  interface PickerCase {
+    name: string;
+    label: string;
+    ui: (motion?: MotionSlot | null) => React.ReactElement;
+    /** The element that positions the popup. */
+    anchor?: (combobox: HTMLElement) => HTMLElement | null;
+  }
+
+  const CASES: PickerCase[] = [
+    {
+      name: 'Dropdown',
+      label: 'Fruit',
+      ui: (motion) => (
+        <Dropdown aria-label="Fruit" motion={motion}>
+          {options}
+        </Dropdown>
+      ),
+    },
+    {
+      name: 'Combobox',
+      label: 'Fruit',
+      ui: (motion) => (
+        <Combobox aria-label="Fruit" motion={motion}>
+          {options}
+        </Combobox>
+      ),
+    },
+    {
+      name: 'TagPicker',
+      label: 'Fruit',
+      ui: (motion) => <TagPicker aria-label="Fruit" options={OPTIONS} motion={motion} />,
+      anchor: (combobox) => combobox.closest('[data-wave-tagpicker-control]'),
+    },
+    {
+      name: 'TimePicker',
+      label: 'Time',
+      ui: (motion) => <TimePicker aria-label="Time" motion={motion} />,
+      anchor: (combobox) => combobox.parentElement,
+    },
+  ];
+
+  /** Gives the layout mock its anchor (the combobox positions the popup) and opens the picker. */
+  async function openPicker(
+    label: string,
+    box: Box,
+    anchor: PickerCase['anchor'] = (combobox) => combobox,
+  ) {
+    mockLayout(box);
+    const user = userEvent.setup();
+    const combobox = screen.getByRole('combobox', { name: label });
+    anchor(combobox)?.setAttribute('data-testid', 'anchor');
+    await user.click(combobox);
+    return { user, combobox };
+  }
+
+  const isListSurface = (el: Element) =>
+    el.hasAttribute('data-wave-listbox-surface') ||
+    el.classList.contains(timePickerClassNames.surface);
+
+  describe.each(CASES)('$name', ({ ui, label, anchor }) => {
+    it('a popup that flips above its field enters once, from above', async () => {
+      const motion = mockAnimations({ animated: isListSurface });
+      const observation = observeSurface();
+      render(ui());
+      const { combobox } = await openPicker(label, NEAR_BOTTOM, anchor);
+      await waitFor(() => expect(surfaceNow()).toHaveAttribute('data-presence', 'entering'));
+      expect(surfaceNow()).toHaveAttribute('data-side', 'top');
+      expect(surfaceNow()).toHaveClass(...popupMotionStart());
+      expectEnteredOnResolvedSide(observation, 'bottom', 'top');
+      // The one listbox is in the document, in the surface, and reachable from the combobox.
+      const listbox = document.getElementById(combobox.getAttribute('aria-controls') ?? '');
+      expect(listbox).not.toBeNull();
+      expect(surfaceNow()).toContainElement(listbox);
+      await act(async () => {
+        await motion.finishAll();
+      });
+      expect(surfaceNow()).toHaveAttribute('data-presence', 'entered');
+      expect(screen.getAllByRole('listbox', { hidden: true })).toHaveLength(1);
+    });
+
+    it('a popup that does not flip enters from the side it was asked for', async () => {
+      mockAnimations({ animated: isListSurface });
+      const observation = observeSurface();
+      render(ui());
+      await openPicker(label, MIDDLE, anchor);
+      await waitFor(() => expect(surfaceNow()).toHaveAttribute('data-presence', 'entering'));
+      const entering = observation.phases.filter(({ phase }) => phase === 'entering');
+      expect(entering).toEqual([
+        {
+          phase: 'entering',
+          side: 'bottom',
+          placed: true,
+          resolved: { phase: 'exited', side: 'bottom' },
+        },
+      ]);
+      expect(observation.sides).not.toContain('top');
+    });
+
+    it('exits on the resolved side with the listbox kept in the surface', async () => {
+      const motion = mockAnimations({ animated: isListSurface });
+      render(ui());
+      const { user, combobox } = await openPicker(label, NEAR_BOTTOM, anchor);
+      await waitFor(() => expect(surfaceNow()).toHaveAttribute('data-presence', 'entering'));
+      await act(async () => {
+        await motion.finishAll();
+      });
+      await user.keyboard('{Escape}');
+      expect(surfaceNow()).toHaveAttribute('data-presence', 'exiting');
+      expect(surfaceNow()).toHaveAttribute('data-side', 'top');
+      const listbox = document.getElementById(combobox.getAttribute('aria-controls') ?? '');
+      expect(listbox).not.toBeNull();
+      expect(surfaceNow()).toContainElement(listbox);
+      await act(async () => {
+        await motion.finishAll();
+      });
+      expect(surfaceNow()).toBeNull();
+      expect(screen.getAllByRole('listbox', { hidden: true })).toHaveLength(1);
+    });
+
+    it('closed before it was placed: it never showed, and unmounts at once', async () => {
+      mockAnimations({ animated: isListSurface });
+      render(ui());
+      mockLayout(NEAR_BOTTOM);
+      const combobox = screen.getByRole('combobox', { name: label });
+      anchor?.(combobox)?.setAttribute('data-testid', 'anchor');
+      // Open and close in two synchronous steps, before floating-ui has placed the popup.
+      act(() => {
+        combobox.focus();
+        fireEvent.click(combobox);
+      });
+      expect(surfaceNow()).toHaveAttribute('data-presence', 'exited');
+      act(() => {
+        fireEvent.keyDown(combobox, { key: 'Escape' });
+      });
+      expect(surfaceNow()).toBeNull();
+    });
+
+    it('a motion of your own mounts entering, not exited', async () => {
+      mockAnimations({ animated: isListSurface });
+      const observation = observeSurface();
+      render(ui('transition-opacity'));
+      await openPicker(label, NEAR_BOTTOM, anchor);
+      await waitFor(() => expect(surfaceNow()).toHaveAttribute('data-presence', 'entering'));
+      expect(observation.phases[0].phase).toBe('entering');
+      expect(observation.phases.map(({ phase }) => phase)).not.toContain('exited');
+    });
+
+    it('no motion: it never waits for a position', async () => {
+      const observation = observeSurface();
+      render(ui(null));
+      await openPicker(label, NEAR_BOTTOM, anchor);
+      expect(surfaceNow()).toHaveAttribute('data-presence', 'entered');
+      expect(observation.phases.map(({ phase }) => phase)).not.toContain('exited');
+    });
+
+    it('under a provider with motion none it never waits for a position', async () => {
+      const observation = observeSurface();
+      renderWithProviders(ui(), { motion: 'none' });
+      await openPicker(label, NEAR_BOTTOM, anchor);
+      expect(surfaceNow()).toHaveAttribute('data-presence', 'entered');
+      expect(observation.phases.map(({ phase }) => phase)).not.toContain('exited');
+    });
+  });
+
+  it('the "No matches" row of a Combobox enters on the resolved side too', async () => {
+    mockAnimations({ animated: isListSurface });
+    const observation = observeSurface();
+    render(
+      <Combobox aria-label="Fruit" freeform>
+        {options}
+      </Combobox>,
+    );
+    mockLayout(NEAR_BOTTOM);
+    const user = userEvent.setup();
+    const combobox = screen.getByRole('combobox', { name: 'Fruit' });
+    combobox.setAttribute('data-testid', 'anchor');
+    await user.type(combobox, 'zzz');
+    await waitFor(() => expect(surfaceNow()).toHaveAttribute('data-presence', 'entering'));
+    expect(surfaceNow()).toHaveTextContent('No matches');
+    expectEnteredOnResolvedSide(observation, 'bottom', 'top');
+  });
+
+  describe('a custom picker on ListboxSurface', () => {
+    function Custom({ pass }: { pass: boolean }) {
+      const rootRef = React.useRef<HTMLDivElement | null>(null);
+      const anchorRef = React.useRef<HTMLButtonElement | null>(null);
+      const [open, setOpen] = React.useState(false);
+      const listbox = useListbox({
+        open,
+        onOpenChange: setOpen,
+        mode: 'select-only',
+        selectedValues: [],
+        onSelect: () => {},
+      });
+      const expanded = open && listbox.items.length > 0;
+      const { layerId, setReference, surfaceRef, floatingProps, isPositioned } = useListboxPopup({
+        open,
+        surfaceOpen: expanded,
+        onDismiss: () => setOpen(false),
+        rootRef,
+        anchorRef,
+      });
+      const buttonRef = useMergedRefs<HTMLButtonElement>(anchorRef, setReference);
+      return (
+        <div ref={rootRef}>
+          <button
+            type="button"
+            ref={buttonRef}
+            data-testid="anchor"
+            {...listbox.getComboboxProps()}
+            aria-label="Custom"
+            aria-expanded={expanded}
+            onClick={() => setOpen((current) => !current)}
+          />
+          <ListboxSurface
+            listbox={listbox}
+            layerId={layerId}
+            surfaceRef={surfaceRef}
+            floatingProps={floatingProps}
+            isPositioned={pass ? isPositioned : undefined}
+            open={open}
+            expanded={expanded}
+            aria-label="Custom list"
+          >
+            {options}
+          </ListboxSurface>
+        </div>
+      );
+    }
+
+    it('enters on the resolved side when it passes isPositioned', async () => {
+      mockAnimations({ animated: isListSurface });
+      mockLayout(NEAR_BOTTOM);
+      const observation = observeSurface();
+      const user = userEvent.setup();
+      render(<Custom pass />);
+      await user.click(screen.getByRole('combobox', { name: 'Custom' }));
+      await waitFor(() => expect(surfaceNow()).toHaveAttribute('data-presence', 'entering'));
+      expectEnteredOnResolvedSide(observation, 'bottom', 'top');
+    });
+
+    it('enters as it mounts, as before, when it does not', async () => {
+      mockAnimations({ animated: isListSurface });
+      mockLayout(NEAR_BOTTOM);
+      const observation = observeSurface();
+      const user = userEvent.setup();
+      render(<Custom pass={false} />);
+      await user.click(screen.getByRole('combobox', { name: 'Custom' }));
+      await waitFor(() => expect(surfaceNow()).toHaveAttribute('data-presence', 'entering'));
+      expect(observation.phases[0].phase).toBe('entering');
+      expect(observation.phases.map(({ phase }) => phase)).not.toContain('exited');
+    });
+  });
+});

@@ -1171,6 +1171,8 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     expectTypeOf<ListboxSurfaceProps['floatingProps']>().toEqualTypeOf<
       UseListboxPopupResult['floatingProps']
     >();
+    expectTypeOf<ListboxSurfaceProps['isPositioned']>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<UseListboxPopupResult['isPositioned']>().toEqualTypeOf<boolean>();
     expectTypeOf<typeof useListboxPopup>().parameter(0).toEqualTypeOf<UseListboxPopupOptions>();
     expectTypeOf<typeof useListboxPopup>().returns.toEqualTypeOf<UseListboxPopupResult>();
     expectTypeOf<DismissReason>().toEqualTypeOf<

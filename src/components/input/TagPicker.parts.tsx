@@ -1099,6 +1099,7 @@ function TagPickerListImpl({
       layerId={ctx.layerId}
       surfaceRef={ctx.surfaceRef}
       floatingProps={ctx.floatingProps}
+      isPositioned={ctx.isPositioned}
       open={ctx.open}
       expanded={ctx.expanded}
       showCheck={false}

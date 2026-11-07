@@ -893,7 +893,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     expanded ? activeWindow?.scrollRef : undefined,
   );
   useShownListScroll(expanded, activeWindow, listbox.items, listbox.activeValue, selected);
-  const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+  const { layerId, setReference, surfaceRef, floatingProps, isPositioned } = useListboxPopup({
     positioning,
     open,
     surfaceOpen,
@@ -1099,6 +1099,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       layerId,
       surfaceRef,
       floatingProps,
+      isPositioned,
       listLabel,
       triggerProps,
       inputProps,
@@ -1159,6 +1160,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       layerId,
       surfaceRef,
       floatingProps,
+      isPositioned,
       listLabel,
       triggerProps,
       inputProps,

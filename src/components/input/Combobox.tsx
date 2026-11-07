@@ -841,7 +841,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
   // The popup shows the list, or "No matches" for a draft.
   const surfaceOpen = open && (expanded || !!draft);
   const noMatches = surfaceOpen && !expanded;
-  const { layerId, setReference, surfaceRef, floatingProps } = useListboxPopup({
+  const { layerId, setReference, surfaceRef, floatingProps, isPositioned } = useListboxPopup({
     positioning,
     open,
     surfaceOpen,
@@ -1206,6 +1206,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
         layerId={layerId}
         surfaceRef={surfaceRef}
         floatingProps={floatingProps}
+        isPositioned={isPositioned}
         open={open}
         expanded={expanded}
         // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.

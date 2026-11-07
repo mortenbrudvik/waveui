@@ -904,9 +904,6 @@ export const TimePicker = (props: TimePickerProps) => {
         : undefined,
   });
 
-  // The popup surface mounts through the presence core: the list stays in it while it exits.
-  const popup = usePickerSurfacePresence(open ? (hasMatches ? 'list' : 'empty') : null, lb.items);
-  const motionClassName = useMotionClasses(motion, popupMotion);
   // The window scrolls the shown list only (the closed list in place is another, hidden element).
   const listScrollRef = useMergedRefs<HTMLUListElement>(
     expanded ? virtualWindow?.scrollRef : undefined,
@@ -962,11 +959,18 @@ export const TimePicker = (props: TimePickerProps) => {
     focusOutside: true,
   });
 
-  const { setReference, setFloating, floatingProps } = usePopupPosition({
+  const { setReference, setFloating, floatingProps, isPositioned } = usePopupPosition({
     open,
     side: 'bottom',
     align: 'start',
     ...resolvePositioning(positioning, { matchReferenceWidth: true, fitViewport: true }),
+  });
+  // The popup surface mounts through the presence core (the list stays in it while it exits) and
+  // enters once it has its position, so a popup that flips enters on the side it ends up on.
+  const motionClassName = useMotionClasses(motion, popupMotion);
+  const popup = usePickerSurfacePresence(open ? (hasMatches ? 'list' : 'empty') : null, lb.items, {
+    placed: isPositioned,
+    hold: motionClassName === popupMotion,
   });
   const surfaceRefs = useMergedRefs<HTMLDivElement>(
     surfaceRef,
