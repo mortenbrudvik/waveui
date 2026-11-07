@@ -187,3 +187,28 @@ project) and argTypes defaults; `composeStory` can stay as the server-side oracl
   `npm run test:pack` pass.
 - **Root Vitest** also collects `website/**/*.test.*` until Task 2 excludes `website/**`; the one
   website test passes under both configurations.
+
+## Outcome (Task 4)
+
+The ruling adopted the site composer. `src/stories/runtime.tsx` composes a story itself (args,
+argTypes, `render`, the story's, the meta's and the site's decorators, the name) and imports no
+Storybook module; `composeStory` appears only in `src/stories/runtime.test.tsx`, as the oracle
+whose `renderToString` output the composer must match (five stories: args only, two `render`
+functions, two story decorators). The site's project annotation is one decorator, `WaveProvider`
+with the theme and direction of `SiteChoiceContext`; `.storybook/preview.tsx` is no longer
+imported. The shim lost the eight stubs only `composeStory` needed. The spike page and island are
+gone; `src/pages/index.astro` is a placeholder until the component pages exist. All 843 stories of
+the 80 catalog entries render on the server in Node (`website/skipped-stories.json` is empty).
+
+Re-measured with the method above, each page built alone and then removed (2026-11-07):
+
+| Island | First load (gzip) | Later (gzip) |
+| --- | ---: | ---: |
+| Imports `meta` and `Default` of `stories/Button.stories.tsx` and composes with `composeStoryExport` | **87,474 B (85.4 KiB)** | 0 B |
+| Calls `loadStory` (its `import.meta.glob` map of the 80 component story files) | 97,003 B (94.7 KiB) by static imports, then Button's story chunk when it hydrates | 457,998 B (447.3 KiB) |
+
+So an island imports its stories statically, by name: the bundler then drops the file's other
+stories (Button's `DisabledFocusable` takes `Tooltip` along). Through `loadStory`'s map every story
+file becomes a dynamic import of the island, and Rolldown moved shared modules into two unrelated
+story chunks (`Tree.stories`, `WaveProvider.stories`) that the island then loads up front;
+`loadStory` is for server code (Astro pages, tests).

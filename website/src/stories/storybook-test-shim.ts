@@ -3,26 +3,23 @@
  * their action args (`onClick: fn()`); the site records no calls, so an action is a no-op and no
  * testing-library or Vitest code reaches a page.
  *
- * `composeStory` of `@storybook/react` brings Storybook's preview modules along, and they import
- * more names from `storybook/test`: `configure` (`@storybook/react`'s preview entry, in its
- * `beforeAll`), `onMockCall` (the actions loader of `storybook/internal/csf`), and the mock and
- * query helpers of the test addon's loaders (`clearAllMocks`, `resetAllMocks`, `restoreAllMocks`,
- * `isMockFunction`, `within`, `uninstrumentedUserEvent`). None of them runs when a composed story
- * only renders (loaders and `beforeAll` run in `story.run()`), so each is an inert stub.
+ * The site composes stories itself (runtime.tsx) and never runs a `play` function, so the other
+ * names a `play` function may import (`expect`, `userEvent`, `within`, `waitFor`) only have to
+ * exist: each is an inert stub. Storybook's own preview modules, which import more names from
+ * `storybook/test`, are not part of the site.
  */
 export const fn =
   () =>
   (..._args: unknown[]): void => {};
 
-export const configure = (_options: unknown): void => {};
+/** Never called: `play` functions do not run on the site. */
+export const expect = (_actual: unknown): Record<string, never> => ({});
 
-export const onMockCall =
-  (_callback: unknown): (() => void) =>
-  () => {};
+/** Never called: `play` functions do not run on the site. */
+export const userEvent: Record<string, never> = {};
 
-export const clearAllMocks = (): void => {};
-export const resetAllMocks = (): void => {};
-export const restoreAllMocks = (): void => {};
-export const isMockFunction = (_value: unknown): boolean => false;
+/** Never called: `play` functions do not run on the site. */
 export const within = (_element: unknown): Record<string, never> => ({});
-export const uninstrumentedUserEvent: Record<string, never> = {};
+
+/** Never called: `play` functions do not run on the site. */
+export const waitFor = async (_callback: unknown): Promise<void> => {};
