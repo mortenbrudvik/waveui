@@ -320,6 +320,8 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   cardHeaderClassNames: ['image', 'action'],
   cardPreviewClassNames: ['logo'],
   tabListTabClassNames: ['icon'],
+  // `expandIcon` is also a named slot of the Trigger; `slotProps.expandIcon` stays (semver).
+  accordionTriggerClassNames: ['icon'],
   treeItemClassNames: ['expandIcon', 'icon', 'iconAfter'],
   carouselItemClassNames: ['thumbnail'],
   breadcrumbClassNames: ['divider'],

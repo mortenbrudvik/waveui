@@ -2,6 +2,8 @@ export { Card, CardHeader, CardPreview, CardBody, CardFooter } from './Card';
 export type {
   CardProps,
   CardAppearance,
+  CardFocusMode,
+  CardSelectionDetails,
   CardOwnProps,
   CardHeaderProps,
   CardHeaderOwnProps,
@@ -20,6 +22,10 @@ export type {
   AccordionSingleProps,
   AccordionMultipleProps,
   AccordionHeadingLevel,
+  AccordionValue,
+  AccordionSize,
+  AccordionExpandIconPosition,
+  AccordionToggleDetails,
   AccordionItemProps,
   AccordionTriggerProps,
   AccordionPanelProps,
@@ -40,6 +46,9 @@ export type {
   TreeItemProps,
   TreeItemPersonaLayoutProps,
   TreeCheckedItemsChangeDetails,
+  TreeOpenChangeDetails,
+  TreeAppearance,
+  TreeSize,
 } from './Tree';
 
 export { useFlatTree } from './useFlatTree';
@@ -60,6 +69,8 @@ export type {
   CarouselAppearance,
   CarouselControlsLayout,
   CarouselMotion,
+  CarouselChangeReason,
+  CarouselChangeDetails,
 } from './Carousel';
 
 export {

@@ -914,4 +914,31 @@ export const LightDismiss: Story = {
       <p>Page content</p>
     </div>
   ),
+
+ * `mountNode` renders an overlay drawer into an element of your choosing instead of the body (a
+ * panel, a shadow root's container, a preview frame). The panel is fixed, so it is placed against
+ * the viewport unless the node has a transform.
+ */
+export const MountNode: Story = {
+  render: function MountNodeDrawer(args) {
+    const [open, setOpen] = React.useState(false);
+    const [node, setNode] = React.useState<HTMLElement | null>(null);
+    return (
+      <div className="flex flex-col gap-3">
+        <Button onClick={() => setOpen(true)}>Open drawer</Button>
+        <div ref={setNode} className="text-wave-body-1">
+          The drawer renders inside this box.
+        </div>
+        <Drawer
+          {...args}
+          open={open}
+          onOpenChange={(next) => setOpen(next)}
+          mountNode={node}
+          title="Mounted in a node"
+        >
+          Content
+        </Drawer>
+      </div>
+    );
+  },
 };

@@ -80,6 +80,9 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   has once entered: a column sized by its content would grow to the part's longest unbreakable
  *   line (a long link, a label that does not wrap), and the part would be wider, its end side
  *   clipped and its lines broken anew, for as long as it moves.
+ *   While the element is not entered it also lifts the part's own maximum height: a percentage
+ *   maximum would follow the moving track instead of the page and squeeze the part, where the track
+ *   should only clip it. Entered, the maximum applies again, as before.
  * - `collapseMotion`, the motion of that element: its row track and its opacity. It enters from
  *   an empty, transparent track and exits back to one over the normal duration (200 ms) with the
  *   max easy-ease curve, both ways, so the space the part takes opens and closes while the content
@@ -251,10 +254,12 @@ export const tooltipMotion =
  * The structure of the element around a disclosure's collapsing part (Accordion's region, a Tree
  * group, a Nav category's list): no box while open, a clipping one-track grid of rows while it
  * enters or exits, with the part at the top of the track at its own height (clipped, not
- * squeezed) and in a whole column with a zero minimum (the width it has once entered).
+ * squeezed) and in a whole column with a zero minimum (the width it has once entered). While it is
+ * not entered it also lifts the part's own maximum height: a percentage maximum would resolve
+ * against the moving track, so the part is clipped by the track instead and keeps its height.
  */
 export const collapseStructure =
-  'wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-start wave:overflow-hidden wave:data-[presence=entered]:contents';
+  'wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-start wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-h-none';
 
 /**
  * A disclosure's default collapse, on the element around its part: the row track opens from zero

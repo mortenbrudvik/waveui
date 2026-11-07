@@ -14,6 +14,7 @@ import type {
   CardHeaderProps,
   CardOwnProps,
   CardProps,
+  CardSelectionDetails,
 } from '../Card';
 import {
   asClientReference,
@@ -911,7 +912,11 @@ describe('Card', () => {
       expectTypeOf<CardFooterProps['ref']>().toEqualTypeOf<React.Ref<HTMLDivElement> | undefined>();
       expectTypeOf<keyof CardOwnProps>().toEqualTypeOf<
         | 'selected'
+        | 'defaultSelected'
+        | 'onSelectionChange'
         | 'onSelect'
+        | 'disabled'
+        | 'focusMode'
         | 'selectionControl'
         | 'selectLabel'
         | 'appearance'
@@ -1781,5 +1786,441 @@ describe('Card and Card.Header — slotProps', () => {
     // @ts-expect-error -- the card draws the glyph
     const card: CardSlotProps = { checkmark: { children: 'x' } };
     expect([header, card]).toHaveLength(2);
+  });
+});
+
+describe('Card - disabled, uncontrolled selection and focus modes (1.1)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('disabled (card-4)', () => {
+    it('is a dimmed card with data-disabled; a plain card has no role or aria-disabled', () => {
+      render(
+        <Card disabled data-testid="card">
+          Plan
+        </Card>,
+      );
+      const card = screen.getByTestId('card');
+      expect(card).toHaveAttribute('data-disabled', '');
+      expect(card).toHaveClass('wave:opacity-50', 'wave:cursor-not-allowed');
+      expect(card).not.toHaveAttribute('aria-disabled');
+      expect(card).not.toHaveAttribute('role');
+    });
+
+    it('is not disabled by default', () => {
+      render(<Card data-testid="card">Plan</Card>);
+      expect(screen.getByTestId('card')).not.toHaveAttribute('data-disabled');
+    });
+
+    it('a selectable card reports aria-disabled, leaves the tab order and selects nothing', async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const onSelectionChange = vi.fn();
+      const onClick = vi.fn();
+      const onKeyDown = vi.fn();
+      render(
+        <Card
+          disabled
+          selected={false}
+          onSelect={onSelect}
+          onSelectionChange={onSelectionChange}
+          onClick={onClick}
+          onKeyDown={onKeyDown}
+        >
+          Plan
+        </Card>,
+      );
+      const card = screen.getByRole('button', { name: 'Plan' });
+      expect(card).toHaveAttribute('aria-disabled', 'true');
+      expect(card).not.toHaveAttribute('tabindex');
+      expect(card).not.toHaveClass('wave:cursor-pointer');
+      await user.click(card);
+      card.focus();
+      fireEvent.keyDown(card, { key: 'Enter' });
+      fireEvent.keyDown(card, { key: ' ' });
+      fireEvent.keyUp(card, { key: ' ' });
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(onSelectionChange).not.toHaveBeenCalled();
+      expect(onClick).not.toHaveBeenCalled();
+      expect(onKeyDown).not.toHaveBeenCalled();
+      await user.tab();
+      expect(card).not.toHaveFocus();
+    });
+
+    it('a native button card gets disabled', () => {
+      render(
+        <Card as="button" disabled onSelect={() => {}}>
+          Plan
+        </Card>,
+      );
+      expect(screen.getByRole('button', { name: 'Plan' })).toBeDisabled();
+    });
+
+    it('disables the built-in checkbox, and the check glyph part gets no click', () => {
+      const onClick = vi.fn();
+      const view = render(
+        <Card disabled selectionControl="checkbox" selected={false} onSelect={() => {}}>
+          <CardHeader title="Plan" />
+        </Card>,
+      );
+      expect(screen.getByRole('checkbox', { name: 'Plan' })).toBeDisabled();
+      view.unmount();
+      render(
+        <Card disabled selected onSelect={() => {}} slotProps={{ checkmark: { onClick } }}>
+          Plan
+        </Card>,
+      );
+      fireEvent.click(document.querySelector(`.${cardClassNames.checkmark}`) as Element);
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('keeps a consumer aria-disabled and the selected look, and is enabled again after', async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const { rerender } = render(
+        <Card disabled selected onSelect={onSelect} data-testid="card">
+          Plan
+        </Card>,
+      );
+      expect(screen.getByTestId('card')).toHaveAttribute('data-selected', '');
+      rerender(
+        <Card selected onSelect={onSelect} data-testid="card">
+          Plan
+        </Card>,
+      );
+      expect(screen.getByTestId('card')).not.toHaveAttribute('data-disabled');
+      expect(screen.getByTestId('card')).toHaveAttribute('tabindex', '0');
+      await user.click(screen.getByTestId('card'));
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('has no axe violations', async () => {
+      const view = render(
+        <>
+          <Card disabled onSelect={() => {}} aria-label="One">
+            One
+          </Card>
+          <Card disabled selectionControl="checkbox" selected onSelect={() => {}}>
+            <CardHeader title="Two" />
+          </Card>
+        </>,
+      );
+      await expectNoA11yViolations(view.container);
+    });
+  });
+
+  describe('uncontrolled selection and event data (card-5)', () => {
+    it('defaultSelected makes the card selectable and keeps its own state', async () => {
+      const user = userEvent.setup();
+      render(<Card defaultSelected={false}>Plan</Card>);
+      const card = screen.getByRole('button', { name: 'Plan', pressed: false });
+      await user.click(card);
+      expect(screen.getByRole('button', { name: 'Plan', pressed: true })).toBeInTheDocument();
+      expect(card).toHaveAttribute('data-selected', '');
+      await user.click(card);
+      expect(screen.getByRole('button', { name: 'Plan', pressed: false })).toBeInTheDocument();
+    });
+
+    it('starts selected with defaultSelected, in both selection controls', async () => {
+      const user = userEvent.setup();
+      const view = render(<Card defaultSelected>Plan</Card>);
+      expect(screen.getByRole('button', { name: 'Plan', pressed: true })).toBeInTheDocument();
+      view.unmount();
+      render(
+        <Card defaultSelected selectionControl="checkbox">
+          <CardHeader title="Plan" />
+        </Card>,
+      );
+      const checkbox = screen.getByRole('checkbox', { name: 'Plan' });
+      expect(checkbox).toBeChecked();
+      await user.click(checkbox);
+      expect(checkbox).not.toBeChecked();
+    });
+
+    it('onSelectionChange alone makes an unselected, uncontrolled card', async () => {
+      const user = userEvent.setup();
+      const onSelectionChange = vi.fn();
+      render(<Card onSelectionChange={onSelectionChange}>Plan</Card>);
+      await user.click(screen.getByRole('button', { name: 'Plan', pressed: false }));
+      expect(onSelectionChange).toHaveBeenCalledTimes(1);
+      expect(onSelectionChange).toHaveBeenCalledWith(true, {
+        event: expect.objectContaining({ type: 'click' }),
+      });
+    });
+
+    it('reports the new state and the event for a click, Enter, Space and the checkbox', async () => {
+      const user = userEvent.setup();
+      const onSelectionChange = vi.fn();
+      const view = render(
+        <Card defaultSelected={false} onSelectionChange={onSelectionChange}>
+          Plan
+        </Card>,
+      );
+      const card = screen.getByRole('button', { name: 'Plan' });
+      await user.click(card);
+      await user.tab();
+      card.focus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      expect(onSelectionChange.mock.calls.map(([selected]) => selected)).toEqual([
+        true,
+        false,
+        true,
+      ]);
+      expect(onSelectionChange.mock.calls.map(([, details]) => details.event.type)).toEqual([
+        'click',
+        'keydown',
+        'keyup',
+      ]);
+      view.unmount();
+      onSelectionChange.mockClear();
+      render(
+        <Card
+          selectionControl="checkbox"
+          defaultSelected={false}
+          onSelectionChange={onSelectionChange}
+        >
+          <CardHeader title="Plan" />
+        </Card>,
+      );
+      await user.click(screen.getByRole('checkbox', { name: 'Plan' }));
+      expect(onSelectionChange).toHaveBeenCalledWith(true, {
+        event: expect.objectContaining({ type: 'change' }),
+      });
+    });
+
+    it('gives onSelect the event, on every activation', async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      render(
+        <Card onSelect={onSelect} selected>
+          Plan
+        </Card>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Plan' }));
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect.mock.calls[0]?.[0]).toMatchObject({ type: 'click' });
+    });
+
+    it('a controlled card reports the state it asks for; the parent decides', async () => {
+      const user = userEvent.setup();
+      const onSelectionChange = vi.fn();
+      function Parent() {
+        const [selected, setSelected] = React.useState(false);
+        return (
+          <Card
+            selected={selected}
+            onSelectionChange={(next, details) => {
+              onSelectionChange(next, details);
+              setSelected(next);
+            }}
+          >
+            Plan
+          </Card>
+        );
+      }
+      const view = render(<Parent />);
+      await user.click(screen.getByRole('button', { name: 'Plan' }));
+      expect(screen.getByRole('button', { name: 'Plan', pressed: true })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Plan' }));
+      expect(onSelectionChange.mock.calls.map(([selected]) => selected)).toEqual([true, false]);
+      // A parent that ignores the change keeps the card as it is, and hears each request.
+      onSelectionChange.mockClear();
+      view.unmount();
+      render(
+        <Card selected={false} onSelectionChange={onSelectionChange}>
+          Plan
+        </Card>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Plan' }));
+      await user.click(screen.getByRole('button', { name: 'Plan' }));
+      expect(onSelectionChange.mock.calls.map(([selected]) => selected)).toEqual([true, true]);
+      expect(screen.getByRole('button', { name: 'Plan', pressed: false })).toBeInTheDocument();
+    });
+
+    it('calls onSelectionChange and onSelect once per click in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onSelectionChange = vi.fn();
+      const onSelect = vi.fn();
+      render(
+        <React.StrictMode>
+          <Card defaultSelected={false} onSelect={onSelect} onSelectionChange={onSelectionChange}>
+            Plan
+          </Card>
+        </React.StrictMode>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Plan' }));
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('a card with only onSelect still has no selected state of its own', async () => {
+      const user = userEvent.setup();
+      render(<Card onSelect={() => {}}>Plan</Card>);
+      const card = screen.getByRole('button', { name: 'Plan' });
+      await user.click(card);
+      expect(card).not.toHaveAttribute('aria-pressed');
+      expect(card).not.toHaveAttribute('data-selected');
+    });
+
+    it('types: onSelectionChange takes the state and details; onSelect may take the event', () => {
+      expectTypeOf<CardOwnProps['onSelectionChange']>().toEqualTypeOf<
+        ((selected: boolean, details: CardSelectionDetails) => void) | undefined
+      >();
+      expectTypeOf<CardSelectionDetails['event']>().toEqualTypeOf<
+        React.SyntheticEvent<HTMLElement>
+      >();
+      const elements = [
+        // @ts-expect-error the change callback's first argument is the boolean state
+        <Card key="1" onSelectionChange={(selected: string) => selected} />,
+        <Card key="2" onSelect={(event?: React.SyntheticEvent) => void event} />,
+      ];
+      expect(elements).toHaveLength(2);
+    });
+  });
+
+  describe('focus modes (card-6)', () => {
+    const withActions = (props: React.ComponentProps<typeof Card> = {}) => (
+      <>
+        <button type="button">Before</button>
+        <Card aria-label="Plan card" data-testid="card" {...props}>
+          <button type="button">Open</button>
+          <button type="button">Share</button>
+        </Card>
+        <button type="button">After</button>
+      </>
+    );
+
+    it('off leaves focus alone: no role, tab stop or group marker; the buttons stay tabbable', async () => {
+      const user = userEvent.setup();
+      render(withActions());
+      const card = screen.getByTestId('card');
+      expect(card).toHaveAttribute('data-focus-mode', 'off');
+      expect(card).not.toHaveAttribute('role');
+      expect(card).not.toHaveAttribute('tabindex');
+      expect(card).not.toHaveAttribute('data-focusable-group');
+      await user.tab();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+    });
+
+    it('no-tab: one group tab stop, Enter enters, Tab is trapped, Escape returns', async () => {
+      const user = userEvent.setup();
+      render(withActions({ focusMode: 'no-tab' }));
+      const card = screen.getByRole('group', { name: 'Plan card' });
+      expect(card).toHaveAttribute('data-focus-mode', 'no-tab');
+      expect(card).toHaveAttribute('tabindex', '0');
+      expect(card).toHaveAttribute('data-focusable-group', '');
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Before' })).toHaveFocus();
+      await user.tab();
+      expect(card).toHaveFocus();
+      // Tab skips the card's content.
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(card).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Share' })).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(card).toHaveFocus();
+    });
+
+    it('tab-exit: Tab past the last element leaves the card', async () => {
+      const user = userEvent.setup();
+      render(withActions({ focusMode: 'tab-exit' }));
+      const card = screen.getByRole('group', { name: 'Plan card' });
+      card.focus();
+      await user.keyboard('{F2}');
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Share' })).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'After' })).toHaveFocus();
+    });
+
+    it('tab-only: the card is one more tab stop and no key is taken', async () => {
+      const user = userEvent.setup();
+      render(withActions({ focusMode: 'tab-only' }));
+      const card = screen.getByRole('group', { name: 'Plan card' });
+      await user.tab();
+      await user.tab();
+      expect(card).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(card).toHaveFocus();
+      await user.tab();
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+    });
+
+    it('composes with your onKeyDown and onFocusCapture, and lets a role of yours win', async () => {
+      const user = userEvent.setup();
+      const onKeyDown = vi.fn();
+      const onFocusCapture = vi.fn();
+      render(withActions({ focusMode: 'no-tab', onKeyDown, onFocusCapture, role: 'region' }));
+      const card = screen.getByRole('region', { name: 'Plan card' });
+      card.focus();
+      await user.keyboard('{Enter}');
+      expect(onKeyDown).toHaveBeenCalled();
+      expect(onFocusCapture).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+    });
+
+    it('a keydown your handler prevents does not enter the group', async () => {
+      const user = userEvent.setup();
+      render(
+        withActions({
+          focusMode: 'no-tab',
+          onKeyDown: (event: React.KeyboardEvent) => event.preventDefault(),
+        }),
+      );
+      const card = screen.getByRole('group', { name: 'Plan card' });
+      card.focus();
+      await user.keyboard('{Enter}');
+      expect(card).toHaveFocus();
+    });
+
+    it('has no effect on a disabled card or a selectable card in the default mode', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const view = render(withActions({ focusMode: 'no-tab', disabled: true }));
+      const card = screen.getByTestId('card');
+      expect(card).not.toHaveAttribute('role');
+      expect(card).not.toHaveAttribute('data-focusable-group');
+      view.unmount();
+      render(
+        <Card focusMode="tab-exit" onSelect={() => {}} data-testid="card">
+          Plan
+        </Card>,
+      );
+      expect(screen.getByRole('button', { name: 'Plan' })).not.toHaveAttribute(
+        'data-focusable-group',
+      );
+      expect(messagesOf(warn)).toEqual([
+        '[WaveUI] Card: `focusMode` has no effect on a selectable card in the default mode, which is a button and must not hold focusable content. Use `selectionControl="checkbox"` for a card with interactive content.',
+      ]);
+    });
+
+    it('works with a built-in checkbox card and RTL, and has no axe violations', async () => {
+      const view = render(
+        <Card
+          selectionControl="checkbox"
+          onSelect={() => {}}
+          selected
+          focusMode="tab-exit"
+          aria-label="Plan card"
+        >
+          <CardHeader title="Plan" />
+          <CardFooter>
+            <button type="button">Details</button>
+          </CardFooter>
+        </Card>,
+      );
+      expect(screen.getByRole('group', { name: 'Plan card' })).toBeInTheDocument();
+      await expectNoA11yViolations(view.container);
+    });
   });
 });

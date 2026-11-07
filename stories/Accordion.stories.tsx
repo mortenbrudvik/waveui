@@ -70,7 +70,7 @@ export const Controlled: Story = {
         type="single"
         openItem={openItem}
         onOpenItemChange={(next) => {
-          setOpenItem(next);
+          setOpenItem(next as string | null);
           args.onOpenItemChange?.(next);
         }}
       >
@@ -151,4 +151,102 @@ export const WithDisabledItem: Story = {
       </Accordion.Item>
     </Accordion>
   ),
+};
+
+/** `collapsible={false}`: the open item cannot be closed, only replaced by opening another. */
+export const NotCollapsible: Story = {
+  args: {
+    collapsible: false,
+    defaultOpenItem: 'item-1',
+    onOpenItemChange: fn(),
+  },
+  render: (args) => <Accordion {...args}>{faqItems}</Accordion>,
+};
+
+/** `size` on the Accordion sets every trigger; a Trigger's own `size` overrides it. */
+export const Sizes: Story = {
+  render: () => (
+    <div className="flex flex-col gap-6" style={{ width: 400 }}>
+      {(['small', 'medium', 'large', 'extra-large'] as const).map((size) => (
+        <Accordion key={size} style={{ width: 400 }} size={size} defaultOpenItem="item-1">
+          <Accordion.Item value="item-1">
+            <Accordion.Trigger>Size {size}</Accordion.Trigger>
+            <Accordion.Panel>A trigger of size {size}.</Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      ))}
+    </div>
+  ),
+};
+
+const PlusMinus = ({ open }: { open: boolean }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path
+      d={open ? 'M3 7.25h10v1.5H3z' : 'M7.25 3h1.5v4.25H13v1.5H8.75V13h-1.5V8.75H3v-1.5h4.25z'}
+    />
+  </svg>
+);
+
+/**
+ * `expandIconPosition="start"` puts the chevron before the content; a custom `expandIcon` replaces
+ * it (it does not turn: it follows the trigger's `aria-expanded`), and `icon` adds a leading icon.
+ */
+export const ExpandIconAndLeadingIcon: Story = {
+  render: () => (
+    <div className="flex flex-col gap-6" style={{ width: 400 }}>
+      <Accordion expandIconPosition="start" defaultOpenItem="item-1">
+        {faqItems}
+      </Accordion>
+      <Accordion defaultOpenItem="item-1">
+        <Accordion.Item value="item-1">
+          <Accordion.Trigger icon="★" expandIcon={<PlusMinus open={false} />}>
+            Custom expand icon and a leading icon
+          </Accordion.Trigger>
+          <Accordion.Panel>The leading icon sits before the label.</Accordion.Panel>
+        </Accordion.Item>
+        <Accordion.Item value="item-2">
+          <Accordion.Trigger expandIcon={<PlusMinus open />}>Another custom icon</Accordion.Trigger>
+          <Accordion.Panel>Panel content.</Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+    </div>
+  ),
+};
+
+/** `inline` lets the trigger button take the width of its content instead of the whole row. */
+export const InlineHeader: Story = {
+  render: () => (
+    <Accordion style={{ width: 400 }}>
+      <Accordion.Item value="item-1">
+        <Accordion.Trigger inline expandIconPosition="start">
+          Inline trigger
+        </Accordion.Trigger>
+        <Accordion.Panel>The trigger is as wide as its content.</Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  ),
+};
+
+/** Item values can be numbers; `onOpenItemChange` gets the toggle details as its second argument. */
+export const NumberValues: Story = {
+  render: function NumberValuesAccordion() {
+    const [last, setLast] = React.useState('nothing yet');
+    return (
+      <div className="flex flex-col gap-3" style={{ width: 400 }}>
+        <Accordion<number>
+          onOpenItemChange={(openItem, details) =>
+            setLast(`${details?.value} ${details?.open ? 'opened' : 'closed'} (open: ${openItem})`)
+          }
+        >
+          {[1, 2, 3].map((n) => (
+            <Accordion.Item key={n} value={n}>
+              <Accordion.Trigger>Section {n}</Accordion.Trigger>
+              <Accordion.Panel>Content of section {n}.</Accordion.Panel>
+            </Accordion.Item>
+          ))}
+        </Accordion>
+        <p className="text-wave-body-1">Last change: {last}</p>
+      </div>
+    );
+  },
 };

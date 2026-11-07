@@ -35,12 +35,22 @@ import {
   type PersonaLayoutIds,
   type TreeContextValue,
   type TreeItemContextValue,
+  type TreeAppearance,
+  type TreeItemOpenControl,
+  type TreeOpenChangeDetails,
   type TreeSelectionEntry,
+  type TreeSize,
 } from './Tree.context';
+
+export type { TreeAppearance, TreeOpenChangeDetails, TreeSize };
 import {
+  allItemValues,
+  checkItems,
+  checkItemsIndependent,
   collectItems,
   computeCheckStates,
   toggleCheck,
+  toggleCheckIndependent,
   type CheckState,
   type TreeNode,
 } from './Tree.selection';
@@ -96,6 +106,22 @@ function forestInTreeOrder(
  * roving container of their own, which the default selector would count as one more item.
  */
 const TREE_ITEM_SELECTOR = '[role="treeitem"]';
+
+/** The gap and vertical padding of a row, per size (24 and 28px high). Literal strings only. */
+const ROW_SIZE_CLASSES: Readonly<Record<TreeSize, { gap: string; padding: string }>> = {
+  small: { gap: 'wave:gap-1', padding: 'wave:py-0.5' },
+  medium: { gap: 'wave:gap-1.5', padding: 'wave:py-1' },
+};
+
+/** The hover and selected fills of a row, per appearance. Literal strings only. */
+const ROW_LOOKS: Readonly<Record<TreeAppearance, { hover: string; selected: string }>> = {
+  subtle: { hover: 'wave:hover:bg-subtle-hover', selected: 'wave:bg-subtle-selected' },
+  'subtle-alpha': {
+    hover: 'wave:hover:bg-subtle-hover/60',
+    selected: 'wave:bg-subtle-selected/70',
+  },
+  transparent: { hover: '', selected: '' },
+};
 
 /** Every focusable control a row's actions can hold (Toolbar's rule). */
 const ACTION_ITEM_SELECTOR = 'button, [href], input, select, textarea, [role="button"], [tabindex]';
@@ -190,8 +216,13 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default []
    */
   defaultExpandedItems?: readonly string[];
-  /** Called with the new list of expanded item values when an item expands or collapses. */
-  onExpandedItemsChange?: (expandedItems: string[]) => void;
+  /**
+   * Called with the new list of expanded item values when an item expands or collapses, and with
+   * the item, its new state and the click or key press behind it (Fluent UI's
+   * `onOpenChange(event, { open, value, openItems })`; the open items are the first argument).
+   * An item with its own `open` is not in this list and does not call it.
+   */
+  onExpandedItemsChange?: (expandedItems: string[], details?: TreeOpenChangeDetails) => void;
   /**
    * Called with an item's value every time it is activated (a click on its row, Enter, or Space
    * unless the tree has checkboxes), also when the same item is activated again.
@@ -228,6 +259,28 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   onCheckedItemsChange?: (checkedItems: string[], details: TreeCheckedItemsChangeDetails) => void;
   /**
+   * Size of the rows (Fluent UI's `Tree size`): `small` rows are 24px high, `medium` 28px. Rendered
+   * as `data-size` on the tree.
+   * @default 'medium'
+   */
+  size?: TreeSize;
+  /**
+   * With `selectionMode="multiple"`, makes the checks independent: checking an item checks only
+   * that item, and a parent is neither checked by its children nor mixed (the default cascades,
+   * Fluent UI's behaviour). `checkedItems` then lists exactly the items checked. Rendered as
+   * `data-independent-checks` on the tree.
+   * @default false
+   */
+  independentChecks?: boolean;
+  /**
+   * Look of the rows (Fluent UI's `Tree appearance`): `subtle` fills a hovered or selected row with
+   * the subtle colors, `subtle-alpha` with translucent versions of them, so a surface behind the
+   * tree shows through, and `transparent` draws no fill at all: a selected row then shows by its
+   * bold text (and its outline in forced colors). Rendered as `data-appearance` on the tree.
+   * @default 'subtle'
+   */
+  appearance?: TreeAppearance;
+  /**
    * `'tree'`: Tab from a focused item enters its actions. `'treegrid'`: the "next" arrow
    * (ArrowRight, ArrowLeft in RTL) moves into an item's actions and "previous" returns; on an
    * expanded parent "next" no longer moves to the first child (ArrowDown does). The roles stay
@@ -263,6 +316,9 @@ export const TreeRoot = ({
   defaultCheckedItems,
   onCheckedItemsChange,
   motion,
+  size = 'medium',
+  appearance = 'subtle',
+  independentChecks = false,
   className,
   children,
   onKeyDown,
@@ -273,30 +329,79 @@ export const TreeRoot = ({
   ...rest
 }: TreeProps) => {
   const [initialExpanded] = React.useState<readonly string[]>(() => defaultExpandedItems ?? EMPTY);
+  // The request that changes the expanded list, held for `useControllable`'s change callback
+  // (called synchronously from the event path) and cleared after it.
+  const openRequest = React.useRef<{ value: string; event: Event; open?: boolean } | null>(null);
   const [expandedList, setExpandedList] = useControllable<readonly string[]>(
     expandedItems,
     initialExpanded,
-    (next) => onExpandedItemsChange?.([...next]),
+    (next) => {
+      const request = openRequest.current;
+      onExpandedItemsChange?.(
+        [...next],
+        request ? { ...request, open: request.open ?? next.includes(request.value) } : undefined,
+      );
+    },
   );
   const expanded = React.useMemo(() => new Set(expandedList), [expandedList]);
 
+  // The items with an `open` or an `onOpenChange` of their own, so `*` reaches them too.
+  const openControls = React.useRef<Map<string, TreeItemOpenControl> | null>(null);
+  const registerOpenControl = React.useCallback((value: string, control: TreeItemOpenControl) => {
+    openControls.current ??= new Map();
+    const controls = openControls.current;
+    controls.set(value, control);
+    return () => {
+      if (controls.get(value) === control) controls.delete(value);
+    };
+  }, []);
+
+  const requestExpandedChange = useEventCallback(
+    (
+      value: string,
+      event: Event,
+      change: (prev: readonly string[]) => readonly string[],
+      open?: boolean,
+    ) => {
+      openRequest.current = { value, event, open };
+      try {
+        setExpandedList(change);
+      } finally {
+        openRequest.current = null;
+      }
+    },
+  );
+
   const toggle = React.useCallback(
-    (value: string) => {
-      setExpandedList((prev) =>
+    (value: string, event: Event) => {
+      requestExpandedChange(value, event, (prev) =>
         prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
       );
     },
-    [setExpandedList],
+    [requestExpandedChange],
   );
 
   const expand = React.useCallback(
-    (values: readonly string[]) => {
-      setExpandedList((prev) => {
-        const added = values.filter((v) => !prev.includes(v));
-        return added.length > 0 ? [...prev, ...added] : prev;
-      });
+    (values: readonly string[], event: Event, origin: string) => {
+      // An item with an `open` of its own is asked to open and left out of the list.
+      const listed: string[] = [];
+      for (const value of values) {
+        const control = openControls.current?.get(value);
+        control?.open(event);
+        if (!control?.owns) listed.push(value);
+      }
+      if (listed.length === 0) return;
+      requestExpandedChange(
+        origin,
+        event,
+        (prev) => {
+          const added = listed.filter((v) => !prev.includes(v));
+          return added.length > 0 ? [...prev, ...added] : prev;
+        },
+        true,
+      );
     },
-    [setExpandedList],
+    [requestExpandedChange],
   );
 
   const activate = useEventCallback((value: string) => {
@@ -331,14 +436,54 @@ export const TreeRoot = ({
     },
     [],
   );
+  // The item checked last, where Shift+Space starts a range.
+  const anchorRef = React.useRef<string | null>(null);
+  const treeRef = React.useRef<HTMLDivElement | null>(null);
   const toggleChecked = useEventCallback((value: string, event: Event) => {
     const forest = forestInTreeOrder(topLevel.current);
+    anchorRef.current = value;
     setCheckedList((previous) => {
-      const next = toggleCheck(forest, previous, value);
+      const next = (independentChecks ? toggleCheckIndependent : toggleCheck)(
+        forest,
+        previous,
+        value,
+      );
       pendingDetails.current = { value, checked: next.includes(value), event };
       return next;
     });
     pendingDetails.current = undefined;
+  });
+  // The treeitems that are visible: not in a group that is collapsing (`inert`).
+  const getVisibleItems = useEventCallback(() =>
+    Array.from(treeRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? []).filter(
+      (el) => !el.closest('[inert]'),
+    ),
+  );
+  const checkValues = (values: readonly string[], value: string, event: Event) => {
+    const forest = forestInTreeOrder(topLevel.current);
+    setCheckedList((previous) => {
+      const next = (independentChecks ? checkItemsIndependent : checkItems)(
+        forest,
+        previous,
+        values,
+      );
+      pendingDetails.current = { value, checked: true, event };
+      return next;
+    });
+    pendingDetails.current = undefined;
+  };
+  const checkRange = useEventCallback((value: string, event: Event) => {
+    const values = getVisibleItems().map((el) => el.getAttribute('data-roving-value') ?? '');
+    const from = values.indexOf(anchorRef.current ?? value);
+    const to = values.indexOf(value);
+    const range =
+      from === -1 || to === -1 ? [value] : values.slice(Math.min(from, to), Math.max(from, to) + 1);
+    anchorRef.current ??= value;
+    checkValues(range, value, event);
+  });
+  const checkAll = useEventCallback((value: string, event: Event) => {
+    anchorRef.current = value;
+    checkValues(allItemValues(forestInTreeOrder(topLevel.current)), value, event);
   });
 
   // An item carries aria-checked or aria-selected, never both (APG); in single mode every item
@@ -400,6 +545,7 @@ export const TreeRoot = ({
       expanded,
       toggle,
       expand,
+      registerOpenControl,
       activate,
       selected: effectiveSelected,
       current,
@@ -414,11 +560,18 @@ export const TreeRoot = ({
       toggleChecked,
       registerTopLevel,
       motion,
+      independentChecks,
+      checkRange,
+      checkAll,
+      getVisibleItems,
+      size,
+      appearance,
     }),
     [
       expanded,
       toggle,
       expand,
+      registerOpenControl,
       activate,
       effectiveSelected,
       current,
@@ -432,10 +585,16 @@ export const TreeRoot = ({
       toggleChecked,
       registerTopLevel,
       motion,
+      independentChecks,
+      checkRange,
+      checkAll,
+      getVisibleItems,
+      size,
+      appearance,
     ],
   );
 
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref, treeRef);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // Typeahead reads `data-roving-text` at key time: fill it from each item's label first.
@@ -461,6 +620,11 @@ export const TreeRoot = ({
           <div
             role="tree"
             data-selection-mode={selectionMode}
+            data-size={size}
+            data-appearance={appearance}
+            data-independent-checks={
+              selectionMode === 'multiple' && independentChecks ? '' : undefined
+            }
             aria-multiselectable={selectionMode === 'multiple' ? true : undefined}
             className={wcn(treeClassNames.root, 'wave:text-body-1', className)}
             {...rest}
@@ -534,6 +698,33 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default false
    */
   leaf?: boolean;
+  /**
+   * Keeps the `actions` shown whatever the pointer and focus do, so a hidden action cannot refuse
+   * the focus that a surface returns to it. Set it while a Dialog, Menu or Popover that your app
+   * renders outside `actions` and opens through state (a "Delete…" menu item that opens a confirm
+   * Dialog) is open, and clear it after the surface has closed and returned focus: the actions
+   * then take that focus instead of the item. The actions also give way to the `aside` while held,
+   * as while they have focus. Rendered as `data-focus-in-popup` on the actions.
+   * @default false
+   */
+  actionsVisible?: boolean;
+  /**
+   * Controls this item's expanded state from outside the tree's list (Fluent UI's `TreeItem
+   * open`): `true` shows the child group, `false` hides it, whatever `expandedItems` and
+   * `defaultExpandedItems` say about this item. The item's chevron, Enter, Space, the arrow keys
+   * and a click ask for a change through `onOpenChange` and nothing else changes until you pass the
+   * new value; the tree's `onExpandedItemsChange` is not called for an item with its own `open`.
+   * The `*` key asks every collapsed sibling with an `open` through its `onOpenChange` as well.
+   * Without it the tree's `expandedItems` decides.
+   */
+  open?: boolean;
+  /**
+   * Called when the item expands or collapses by the user, with the new state and the click or key
+   * press behind it (Fluent UI's `onOpenChange(event, { open })`): for an item with its own `open`
+   * (which you then update) and for one in the tree's list, before the tree's
+   * `onExpandedItemsChange`. Not called for an item that has no nested items.
+   */
+  onOpenChange?: (open: boolean, details: TreeOpenChangeDetails) => void;
   /** Ref to the `role="treeitem"` element. */
   ref?: React.Ref<HTMLDivElement>;
   /**
@@ -690,6 +881,8 @@ interface TreeItemActionsProps {
   navigationMode: 'tree' | 'treegrid';
   /** Moves focus back to the item. */
   onReturn: () => void;
+  /** The item's `actionsVisible`: the actions stay shown whatever the pointer and focus do. */
+  held: boolean;
   /** The item's `slotProps.actions`, merged only when given. */
   part: SlotPart<'span'> | undefined;
   children: React.ReactNode;
@@ -706,6 +899,7 @@ const TreeItemActions = ({
   tabStop,
   navigationMode,
   onReturn,
+  held,
   part,
   children,
 }: TreeItemActionsProps) => {
@@ -785,7 +979,7 @@ const TreeItemActions = ({
   // A part's ref joins the roving container's after the spread, so an inline ref never detaches
   // the container (which would hand its stamped tab stops back).
   const toolbarRef = useMergedRefs<HTMLSpanElement>(rovingRef, part?.ref);
-  const focusInPopup = popupFocus === null ? undefined : '';
+  const focusInPopup = popupFocus === null && !held ? undefined : '';
   const className = wcn(
     treeItemClassNames.actions,
     'wave:inline-flex wave:items-center wave:gap-1',
@@ -876,6 +1070,9 @@ export const TreeItem = ({
   aside,
   actions,
   leaf = false,
+  actionsVisible = false,
+  open,
+  onOpenChange,
   className,
   children,
   onClick,
@@ -892,7 +1089,8 @@ export const TreeItem = ({
   const ctx = useTreeContext('Tree.Item');
   const parent = React.useContext(TreeParentContext);
   const insideLabel = React.useContext(TreeLabelContext);
-  const isExpanded = ctx.expanded.has(value);
+  const ownsOpen = open !== undefined;
+  const isExpanded = ownsOpen ? open : ctx.expanded.has(value);
   const labelId = useId('tree-item-label');
   const asideId = useId('tree-item-aside');
   const ancestorListed = React.useContext(TreeCheckForcedContext);
@@ -911,8 +1109,28 @@ export const TreeItem = ({
   );
   const nameId = layoutIds?.nameId ?? labelId;
 
-  const { registerValue, registerTopLevel } = ctx;
+  const { registerValue, registerTopLevel, registerOpenControl } = ctx;
   React.useEffect(() => registerValue(value), [registerValue, value]);
+
+  // Asks for the item to open or close: the item's own callback first, then the tree's list unless
+  // the item has an `open` of its own.
+  const requestOpen = useEventCallback((next: boolean, event: Event) => {
+    onOpenChange?.(next, { value, open: next, event });
+    if (!ownsOpen) ctx.toggle(value, event);
+  });
+  const hasOpenCallback = onOpenChange !== undefined;
+  const openForKey = useEventCallback((event: Event) => {
+    // The key's request: only the callback of an item with its own `open` (the tree changes its
+    // list for the others).
+    onOpenChange?.(true, { value, open: true, event });
+  });
+  React.useLayoutEffect(
+    () =>
+      ownsOpen || hasOpenCallback
+        ? registerOpenControl(value, { owns: ownsOpen, open: openForKey })
+        : undefined,
+    [registerOpenControl, value, ownsOpen, hasOpenCallback, openForKey],
+  );
   React.useEffect(() => {
     if (insideLabel) warnOnce('Tree.Item:inside-label', ITEM_IN_LABEL_MESSAGE);
   }, [insideLabel]);
@@ -1015,7 +1233,11 @@ export const TreeItem = ({
     [multiple, value, leaf, children],
   );
   const checkState: CheckState | undefined = ownNode
-    ? computeCheckStates([ownNode], ctx.checked, ancestorListed).get(value)
+    ? ctx.independentChecks
+      ? ctx.checked.has(value)
+        ? 'checked'
+        : 'unchecked'
+      : computeCheckStates([ownNode], ctx.checked, ancestorListed).get(value)
     : undefined;
   const selectionEntry = React.useRef<TreeSelectionEntry | null>(null);
   React.useLayoutEffect(() => {
@@ -1029,32 +1251,63 @@ export const TreeItem = ({
   const isSelected = ctx.selected !== undefined ? ctx.selected === value : undefined;
   const isCurrent = ctx.current !== undefined && ctx.current !== null && ctx.current === value;
 
-  const activate = () => {
-    if (hasChildren) ctx.toggle(value);
+  const activate = (event: Event) => {
+    if (hasChildren) requestOpen(!isExpanded, event);
     ctx.activate(value);
   };
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!isOwnClick(event)) return;
     onClick?.(event);
-    if (!event.defaultPrevented) activate();
+    if (!event.defaultPrevented) activate(event.nativeEvent);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isOwnKeyEvent(event)) return;
     onKeyDown?.(event);
-    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.defaultPrevented) return;
+
+    // Range selection in a checkbox tree (APG, optional): Ctrl+A checks every item, Shift+Space
+    // the items between the last one checked and this one, Shift+Up and Down move and toggle.
+    if (checkState !== undefined && !event.altKey) {
+      const key = event.key;
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'a') {
+        event.preventDefault();
+        ctx.checkAll(value, event.nativeEvent);
+        return;
+      }
+      if (event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        if (key === ' ') {
+          event.preventDefault();
+          ctx.checkRange(value, event.nativeEvent);
+          return;
+        }
+        if (key === 'ArrowDown' || key === 'ArrowUp') {
+          const visible = ctx.getVisibleItems();
+          const index = visible.indexOf(event.currentTarget);
+          const target = visible[index + (key === 'ArrowDown' ? 1 : -1)];
+          event.preventDefault();
+          const targetValue = target?.getAttribute('data-roving-value');
+          if (target && targetValue != null) {
+            ctx.focusValue(targetValue);
+            ctx.toggleChecked(targetValue, event.nativeEvent);
+          }
+          return;
+        }
+      }
+    }
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
 
     switch (event.key) {
       case 'Enter':
         event.preventDefault();
-        activate();
+        activate(event.nativeEvent);
         return;
       case ' ':
         event.preventDefault();
         // A checkbox tree toggles the focused item's check (APG); the other modes activate.
         if (checkState !== undefined) ctx.toggleChecked(value, event.nativeEvent);
-        else activate();
+        else activate(event.nativeEvent);
         return;
       case '*': {
         event.preventDefault();
@@ -1065,6 +1318,8 @@ export const TreeItem = ({
           Array.from(siblings ?? [], (el) => el.getAttribute('data-roving-value') ?? '').filter(
             Boolean,
           ),
+          event.nativeEvent,
+          value,
         );
         return;
       }
@@ -1078,7 +1333,7 @@ export const TreeItem = ({
     if (intent === 'next') {
       event.preventDefault();
       if (hasChildren && !isExpanded) {
-        ctx.toggle(value);
+        requestOpen(true, event.nativeEvent);
         return;
       }
       // Treegrid navigation moves into the row's actions, also from an open parent (Down reaches
@@ -1087,7 +1342,7 @@ export const TreeItem = ({
       if (hasChildren && firstChildValue !== undefined) ctx.focusValue(firstChildValue);
     } else if (intent === 'prev') {
       event.preventDefault();
-      if (hasChildren && isExpanded) ctx.toggle(value);
+      if (hasChildren && isExpanded) requestOpen(false, event.nativeEvent);
       else if (parent !== null) ctx.focusValue(parent);
     }
   };
@@ -1217,13 +1472,19 @@ export const TreeItem = ({
   const indicator = checkbox ?? radio;
 
   // Items in this item's group are checked when the list checks this item or an ancestor.
-  const groupListed = ancestorListed || (multiple && ctx.checked.has(value));
+  const groupListed =
+    !ctx.independentChecks && (ancestorListed || (multiple && ctx.checked.has(value)));
 
+  const looks = ROW_LOOKS[ctx.appearance];
   const rowClasses = wcn(
     treeItemClassNames.row,
-    'wave:flex wave:cursor-pointer wave:items-center wave:gap-1.5 wave:rounded wave:px-2 wave:py-1 wave:hover:bg-subtle-hover',
+    'wave:flex wave:cursor-pointer wave:items-center',
+    ROW_SIZE_CLASSES[ctx.size].gap,
+    'wave:rounded wave:px-2',
+    ROW_SIZE_CLASSES[ctx.size].padding,
+    looks.hover,
     hasActions && 'wave:group/row',
-    isSelected && wcn('wave:bg-subtle-selected wave:font-semibold', forcedColors.selectedContainer),
+    isSelected && wcn(looks.selected, 'wave:font-semibold', forcedColors.selectedContainer),
   );
   // The label shrinks (and truncates) when the row has content after it.
   const labelClasses = wcn(
@@ -1363,6 +1624,7 @@ export const TreeItem = ({
                 }
                 navigationMode={ctx.navigationMode}
                 onReturn={() => ctx.focusValue(value)}
+                held={actionsVisible}
                 part={slotProps?.actions}
               >
                 {materialiseSlotContent(actions)}

@@ -236,6 +236,11 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
    * motion, is no value and warns about nothing).
    */
   backdropMotion?: MotionSlot | null;
+  /**
+   * Overlay only: the element the panel and its backdrop render into, in place of the
+   * `WaveProvider`'s `portalContainer` or `document.body`. Ignored inline.
+   */
+  mountNode?: HTMLElement | null;
   /** The panel's id (always set: triggers point `aria-controls` at it). */
   id: string;
   /** Merged with the shell's own ref and the presence ref. */
@@ -289,6 +294,7 @@ export const DrawerPanel = ({
   backdrop,
   motion,
   backdropMotion,
+  mountNode,
   id,
   className,
   onKeyDown,
@@ -469,7 +475,7 @@ export const DrawerPanel = ({
   }
 
   return (
-    <Portal ref={portalRef} layerId={layer.layerId}>
+    <Portal ref={portalRef} layerId={layer.layerId} container={mountNode ?? undefined}>
       {/* The backdrop of a modal or alert panel, the panel's sibling; a non-modal one has none.
           Both carry the presence attributes (D7, D103): hidden and inert while kept closed, so a
           closed panel leaves no backdrop over the page. */}

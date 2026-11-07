@@ -16,7 +16,7 @@ export interface UseCarouselDragOptions {
   /** The resolved direction: dragging towards the start of the page order shows the next page. */
   dir: 'ltr' | 'rtl';
   /** Called once when a drag ends: `1` shows the next page, `-1` the previous, `0` snaps back. */
-  onCommit: (delta: -1 | 0 | 1) => void;
+  onCommit: (delta: -1 | 0 | 1, event: Event) => void;
 }
 
 export interface UseCarouselDragResult {
@@ -62,14 +62,14 @@ export function useCarouselDrag({
   const session = React.useRef<Session | null>(null);
   const swallowClick = React.useRef(false);
 
-  const finish = (commit: boolean) => {
+  const finish = (commit: boolean, event: Event) => {
     const current = session.current;
     session.current = null;
     if (!current?.active) return;
     setDragging(false);
     setOffsetPx(0);
     if (!commit) {
-      onCommit(0);
+      onCommit(0, event);
       return;
     }
     const distance = current.last.x - current.startX;
@@ -84,7 +84,7 @@ export function useCarouselDrag({
     else if (current.width > 0 && Math.abs(distance) > current.width * COMMIT_DISTANCE_RATIO) {
       delta = Math.sign(distance) === forward ? 1 : -1;
     }
-    onCommit(delta);
+    onCommit(delta, event);
   };
 
   if (!enabled) return { dragging: false, offsetPx: 0, handlers: {} };
@@ -133,12 +133,12 @@ export function useCarouselDrag({
       const current = session.current;
       if (!current || event.pointerId !== current.pointerId) return;
       if (current.active) swallowClick.current = true;
-      finish(true);
+      finish(true, event.nativeEvent);
     },
     onPointerCancel: (event) => {
       const current = session.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      finish(false);
+      finish(false, event.nativeEvent);
     },
     onClickCapture: (event) => {
       // The click a browser sends after a mouse drag has a detail; a keyboard or programmatic

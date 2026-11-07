@@ -115,6 +115,8 @@ const INERT_REGISTRY: TabListRegistry = {
 interface TabListStructure {
   /** Value of the first Tab without `disabled`/`aria-disabled`: the uncontrolled default. */
   firstEnabled?: string;
+  /** Value of the first Tab: the uncontrolled default of a TabList that is `disabled` as a whole. */
+  first?: string;
   /** Consumer `id`s of Tabs, by value. */
   tabIds: Array<[string, string]>;
   /** Values of the Panels, each with its consumer `id` or `null`. */
@@ -123,6 +125,32 @@ interface TabListStructure {
 
 /** The look of a TabList: an underline, subtle fills, or circular subtle or filled tabs. */
 export type TabListAppearance = 'transparent' | 'subtle' | 'subtle-circular' | 'filled-circular';
+
+/**
+ * The box of a selected tab's line as the user sees it now, in physical pixels along the list's
+ * axis: where it starts and how long it is. While the line slides, its translate and scale are
+ * mid-transition, so the box is the tab's box moved by the computed `translate` and stretched by
+ * the computed `scale` of the tab's after pseudo-element (the line draws from the tab's own edge:
+ * `origin-left` or `origin-top`). A computed value that is not a pixel length or a number counts
+ * as no translate or scale.
+ */
+function visibleLine(
+  tab: HTMLElement,
+  tabRect: DOMRect,
+  vertical: boolean,
+): { start: number; size: number } {
+  const style = tab.ownerDocument.defaultView?.getComputedStyle(tab, '::after');
+  // `translate` serializes as `none`, `12px` or `12px 4px`; `scale` as `none`, `0.5` (both axes)
+  // or `0.5 1`.
+  const translate = (style?.translate ?? '').split(/\s+/);
+  const scale = (style?.scale ?? '').split(/\s+/);
+  const move = parseFloat(vertical ? (translate[1] ?? '') : (translate[0] ?? ''));
+  const stretch = parseFloat(vertical ? (scale[1] ?? scale[0] ?? '') : (scale[0] ?? ''));
+  return {
+    start: (vertical ? tabRect.top : tabRect.left) + (Number.isFinite(move) ? move : 0),
+    size: (vertical ? tabRect.height : tabRect.width) * (Number.isFinite(stretch) ? stretch : 1),
+  };
+}
 
 /**
  * Where the selected tab's line starts its slide (FLIP), measured in physical pixels from the tab
@@ -141,6 +169,8 @@ interface TabListContextValue {
   orientation: Orientation;
   appearance: TabListAppearance;
   size: CoreSize;
+  /** Whether the whole TabList is disabled: every tab is. */
+  disabled: boolean;
   /** Whether the tab with this value is the selected one (explicit value, else the tab stop). */
   isSelected: (value: string) => boolean;
   /**
@@ -177,6 +207,7 @@ const INERT_CONTEXT: TabListContextValue = {
   orientation: 'horizontal',
   appearance: 'transparent',
   size: 'medium',
+  disabled: false,
   isSelected: () => false,
   select: () => {},
   getTabIndex: () => -1,
@@ -233,6 +264,7 @@ function collectStructure(node: unknown, into: TabListStructure): TabListStructu
   const value = typeof props.value === 'string' ? props.value : undefined;
   if (type === Tab) {
     if (value !== undefined) {
+      into.first ??= value;
       if (into.firstEnabled === undefined && !isUnavailable(props)) into.firstEnabled = value;
       const id = consumerId(props.id);
       if (id !== null) into.tabIds.push([value, id]);
@@ -327,6 +359,15 @@ export interface TabListProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
    */
   size?: CoreSize;
   /**
+   * Disables the whole list (Fluent UI's `TabList disabled`): every tab is `disabled`, so none can
+   * be focused or selected, and the tablist reports `aria-disabled="true"` and a boolean
+   * `data-disabled`. The selected tab keeps its selected look and its panel stays shown: a
+   * controlled `value` or `defaultValue` still selects, and without either the first tab does. A
+   * tab's own `disabled` adds to it.
+   * @default false
+   */
+  disabled?: boolean;
+  /**
    * Whether moving focus with the arrow keys, Home and End also selects the tab (automatic
    * activation, as in 0.5). With `false`, the keys only move focus and Enter, Space or a click
    * selects the focused tab (manual activation, for panels that are slow to show). Fluent's
@@ -361,12 +402,15 @@ const TabListRoot = ({
   orientation: orientationProp,
   appearance = 'transparent',
   size = 'medium',
+  disabled = false,
   selectTabOnFocus = true,
   motion,
   className,
   children,
   onKeyDown,
   onFocus,
+  onTransitionEnd,
+  onTransitionCancel,
   ref,
   ...rest
 }: TabListProps) => {
@@ -386,6 +430,7 @@ const TabListRoot = ({
     const parsed = JSON.parse(structureKey) as TabListStructure;
     return {
       firstEnabled: parsed.firstEnabled,
+      first: parsed.first,
       tabIds: new Map(parsed.tabIds),
       panels: new Map(parsed.panels),
     };
@@ -408,13 +453,47 @@ const TabListRoot = ({
     onFocusMove: selectTabOnFocus ? (next) => select(next) : undefined,
   });
 
+  // A disabled list has no enabled tab for the roving stop to rest on: its derived selection is
+  // the first tab.
+  const firstTab = structure.first;
   const isSelected = React.useCallback(
-    (tabValue: string) => (derivesSelection ? getTabIndex(tabValue) === 0 : selected === tabValue),
-    [derivesSelection, getTabIndex, selected],
+    (tabValue: string) =>
+      derivesSelection
+        ? disabled
+          ? firstTab === tabValue
+          : getTabIndex(tabValue) === 0
+        : selected === tabValue,
+    [derivesSelection, disabled, firstTab, getTabIndex, selected],
   );
 
+  const tablistRef = React.useRef<HTMLDivElement>(null);
+  // Whether a line may still be sliding: set when a slide starts, cleared when its transition ends
+  // or is cancelled. A reselection while it is set starts the next slide from the line's visible
+  // box, read before the commit that removes the line from the tab selected until then.
+  const lineMovingRef = React.useRef(false);
+  const lineBoxRef = React.useRef<{ value: string; start: number; size: number } | null>(null);
+
   const select = useEventCallback((next: string) => {
-    if (!isSelected(next)) setSelected(next);
+    if (isSelected(next)) return;
+    // The line is still drawn by the tab selected until now: read its box before the change
+    // renders, for the layout effect of that render (a change that does not render this way, a
+    // controlled parent that ignores it or answers later, leaves it unused and it is dropped).
+    lineBoxRef.current = null;
+    const tablist = tablistRef.current;
+    const tab = lineMovingRef.current
+      ? tablist?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      : null;
+    const tabValue = tab?.getAttribute('data-roving-value');
+    if (tab && tabValue != null) {
+      lineBoxRef.current = {
+        value: tabValue,
+        ...visibleLine(tab, tab.getBoundingClientRect(), orientation === 'vertical'),
+      };
+      queueMicrotask(() => {
+        lineBoxRef.current = null;
+      });
+    }
+    setSelected(next);
   });
 
   const baseId = useId('tablist');
@@ -430,7 +509,6 @@ const TabListRoot = ({
   const slidesIndicator =
     appearance === 'transparent' && indicatorMotion !== '' && !prefersReducedMotion;
   const [indicator, setIndicator] = React.useState<TabIndicatorStart | null>(null);
-  const tablistRef = React.useRef<HTMLDivElement>(null);
   // The value of the tab that drew the line after the last selection change seen, `null` before
   // the first one is seen (nothing slides on mount).
   const lineValueRef = React.useRef<string | null>(null);
@@ -456,14 +534,27 @@ const TabListRoot = ({
     if (nextValue === previousValue) return;
     const previous = tabs.find((tab) => valueOf(tab) === previousValue);
     if (!previous) return;
-    const from = previous.getBoundingClientRect();
     const to = next.getBoundingClientRect();
     const size = isVertical ? to.height : to.width;
     if (size === 0) return;
+    // The line starts where it is seen: over the tab selected before, or, while it still slides
+    // there from an earlier selection, over its box mid-slide.
+    const seen = lineBoxRef.current;
+    lineBoxRef.current = null;
+    let start: number;
+    let length: number;
+    if (seen && seen.value === previousValue) {
+      ({ start, size: length } = seen);
+    } else {
+      const from = previous.getBoundingClientRect();
+      start = isVertical ? from.top : from.left;
+      length = isVertical ? from.height : from.width;
+    }
+    lineMovingRef.current = true;
     setIndicator({
       value: nextValue,
-      offset: isVertical ? from.top - to.top : from.left - to.left,
-      scale: (isVertical ? from.height : from.width) / size,
+      offset: start - (isVertical ? to.top : to.left),
+      scale: length / size,
     });
   }, [isSelected, slidesIndicator, isVertical]);
 
@@ -476,11 +567,17 @@ const TabListRoot = ({
     return () => cancelAnimationFrame(frame);
   }, [indicator]);
 
+  // A line's transition (on a tab's after pseudo-element) has ended: it no longer slides.
+  const endLineSlide = useEventCallback((event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.pseudoElement === '::after') lineMovingRef.current = false;
+  });
+
   const context = React.useMemo<TabListContextValue>(
     () => ({
       orientation,
       appearance,
       size,
+      disabled,
       isSelected,
       select,
       getTabIndex,
@@ -500,6 +597,7 @@ const TabListRoot = ({
       orientation,
       appearance,
       size,
+      disabled,
       isSelected,
       select,
       getTabIndex,
@@ -526,6 +624,8 @@ const TabListRoot = ({
         <div
           role="tablist"
           aria-orientation={orientation}
+          aria-disabled={disabled ? true : undefined}
+          data-disabled={disabled ? '' : undefined}
           data-appearance={appearance}
           data-size={size}
           data-orientation={orientation}
@@ -542,6 +642,12 @@ const TabListRoot = ({
           {...rest}
           data-roving-container=""
           onKeyDown={composeEventHandlers(onKeyDown, containerProps.onKeyDown)}
+          onTransitionEnd={composeEventHandlers(onTransitionEnd, endLineSlide, {
+            checkDefaultPrevented: false,
+          })}
+          onTransitionCancel={composeEventHandlers(onTransitionCancel, endLineSlide, {
+            checkDefaultPrevented: false,
+          })}
           onFocus={composeEventHandlers(onFocus, containerProps.onFocus, {
             checkDefaultPrevented: false,
           })}
@@ -683,7 +789,7 @@ const Tab = ({
         '--wave-tab-indicator-scale': String(lineStart.scale),
       } as React.CSSProperties)
     : style;
-  const unavailable = isUnavailable(rest);
+  const unavailable = ctx.disabled || isUnavailable(rest);
   const hasIcon = !!icon && slotRendersContent(icon);
   const iconOnly = hasIcon && !slotRendersContent(children);
   const ariaLabel = rest['aria-label'];
@@ -733,6 +839,7 @@ const Tab = ({
       style={tabStyle}
       {...rest}
       id={id}
+      disabled={ctx.disabled ? true : rest.disabled}
       aria-selected={selected}
       aria-controls={selected ? panelId : undefined}
       tabIndex={ctx.getTabIndex(value)}

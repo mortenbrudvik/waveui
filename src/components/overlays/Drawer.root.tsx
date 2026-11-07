@@ -263,6 +263,16 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    */
   unmountOnClose?: boolean;
   /**
+   * The element an overlay drawer's panel and backdrop render into, in place of the
+   * `WaveProvider`'s `portalContainer` or `document.body` (Fluent's `mountNode`; a nested
+   * `WaveProvider` with its own `portalContainer` was the only way before). It keeps the theme
+   * classes, direction and token overrides of the provider around the Drawer. Ignored by an
+   * inline drawer. The panel is `position: fixed`, so the node needs no positioning of its own
+   * unless a transform or filter on it makes it the containing block.
+   * @default the provider's `portalContainer`, else `document.body`
+   */
+  mountNode?: HTMLElement | null;
+  /**
    * The drawer's content, placed by the Drawer, also from a Fragment (`{isMobile && <>…</>}`) and
    * when written in a Server Component: `Drawer.Trigger` children render in place (outside the
    * panel); a `Drawer.Header` replaces the built-in header (the `title` and Close button row); a

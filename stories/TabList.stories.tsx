@@ -215,3 +215,21 @@ export const Motion: Story = {
     </div>
   ),
 };
+
+/** `disabled` disables every tab at once; the selected tab and its panel stay as they are. */
+export const Disabled: Story = {
+  args: {
+    disabled: true,
+    defaultValue: 'tab2',
+  },
+  render: (args) => (
+    <TabList {...args}>
+      <TabList.Tab value="tab1">Tab 1</TabList.Tab>
+      <TabList.Tab value="tab2">Tab 2</TabList.Tab>
+      <TabList.Tab value="tab3">Tab 3</TabList.Tab>
+      <TabList.Panel value="tab1">Content for Tab 1</TabList.Panel>
+      <TabList.Panel value="tab2">Content for Tab 2</TabList.Panel>
+      <TabList.Panel value="tab3">Content for Tab 3</TabList.Panel>
+    </TabList>
+  ),
+};

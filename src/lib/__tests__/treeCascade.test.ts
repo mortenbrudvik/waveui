@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { computeCheckStates, toggleCheck, type CheckState, type TreeNode } from '../treeCascade';
+import {
+  allItemValues,
+  checkItems,
+  checkItemsIndependent,
+  computeCheckStates,
+  toggleCheck,
+  toggleCheckIndependent,
+  type CheckState,
+  type TreeNode,
+} from '../treeCascade';
 
 const node = (value: string, ...children: TreeNode[]): TreeNode => ({ value, children });
 
@@ -169,5 +178,139 @@ describe('toggleCheck', () => {
     const next = toggleCheck(FILES, listed, 'slides');
     expect(next).not.toBe(listed);
     expect(listed).toEqual(['report']);
+  });
+});
+
+describe('checkItems', () => {
+  it('checks each value with the cascade, in tree order, and keeps what is checked', () => {
+    expect(checkItems(FILES, [], ['work', 'readme'])).toEqual([
+      'work',
+      'report',
+      'slides',
+      'readme',
+    ]);
+    expect(checkItems(FILES, ['readme'], ['report'])).toEqual(['report', 'readme']);
+    // Checking the last unchecked child checks the parent.
+    expect(checkItems(FILES, ['report'], ['slides'])).toEqual(['work', 'report', 'slides']);
+    expect(checkItems(FILES, ['report'], ['slides', 'personal'])).toEqual([
+      'docs',
+      'work',
+      'report',
+      'slides',
+      'personal',
+    ]);
+  });
+
+  it('is not a toggle: a checked item stays checked', () => {
+    expect(checkItems(FILES, ['work', 'report', 'slides'], ['work'])).toEqual([
+      'work',
+      'report',
+      'slides',
+    ]);
+    expect(toggleCheck(FILES, ['work', 'report', 'slides'], 'work')).toEqual([]);
+  });
+
+  it('handles values no item has, listed once, after the items', () => {
+    expect(checkItems(FILES, ['stray'], ['readme', 'stray', 'other', 'other'])).toEqual([
+      'readme',
+      'stray',
+      'other',
+    ]);
+    expect(checkItems(FILES, [], [])).toEqual([]);
+  });
+});
+
+describe('independent checks', () => {
+  it('toggles one item and nothing else', () => {
+    expect(toggleCheckIndependent(FILES, [], 'work')).toEqual(['work']);
+    expect(toggleCheckIndependent(FILES, ['work'], 'report')).toEqual(['work', 'report']);
+    expect(toggleCheckIndependent(FILES, ['work', 'report'], 'work')).toEqual(['report']);
+  });
+
+  it('lists the checked items in tree order, then the values no item has', () => {
+    expect(toggleCheckIndependent(FILES, ['readme', 'stray'], 'report')).toEqual([
+      'report',
+      'readme',
+      'stray',
+    ]);
+    expect(toggleCheckIndependent(FILES, ['stray'], 'stray')).toEqual([]);
+    expect(toggleCheckIndependent(FILES, [], 'stray')).toEqual(['stray']);
+  });
+
+  it('checks several values, each on its own', () => {
+    expect(checkItemsIndependent(FILES, ['readme'], ['personal', 'work'])).toEqual([
+      'work',
+      'personal',
+      'readme',
+    ]);
+    expect(checkItemsIndependent(FILES, ['docs'], ['docs'])).toEqual(['docs']);
+  });
+});
+
+describe('allItemValues', () => {
+  it('lists every value in tree order, each once', () => {
+    expect(allItemValues(FILES)).toEqual([
+      'docs',
+      'work',
+      'report',
+      'slides',
+      'personal',
+      'images',
+      'photo',
+      'readme',
+    ]);
+    expect(allItemValues([node('a', node('b')), node('b')])).toEqual(['a', 'b']);
+    expect(allItemValues([])).toEqual([]);
+  });
+});
+
+describe('deep trees (the walks are iterative)', () => {
+  /** A chain of `depth` nested items: v0 > v1 > … > v(depth-1). */
+  function chain(depth: number): { root: TreeNode; last: TreeNode } {
+    const root = node('v0');
+    let last = root;
+    for (let level = 1; level < depth; level += 1) {
+      const child = node(`v${level}`);
+      last.children.push(child);
+      last = child;
+    }
+    return { root, last };
+  }
+  const DEPTH = 5000;
+
+  it('computes the states of a 5,000-level chain', () => {
+    const { root, last } = chain(DEPTH);
+    const states = computeCheckStates([root], new Set([last.value]));
+    expect(states.size).toBe(DEPTH);
+    expect(states.get('v0')).toBe('checked');
+    expect(states.get(last.value)).toBe('checked');
+    const none = computeCheckStates([root], new Set());
+    expect(none.get('v0')).toBe('unchecked');
+    // A listed item in the middle checks everything below it and leaves its ancestors mixed.
+    const middle = computeCheckStates([root], new Set(['v2500']));
+    expect(middle.get('v2499')).toBe('checked');
+    expect(middle.get('v4999')).toBe('checked');
+    expect(middle.get('v0')).toBe('checked');
+    expect(computeCheckStates([root], new Set(), true).get(last.value)).toBe('checked');
+  });
+
+  it('toggles, checks and lists a 5,000-level chain', () => {
+    const { root, last } = chain(DEPTH);
+    const all = allItemValues([root]);
+    expect(all).toHaveLength(DEPTH);
+    expect(toggleCheck([root], [], 'v0')).toEqual(all);
+    expect(toggleCheck([root], [], last.value)).toEqual(all);
+    expect(toggleCheck([root], all, 'v2500')).toEqual([]);
+    expect(checkItems([root], [], ['v4000'])).toEqual(all.slice(0));
+    expect(toggleCheckIndependent([root], [], 'v4999')).toEqual(['v4999']);
+    expect(checkItemsIndependent([root], [], ['v10', 'v9'])).toEqual(['v9', 'v10']);
+  });
+
+  it('a wide and deep forest gives the same answers as the shallow ones', () => {
+    const wide = Array.from({ length: 3000 }, (_, index) => node(`w${index}`, node(`c${index}`)));
+    const states = computeCheckStates(wide, new Set(['c2999']));
+    expect(states.get('w2999')).toBe('checked');
+    expect(states.get('w0')).toBe('unchecked');
+    expect(toggleCheck(wide, [], 'w1')).toEqual(['w1', 'c1']);
   });
 });

@@ -1860,3 +1860,119 @@ describe('TabList - panels still loading inside their own Suspense', () => {
     });
   });
 });
+
+describe('TabList - disabled as a whole (1.1)', () => {
+  it('disables every tab and reports aria-disabled and data-disabled on the tablist', () => {
+    render(
+      <TabList aria-label="Sections" disabled>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    const list = screen.getByRole('tablist', { name: 'Sections' });
+    expect(list).toHaveAttribute('aria-disabled', 'true');
+    expect(list).toHaveAttribute('data-disabled', '');
+    for (const name of ['Tab A', 'Tab B', 'Tab C']) expect(tab(name)).toBeDisabled();
+  });
+
+  it('renders neither attribute by default', () => {
+    render(<TabList aria-label="Sections">{threeTabs}</TabList>);
+    const list = screen.getByRole('tablist');
+    expect(list).not.toHaveAttribute('aria-disabled');
+    expect(list).not.toHaveAttribute('data-disabled');
+    expect(tab('Tab A')).toBeEnabled();
+  });
+
+  it('keeps the first tab selected, with its panel, when nothing else selects', () => {
+    render(
+      <TabList aria-label="Sections" disabled>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Panel A');
+  });
+
+  it('keeps the defaultValue and a controlled value selected', () => {
+    const view = render(
+      <TabList aria-label="Sections" disabled defaultValue="b">
+        {tabsWithPanels}
+      </TabList>,
+    );
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'true');
+    view.unmount();
+    render(
+      <TabList aria-label="Sections" disabled value="c">
+        {tabsWithPanels}
+      </TabList>,
+    );
+    expect(tab('Tab C')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('cannot be selected by a click or the arrow keys, and no tab takes focus', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <>
+        <TabList aria-label="Sections" disabled onValueChange={onValueChange}>
+          {tabsWithPanels}
+        </TabList>
+        <button type="button">After</button>
+      </>,
+    );
+    await user.click(tab('Tab B'));
+    await user.keyboard('{ArrowRight}');
+    await user.tab();
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(tab('Tab A')).toHaveAttribute('aria-selected', 'true');
+    // Tab goes on past the tabs: to the panel, then the button.
+    for (const name of ['Tab A', 'Tab B', 'Tab C']) expect(tab(name)).not.toHaveFocus();
+    expect(screen.getByRole('tabpanel')).toHaveFocus();
+  });
+
+  it('enables the tabs again when disabled goes away', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <TabList aria-label="Sections" disabled>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    rerender(<TabList aria-label="Sections">{tabsWithPanels}</TabList>);
+    expect(tab('Tab A')).toBeEnabled();
+    await user.click(tab('Tab B'));
+    expect(tab('Tab B')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('a tab’s own disabled still applies when the list is enabled, and the list wins when disabled', () => {
+    render(
+      <TabList aria-label="Sections" disabled={false}>
+        <TabList.Tab value="a">Tab A</TabList.Tab>
+        <TabList.Tab value="b" disabled>
+          Tab B
+        </TabList.Tab>
+      </TabList>,
+    );
+    expect(tab('Tab A')).toBeEnabled();
+    expect(tab('Tab B')).toBeDisabled();
+  });
+
+  it('is typed as an optional boolean, and has no axe violations', async () => {
+    expectTypeOf<TabListProps['disabled']>().toEqualTypeOf<boolean | undefined>();
+    const view = render(
+      <TabList aria-label="Sections" disabled>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    await expectNoA11yViolations(view.container);
+  });
+
+  it('renders the same on the server', () => {
+    const html = renderToString(
+      <TabList aria-label="Sections" disabled>
+        {tabsWithPanels}
+      </TabList>,
+    );
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).toContain('data-disabled=""');
+    expect(html).toContain('aria-selected="true"');
+  });
+});

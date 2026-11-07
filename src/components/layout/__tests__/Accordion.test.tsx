@@ -14,6 +14,7 @@ import {
   type AccordionMultipleProps,
   type AccordionTriggerProps,
   type AccordionPanelProps,
+  type AccordionToggleDetails,
 } from '../Accordion';
 import { Tooltip } from '../../overlays/Tooltip';
 import type { SelectionMode } from '../../../lib/types';
@@ -26,6 +27,7 @@ import {
   testCompoundExposure,
   testComposedHandler,
   expectThrows,
+  renderWithProviders,
 } from '../../../test-utils';
 
 /** Stand-in for a Tooltip (P16): a wrapper component that renders its `children` (§5.9). */
@@ -211,7 +213,10 @@ describe('Accordion', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Item 2' }));
     expect(onOpenItemsChange).toHaveBeenCalledTimes(1);
-    expect(onOpenItemsChange).toHaveBeenCalledWith(['2']);
+    expect(onOpenItemsChange).toHaveBeenCalledWith(
+      ['2'],
+      expect.objectContaining({ event: expect.anything() }),
+    );
   });
 });
 
@@ -671,9 +676,15 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
     render(<Accordion onOpenItemChange={onOpenItemChange}>{items}</Accordion>);
     const button = screen.getByRole('button', { name: 'Item 1' });
     await user.click(button);
-    expect(onOpenItemChange).toHaveBeenLastCalledWith('1');
+    expect(onOpenItemChange).toHaveBeenLastCalledWith(
+      '1',
+      expect.objectContaining({ event: expect.anything() }),
+    );
     await user.click(button);
-    expect(onOpenItemChange).toHaveBeenLastCalledWith(null);
+    expect(onOpenItemChange).toHaveBeenLastCalledWith(
+      null,
+      expect.objectContaining({ event: expect.anything() }),
+    );
     expect(onOpenItemChange).toHaveBeenCalledTimes(2);
   });
 
@@ -688,8 +699,16 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
     const button = screen.getByRole('button', { name: 'Item 1' });
     await user.click(button);
     await user.click(button);
-    expect(onOpenItemChange).toHaveBeenNthCalledWith(1, '1');
-    expect(onOpenItemChange).toHaveBeenNthCalledWith(2, '1');
+    expect(onOpenItemChange).toHaveBeenNthCalledWith(
+      1,
+      '1',
+      expect.objectContaining({ event: expect.anything() }),
+    );
+    expect(onOpenItemChange).toHaveBeenNthCalledWith(
+      2,
+      '1',
+      expect.objectContaining({ event: expect.anything() }),
+    );
     expect(button).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -760,7 +779,10 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
       </Accordion>,
     );
     await user.click(screen.getByRole('button', { name: 'Item 2' }));
-    expect(onOpenItemsChange).toHaveBeenCalledWith(['1', '2']);
+    expect(onOpenItemsChange).toHaveBeenCalledWith(
+      ['1', '2'],
+      expect.objectContaining({ event: expect.anything() }),
+    );
     expectTypeOf<AccordionMultipleProps['openItems']>().toEqualTypeOf<
       readonly string[] | undefined
     >();
@@ -818,7 +840,9 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
         </Accordion>,
       );
       await user.click(screen.getByRole('button', { name: 'Item 1' }));
-      expect(onOpenItemChange.mock.calls).toEqual([['1']]);
+      expect(onOpenItemChange.mock.calls).toEqual([
+        ['1', expect.objectContaining({ event: expect.anything() })],
+      ]);
       expect(onOpenItemsChange).not.toHaveBeenCalled();
       expect(warn).not.toHaveBeenCalled();
       expect(error).not.toHaveBeenCalled();
@@ -845,7 +869,10 @@ describe('Accordion - single and multiple APIs (layout#19)', () => {
       </Accordion>,
     );
     await user.click(screen.getByRole('button', { name: 'Item 2' }));
-    expect(onOpenItemsChange).toHaveBeenCalledWith(['1', '2']);
+    expect(onOpenItemsChange).toHaveBeenCalledWith(
+      ['1', '2'],
+      expect.objectContaining({ event: expect.anything() }),
+    );
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -1460,5 +1487,465 @@ describe('Accordion.Trigger — slotProps', () => {
         <Accordion.Trigger slotProps={{ heading: { children: 'x' } }}>A</Accordion.Trigger>
       )
     );
+  });
+});
+
+describe('Accordion - collapsible, values, details, size, icons (1.1)', () => {
+  const sections = (
+    <>
+      <Accordion.Item value="a">
+        <Accordion.Trigger>Alpha</Accordion.Trigger>
+        <Accordion.Panel>Panel A</Accordion.Panel>
+      </Accordion.Item>
+      <Accordion.Item value="b">
+        <Accordion.Trigger>Beta</Accordion.Trigger>
+        <Accordion.Panel>Panel B</Accordion.Panel>
+      </Accordion.Item>
+    </>
+  );
+  const trigger = (name: string) => screen.getByRole('button', { name });
+  const iconOf = (button: HTMLElement) =>
+    button.querySelector<HTMLElement>(`.${accordionTriggerClassNames.expandIcon}`);
+
+  describe('collapsible (acc-1)', () => {
+    it('keeps the open item open with collapsible={false}: aria-disabled, no change, no callback', async () => {
+      const user = userEvent.setup();
+      const onOpenItemChange = vi.fn();
+      render(
+        <Accordion collapsible={false} defaultOpenItem="a" onOpenItemChange={onOpenItemChange}>
+          {sections}
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).toHaveAttribute('aria-disabled', 'true');
+      expect(trigger('Beta')).not.toHaveAttribute('aria-disabled');
+      await user.click(trigger('Alpha'));
+      expect(trigger('Alpha')).toHaveAttribute('aria-expanded', 'true');
+      expect(onOpenItemChange).not.toHaveBeenCalled();
+      // Opening another item closes the first, which is then no longer locked.
+      await user.click(trigger('Beta'));
+      expect(onOpenItemChange).toHaveBeenCalledTimes(1);
+      expect(trigger('Alpha')).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger('Alpha')).not.toHaveAttribute('aria-disabled');
+      expect(trigger('Beta')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('stays focusable and keeps the full opacity of an enabled trigger', async () => {
+      const user = userEvent.setup();
+      render(
+        <Accordion collapsible={false} defaultOpenItem="a">
+          {sections}
+        </Accordion>,
+      );
+      await user.tab();
+      expect(trigger('Alpha')).toHaveFocus();
+      expect(trigger('Alpha')).toHaveClass('wave:aria-disabled:opacity-100');
+      expect(trigger('Beta')).not.toHaveClass('wave:aria-disabled:opacity-100');
+    });
+
+    it('starts closed when nothing is open, opens on the first click and then cannot close', async () => {
+      const user = userEvent.setup();
+      render(<Accordion collapsible={false}>{sections}</Accordion>);
+      expect(trigger('Alpha')).not.toHaveAttribute('aria-disabled');
+      await user.click(trigger('Alpha'));
+      await user.click(trigger('Alpha'));
+      expect(trigger('Alpha')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('still calls the trigger’s own onClick on the locked trigger', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Accordion collapsible={false} defaultOpenItem="a">
+          <Accordion.Item value="a">
+            <Accordion.Trigger onClick={onClick}>Alpha</Accordion.Trigger>
+            <Accordion.Panel>Panel A</Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      await user.click(trigger('Alpha'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('follows a controlled openItem', () => {
+      const { rerender } = render(
+        <Accordion collapsible={false} openItem="a">
+          {sections}
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).toHaveAttribute('aria-disabled', 'true');
+      rerender(
+        <Accordion collapsible={false} openItem={null}>
+          {sections}
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('is a single-mode prop only (types), and a multiple Accordion stays collapsible', async () => {
+      // @ts-expect-error `collapsible` is not a prop of type="multiple"
+      const props: AccordionMultipleProps = { type: 'multiple', collapsible: false };
+      expect(props.type).toBe('multiple');
+      const user = userEvent.setup();
+      render(
+        <Accordion type="multiple" defaultOpenItems={['a']}>
+          {sections}
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).not.toHaveAttribute('aria-disabled');
+      await user.click(trigger('Alpha'));
+      expect(trigger('Alpha')).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
+  describe('toggle details and number values (acc-2)', () => {
+    it('passes the toggled value, its new state and the click as the second argument', async () => {
+      const user = userEvent.setup();
+      const onOpenItemChange = vi.fn();
+      const onOpenItemsChange = vi.fn();
+      const view = render(<Accordion onOpenItemChange={onOpenItemChange}>{sections}</Accordion>);
+      await user.click(trigger('Beta'));
+      expect(onOpenItemChange).toHaveBeenLastCalledWith('b', {
+        event: expect.objectContaining({ type: 'click' }),
+        value: 'b',
+        open: true,
+      });
+      await user.click(trigger('Beta'));
+      expect(onOpenItemChange).toHaveBeenLastCalledWith(null, {
+        event: expect.anything(),
+        value: 'b',
+        open: false,
+      });
+      view.unmount();
+      render(
+        <Accordion type="multiple" defaultOpenItems={['a']} onOpenItemsChange={onOpenItemsChange}>
+          {sections}
+        </Accordion>,
+      );
+      await user.click(trigger('Beta'));
+      expect(onOpenItemsChange).toHaveBeenLastCalledWith(['a', 'b'], {
+        event: expect.anything(),
+        value: 'b',
+        open: true,
+      });
+      await user.click(trigger('Alpha'));
+      expect(onOpenItemsChange).toHaveBeenLastCalledWith(['b'], {
+        event: expect.anything(),
+        value: 'a',
+        open: false,
+      });
+    });
+
+    it('is called once per click in StrictMode, details included', async () => {
+      const user = userEvent.setup();
+      const onOpenItemChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <Accordion onOpenItemChange={onOpenItemChange}>{sections}</Accordion>
+        </React.StrictMode>,
+      );
+      await user.click(trigger('Alpha'));
+      expect(onOpenItemChange).toHaveBeenCalledTimes(1);
+      expect(onOpenItemChange.mock.calls[0]?.[1]).toMatchObject({ value: 'a', open: true });
+    });
+
+    it('takes number values in both modes and reports them as numbers', async () => {
+      const user = userEvent.setup();
+      const onOpenItemChange = vi.fn();
+      const onOpenItemsChange = vi.fn();
+      const numbered = (
+        <>
+          <Accordion.Item value={1}>
+            <Accordion.Trigger>One</Accordion.Trigger>
+            <Accordion.Panel>Panel 1</Accordion.Panel>
+          </Accordion.Item>
+          <Accordion.Item value={2}>
+            <Accordion.Trigger>Two</Accordion.Trigger>
+            <Accordion.Panel>Panel 2</Accordion.Panel>
+          </Accordion.Item>
+        </>
+      );
+      const view = render(
+        <Accordion<number> defaultOpenItem={2} onOpenItemChange={onOpenItemChange}>
+          {numbered}
+        </Accordion>,
+      );
+      expect(screen.getByText('Panel 2')).toBeInTheDocument();
+      await user.click(trigger('One'));
+      expect(onOpenItemChange).toHaveBeenLastCalledWith(1, expect.objectContaining({ value: 1 }));
+      expectUniqueIds();
+      view.unmount();
+      render(
+        <Accordion<number> type="multiple" openItems={[1]} onOpenItemsChange={onOpenItemsChange}>
+          {numbered}
+        </Accordion>,
+      );
+      expect(screen.getByText('Panel 1')).toBeInTheDocument();
+      await user.click(trigger('Two'));
+      expect(onOpenItemsChange).toHaveBeenLastCalledWith([1, 2], expect.anything());
+    });
+
+    it('types: the value type argument reaches the callbacks; string stays the default', () => {
+      expectTypeOf<AccordionSingleProps['onOpenItemChange']>().toEqualTypeOf<
+        ((openItem: string | null, details?: AccordionToggleDetails<string>) => void) | undefined
+      >();
+      expectTypeOf<AccordionSingleProps<number>['openItem']>().toEqualTypeOf<
+        number | null | undefined
+      >();
+      expectTypeOf<AccordionToggleDetails<number>['value']>().toBeNumber();
+      expectTypeOf<AccordionToggleDetails['open']>().toBeBoolean();
+      // A handler that takes only the value still fits.
+      const handler: AccordionSingleProps['onOpenItemChange'] = (value: string | null) =>
+        void value;
+      expect(handler).toBeTypeOf('function');
+    });
+  });
+
+  describe('size (acc-3)', () => {
+    it.each([
+      ['small', 'wave:py-1.5', 'wave:text-body-1'],
+      ['medium', 'wave:py-3', 'wave:text-body-1'],
+      ['large', 'wave:py-3.5', 'wave:text-body-2'],
+      ['extra-large', 'wave:py-4', 'wave:text-subtitle-1'],
+    ] as const)('draws size %s', (size, padding, text) => {
+      render(<Accordion size={size}>{sections}</Accordion>);
+      for (const name of ['Alpha', 'Beta']) {
+        expect(trigger(name)).toHaveAttribute('data-size', size);
+        expect(trigger(name)).toHaveClass(padding, text);
+      }
+    });
+
+    it('defaults to medium', () => {
+      render(<Accordion>{sections}</Accordion>);
+      expect(trigger('Alpha')).toHaveAttribute('data-size', 'medium');
+    });
+
+    it('lets a Trigger size override the Accordion size', () => {
+      render(
+        <Accordion size="large">
+          <Accordion.Item value="a">
+            <Accordion.Trigger size="small">Alpha</Accordion.Trigger>
+          </Accordion.Item>
+          <Accordion.Item value="b">
+            <Accordion.Trigger>Beta</Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).toHaveAttribute('data-size', 'small');
+      expect(trigger('Beta')).toHaveAttribute('data-size', 'large');
+    });
+
+    it('reaches a Trigger inside a wrapper, and lets a className win', () => {
+      render(
+        <Accordion size="extra-large">
+          <Accordion.Item value="a">
+            <WrapperStandIn>
+              <Accordion.Trigger className="py-1">Alpha</Accordion.Trigger>
+            </WrapperStandIn>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).toHaveAttribute('data-size', 'extra-large');
+      expect(trigger('Alpha')).toHaveClass('py-1');
+      expect(trigger('Alpha')).not.toHaveClass('wave:py-4');
+    });
+  });
+
+  describe('expand icon position and custom expand icon (acc-4)', () => {
+    it('draws the chevron after the content by default and before it with start', () => {
+      const view = render(<Accordion defaultOpenItem="a">{sections}</Accordion>);
+      expect(trigger('Alpha')).toHaveAttribute('data-expand-icon-position', 'end');
+      expect(trigger('Alpha').lastElementChild).toBe(iconOf(trigger('Alpha')));
+      expect(iconOf(trigger('Alpha'))).toHaveAttribute('data-wave-icon', 'chevron-down');
+      view.unmount();
+      render(
+        <Accordion expandIconPosition="start" defaultOpenItem="a">
+          {sections}
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).toHaveAttribute('data-expand-icon-position', 'start');
+      expect(trigger('Alpha').firstElementChild).toBe(iconOf(trigger('Alpha')));
+      // Right chevron: turned down while open, flipped in right-to-left while closed.
+      expect(iconOf(trigger('Alpha'))).toHaveAttribute('data-wave-icon', 'chevron-right');
+      expect(iconOf(trigger('Alpha'))).toHaveClass('wave:rotate-90');
+      expect(iconOf(trigger('Beta'))).toHaveClass('wave:wave-rtl:-scale-x-100');
+      expect(trigger('Alpha')).toHaveClass('wave:justify-start');
+    });
+
+    it('lets a Trigger override the position', () => {
+      render(
+        <Accordion expandIconPosition="start">
+          <Accordion.Item value="a">
+            <Accordion.Trigger expandIconPosition="end">Alpha</Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).toHaveAttribute('data-expand-icon-position', 'end');
+      expect(trigger('Alpha').lastElementChild).toBe(iconOf(trigger('Alpha')));
+    });
+
+    it('keeps the flip class of a closed start chevron in right-to-left', () => {
+      renderWithProviders(<Accordion expandIconPosition="start">{sections}</Accordion>, {
+        dir: 'rtl',
+      });
+      expect(iconOf(trigger('Alpha'))).toHaveClass('wave:wave-rtl:-scale-x-100');
+    });
+
+    it('replaces the chevron with a custom icon that is decorative and not turned', () => {
+      render(
+        <Accordion defaultOpenItem="a">
+          <Accordion.Item value="a">
+            <Accordion.Trigger expandIcon={<svg data-testid="plus" />}>Alpha</Accordion.Trigger>
+          </Accordion.Item>
+          <Accordion.Item value="b">
+            <Accordion.Trigger
+              expandIcon={{ className: 'my-icon', children: <svg data-testid="minus" /> }}
+              slotProps={{ expandIcon: { className: 'ignored' } }}
+            >
+              Beta
+            </Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      const plus = screen.getByTestId('plus').parentElement as HTMLElement;
+      expect(plus).toHaveClass(accordionTriggerClassNames.expandIcon);
+      expect(plus).toHaveAttribute('aria-hidden', 'true');
+      expect(plus).not.toHaveClass('wave:rotate-180');
+      expect(trigger('Alpha').querySelector('[data-wave-icon]')).toBeNull();
+      const minus = screen.getByTestId('minus').parentElement as HTMLElement;
+      expect(minus).toHaveClass('my-icon');
+      expect(minus).not.toHaveClass('ignored');
+      // The accessible name is the label only.
+      expect(trigger('Alpha')).toHaveAccessibleName('Alpha');
+    });
+
+    it('keeps the chevron for null and undefined, and hides it for false or nothing', () => {
+      const cases: Array<[string, AccordionTriggerProps['expandIcon'], boolean]> = [
+        ['Null', null, true],
+        ['Undefined', undefined, true],
+        ['False', false, false],
+        ['Empty', [], false],
+        ['Text', 'v', true],
+      ];
+      render(
+        <Accordion>
+          {cases.map(([name, expandIcon]) => (
+            <Accordion.Item key={name} value={name}>
+              <Accordion.Trigger expandIcon={expandIcon}>{name}</Accordion.Trigger>
+            </Accordion.Item>
+          ))}
+        </Accordion>,
+      );
+      for (const [name, , shown] of cases) {
+        expect(iconOf(trigger(name)) !== null).toBe(shown);
+      }
+    });
+
+    it('puts a custom icon at the start too, and the part rules still reach the chevron', () => {
+      render(
+        <Accordion expandIconPosition="start">
+          <Accordion.Item value="a">
+            <Accordion.Trigger expandIcon="+">Alpha</Accordion.Trigger>
+          </Accordion.Item>
+          <Accordion.Item value="b">
+            <Accordion.Trigger slotProps={{ expandIcon: { 'data-part': 'x' } }}>
+              Beta
+            </Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      expect(trigger('Alpha').firstElementChild).toHaveTextContent('+');
+      expect(iconOf(trigger('Beta'))).toHaveAttribute('data-part', 'x');
+    });
+  });
+
+  describe('leading icon and inline header (acc-5)', () => {
+    it('draws the icon in a decorative span before the content, after a start chevron', () => {
+      render(
+        <Accordion expandIconPosition="start">
+          <Accordion.Item value="a">
+            <Accordion.Trigger icon={<svg data-testid="lead" />}>Alpha</Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      const button = trigger('Alpha');
+      const lead = screen.getByTestId('lead').parentElement as HTMLElement;
+      expect(lead).toHaveClass(accordionTriggerClassNames.icon);
+      expect(lead).toHaveAttribute('aria-hidden', 'true');
+      expect(Array.from(button.children).map((child) => child.classList[0])).toEqual([
+        accordionTriggerClassNames.expandIcon,
+        accordionTriggerClassNames.icon,
+      ]);
+      expect(button).toHaveAccessibleName('Alpha');
+    });
+
+    it('keeps the label next to the icon at the end position, with the chevron at the row end', () => {
+      render(
+        <Accordion>
+          <Accordion.Item value="a">
+            <Accordion.Trigger icon={{ className: 'my-lead', children: '*' }}>
+              Alpha
+            </Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      const button = trigger('Alpha');
+      expect(button).toHaveClass('wave:justify-start');
+      expect(button.firstElementChild).toHaveClass('my-lead');
+      expect(button.lastElementChild).toHaveClass(
+        accordionTriggerClassNames.expandIcon,
+        'wave:ms-auto',
+      );
+    });
+
+    it('draws no span for an icon that renders nothing', () => {
+      render(
+        <Accordion>
+          <Accordion.Item value="a">
+            <Accordion.Trigger icon={false}>Alpha</Accordion.Trigger>
+          </Accordion.Item>
+          <Accordion.Item value="b">
+            <Accordion.Trigger icon={[]}>Beta</Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      expect(document.querySelector(`.${accordionTriggerClassNames.icon}`)).toBeNull();
+      expect(trigger('Alpha')).not.toHaveClass('wave:justify-start');
+    });
+
+    it('inline lets the button take its content width and renders data-inline', () => {
+      render(
+        <Accordion>
+          <Accordion.Item value="a">
+            <Accordion.Trigger inline>Alpha</Accordion.Trigger>
+          </Accordion.Item>
+          <Accordion.Item value="b">
+            <Accordion.Trigger>Beta</Accordion.Trigger>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      expect(trigger('Alpha')).toHaveAttribute('data-inline', '');
+      expect(trigger('Alpha')).toHaveClass('wave:w-auto', 'wave:justify-self-start');
+      expect(trigger('Alpha')).not.toHaveClass('wave:w-full');
+      expect(trigger('Beta')).not.toHaveAttribute('data-inline');
+      expect(trigger('Beta')).toHaveClass('wave:w-full');
+    });
+
+    it('has no axe violations with the new props', async () => {
+      const view = render(
+        <Accordion collapsible={false} size="large" expandIconPosition="start" defaultOpenItem="a">
+          <Accordion.Item value="a">
+            <Accordion.Trigger icon={<svg />} inline>
+              Alpha
+            </Accordion.Trigger>
+            <Accordion.Panel>Panel A</Accordion.Panel>
+          </Accordion.Item>
+          <Accordion.Item value="b">
+            <Accordion.Trigger expandIcon="+">Beta</Accordion.Trigger>
+            <Accordion.Panel>Panel B</Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>,
+      );
+      await expectNoA11yViolations(view.container);
+    });
   });
 });

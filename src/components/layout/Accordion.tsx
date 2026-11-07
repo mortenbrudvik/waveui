@@ -9,7 +9,8 @@ import { flattenChildren, getElementType } from '../../lib/children';
 import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
-import { ChevronDownIcon } from '../../lib/icons';
+import { ChevronDownIcon, ChevronRightIcon } from '../../lib/icons';
+import { renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRingInset } from '../../lib/styles';
 import type { HeadingLevel, MotionSlot, SelectionMode } from '../../lib/types';
@@ -22,22 +23,57 @@ import { getPartId } from './disclosureIds';
 /** Heading level of the element that wraps each Accordion trigger: the shared {@link HeadingLevel}. */
 export type AccordionHeadingLevel = HeadingLevel;
 
+/**
+ * An Accordion item's value: a string or a number (Fluent UI's `AccordionItemValue` is any value;
+ * here the value also names the item's DOM ids, so it stays a primitive). `1` and `'1'` are
+ * different values that give the same ids, so a development warning treats them as one.
+ */
+export type AccordionValue = string | number;
+
+/** Size of an Accordion trigger (Fluent's `AccordionHeader size`): 32, 44, 52 or 60 px high. */
+export type AccordionSize = 'small' | 'medium' | 'large' | 'extra-large';
+
+/** Where an Accordion trigger draws its expand icon (Fluent's `expandIconPosition`). */
+export type AccordionExpandIconPosition = 'start' | 'end';
+
+/**
+ * What an Accordion's `onOpenItemChange` and `onOpenItemsChange` receive as their second argument:
+ * the item whose trigger was clicked, whether it is open now and the click (Fluent UI's
+ * `onToggle(event, { value, openItems })`; the open items are the callback's first argument).
+ */
+export interface AccordionToggleDetails<V extends AccordionValue = string> {
+  /** The click on the trigger. */
+  event: React.MouseEvent<HTMLButtonElement>;
+  /** The value of the item that was toggled. */
+  value: V;
+  /** Whether that item is open after the change. */
+  open: boolean;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Contexts                                                           */
 /* ------------------------------------------------------------------ */
 
 interface AccordionContextValue {
-  openItems: readonly string[];
-  toggle: (value: string) => void;
+  openItems: readonly AccordionValue[];
+  toggle: (value: AccordionValue, event: React.MouseEvent<HTMLButtonElement>) => void;
   /** Counts a mounted Item's value (warns when several Items share it); returns the unregister. */
-  registerItem: (value: string) => () => void;
+  registerItem: (value: AccordionValue) => () => void;
   baseId: string;
   headingLevel: AccordionHeadingLevel;
+  /** `true` in a single Accordion that is not `collapsible`: its open item cannot be closed. */
+  keepsOneOpen: boolean;
+  size: AccordionSize;
+  expandIconPosition: AccordionExpandIconPosition;
 }
 
 interface AccordionItemContextValue {
-  value: string;
+  value: AccordionValue;
   isOpen: boolean;
+  /** The open item of a single Accordion that is not `collapsible`: the trigger cannot close it. */
+  isLocked: boolean;
+  size: AccordionSize;
+  expandIconPosition: AccordionExpandIconPosition;
   /** Id of the trigger button: the consumer `id` of the Item's Trigger, else a generated one. */
   triggerId: string;
   /** Id of the panel region: the consumer `id` of the Item's Panel, else a generated one. */
@@ -45,7 +81,7 @@ interface AccordionItemContextValue {
   /** Whether the Item renders a panel region while open (a Panel, or other content). */
   hasPanelContent: boolean;
   headingLevel: AccordionHeadingLevel;
-  toggle: () => void;
+  toggle: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 /**
@@ -63,7 +99,7 @@ const AccordionContext = React.createContext<AccordionContextValue | null>(null)
 const AccordionItemContext = React.createContext<AccordionItemContextValue | null>(null);
 const AccordionPanelSlotContext = React.createContext<AccordionPanelSlotValue | null>(null);
 
-const EMPTY: readonly string[] = [];
+const EMPTY: readonly AccordionValue[] = [];
 
 const INERT_ACCORDION: AccordionContextValue = {
   openItems: EMPTY,
@@ -71,11 +107,17 @@ const INERT_ACCORDION: AccordionContextValue = {
   registerItem: () => () => {},
   baseId: 'wave-accordion-inert',
   headingLevel: 3,
+  keepsOneOpen: false,
+  size: 'medium',
+  expandIconPosition: 'end',
 };
 
 const INERT_ITEM: AccordionItemContextValue = {
   value: '',
   isOpen: false,
+  isLocked: false,
+  size: 'medium',
+  expandIconPosition: 'end',
   triggerId: 'wave-accordion-inert-trigger',
   panelId: 'wave-accordion-inert-panel',
   hasPanelContent: false,
@@ -148,7 +190,15 @@ function useAccordionItemContext(component: string): AccordionItemContextValue {
   return INERT_ITEM;
 }
 
-function warnDuplicateValue(value: string): void {
+/** The classes of a trigger by size: its vertical padding and its type (32, 44, 52, 60 px). */
+const SIZE_CLASSES: Record<AccordionSize, string> = {
+  small: 'wave:py-1.5 wave:text-body-1',
+  medium: 'wave:py-3 wave:text-body-1',
+  large: 'wave:py-3.5 wave:text-body-2',
+  'extra-large': 'wave:py-4 wave:text-subtitle-1',
+};
+
+function warnDuplicateValue(value: AccordionValue): void {
   warnOnce(
     `Accordion:duplicate:${value}`,
     `Accordion: several items share the value "${value}". Item values must be unique within an ` +
@@ -169,23 +219,55 @@ export interface AccordionBaseProps extends React.HTMLAttributes<HTMLDivElement>
    * @default 3
    */
   headingLevel?: AccordionHeadingLevel;
+  /**
+   * Size of every trigger: `small` (32 px high), `medium` (44), `large` (52) or `extra-large`
+   * (60), which also steps the type up for the two largest. Fluent UI's `AccordionHeader size`,
+   * set once here; each `Accordion.Trigger` can override it. Rendered as `data-size` on the
+   * trigger button.
+   * @default 'medium'
+   */
+  size?: AccordionSize;
+  /**
+   * Where every trigger draws its expand icon: `end` (a down chevron that turns up while the item
+   * is open) or `start` (a right chevron, mirrored in right-to-left, that turns down). Fluent UI's
+   * `expandIconPosition`, set once here; each `Accordion.Trigger` can override it. Rendered as
+   * `data-expand-icon-position` on the trigger button.
+   * @default 'end'
+   */
+  expandIconPosition?: AccordionExpandIconPosition;
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
 }
 
 /** Props of an Accordion in which at most one item is open (the default). */
-export interface AccordionSingleProps extends AccordionBaseProps {
+export interface AccordionSingleProps<
+  V extends AccordionValue = string,
+> extends AccordionBaseProps {
   /**
    * Whether only one or multiple items can be open at a time.
    * @default 'single'
    */
   type?: Extract<SelectionMode, 'single'>;
+  /**
+   * Whether the open item can be closed by its trigger. With `false` the open item stays open:
+   * its trigger reports `aria-disabled="true"` (the WAI-ARIA Accordion pattern for an accordion
+   * that does not permit a panel to collapse), keeps its place in the tab order and a click on it
+   * changes nothing, while opening another item still closes it. Fluent UI's `collapsible`, whose
+   * default is `false`: here the default keeps the Accordion collapsible, as it always was. An
+   * Accordion that starts with no open item (`defaultOpenItem` unset) stays closed until the
+   * first click.
+   * @default true
+   */
+  collapsible?: boolean;
   /** Controlled open item (`null`: every item closed). */
-  openItem?: string | null;
+  openItem?: V | null;
   /** Initially open item for uncontrolled usage. */
-  defaultOpenItem?: string | null;
-  /** Called with the new open item (`null` when it closed) when it changes. */
-  onOpenItemChange?: (openItem: string | null) => void;
+  defaultOpenItem?: V | null;
+  /**
+   * Called with the new open item (`null` when it closed) when it changes, and with the
+   * {@link AccordionToggleDetails} of the click (Fluent UI's `onToggle(event, data)`).
+   */
+  onOpenItemChange?: (openItem: V | null, details?: AccordionToggleDetails<V>) => void;
   /** `type="multiple"` only: a single Accordion takes `openItem`. */
   openItems?: never;
   /** `type="multiple"` only: a single Accordion takes `defaultOpenItem`. */
@@ -195,18 +277,25 @@ export interface AccordionSingleProps extends AccordionBaseProps {
 }
 
 /** Props of an Accordion in which any number of items can be open. */
-export interface AccordionMultipleProps extends AccordionBaseProps {
+export interface AccordionMultipleProps<
+  V extends AccordionValue = string,
+> extends AccordionBaseProps {
   /** Whether only one or multiple items can be open at a time. */
   type: Extract<SelectionMode, 'multiple'>;
   /** Controlled array of open item values (a readonly array is accepted). */
-  openItems?: readonly string[];
+  openItems?: readonly V[];
   /**
    * Initially open items for uncontrolled usage.
    * @default []
    */
-  defaultOpenItems?: readonly string[];
-  /** Called with the new open items (a new array) when they change. */
-  onOpenItemsChange?: (openItems: string[]) => void;
+  defaultOpenItems?: readonly V[];
+  /**
+   * Called with the new open items (a new array) when they change, and with the
+   * {@link AccordionToggleDetails} of the click (Fluent UI's `onToggle(event, data)`).
+   */
+  onOpenItemsChange?: (openItems: V[], details?: AccordionToggleDetails<V>) => void;
+  /** `type="single"` only: every item of a multiple Accordion can close. */
+  collapsible?: never;
   openItem?: never;
   defaultOpenItem?: never;
   onOpenItemChange?: never;
@@ -215,29 +304,33 @@ export interface AccordionMultipleProps extends AccordionBaseProps {
 /**
  * Properties for the Accordion component: a discriminated union on `type`. Single mode
  * (default) uses `openItem`/`defaultOpenItem`/`onOpenItemChange`; `type="multiple"` uses
- * `openItems`/`defaultOpenItems`/`onOpenItemsChange`.
+ * `openItems`/`defaultOpenItems`/`onOpenItemsChange`. The type argument is the type of the item
+ * values (`string` or `number`; `string` by default).
  *
  * A union cannot be extended by an `interface` (TS2312), which 0.4's interface allowed: extend
  * `AccordionSingleProps` or `AccordionMultipleProps` instead
  * (`interface MyProps extends AccordionSingleProps {}`), or intersect the union
  * (`type MyProps = AccordionProps & { … }`).
  */
-export type AccordionProps = AccordionSingleProps | AccordionMultipleProps;
+export type AccordionProps<V extends AccordionValue = string> =
+  AccordionSingleProps<V> | AccordionMultipleProps<V>;
 
 /** The props only `type="multiple"` takes (`never` in single mode). */
 type MultipleOnly = 'openItems' | 'defaultOpenItems' | 'onOpenItemsChange';
 
-function toItems(value: string | null | undefined): readonly string[] | undefined {
+function toItems(value: AccordionValue | null | undefined): readonly AccordionValue[] | undefined {
   if (value === undefined) return undefined;
   return value === null ? EMPTY : [value];
 }
 
 // The Accordion root, documented on the exported `Accordion` const.
-const AccordionRoot = (props: AccordionProps) => {
+const AccordionRoot = <V extends AccordionValue = string>(props: AccordionProps<V>) => {
   // Both modes' props, read by mode: a single Accordion ignores the multiple-mode ones (and the
-  // other way round), so neither reaches the root element.
+  // other way round), so neither reaches the root element. Values are handled as the primitives
+  // they are; the callbacks' types are `V`'s, which the props already guarantee.
   const {
     type,
+    collapsible = true,
     openItem,
     defaultOpenItem,
     onOpenItemChange,
@@ -245,13 +338,16 @@ const AccordionRoot = (props: AccordionProps) => {
     defaultOpenItems,
     onOpenItemsChange,
     headingLevel = 3,
+    size = 'medium',
+    expandIconPosition = 'end',
     className,
     children,
     ref,
     ...rest
-  } = props as Omit<AccordionSingleProps, 'type' | MultipleOnly> &
-    Pick<AccordionMultipleProps, MultipleOnly> & { type?: SelectionMode };
+  } = props as unknown as Omit<AccordionSingleProps<AccordionValue>, 'type' | MultipleOnly> &
+    Pick<AccordionMultipleProps<AccordionValue>, MultipleOnly> & { type?: SelectionMode };
   const multiple = type === 'multiple';
+  const keepsOneOpen = !multiple && !collapsible;
 
   const controlled = React.useMemo(
     () => (multiple ? openItemsProp : toItems(openItem)),
@@ -261,48 +357,75 @@ const AccordionRoot = (props: AccordionProps) => {
     () => (multiple ? defaultOpenItems : toItems(defaultOpenItem)) ?? EMPTY,
   );
 
-  const handleChange = (next: readonly string[]) => {
+  // The click that asks for a change, held until `useControllable` reports it (synchronously, from
+  // the event path) and cleared after, so a change with no request carries no stale event.
+  const requestRef = React.useRef<{
+    value: AccordionValue;
+    event: React.MouseEvent<HTMLButtonElement>;
+  } | null>(null);
+  const handleChange = (next: readonly AccordionValue[]) => {
     const list = [...next];
-    if (multiple) onOpenItemsChange?.(list);
-    else onOpenItemChange?.(list[0] ?? null);
+    const request = requestRef.current;
+    const details = request && {
+      event: request.event,
+      value: request.value,
+      open: list.includes(request.value),
+    };
+    if (multiple) onOpenItemsChange?.(list, details ?? undefined);
+    else onOpenItemChange?.(list[0] ?? null, details ?? undefined);
   };
 
-  const [openItems, setOpenItems] = useControllable<readonly string[]>(
+  const [openItems, setOpenItems] = useControllable<readonly AccordionValue[]>(
     controlled,
     initialItems,
     handleChange,
   );
 
   const toggle = React.useCallback(
-    (value: string) => {
-      setOpenItems((prev) => {
-        if (prev.includes(value)) return prev.filter((v) => v !== value);
-        return multiple ? [...prev, value] : [value];
-      });
+    (value: AccordionValue, event: React.MouseEvent<HTMLButtonElement>) => {
+      requestRef.current = { value, event };
+      try {
+        setOpenItems((prev) => {
+          if (prev.includes(value)) return keepsOneOpen ? prev : prev.filter((v) => v !== value);
+          return multiple ? [...prev, value] : [value];
+        });
+      } finally {
+        requestRef.current = null;
+      }
     },
-    [multiple, setOpenItems],
+    [multiple, keepsOneOpen, setOpenItems],
   );
 
   // How many mounted Items hold each value, to warn about a repeated value (C-DEV). Only the Items'
   // effects touch it (through `registerItem`), never render.
   const itemCountsRef = React.useRef<Map<string, number>>(null);
-  const registerItem = React.useCallback((value: string) => {
+  const registerItem = React.useCallback((value: AccordionValue) => {
     itemCountsRef.current ??= new Map();
     const counts = itemCountsRef.current;
-    const count = (counts.get(value) ?? 0) + 1;
-    counts.set(value, count);
+    const key = String(value);
+    const count = (counts.get(key) ?? 0) + 1;
+    counts.set(key, count);
     if (count > 1) warnDuplicateValue(value);
     return () => {
-      const remaining = (counts.get(value) ?? 1) - 1;
-      if (remaining > 0) counts.set(value, remaining);
-      else counts.delete(value);
+      const remaining = (counts.get(key) ?? 1) - 1;
+      if (remaining > 0) counts.set(key, remaining);
+      else counts.delete(key);
     };
   }, []);
 
   const baseId = useId('accordion');
   const context = React.useMemo<AccordionContextValue>(
-    () => ({ openItems, toggle, registerItem, baseId, headingLevel }),
-    [openItems, toggle, registerItem, baseId, headingLevel],
+    () => ({
+      openItems,
+      toggle,
+      registerItem,
+      baseId,
+      headingLevel,
+      keepsOneOpen,
+      size,
+      expandIconPosition,
+    }),
+    [openItems, toggle, registerItem, baseId, headingLevel, keepsOneOpen, size, expandIconPosition],
   );
 
   return (
@@ -336,8 +459,11 @@ AccordionRoot.displayName = 'Accordion';
 
 /** Properties for the AccordionItem sub-component. */
 export interface AccordionItemProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Unique value identifying this accordion item. */
-  value: string;
+  /**
+   * Unique value identifying this accordion item (a string, or a number: Fluent UI's item
+   * `value` is any value). It must match the values the Accordion's props use.
+   */
+  value: AccordionValue;
   /** Heading level of this item's trigger; overrides the Accordion's `headingLevel`. */
   headingLevel?: AccordionHeadingLevel;
   /** Ref to the item `<div>`. */
@@ -482,17 +608,35 @@ const AccordionItem = ({
   const hasPanelContent = hasPanel || extra.length > 0;
   const extraPanelContent = hasPanel && extra.length > 0 ? extra : null;
 
+  const { keepsOneOpen, size, expandIconPosition } = accordion;
+  const idValue = String(value);
   const itemContext = React.useMemo<AccordionItemContextValue>(
     () => ({
       value,
       isOpen,
-      triggerId: triggerIdProp ?? getPartId(baseId, 'trigger', value),
-      panelId: panelIdProp ?? getPartId(baseId, 'panel', value),
+      isLocked: keepsOneOpen && isOpen,
+      size,
+      expandIconPosition,
+      triggerId: triggerIdProp ?? getPartId(baseId, 'trigger', idValue),
+      panelId: panelIdProp ?? getPartId(baseId, 'panel', idValue),
       hasPanelContent,
       headingLevel,
-      toggle: () => toggleValue(value),
+      toggle: (event) => toggleValue(value, event),
     }),
-    [value, isOpen, baseId, triggerIdProp, panelIdProp, hasPanelContent, headingLevel, toggleValue],
+    [
+      value,
+      isOpen,
+      keepsOneOpen,
+      size,
+      expandIconPosition,
+      baseId,
+      idValue,
+      triggerIdProp,
+      panelIdProp,
+      hasPanelContent,
+      headingLevel,
+      toggleValue,
+    ],
   );
   const panelSlot = React.useMemo<AccordionPanelSlotValue>(
     () => ({ extra: extraPanelContent, inPanel: false }),
@@ -526,6 +670,41 @@ AccordionItem.displayName = 'AccordionItem';
 export interface AccordionTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Ref to the trigger `<button>`. */
   ref?: React.Ref<HTMLButtonElement>;
+  /**
+   * Size of this trigger; overrides the Accordion's `size` (Fluent UI's `AccordionHeader size`).
+   * @default the Accordion's `size`, `'medium'`
+   */
+  size?: AccordionSize;
+  /**
+   * Where this trigger draws its expand icon; overrides the Accordion's `expandIconPosition`
+   * (Fluent UI's `expandIconPosition`).
+   * @default the Accordion's `expandIconPosition`, `'end'`
+   */
+  expandIconPosition?: AccordionExpandIconPosition;
+  /**
+   * Lets the button take the width of its content instead of the whole row (Fluent UI's
+   * `AccordionHeader inline`, which places the header's button in line). Rendered as a boolean
+   * `data-inline` on the button.
+   * @default false
+   */
+  inline?: boolean;
+  /**
+   * Icon drawn before the trigger's content, after the expand icon when that is at the start
+   * (Fluent UI's `AccordionHeader icon`). Decorative: a `<span>` with `aria-hidden` and the stable
+   * class `wave-accordion-trigger__icon`; pass a slot object (`{ className, children, … }`) to
+   * customise it. A value that renders nothing draws no span.
+   */
+  icon?: Slot<'span'>;
+  /**
+   * Replaces the expand chevron (Fluent UI's `expandIcon` slot). `null` and `undefined` keep the
+   * chevron; `false`, or anything that renders nothing, hides it (`aria-expanded` still reports
+   * the state). A custom icon is decorative (`aria-hidden`), is drawn in a `<span>` with the
+   * stable class `wave-accordion-trigger__expand-icon` and does not turn: style it with the
+   * trigger's `data-state` or `aria-expanded`. `slotProps.expandIcon` applies to the default
+   * chevron only; a slot object here carries the custom icon's own props.
+   * @default the chevron
+   */
+  expandIcon?: Slot<'span'>;
   /**
    * Props for the elements the trigger draws around and inside its button, by part, merged into
    * each part's own: your classes after the part's (yours win a conflict), your styles over its
@@ -570,6 +749,11 @@ const AccordionTrigger = ({
   onClick,
   ref,
   slotProps,
+  size: sizeProp,
+  expandIconPosition: positionProp,
+  inline = false,
+  icon,
+  expandIcon,
   ...rest
 }: AccordionTriggerProps) => {
   const item = useAccordionItemContext('Accordion.Trigger');
@@ -582,37 +766,34 @@ const AccordionTrigger = ({
   const headingOutside = React.useContext(AccordionHeadingOutsideContext);
   const Heading: `h${AccordionHeadingLevel}` = `h${item.headingLevel}`;
   const state = item.isOpen ? 'open' : 'closed';
+  const size = sizeProp ?? item.size;
+  const position = positionProp ?? item.expandIconPosition;
+  const atStart = position === 'start';
   const iconPart = slotProps?.expandIcon;
+  const hasLeadingIcon = slotRendersContent(icon);
+  // The chevron after the content is pushed to the end by the space between the two; with a
+  // leading icon there are three items, so the chevron takes the free space itself.
+  const pushChevron = !atStart && hasLeadingIcon;
   const iconClassName = wcn(
     accordionTriggerClassNames.expandIcon,
     'wave:shrink-0 wave:transition-transform wave:motion-reduce:transition-none',
-    item.isOpen && 'wave:rotate-180',
+    // The end chevron points down and turns up; the start one points right (left in
+    // right-to-left) and turns down.
+    atStart
+      ? item.isOpen
+        ? 'wave:rotate-90'
+        : 'wave:wave-rtl:-scale-x-100'
+      : item.isOpen && 'wave:rotate-180',
+    pushChevron && 'wave:ms-auto',
   );
 
-  const button = (
-    <button
-      type="button"
-      className={wcn(
-        accordionTriggerClassNames.root,
-        'wave:flex wave:w-full wave:items-center wave:justify-between wave:gap-2 wave:px-4 wave:py-3 wave:text-start wave:text-body-1 wave:font-semibold wave:text-foreground',
-        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
-        disabledStyles,
-        focusRingInset,
-        className,
-      )}
-      {...rest}
-      // A misplaced Trigger (inside the panel) still toggles, but only the item's own trigger
-      // carries the item's id and panel reference.
-      id={idProp || (inPanel ? undefined : item.triggerId)}
-      // Only a panel region the item renders is referenced (none without panel content).
-      aria-controls={!inPanel && item.hasPanelContent ? item.panelId : undefined}
-      aria-expanded={item.isOpen}
-      data-state={state}
-      onClick={composeEventHandlers(onClick, item.toggle)}
-      ref={ref}
-    >
-      {children}
-      <ChevronDownIcon
+  // The optional-indicator slot rule (C-SLOTS): `null`/`undefined` keep the chevron, `false` or
+  // content that renders nothing hides it, and a custom glyph is rendered as given, not turned.
+  let chevron: React.ReactNode = null;
+  if (expandIcon === undefined || expandIcon === null) {
+    const Chevron = atStart ? ChevronRightIcon : ChevronDownIcon;
+    chevron = (
+      <Chevron
         size={16}
         className={iconClassName}
         {...(iconPart &&
@@ -623,6 +804,63 @@ const AccordionTrigger = ({
             blockHandlers: rest.disabled ? BLOCK_CLICK : undefined,
           }))}
       />
+    );
+  } else if (slotRendersContent(expandIcon)) {
+    chevron = renderSlot(
+      expandIcon,
+      'span',
+      wcn(
+        accordionTriggerClassNames.expandIcon,
+        'wave:inline-flex wave:shrink-0',
+        pushChevron && 'wave:ms-auto',
+      ),
+      { 'aria-hidden': true },
+    );
+  }
+
+  const button = (
+    <button
+      type="button"
+      className={wcn(
+        accordionTriggerClassNames.root,
+        'wave:flex wave:w-full wave:items-center wave:justify-between wave:gap-2 wave:px-4 wave:text-start wave:font-semibold wave:text-foreground',
+        SIZE_CLASSES[size],
+        'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+        disabledStyles,
+        // The open item of an Accordion that is not collapsible reports aria-disabled for what it
+        // does, not for a disabled look: it keeps full opacity and a normal cursor.
+        item.isLocked && 'wave:aria-disabled:cursor-default wave:aria-disabled:opacity-100',
+        (atStart || hasLeadingIcon) && 'wave:justify-start',
+        inline && 'wave:w-auto wave:justify-self-start',
+        focusRingInset,
+        className,
+      )}
+      data-size={size}
+      data-expand-icon-position={position}
+      data-inline={inline ? '' : undefined}
+      {...rest}
+      // A misplaced Trigger (inside the panel) still toggles, but only the item's own trigger
+      // carries the item's id and panel reference.
+      id={idProp || (inPanel ? undefined : item.triggerId)}
+      // Only a panel region the item renders is referenced (none without panel content).
+      aria-controls={!inPanel && item.hasPanelContent ? item.panelId : undefined}
+      aria-expanded={item.isOpen}
+      {...(item.isLocked ? { 'aria-disabled': true } : null)}
+      data-state={state}
+      onClick={composeEventHandlers(onClick, item.toggle)}
+      ref={ref}
+    >
+      {atStart ? chevron : null}
+      {hasLeadingIcon
+        ? renderSlot(
+            icon,
+            'span',
+            wcn(accordionTriggerClassNames.icon, 'wave:inline-flex wave:shrink-0'),
+            { 'aria-hidden': true },
+          )
+        : null}
+      {children}
+      {atStart ? null : chevron}
     </button>
   );
   // Inside a wrapper chain (a Tooltip) the Item has rendered the heading around the wrapper.
