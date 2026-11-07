@@ -1,0 +1,62 @@
+[
+  {
+    "page": "components/breadcrumb",
+    "firstLoadGzip": 156156,
+    "reason": "its stories use the collapse menu (Menu 10,385 B and the positioning stack 9,189 B), Overflow and roving focus; own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/color-picker",
+    "firstLoadGzip": 165033,
+    "reason": "a Popover picker story (positioning 9,189 B, Popover 4,470 B, Portal 3,022 B), SwatchPicker, roving focus and SpinButton; own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/custom-overlays",
+    "firstLoadGzip": 164583,
+    "reason": "the public overlay hooks shown with a Toaster, Popover and Dialog (positioning 9,189 B, focus restore, roving focus); own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/data-grid",
+    "firstLoadGzip": 168336,
+    "reason": "DataGrid itself (18,341 B) plus the Menu of its header menus, positioning, roving focus and the virtual window; own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/drawer",
+    "firstLoadGzip": 151098,
+    "reason": "Drawer with its scroll state, a Tooltip story (positioning 9,189 B) and Portal; 1,098 B over, own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/nav",
+    "firstLoadGzip": 161178,
+    "reason": "Nav stories with Menu (10,385 B), positioning (9,189 B), Avatar and Tooltip; own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/nav-drawer",
+    "firstLoadGzip": 178070,
+    "reason": "the app shell story shows Menu, positioning, Nav, Drawer and Tooltip together; own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/overflow",
+    "firstLoadGzip": 154648,
+    "reason": "the overflow menu (Menu 10,385 B, positioning 9,189 B), Overflow, roving focus and focus restore; own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/presence",
+    "firstLoadGzip": 150876,
+    "reason": "its stories show Popover, Dialog and Accordion transitions (positioning 9,189 B, Popover 4,470 B, Dialog 3,441 B, Accordion 3,278 B); 876 B over since the shell's search palette shortcut, see BUDGET.md"
+  },
+  {
+    "page": "components/tag-picker",
+    "firstLoadGzip": 169354,
+    "reason": "TagPicker itself (12,501 B), the listbox data mode, positioning, TagGroup, roving focus and Avatar; own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/toast",
+    "firstLoadGzip": 154328,
+    "reason": "the Toaster (10,272 B), a Drawer story, Portal and focus restore; own code beyond the react and base chunks, see BUDGET.md"
+  },
+  {
+    "page": "components/wave-provider",
+    "firstLoadGzip": 182833,
+    "reason": "its stories show many components at once (Combobox and List data mode, positioning, Dialog, SpinButton); 84,773 B of own code beyond the react and base chunks, see BUDGET.md"
+  }
+]

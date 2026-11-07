@@ -8,7 +8,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "node scripts/site-check.mjs"
   },
   "devDependencies": {
     "@astrojs/react": "7.0.1",

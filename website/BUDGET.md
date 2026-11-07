@@ -3,7 +3,8 @@
 Measured 2026-11-07 (Task 10b of `docs/superpowers/plans/2026-11-07-docs-site-app.md`). The limits
 come from the spec (`docs/superpowers/specs/2026-11-07-docs-site-design.md`, "Performance"):
 **under 150 KB gzipped on first load** for a component page, and **under 250 KB gzipped** for
-everything a page can ever request. Task 12 adds the failing check; this file is where it starts.
+everything a page can ever request. `npm run site:check` fails the build on a page over either limit
+(`scripts/check-budget.mjs`, Task 12; see "The gate" below).
 
 ## Method
 
@@ -90,6 +91,26 @@ alone, with Rolldown's automatic chunking, the registries give −6,264.5 median
 Checked and fine: the HTML requests no `modulepreload` for islands and no hydration script for an
 island out of view (lever c); the Controls chunk stays out of the first load (1,041 B, loaded on
 the first focus or pointer over an example); there is one React and one react-dom copy.
+
+## The gate
+
+`node scripts/check-budget.mjs` measures every page of `dist` with the same function as
+`measure-page.mjs` (`pageJsReport`: the strict static metric, every island counted as first load)
+and fails above 150,000 B gzipped of first-load JavaScript, or above 250,000 B for everything the
+page can request (first load, scripts only dynamic imports add, and the data files the scripts name,
+the search index). A page over the first-load limit passes only through
+`website/budget-exceptions.json` (`page`, `firstLoadGzip` as measured, `reason`) and only while its
+measured number is not above the recorded one; an entry for a page that is under the limit fails
+("remove it"). The command prints each exception with its headroom. Raising a number is a
+deliberate edit of that file with its reason, never a silent change. The same run also fails an
+address outside `/waveui/docs/` (but the one Close link, and GitHub/npm links in guide content), an
+`<iframe>`, a web font, a page without `lang` and `dir`, not exactly one `<main>`, a script outside
+`/waveui/docs/_assets/` and any reference to `i.pravatar.cc`.
+
+The metric is an upper bound: a real browser loads less before scrolling (Task 13 measures that).
+12 pages are over the first-load limit today, all recorded: the 11 below, and `presence`
+(150,876 B), which the search palette's shell code (+984 B) pushed over from 149,878 B. The numbers
+of the table that follows are the build before the palette; the file holds the current ones.
 
 ## Pages over 150,000 B after every neutral lever
 
