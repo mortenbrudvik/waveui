@@ -4,7 +4,7 @@ import type { PluginOption } from 'vite';
 import { exportDocblockPlugin, STORYBOOK_DOCGEN_PLUGIN } from './exportDocblocks';
 
 /**
- * Removes the `vite:dts` plugin from a (nested, possibly promised) Vite plugin list. Storybook's
+ * Removes the `unplugin-dts` plugin from a (nested, possibly promised) Vite plugin list. Storybook's
  * Vite builder loads the plugins of the library config (vite.config.ts), never its `build`
  * block; the declaration build belongs to the library build only.
  */
@@ -12,7 +12,7 @@ async function withoutDts(plugins: PluginOption[]): Promise<PluginOption[]> {
   const kept: PluginOption[] = [];
   for (const plugin of await Promise.all(plugins)) {
     if (Array.isArray(plugin)) kept.push(...(await withoutDts(plugin)));
-    else if (plugin && plugin.name !== 'vite:dts') kept.push(plugin);
+    else if (plugin && plugin.name !== 'unplugin-dts') kept.push(plugin);
   }
   return kept;
 }

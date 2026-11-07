@@ -145,11 +145,32 @@ describe('library build options (repo-level#2, repo-level#3)', () => {
   it('does not compile CSS in the library build (scripts/build-css.mjs does)', () => {
     const names = pluginNames();
     expect(names.some((name) => /tailwind/i.test(name))).toBe(false);
-    expect(names).toContain('vite:dts');
+    expect(names).toContain('unplugin-dts');
   });
 
   it('rolls up index.d.ts and makes no CommonJS copy of it (repo-level#5, spec R4)', () => {
     // 0.x copied the roll-up to index.d.cts after the declaration build.
     expect(viteConfig).not.toHaveProperty('copyIndexDtsToDcts');
+  });
+});
+
+describe('withoutAppendedDeclarations (unplugin-dts appends non-exported namespaces)', () => {
+  const { withoutAppendedDeclarations } = viteConfig;
+
+  it('keeps the roll-up up to its last export list and drops the appended namespaces', () => {
+    const rollUp = 'export declare const a: 1;\n\nexport { }\n';
+    const appended = `${rollUp}\n\ndeclare namespace NavItem {\n    var displayName: string;\n}\n`;
+    expect(withoutAppendedDeclarations(appended)).toBe(rollUp);
+  });
+
+  it('leaves a roll-up with nothing appended, and one without an export list, as it is', () => {
+    expect(withoutAppendedDeclarations('export { }\n')).toBe('export { }\n');
+    expect(withoutAppendedDeclarations('declare const a: 1;\n')).toBe('declare const a: 1;\n');
+  });
+
+  it('handles CRLF line endings', () => {
+    expect(withoutAppendedDeclarations('x\r\nexport { }\r\ndeclare namespace A {}\r\n')).toBe(
+      'x\r\nexport { }\r\n',
+    );
   });
 });

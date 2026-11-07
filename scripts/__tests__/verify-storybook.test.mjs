@@ -2,7 +2,7 @@
 /**
  * Storybook build configuration (spec §3.3; repo-level#1, #36): `.storybook/main.ts` registers
  * the a11y and docs addons and turns the library's Vite plugins into a Storybook app build
- * (Tailwind added, `vite:dts` removed, the export-docblock plugin placed after Storybook's docgen);
+ * (Tailwind added, `unplugin-dts` removed, the export-docblock plugin placed after Storybook's docgen);
  * `.storybook/preview.css` compiles the library styles (prefixed) and `.storybook/stories.css` the
  * stories' own classes (unprefixed, Phase 14 spec R6); `scripts/verify-storybook.mjs` asserts the
  * emitted CSS.
@@ -55,7 +55,7 @@ describe('.storybook/main.ts', () => {
   it('adds the Tailwind plugin and removes vite:dts from the library plugins', async () => {
     const config = await storybookMain.viteFinal({ plugins: [...viteConfig.plugins] }, {});
     const names = await pluginNames(config.plugins);
-    expect(names).not.toContain('vite:dts');
+    expect(names).not.toContain('unplugin-dts');
     expect(names).toEqual(expect.arrayContaining(['@tailwindcss/vite:scan']));
     expect(names.some((name) => name.startsWith('vite:react'))).toBe(true);
   });
@@ -65,10 +65,10 @@ describe('.storybook/main.ts', () => {
       {
         plugins: [
           { name: 'keep-a' },
-          [{ name: 'vite:dts' }, { name: 'keep-b' }],
+          [{ name: 'unplugin-dts' }, { name: 'keep-b' }],
           null,
           false,
-          Promise.resolve([{ name: 'vite:dts' }, { name: 'keep-c' }]),
+          Promise.resolve([{ name: 'unplugin-dts' }, { name: 'keep-c' }]),
         ],
       },
       {},
