@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { ArgTypes, Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Avatar, Button, InteractionTag, Tag, TagGroup, Text } from '../src';
+import { Avatar, Button, Field, InteractionTag, Tag, TagGroup, Text } from '../src';
 import type { TagAppearance, TagGroupProps, TagShape, TagSize } from '../src';
 import { orientationArgType } from './_helpers';
 
@@ -191,6 +191,41 @@ export const Selectable: Story = {
     onValueChange: fn(),
   },
   render: (args) => <SelectableChips {...args} />,
+};
+
+/**
+ * `selectionMode="single"` keeps at most one chip selected: pressing a chip selects it and
+ * deselects the previous one, and pressing the selected chip clears the selection.
+ * `onValueChange` receives an array of at most one value.
+ */
+export const SelectableSingle: Story = {
+  args: {
+    'aria-label': 'Fruit',
+    dismissible: false,
+    selectionMode: 'single',
+    defaultValue: ['plum'],
+    onValueChange: fn(),
+  },
+  render: (args) => <SelectableChips {...args} />,
+};
+
+/**
+ * Inside a `Field` the group is named by the Field's label and described by its hint, through
+ * `aria-labelledby` and `aria-describedby` (a toolbar is no labelable element, so the label's
+ * `for` cannot reach it).
+ */
+export const InAField: Story = {
+  args: {
+    dismissible: false,
+    selectionMode: 'single',
+    defaultValue: ['plum'],
+    'aria-label': undefined,
+  },
+  render: ({ 'aria-label': _label, ...args }) => (
+    <Field label="Favourite fruit" hint="Pick one.">
+      <SelectableChips {...args} />
+    </Field>
+  ),
 };
 
 /**

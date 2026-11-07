@@ -2,7 +2,7 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Listbox, type ListboxLabels } from '../Listbox';
+import { Listbox, type ListboxLabels, type ListboxProps } from '../Listbox';
 import { Option } from '../Option';
 import { __getAnnouncerText, __resetAnnouncer } from '../../../hooks/useAnnounce';
 import type { ListboxItem } from '../../../hooks/useListbox';
@@ -10,7 +10,7 @@ import { expectNoA11yViolations } from '../../../test-utils';
 
 const FRUITS = ['Apple', 'Banana', 'Cherry', 'Date', 'Elderberry', 'Fig'];
 
-function renderRange(props: Partial<React.ComponentProps<typeof Listbox<true>>> = {}) {
+function renderRange(props: Partial<ListboxProps<true>> = {}) {
   return render(
     <Listbox aria-label="Fruits" multiselect {...props}>
       {FRUITS.map((fruit) => (
