@@ -1,26 +1,47 @@
 import * as React from 'react';
 import { spinnerClassNames } from '../../lib/classNames';
 import { wcn } from '../../lib/cn';
+import { isDev, warnOnce } from '../../lib/dev';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
-import type { Size } from '../../lib/types';
+import type { LabelPosition } from '../../lib/types';
+import { SpinnerContext } from './Spinner.context';
+import type { SpinnerContextValue, SpinnerSize } from './Spinner.context';
+
+export type { SpinnerContextValue, SpinnerSize } from './Spinner.context';
 
 /** Color treatment of a {@link Spinner}. */
 export type SpinnerAppearance = 'primary' | 'inverted';
 
 /** Properties for the Spinner component. */
 export interface SpinnerProps extends React.HTMLAttributes<HTMLSpanElement> {
-  /** Size of the spinner.
-   * @default 'medium'
-   */
-  size?: Size;
   /**
-   * Text announced by the spinner's status region (and shown with `labelVisible`). Localize it.
+   * Size of the spinner: `extra-tiny` (16px), `tiny` (20px), `extra-small` (12px), `small` (16px),
+   * `medium` (24px), `large` (36px), `huge` (44px) or `extra-large` (48px). The five sizes of 0.x
+   * keep their pixel sizes, so `medium` is 24px where Fluent's is 32px; `extra-tiny`, `tiny` and
+   * `huge` are Fluent's names with Fluent's pixel sizes. Without one, a surrounding
+   * `SpinnerContextProvider` gives the size (Fluent's `SpinnerContext`).
+   * @default 'medium', or the size of the surrounding `SpinnerContextProvider`
+   */
+  size?: SpinnerSize;
+  /**
+   * What the spinner's status region announces (and what shows with `labelVisible`): a string, or
+   * any content (Fluent's `label` slot, which takes a ReactNode). Localize it. With
+   * `role="progressbar"` only a string names the spinner (`aria-label`): pass an `aria-label` or
+   * `aria-labelledby` of your own with other content.
    * @default 'Loading'
    */
-  label?: string;
+  label?: React.ReactNode;
   /** Whether the label text is visually displayed alongside the spinner. */
   labelVisible?: boolean;
+  /**
+   * Where the visible label sits relative to the ring: `after` (the ring first, in the reading
+   * direction), `before`, `below` or `above`. The DOM order is the same in each; only the layout
+   * changes, so the status region announces the label alike. The root carries it as
+   * `data-label-position`. Fluent's `labelPosition`.
+   * @default 'after'
+   */
+  labelPosition?: LabelPosition;
   /**
    * `primary`: a primary arc on the track color. `inverted`: drawn in the current text color (a
    * 30% track), for brand or inverted surfaces such as a primary Button.
@@ -93,12 +114,27 @@ function isName(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
 }
 
-const sizeClasses: Record<Size, string> = {
+const sizeClasses: Record<SpinnerSize, string> = {
+  'extra-tiny': 'wave:w-4 wave:h-4',
+  tiny: 'wave:w-5 wave:h-5',
   'extra-small': 'wave:w-3 wave:h-3',
   small: 'wave:w-4 wave:h-4',
   medium: 'wave:w-6 wave:h-6',
   large: 'wave:w-9 wave:h-9',
+  huge: 'wave:w-11 wave:h-11',
   'extra-large': 'wave:w-12 wave:h-12',
+};
+
+/**
+ * The root's flex direction per label position. The label is the last child, so `after` is the
+ * row, `before` its reverse (which also follows the writing direction), `below` the column and
+ * `above` its reverse.
+ */
+const labelPositionClasses: Record<LabelPosition, string> = {
+  after: 'wave:flex-row',
+  before: 'wave:flex-row-reverse',
+  below: 'wave:flex-col',
+  above: 'wave:flex-col-reverse',
 };
 
 /** Ring (track, then arc) and visible-label colors of each appearance. */
@@ -122,6 +158,10 @@ const appearanceClasses: Record<SpinnerAppearance, { ring: string; label: string
  * - `delay` holds back the ring and the label for that many milliseconds (the region mounts at
  *   once), so a fast load does not flash the spinner. The root's `data-state` is `delayed`, then
  *   `shown`.
+ * - `labelPosition` places the visible label `before`, `after`, `above` or `below` the ring, and
+ *   the root carries it as `data-label-position`. `label` takes any content, not only text.
+ * - `size` falls back to the size of a surrounding `SpinnerContextProvider` (a parent that sizes
+ *   the spinners it holds), then `medium`.
  * - `appearance="inverted"` draws the spinner in the current text color, for a primary Button or
  *   another brand or inverted surface. The root carries `data-appearance`.
  * - The ring is decorative (`aria-hidden`) and spins slower for reduced motion. In forced-colors
@@ -137,9 +177,10 @@ const appearanceClasses: Record<SpinnerAppearance, { ring: string; label: string
  * </Button>
  */
 export const Spinner = ({
-  size = 'medium',
+  size: sizeProp,
   label = 'Loading',
   labelVisible,
+  labelPosition = 'after',
   appearance = 'primary',
   delay = 0,
   slotProps,
@@ -150,6 +191,14 @@ export const Spinner = ({
   ref,
   ...rest
 }: SpinnerProps) => {
+  const contextSize = React.useContext(SpinnerContext)?.size;
+  const requestedSize = sizeProp ?? contextSize ?? 'medium';
+  // A size or position outside the unions (from untyped code) renders as the default instead of
+  // throwing.
+  const size: SpinnerSize = Object.hasOwn(sizeClasses, requestedSize) ? requestedSize : 'medium';
+  const resolvedPosition: LabelPosition = Object.hasOwn(labelPositionClasses, labelPosition ?? '')
+    ? labelPosition
+    : 'after';
   const wait = Number.isFinite(delay) && delay > 0 ? delay : 0;
   const [shown, setShown] = React.useState(wait === 0);
   const [announced, setAnnounced] = React.useState(false);
@@ -170,8 +219,17 @@ export const Spinner = ({
 
   // A progressbar takes its name from the author, never from its content (the label text): name it
   // with `label` unless the consumer does. Also applies to a forwarded `aria-label={undefined}`.
-  const nameFromLabel =
+  const needsName =
     role === 'progressbar' && !isName(rest['aria-label']) && !isName(rest['aria-labelledby']);
+  const nameFromLabel = needsName && typeof label === 'string';
+  const unnamedProgressbar = needsName && typeof label !== 'string';
+  React.useEffect(() => {
+    if (!isDev || !unnamedProgressbar) return;
+    warnOnce(
+      'Spinner:progressbar-name',
+      'Spinner: `role="progressbar"` needs an accessible name, and only a string `label` names it. Pass `aria-label` or `aria-labelledby`.',
+    );
+  }, [unnamedProgressbar]);
   // An appearance outside the union (from untyped code) renders as primary instead of throwing.
   const resolvedAppearance: SpinnerAppearance = Object.hasOwn(appearanceClasses, appearance ?? '')
     ? appearance
@@ -197,6 +255,7 @@ export const Spinner = ({
   return (
     <span
       data-appearance={resolvedAppearance}
+      data-label-position={resolvedPosition}
       data-state={shown ? 'shown' : 'delayed'}
       {...rest}
       role={role}
@@ -205,6 +264,7 @@ export const Spinner = ({
       className={wcn(
         spinnerClassNames.root,
         'wave:inline-flex wave:items-center wave:gap-2',
+        labelPositionClasses[resolvedPosition],
         className,
       )}
     >
@@ -230,3 +290,24 @@ export const Spinner = ({
 };
 
 Spinner.displayName = 'Spinner';
+
+/** Properties for the SpinnerContextProvider component. */
+export interface SpinnerContextProviderProps extends SpinnerContextValue {
+  children?: React.ReactNode;
+}
+
+/**
+ * Gives every Spinner below it a `size`, so a component that sizes its icons or its status area
+ * (a Button, a card, your own loading state) sizes the spinners it holds without passing `size`
+ * to each. A Spinner's own `size` wins. Renders no element. Fluent's `SpinnerContextProvider`.
+ *
+ * @example
+ * <SpinnerContextProvider size="tiny">
+ *   <Spinner label="Saving" labelVisible />
+ * </SpinnerContextProvider>
+ */
+export const SpinnerContextProvider = ({ size, children }: SpinnerContextProviderProps) => {
+  const value = React.useMemo<SpinnerContextValue>(() => ({ size }), [size]);
+  return <SpinnerContext.Provider value={value}>{children}</SpinnerContext.Provider>;
+};
+SpinnerContextProvider.displayName = 'SpinnerContextProvider';

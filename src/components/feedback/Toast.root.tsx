@@ -19,9 +19,10 @@ import {
   StatusText,
   getStatusLabel,
 } from './MessageBar.status';
-import { ToastContext, ToastUnscannedContext } from './Toast.context';
+import { ToastAppearanceContext, ToastContext, ToastUnscannedContext } from './Toast.context';
 import type { ToastContextValue } from './Toast.context';
 import { ToastBody, ToastFooter, ToastTitle } from './Toast.parts';
+import type { ToastAppearance } from './Toaster';
 
 /** Properties for the Toast component. */
 export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -29,6 +30,23 @@ export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'info'
    */
   status?: Status;
+  /**
+   * `inverted` draws the toast on the inverted surface, as a Tooltip is: its background, border,
+   * text and icon take the inverted colors (the status shows in the start border), and so do the
+   * text of `Toast.Title`, `Toast.Body` and its subtitle. Buttons of your own in the footer keep
+   * their appearance (an `inverted` Spinner, a `transparent` Button suit it). The toast carries
+   * it as `data-appearance`. Fluent's `Toast` `appearance`.
+   * @default 'default'
+   */
+  appearance?: ToastAppearance;
+  /**
+   * Whether the Dismiss button shows. Inside a Toaster it shows by default, a `Toast` outside one
+   * shows it with `onDismiss`. `false` hides it (Delete, Backspace, Escape, `dismissToast` and the
+   * timeout still dismiss the toast), for a toast that reports a running task; a `Toast.Close` of
+   * yours is not affected. Fluent has no such prop: its Dismiss button is a `ToastTrigger` you add.
+   * @default true in a Toaster, else whether `onDismiss` is given
+   */
+  showDismissButton?: boolean;
   /**
    * Title text (the 0.5 form; renders as a `Toast.Title`). A `Toast.Title` among the children wins
    * over it (development warning).
@@ -141,6 +159,8 @@ function renderParts(
 
 export const ToastRoot = ({
   status = 'info',
+  appearance: appearanceProp,
+  showDismissButton,
   title,
   statusLabel,
   icon,
@@ -187,8 +207,13 @@ export const ToastRoot = ({
     }),
     [titleId, hasOnDismiss, handleDismiss],
   );
-  // Inside the Toaster every Toast shows the Dismiss button (D11); elsewhere `onDismiss` does.
-  const dismiss = inToaster ? host?.dismiss : ownContext.dismiss;
+  // Inside the Toaster every Toast shows the Dismiss button (D11); elsewhere `onDismiss` does;
+  // `showDismissButton={false}` hides it in both.
+  const dismiss =
+    showDismissButton === false ? undefined : inToaster ? host?.dismiss : ownContext.dismiss;
+  // An appearance outside the union (untyped code) is the default.
+  const appearance = appearanceProp === 'inverted' ? 'inverted' : 'default';
+  const inverted = appearance === 'inverted';
 
   const { content, titleTwice } = renderParts(title, children);
   React.useEffect(() => {
@@ -205,7 +230,7 @@ export const ToastRoot = ({
   const iconClassName = wcn(
     toastClassNames.icon,
     'wave:mt-0.5 wave:inline-flex wave:shrink-0',
-    STATUS_ICON_COLOR[status],
+    inverted ? 'wave:text-inverted-foreground' : STATUS_ICON_COLOR[status],
   );
   const renderedIcon =
     icon === undefined ? (
@@ -227,9 +252,10 @@ export const ToastRoot = ({
   if (dismiss) {
     const dismissClassName = wcn(
       toastClassNames.dismissButton,
-      'wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded wave:border-none wave:bg-transparent wave:p-1 wave:text-muted-foreground',
-      'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground',
-      'wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
+      'wave:inline-flex wave:shrink-0 wave:cursor-pointer wave:items-center wave:justify-center wave:rounded wave:border-none wave:bg-transparent wave:p-1',
+      inverted
+        ? 'wave:text-inverted-foreground/80 wave:not-disabled:not-aria-disabled:hover:bg-inverted-foreground/10 wave:not-disabled:not-aria-disabled:hover:text-inverted-foreground wave:not-disabled:not-aria-disabled:active:bg-inverted-foreground/20'
+        : 'wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
       focusRing,
     );
     const handleDismissClick = () => dismiss();
@@ -257,11 +283,14 @@ export const ToastRoot = ({
   const root = (
     <div
       ref={ref}
+      data-appearance={appearance}
       {...liveRegion}
       {...rest}
       className={wcn(
         toastClassNames.root,
-        'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border wave:border-s-4 wave:border-border wave:bg-background wave:p-3 wave:text-foreground wave:shadow-4',
+        inverted
+          ? 'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border wave:border-s-4 wave:border-inverted-border wave:bg-inverted wave:p-3 wave:text-inverted-foreground wave:shadow-4'
+          : 'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border wave:border-s-4 wave:border-border wave:bg-background wave:p-3 wave:text-foreground wave:shadow-4',
         STATUS_BORDER[status],
         className,
       )}
@@ -276,7 +305,9 @@ export const ToastRoot = ({
           }))}
       >
         <StatusText label={label} id={statusTextId} />
-        {content}
+        <ToastAppearanceContext.Provider value={appearance}>
+          {content}
+        </ToastAppearanceContext.Provider>
       </div>
       {dismissButton}
     </div>

@@ -163,6 +163,7 @@ const NO_ELEMENT: readonly string[] = [
   'Popover', // a context provider: Popover.Content renders the surface
   'PopoverTrigger', // clones its child
   'Presence', // clones its child
+  'SpinnerContextProvider', // a context provider: the Spinners below it render the elements (1.1)
   'TeachingPopoverTrigger', // clones its child (0.14)
   'ToastClose', // clones its child (phase 3)
 ];

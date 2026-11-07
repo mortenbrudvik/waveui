@@ -69,6 +69,9 @@ function fakeController() {
     dispatchToast: vi.fn<(first: unknown, second?: unknown) => string>(() => ''),
     dismissToast: vi.fn<(id: string) => void>(),
     dismissAllToasts: vi.fn<() => void>(),
+    updateToast: vi.fn<(update: unknown) => void>(),
+    pauseToast: vi.fn<(id: string) => void>(),
+    playToast: vi.fn<(id: string) => void>(),
   };
 }
 

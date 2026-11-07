@@ -387,6 +387,12 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
       "a motion element: the one item of a toast's container, clipped while the toast moves; the toast inside takes its own props",
   },
   {
+    component: 'toasterClassNames',
+    key: 'stack',
+    reason:
+      "a layout element: stacks the toasts of one position other than the Toaster's inside its region; each toast in it takes the `toast` part",
+  },
+  {
     component: 'listboxClassNames',
     key: 'spacer',
     reason:

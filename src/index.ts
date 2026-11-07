@@ -69,7 +69,7 @@ export type {
   UseFieldControlOptions,
 } from './hooks/useFieldControl';
 export { useAnnounce, announce } from './hooks/useAnnounce';
-export type { Politeness } from './hooks/useAnnounce';
+export type { Politeness, AnnounceOptions } from './hooks/useAnnounce';
 export { usePresence } from './hooks/usePresence';
 export type {
   PresencePhase,

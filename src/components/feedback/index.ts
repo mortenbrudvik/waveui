@@ -4,19 +4,38 @@ export type {
   MessageBarTitleProps,
   MessageBarActionsProps,
   MessageBarContextValue,
+  MessageBarShape,
+  MessageBarPoliteness,
 } from './MessageBar';
 
 export { MessageBarGroup } from './MessageBarGroup';
 export type { MessageBarGroupProps } from './MessageBarGroup';
 
 export { ProgressBar } from './ProgressBar';
-export type { ProgressBarProps, ProgressBarColor } from './ProgressBar';
+export type {
+  ProgressBarProps,
+  ProgressBarColor,
+  ProgressBarThickness,
+  ProgressBarShape,
+} from './ProgressBar';
 
-export { Spinner } from './Spinner';
-export type { SpinnerProps, SpinnerAppearance } from './Spinner';
+export { Spinner, SpinnerContextProvider } from './Spinner';
+export type {
+  SpinnerProps,
+  SpinnerAppearance,
+  SpinnerSize,
+  SpinnerContextValue,
+  SpinnerContextProviderProps,
+} from './Spinner';
 
 export { Skeleton, SkeletonGroup } from './Skeleton';
-export type { SkeletonProps, SkeletonGroupProps } from './Skeleton';
+export type {
+  SkeletonProps,
+  SkeletonGroupProps,
+  SkeletonSize,
+  SkeletonAnimation,
+  SkeletonAppearance,
+} from './Skeleton';
 
 export {
   Toast,
@@ -40,4 +59,12 @@ export type {
   ToastDispatchOptions,
   ToastController,
   ToastPosition,
+  ToasterOffset,
+  ToastAppearance,
+  ToastAnnouncement,
+  ToastDismissReason,
+  ToastStatus,
+  ToastStatusChangeDetails,
+  ToastStatusChangeHandler,
+  ToastUpdate,
 } from './Toast';

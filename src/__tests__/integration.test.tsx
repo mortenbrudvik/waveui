@@ -9754,7 +9754,7 @@ describe('the Toaster beside real drawers (0.11 spec §4.6 #5)', () => {
     expect(blockOffset()).toBe('');
   });
 
-  it('bottom-start toasts move clear of an open start overlay NavDrawer and come back when it closes', () => {
+  it('bottom-start toasts move clear of an open start overlay NavDrawer and come back when it closes', async () => {
     const ui = (open: boolean) => (
       <Toaster position="bottom-start">
         <NavDrawer open={open} onOpenChange={() => {}} ref={stubPanelRect(p6Rect(0, 0, 320, 768))}>
@@ -9767,6 +9767,12 @@ describe('the Toaster beside real drawers (0.11 spec §4.6 #5)', () => {
     const { rerender } = render(ui(true));
     expect(offset()).toBe('320px');
     rerender(ui(false));
+    // The toasts stay clear of the panel while it exits, and return once it is gone.
+    await act(async () => {
+      for (let frame = 0; frame < 5; frame += 1) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      }
+    });
     expect(offset()).toBe('');
   });
 });

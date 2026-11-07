@@ -16,6 +16,8 @@ const meta = {
       control: 'select',
       options: ['info', 'success', 'warning', 'error'],
     },
+    shape: { control: 'inline-radio', options: ['rounded', 'square'] },
+    politeness: { control: 'inline-radio', options: ['polite', 'assertive'] },
     layout: {
       control: 'select',
       options: ['auto', 'singleline', 'multiline'] satisfies readonly NonNullable<
@@ -265,6 +267,32 @@ export const StatusAwareAction: Story = {
   render: (args) => (
     <div className="w-[720px] min-w-[240px] max-w-full resize-x overflow-hidden p-1">
       <MessageBar {...args} />
+    </div>
+  ),
+};
+
+/**
+ * `shape="square"` removes the rounded corners of a bar that spans the page or the width of a
+ * card. The default is `rounded`.
+ */
+export const Square: Story = {
+  args: { shape: 'square', status: 'warning', children: 'Your trial ends in three days.' },
+};
+
+/**
+ * `politeness` sets how urgently the bar is announced (`assertive` is `role="alert"`, `polite` is
+ * `role="status"`): here an error that can wait, and an info notice that cannot. Without it the
+ * status decides.
+ */
+export const Politeness: Story = {
+  render: () => (
+    <div className="flex flex-col gap-3">
+      <MessageBar status="error" politeness="polite">
+        The sync failed and will retry (announced politely).
+      </MessageBar>
+      <MessageBar status="info" politeness="assertive">
+        The session ends in one minute (announced at once).
+      </MessageBar>
     </div>
   ),
 };

@@ -13,7 +13,7 @@ import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTriggerElement } from '../../hooks/useTriggerElement';
-import { ToastUnscannedContext, useToastContext } from './Toast.context';
+import { ToastAppearanceContext, ToastUnscannedContext, useToastContext } from './Toast.context';
 
 /**
  * Development warning (once, from an effect) for a part that renders inside the body a Toast made
@@ -87,9 +87,11 @@ export const ToastTitle = ({
   const mergedRef = useMergedRefs(ref, rowRef);
   // The Toaster reads the label through this ref: a part's ref goes beside it.
   const labelRefs = useMergedRefs(labelRef, slotProps?.label?.ref);
+  const inverted = React.useContext(ToastAppearanceContext) === 'inverted';
   const labelClassName = wcn(
     toastTitleClassNames.label,
-    'wave:min-w-0 wave:flex-1 wave:text-body-2 wave:font-semibold wave:text-foreground',
+    'wave:min-w-0 wave:flex-1 wave:text-body-2 wave:font-semibold',
+    inverted ? 'wave:text-inverted-foreground' : 'wave:text-foreground',
   );
   React.useLayoutEffect(() => {
     if (titleId === undefined) return undefined;
@@ -169,6 +171,7 @@ export const ToastBody = ({
 }: ToastBodyProps) => {
   const { registerPart } = useToastContext('Toast.Body');
   useUnscannedWarning('Body');
+  const inverted = React.useContext(ToastAppearanceContext) === 'inverted';
   const generatedId = useId('wave-toast-body');
   const id = idProp ?? generatedId;
   const bodyRef = React.useRef<HTMLDivElement>(null);
@@ -181,7 +184,8 @@ export const ToastBody = ({
   if (slotRendersContent(subtitle)) {
     const subtitleClassName = wcn(
       toastBodyClassNames.subtitle,
-      'wave:mt-1 wave:text-caption-1 wave:text-muted-foreground',
+      'wave:mt-1 wave:text-caption-1',
+      inverted ? 'wave:text-inverted-foreground/80' : 'wave:text-muted-foreground',
     );
     subtitleLine = (
       <div
@@ -203,7 +207,8 @@ export const ToastBody = ({
       id={id}
       className={wcn(
         toastBodyClassNames.root,
-        'wave:mt-0.5 wave:text-body-1 wave:text-muted-foreground',
+        'wave:mt-0.5 wave:text-body-1',
+        inverted ? 'wave:text-inverted-foreground/80' : 'wave:text-muted-foreground',
         className,
       )}
     >

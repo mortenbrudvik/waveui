@@ -53,6 +53,13 @@ export interface ToastContextValue {
 export const ToastContext = React.createContext<ToastContextValue | null>(null);
 ToastContext.displayName = 'ToastContext';
 
+/**
+ * The appearance of the Toast around a part (`inverted` draws the text of the title, body and
+ * footer on the inverted surface). Provided by every Toast around its content.
+ */
+export const ToastAppearanceContext = React.createContext<'default' | 'inverted'>('default');
+ToastAppearanceContext.displayName = 'ToastAppearanceContext';
+
 /** `true` inside the body a Toast wraps around children in which its scan found no part (D15 rule). */
 export const ToastUnscannedContext = React.createContext(false);
 ToastUnscannedContext.displayName = 'ToastUnscannedContext';
