@@ -14,6 +14,8 @@
  *
  * The plugins of `plugins/` (website/BUDGET.md has the measurements):
  *
+ * - `localStoryImages`: a story's image address on another host becomes an inline image, in every
+ *   environment (no page requests anything from another host).
  * - `splitModules`: the client build splits the library's registries into one module per export,
  *   so a page loads the class names, icons and motion recipes its islands use, not those of all.
  * - `siteChunking`: the client build's `react` and `base` chunks, and the development warnings
@@ -25,6 +27,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import { runnerImport } from 'vite';
 import { siteChunking } from './plugins/chunking.mjs';
+import { localStoryImages } from './plugins/localImages.mjs';
 import { splitModules } from './plugins/splitModules.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -66,6 +69,7 @@ export default defineConfig({
   vite: {
     plugins: [
       tailwindcss(),
+      localStoryImages({ storiesDir: `${repoRoot}stories` }),
       splitModules({ files: SPLIT_MODULES.map((file) => `${repoRoot}${file}`) }),
       siteChunking({ baseRoots: BASE_ROOTS.map((file) => `${repoRoot}${file}`) }),
     ],

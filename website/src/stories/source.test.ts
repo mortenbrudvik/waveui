@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { AVATAR_IMAGE } from '../../plugins/localImages.mjs';
 import { extractStorySource } from './source';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -48,6 +49,19 @@ describe('extractStorySource', () => {
     const source = extractStorySource(BUTTON_STORIES, 'IconAfter');
     expect(source).toMatch(/^export const IconAfter: Story = \{\n/);
     expect(source).not.toContain('inline end of the label');
+  });
+
+  it('shows an image address on another host as the inline image the site renders', () => {
+    const source = extractStorySource('stories/Avatar.stories.tsx', 'WithImage');
+    expect(source).toBe(
+      [
+        'export const WithImage: Story = {',
+        '  args: {',
+        `    src: '${AVATAR_IMAGE}',`,
+        '  },',
+        '};',
+      ].join('\n'),
+    );
   });
 
   it('unknown export throws a clear error', () => {

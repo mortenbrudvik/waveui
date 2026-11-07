@@ -9,6 +9,7 @@ import { join, relative } from 'node:path';
 import axe from 'axe-core';
 import { JSDOM } from 'jsdom';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { AVATAR_IMAGE } from '../plugins/localImages.mjs';
 import { getCatalog, type ComponentEntry } from '../src/catalog/catalog';
 import { extractDocs, type ComponentDocs } from '../src/docs/props';
 import { formatDescription, isHookEntry } from '../src/docs/page';
@@ -91,13 +92,10 @@ const own = (root: ParentNode, selector: string) =>
   [...root.querySelectorAll(selector)].filter((element) => !element.closest('astro-island'));
 
 /**
- * Images the stories load from another host (they are the stories' data, and `stories/` is outside
- * the site's code). Listed so that any other address outside the app fails.
+ * The host whose images two stories name (Avatar and Persona). The site's build serves an inline
+ * image in their place (`plugins/localImages.mjs`), so no page requests anything from it.
  */
-const STORY_EXTERNAL_IMAGES: Readonly<Record<string, string>> = {
-  'components/avatar.html': 'https://i.pravatar.cc/150?u=avatar-story',
-  'components/persona.html': 'https://i.pravatar.cc/150?u=persona-story',
-};
+const STORY_IMAGE_HOST = 'i.pravatar.cc';
 
 describe.skipIf(!state.ready)(title, () => {
   it('80 component pages plus the index exist', () => {
@@ -255,7 +253,6 @@ describe.skipIf(!state.ready)(title, () => {
 
     const pages = allPages();
     expect(pages.length).toBeGreaterThanOrEqual(82);
-    const excepted = new Set<string>();
     const sheets = new Set<string>();
 
     /** An address in the app: under the prefix once, and not a directory (`…/`). */
@@ -308,14 +305,6 @@ describe.skipIf(!state.ready)(title, () => {
             closeLinks++;
             continue;
           }
-          if (
-            attribute === 'src' &&
-            element.tagName === 'IMG' &&
-            STORY_EXTERNAL_IMAGES[name] === value
-          ) {
-            excepted.add(name);
-            continue;
-          }
           expectInternal(value, `${name}: ${attribute}`);
         }
         const style = element.getAttribute('style');
@@ -354,8 +343,36 @@ describe.skipIf(!state.ready)(title, () => {
       const css = readFileSync(join(SITE_DIST, sheet.slice(DOCS_BASE.length + 1)), 'utf8');
       for (const url of cssAddresses(css, sheet)) expectInternal(url, sheet);
     }
-    // Every listed exception is still needed.
-    expect([...excepted].sort()).toEqual(Object.keys(STORY_EXTERNAL_IMAGES).sort());
+  });
+
+  it('no built page or script chunk names the stories’ image host; the image is served inline', () => {
+    const files = [
+      ...allPages(),
+      ...readdirSync(join(SITE_DIST, '_assets'))
+        .filter((file) => file.endsWith('.js'))
+        .map((file) => join(SITE_DIST, '_assets', file)),
+    ];
+    expect(files.length).toBeGreaterThan(82);
+    const naming = files
+      .filter((file) => readFileSync(file, 'utf8').includes(STORY_IMAGE_HOST))
+      .map((file) => relative(SITE_DIST, file).replace(/\\/g, '/'));
+    expect(naming).toEqual([]);
+
+    // The stories that named it render the inline image, on the server and in their island.
+    for (const slug of ['avatar', 'persona']) {
+      const document = load(join(SITE_DIST, 'components', `${slug}.html`));
+      const images = [...document.querySelectorAll('astro-island img')].map((image) =>
+        image.getAttribute('src'),
+      );
+      expect(images, slug).toContain(AVATAR_IMAGE);
+    }
+    const islands = readdirSync(join(SITE_DIST, '_assets')).filter((file) =>
+      /^(avatar|persona)\..*\.js$/.test(file),
+    );
+    expect(islands).toHaveLength(2);
+    for (const file of islands) {
+      expect(readFileSync(join(SITE_DIST, '_assets', file), 'utf8'), file).toContain(AVATAR_IMAGE);
+    }
   });
 
   it('the h2 and h3 ids of every page are unique on the page', () => {

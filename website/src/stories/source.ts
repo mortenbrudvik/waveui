@@ -5,11 +5,14 @@
  *
  * The text is the story's whole statement as written in the file (`export const Primary: Story =
  * { args: { … } };`, its `render` function included), without the JSDoc in front of it (that is
- * the story's description), with `\n` line endings. Each file is parsed once per process.
+ * the story's description), with `\n` line endings. Each file is parsed once per process. An image
+ * address on another host is shown as the inline image the site renders in its place
+ * (`plugins/localImages.mjs`), so the code matches the example.
  */
 import { readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import ts from 'typescript';
+import { rewriteExternalImages } from '../../plugins/localImages.mjs';
 import { REPO_ROOT } from '../repoRoot';
 
 /** The story statements of each file read so far, by export name. */
@@ -39,7 +42,11 @@ function readStories(path: string, storyFile: string): ReadonlyMap<string, strin
   for (const statement of source.statements) {
     if (!isExported(statement)) continue;
     // `getText` starts at the statement's first token, after its leading comments.
-    const statementText = statement.getText(source).replace(/\r\n/g, '\n');
+    const statementText = rewriteExternalImages(
+      statement.getText(source).replace(/\r\n/g, '\n'),
+      'story.tsx',
+      { inline: true },
+    );
     if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name)) stories.set(declaration.name.text, statementText);
