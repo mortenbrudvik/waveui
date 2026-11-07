@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, expectTypeOf } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { avatarGroupClassNames, avatarGroupItemClassNames } from '../../../lib/classNames';
@@ -1283,7 +1283,7 @@ describe('AvatarGroup and AvatarGroup.Item — slotProps', () => {
   const ITEM =
     'wave-avatar-group__item wave:inline-flex wave:rounded-full wave:ring-2 wave:ring-background';
   const SURFACE =
-    'wave-avatar-group__surface wave:min-w-32 wave:max-w-xs wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-2 wave:text-body-1 wave:text-foreground wave:shadow-16 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1';
+    'wave-avatar-group__surface wave:min-w-32 wave:max-w-xs wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-2 wave:text-body-1 wave:text-foreground wave:shadow-16 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1 wave:data-[presence=exited]:opacity-0 wave:data-[presence=exited]:transition-none wave:data-[side=top]:data-[presence=exited]:translate-y-1 wave:data-[side=bottom]:data-[presence=exited]:-translate-y-1 wave:data-[side=left]:data-[presence=exited]:translate-x-1 wave:data-[side=right]:data-[presence=exited]:-translate-x-1';
   const OPEN_PINS = [
     `<span class="${ITEM}">`,
     `<span class="${ITEM} wave:-ms-2">`,
@@ -1310,12 +1310,14 @@ describe('AvatarGroup and AvatarGroup.Item — slotProps', () => {
     ...all(root, avatarGroupClassNames.item),
   ];
 
-  it('renders the parts of 112d7f8 (attributes sorted): the open popup and the pie', () => {
+  it('renders the parts of 112d7f8 (attributes sorted): the open popup and the pie', async () => {
     for (const [parts, item] of [
       [undefined, undefined],
       [GROUP_PARTS, { name: {} }],
     ] as const) {
       const view = render(<Team parts={parts} item={item} />);
+      // The popup is held (exited) until floating-ui has placed it, then it is entered.
+      await waitFor(() => expect(surfaceOf()).toHaveAttribute('data-presence', 'entered'));
       // The position is the positioning's (tested below), not a pinned value.
       const surface = surfaceOf();
       expect(surface.style.position).toBe('fixed');

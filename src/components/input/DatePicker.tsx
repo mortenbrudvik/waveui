@@ -46,7 +46,7 @@ import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
-import { usePresence } from '../../hooks/usePresence';
+import { usePlacedPresence } from '../../hooks/usePlacedPresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
@@ -835,15 +835,20 @@ export const DatePicker = (props: DatePickerProps) => {
     kind: 'modal',
   });
 
-  const { setReference, setFloating, floatingProps } = usePopupPosition({
+  const { setReference, setFloating, floatingProps, isPositioned } = usePopupPosition({
     open: isOpen,
     side: 'bottom',
     align: 'start',
     ...resolvePositioning(positioning, {}),
   });
-  // The calendar mounts and unmounts through the presence core; everything else keys on `isOpen`.
-  const { isMounted, ref: presenceRef, presenceProps } = usePresence(isOpen, { appear: true });
+  // The calendar mounts and unmounts through the presence core, and enters once it has its
+  // position; everything else keys on `isOpen`.
   const motionClassName = useMotionClasses(motion, popupMotion);
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePlacedPresence(isOpen, isPositioned, motionClassName === popupMotion);
   const surfaceRefs = useMergedRefs<HTMLDivElement>(
     surfaceRef,
     setSurface,

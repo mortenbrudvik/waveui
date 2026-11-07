@@ -23,7 +23,7 @@ import { createHoverIntentGroup, type HoverIntentGroup } from '../../hooks/useHo
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
-import { usePresence } from '../../hooks/usePresence';
+import { usePlacedPresence } from '../../hooks/usePlacedPresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { getTriggerFocusTarget, useTriggerFocusRef } from '../../hooks/useTriggerElement';
@@ -185,13 +185,13 @@ export function useMenuListPointer(menu: MenuContextValue): {
  * (development warning otherwise), as for a menu placed at a `target` without `Menu.Trigger`.
  *
  * It moves in and out: the surface fades in and slides 4px away from its trigger over 200 ms, and
- * fades out and slides back over 100 ms, on the side it opened on (`data-side`), so a submenu
- * slides out of its parent menu; a menu open by default animates in when it mounts in the
- * browser. Under reduced motion it appears and disappears at once. `motion` turns the motion off
+ * fades out and slides back over 100 ms, on the side it is placed on (`data-side`, after a flip: it
+ * enters once it has its position), so a submenu slides out of its parent menu; a menu open by
+ * default animates in when it mounts in the browser. Under reduced motion it appears and disappears at once. `motion` turns the motion off
  * (`null`) or replaces its classes, and a `WaveProvider` with `motion="none"` turns the default
- * off. The surface mounts through the presence core (`usePresence`): it
- * carries `data-presence="entering" | "entered" | "exiting"` and, while it closes,
- * `data-state="closed"` and `inert`, so it stays on screen, where it was, until its exit motion
+ * off. The surface mounts through the presence core: it carries
+ * `data-presence="exited" | "entering" | "entered" | "exiting"` (`exited` only for the moment
+ * before it has its position, transparent) and, while it closes, `data-state="closed"` and `inert`, so it stays on screen, where it was, until its exit motion
  * ends. Focus, the dismiss layer and positioning follow the open state, not the exit: focus
  * inside a closing menu leaves it in the commit that closes it. Without motion it unmounts as
  * soon as it closes.
@@ -266,12 +266,6 @@ export const MenuPopover = ({
     setSurface(element);
   }, []);
 
-  // The surface mounts and unmounts through the presence core, and enters also when it mounts open
-  // (D9: a menu open by default animates in on a client render as after hydration); everything
-  // else below keys on `open`, so focus returns and the layer goes on close, not after the exit.
-  const { isMounted, ref: presenceRef, presenceProps } = usePresence(open, { appear: true });
-  const motionClassName = useMotionClasses(motion, popupMotion);
-
   const {
     setReference,
     setFloating,
@@ -287,6 +281,16 @@ export const MenuPopover = ({
     ...resolvePositioning(positioning, { offset: isSubmenu ? 0 : 4, fitViewport: true }),
     ...(offset !== undefined && { offset }),
   });
+  // The surface mounts and unmounts through the presence core, and enters also when it mounts open
+  // (D9: a menu open by default animates in on a client render as after hydration), once it has
+  // its position, so a menu that flips slides away from its anchor; everything else below keys on
+  // `open`, so focus returns and the layer goes on close, not after the exit.
+  const motionClassName = useMotionClasses(motion, popupMotion);
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePlacedPresence(open, isPositioned && !targetPending, motionClassName === popupMotion);
   // A ref target that holds no element yet keeps the popup hidden (as TeachingPopover's is).
   const floatingProps = targetPending
     ? { ...positionedProps, style: { ...positionedProps.style, visibility: 'hidden' as const } }

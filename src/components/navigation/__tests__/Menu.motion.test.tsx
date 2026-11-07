@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Menu, type MenuPopoverProps, type MenuProps } from '../Menu';
 import { getOpenLayers } from '../../../lib/layers';
@@ -264,7 +264,9 @@ describe('Menu.Popover presence (D7, D9)', () => {
     const motion = mockAnimations({ animated: isMenu });
     render(<FileMenu root={{ defaultOpen: true }} />);
     const surface = menu('File');
-    expect(surface).toHaveAttribute('data-presence', 'entering');
+    // Mounted open but held (exited, transparent) until floating-ui has placed it, then it enters.
+    expect(surface).toHaveAttribute('data-presence', 'exited');
+    await waitFor(() => expect(surface).toHaveAttribute('data-presence', 'entering'));
     expect(surface).not.toHaveAttribute('inert');
     await finish(motion);
     expect(surface).toHaveAttribute('data-presence', 'entered');
