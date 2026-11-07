@@ -1002,7 +1002,8 @@ export const treeItemPersonaLayoutClassNames = {
 } as const;
 
 /**
- * FlatTree: `root` on the `role="tree"` element (the scrolling element of a tree with a
+ * FlatTree: `root` on the `role="tree"` element (`role="treegrid"` with
+ * `navigationMode="treegrid"`; the scrolling element of a tree with a
  * `virtualWindow`); `spacer` on each spacer element of a windowed tree (the elements that stand in
  * for the items that are not rendered, 0.16).
  */
@@ -1012,9 +1013,11 @@ export const flatTreeClassNames = {
 } as const;
 
 /**
- * FlatTree.Item: `root` on the `role="treeitem"` element; `row` on its row; `expandIcon` on the
- * chevron of a branch; `indicator` on the checkbox of a multi-select tree or the radio of a
- * single-select one; `label` on the span around the item's content (0.16).
+ * FlatTree.Item: `root` on the `role="treeitem"` element (the `role="row"` element of a treegrid);
+ * `row` on its row (the first `gridcell` of a treegrid); `expandIcon` on the chevron of a branch;
+ * `indicator` on the checkbox of a multi-select tree or the radio of a single-select one; `label`
+ * on the span around the item's content (0.16); `cell` on each further `gridcell` of a
+ * `navigationMode="treegrid"` row, the ones `renderCells` draws.
  */
 export const flatTreeItemClassNames = {
   root: 'wave-flat-tree-item',
@@ -1022,6 +1025,7 @@ export const flatTreeItemClassNames = {
   expandIcon: 'wave-flat-tree-item__expand-icon',
   indicator: 'wave-flat-tree-item__indicator',
   label: 'wave-flat-tree-item__label',
+  cell: 'wave-flat-tree-item__cell',
 } as const;
 
 /**

@@ -18,6 +18,16 @@ export interface FlatTreeContextValue {
   current: string | null | undefined;
   /** The value of the item that holds the tab stop; `null` while no item can take it. */
   tabStop: string | null;
+  /**
+   * Whether the tree is a `navigationMode="treegrid"` one: its items are `role="row"` elements
+   * with `gridcell`s. Absent counts as `false`.
+   */
+  treegrid?: boolean;
+  /**
+   * In a treegrid, the index of the cell that holds the tab stop in the `tabStop` item (`0` is the
+   * item's own content cell); `null` while the item itself does. Absent counts as `null`.
+   */
+  tabStopCell?: number | null;
   /** The height of every item of a windowed tree, in pixels; `undefined` without a window. */
   itemSize: number | undefined;
   /** Activates a row (a click, Enter): a branch expands or collapses, and `onItemSelect` runs. */
@@ -33,6 +43,7 @@ export interface FlatTreeContextValue {
     expandIcon?: SlotPart<'svg'>;
     indicator?: SlotPart<'span'>;
     label?: SlotPart<'span'>;
+    cell?: SlotPart<'div'>;
   };
 }
 

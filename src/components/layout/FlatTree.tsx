@@ -15,6 +15,14 @@ import { useTypeahead } from '../../hooks/useTypeahead';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { FlatTreeContext, type FlatTreeContextValue, type FlatTreeRow } from './FlatTree.context';
 import { FlatTreeItem } from './FlatTree.item';
+import {
+  focusCell,
+  getCellIndex,
+  getCellOf,
+  getCells,
+  getFirstWidget,
+  parkCellWidgets,
+} from './FlatTree.treegrid';
 import type { FlatTreeModel } from './useFlatTree';
 import { useAppClassName } from '../../hooks/useAppClassName';
 
@@ -48,6 +56,41 @@ export interface FlatTreeProps extends Omit<
    */
   renderItem?: (item: VisibleFlatItem & { checked?: CheckState }) => React.ReactNode;
   /**
+   * How the tree is built and moved through. `'tree'` (the default) is the WAI-ARIA tree view:
+   * `role="tree"` with `role="treeitem"` items, one tab stop on an item. `'treegrid'` is the
+   * WAI-ARIA treegrid: `role="treegrid"` (with `aria-rowcount`), each item a `role="row"` with
+   * `aria-level`, `aria-posinset`, `aria-setsize`, `aria-rowindex` and, on a branch,
+   * `aria-expanded`, and its content in `role="gridcell"` elements: the first holds the chevron,
+   * the check and what `renderItem` returns, and `renderCells` draws the others. A row has no
+   * `aria-checked` (its checkbox does). Fluent UI's `Tree navigationMode` (whose `'treegrid'`
+   * keeps the tree roles; the nested `Tree` does the same here).
+   *
+   * The keys of a treegrid (APG): on a row, Down and Up move to the next and previous row, Home
+   * and End (also with Ctrl) to the first and last row, Right expands a collapsed branch, else
+   * moves into the row's first cell (it no longer moves to the first child: Down does), Left
+   * collapses an expanded branch (else it does nothing: the focus stays), and Enter, Space, `*`
+   * and typing act on the row as in a tree. On a cell, Left and Right move between the row's
+   * cells (Left on the first returns to the row; both mirrored in right-to-left layouts), Up and
+   * Down to the cell of the same column in the previous and next row, Home and End to the first
+   * and last cell of the row, Ctrl+Home and Ctrl+End to the same column of the first and last
+   * row, and Enter or F2 moves focus to the cell's first control (a button, a link), where Escape
+   * returns to the cell and the control's own keys apply. The tree keeps one tab stop, a row or a
+   * cell; the controls in cells are taken out of the Tab order (`tabindex="-1"`, also those that
+   * render later) and reached with Enter. A click on a cell other than the first, and on what is
+   * in it, never activates the row.
+   * @default 'tree'
+   */
+  navigationMode?: 'tree' | 'treegrid';
+  /**
+   * The content of a row's further cells, in order, in `navigationMode="treegrid"`: for each
+   * rendered row, the item with its level, position, set size, expanded state and check state.
+   * Each node is drawn in a `role="gridcell"` element after the first cell, so a value is a column
+   * (a size, a date, a button). Return the same number of cells for every row; a row with fewer
+   * keeps the last column for the keys that move between rows. Without a treegrid it is ignored
+   * (a development warning). Pure, and called for the rendered rows only.
+   */
+  renderCells?: (item: VisibleFlatItem & { checked?: CheckState }) => readonly React.ReactNode[];
+  /**
    * How items are selected, as the nested `Tree`'s `selectionMode`. `'multiple'` draws a checkbox
    * on every item, bound to the model's checked items (create the model with
    * `selectionMode: 'multiple'`); `'single'` draws a radio for `selected`. Spread
@@ -70,7 +113,7 @@ export interface FlatTreeProps extends Omit<
    * unless the tree has checkboxes), also when the same item is activated again.
    */
   onItemSelect?: (value: string) => void;
-  /** Ref to the `role="tree"` element. */
+  /** Ref to the `role="tree"` element (`role="treegrid"` with `navigationMode="treegrid"`). */
   ref?: React.Ref<HTMLDivElement>;
   /**
    * Props for the elements every item draws, by part: each `FlatTree.Item` is rendered by the
@@ -96,10 +139,11 @@ export interface FlatTreeProps extends Omit<
   slotProps?: {
     /**
      * The `<div>` of an item's row, which holds the chevron, the checkbox or radio and the label,
-     * and draws the focus ring and the selected look (stable class `wave-flat-tree-item__row`).
-     * Locked: its marker (the focus ring finds the row by it), no role or tab index, no checkbox
-     * marker, and no `hidden`, `inert` or `aria-hidden`, since it holds the item's name and
-     * content.
+     * and draws the focus ring and the selected look (stable class `wave-flat-tree-item__row`);
+     * in a treegrid it is the row's first `gridcell`. Locked: its marker (the focus ring finds
+     * the row by it), no role or tab index (a treegrid's cell has its `gridcell` role, tab index
+     * and cell marker), no checkbox marker, and no `hidden`, `inert` or `aria-hidden`, since it
+     * holds the item's name and content.
      */
     row?: SlotPart<'div'>;
     /**
@@ -129,6 +173,15 @@ export interface FlatTreeProps extends Omit<
      * `aria-hidden`.
      */
     label?: SlotPart<'span'>;
+    /**
+     * The `<div role="gridcell">` of each further cell of a `navigationMode="treegrid"` row, the
+     * ones `renderCells` draws (stable class `wave-flat-tree-item__cell`); none without them. The
+     * object is for every cell. Locked: its role, tab index (the tree's roving) and cell marker,
+     * no other role, and no `hidden`, `inert` or `aria-hidden`, since it holds the cell's content.
+     * Give it a width (a class or a style) to size a column. While the item is disabled, your
+     * `onClick` is not called.
+     */
+    cell?: SlotPart<'div'>;
   };
 }
 
@@ -138,9 +191,13 @@ interface FlatTreeFocus {
   focused: string | null;
   /** The item a key moved to that was not rendered: kept rendered, focused after the commit. */
   pending: string | null;
+  /** Treegrid: the cell of the focused item that has focus (or holds the tab stop); `null` for the row. */
+  cell: number | null;
+  /** Treegrid: the cell to focus once the `pending` item renders; `null` for the row. */
+  pendingCell: number | null;
 }
 
-const NO_FOCUS: FlatTreeFocus = { focused: null, pending: null };
+const NO_FOCUS: FlatTreeFocus = { focused: null, pending: null, cell: null, pendingCell: null };
 
 /**
  * The focused and the awaited item of a FlatTree, read during render through
@@ -165,7 +222,14 @@ class FlatTreeFocusStore {
   /** Changes the given fields; notifies only when one of them changed. */
   update(next: Partial<FlatTreeFocus>): void {
     const state = { ...this.state, ...next };
-    if (state.focused === this.state.focused && state.pending === this.state.pending) return;
+    if (
+      state.focused === this.state.focused &&
+      state.pending === this.state.pending &&
+      state.cell === this.state.cell &&
+      state.pendingCell === this.state.pendingCell
+    ) {
+      return;
+    }
     this.state = state;
     for (const listener of this.listeners) listener();
   }
@@ -185,11 +249,12 @@ function FlatTreeSpacer({ size }: { size: number }) {
 }
 FlatTreeSpacer.displayName = 'FlatTreeSpacer';
 
-/** The item element (a treeitem child of `root`) that holds `target`; `null` for a portal's. */
+/** The item element (a treeitem or row child of `root`) that holds `target`; `null` for a portal's. */
 function getOwnItem(root: Element, target: EventTarget | null): HTMLElement | null {
   let el = target instanceof Element ? target : null;
   while (el && el.parentElement !== root) el = el.parentElement;
-  return el instanceof HTMLElement && el.getAttribute('role') === 'treeitem' ? el : null;
+  const role = el instanceof HTMLElement ? el.getAttribute('role') : null;
+  return el instanceof HTMLElement && (role === 'treeitem' || role === 'row') ? el : null;
 }
 
 /** The place of an item element in the visible rows (`data-index`). */
@@ -223,6 +288,10 @@ function firstEnabledChild(rows: readonly FlatTreeRow[], index: number): number 
 const NAME_MESSAGE =
   'FlatTree: a tree needs an accessible name. Pass `aria-label` or `aria-labelledby`.';
 
+const CELLS_WITHOUT_TREEGRID_MESSAGE =
+  'FlatTree: `renderCells` draws cells in a treegrid only; pass navigationMode="treegrid" ' +
+  '(until then no cell is drawn).';
+
 const SELECTION_MODE_MESSAGE =
   'FlatTree: selectionMode="multiple" needs a model that holds the check states: pass ' +
   "`selectionMode: 'multiple'` to `useFlatTree` as well; until then every item shows unchecked.";
@@ -240,6 +309,8 @@ const FlatTreeRoot = ({
   model,
   virtualWindow,
   renderItem,
+  navigationMode = 'tree',
+  renderCells,
   selectionMode: selectionModeProp,
   selected,
   current,
@@ -260,6 +331,7 @@ const FlatTreeRoot = ({
   const rows = model.visibleItems;
   const count = rows.length;
   const windowed = virtualWindow !== undefined;
+  const treegrid = navigationMode === 'treegrid';
 
   // An item carries aria-checked or aria-selected, never both (APG); in single mode every item
   // carries aria-selected from the first render, so the radios and the state agree.
@@ -271,7 +343,7 @@ const FlatTreeRoot = ({
         : selected;
 
   const [focusStore] = React.useState(() => new FlatTreeFocusStore());
-  const { focused, pending } = React.useSyncExternalStore(
+  const { focused, pending, cell } = React.useSyncExternalStore(
     focusStore.subscribe,
     focusStore.getSnapshot,
     focusStore.getServerSnapshot,
@@ -288,6 +360,8 @@ const FlatTreeRoot = ({
   const tabStopRow =
     focusedRow ?? (selectedRow && !selectedRow.item.disabled ? selectedRow : firstEnabled);
   const tabStopIndex = tabStopRow?.index;
+  // A treegrid's focused cell holds the tab stop in the focused item.
+  const tabStopCell = treegrid && focusedRow !== undefined ? cell : null;
   const pendingIndex = pending === null ? undefined : model.getItem(pending)?.index;
   // The tab stop and the awaited item stay rendered outside the window (a focused item scrolled
   // away keeps focus and its tab stop).
@@ -314,6 +388,8 @@ const FlatTreeRoot = ({
       selected: effectiveSelected,
       current,
       tabStop,
+      treegrid,
+      tabStopCell,
       itemSize,
       activate,
       toggleChecked,
@@ -324,6 +400,8 @@ const FlatTreeRoot = ({
       effectiveSelected,
       current,
       tabStop,
+      treegrid,
+      tabStopCell,
       itemSize,
       activate,
       toggleChecked,
@@ -340,16 +418,17 @@ const FlatTreeRoot = ({
    * shows the spacer); a row that is not rendered is awaited and focused after the commit that
    * renders it.
    */
-  const moveTo = (root: HTMLElement, index: number) => {
+  const moveTo = (root: HTMLElement, index: number, cellIndex: number | null = null) => {
     const row = rows[index];
     if (!row) return;
     virtualWindow?.scrollToIndex(index, { align: 'auto' });
     const el = getRenderedItem(root, index);
     if (el) {
-      focusStore.update({ pending: null });
-      el.focus();
+      focusStore.update({ pending: null, pendingCell: null });
+      if (cellIndex === null) el.focus();
+      else focusCell(el, cellIndex);
     } else {
-      focusStore.update({ pending: row.item.value });
+      focusStore.update({ pending: row.item.value, pendingCell: cellIndex });
     }
   };
 
@@ -408,7 +487,14 @@ const FlatTreeRoot = ({
     const index = el ? getIndex(el) : null;
     const row = index === null ? undefined : rows[index];
     if (!row || index === null) return;
-    focusStore.update({ focused: row.item.value, pending: null });
+    // A treegrid's focus on a cell, or on a control in one, makes that cell the tab stop.
+    const cellOf = treegrid ? getCellOf(el as Element, event.target as Element) : null;
+    focusStore.update({
+      focused: row.item.value,
+      pending: null,
+      pendingCell: null,
+      cell: cellOf ? getCellIndex(cellOf) : null,
+    });
     const path: string[] = [];
     for (let parent = row.parentValue; parent !== undefined;) {
       path.push(parent);
@@ -438,16 +524,103 @@ const FlatTreeRoot = ({
     });
   });
 
+  /**
+   * The keys of a treegrid's focused cell (APG): between its row's cells, to the cell of the same
+   * column in other rows, and Enter or F2 into the cell's first control.
+   */
+  const handleCellKeyDown = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    root: HTMLElement,
+    rowEl: HTMLElement,
+    cellEl: HTMLElement,
+    current: number,
+    from: number,
+  ) => {
+    if (event.altKey || event.metaKey) return;
+    const column = getCellIndex(cellEl);
+    const cells = getCells(rowEl);
+    const toRow = (index: number | undefined) => {
+      event.preventDefault();
+      if (index === undefined || index === current) {
+        focusStore.update({ pending: null, pendingCell: null });
+        virtualWindow?.scrollToIndex(current, { align: 'auto' });
+        return;
+      }
+      moveTo(root, index, column);
+    };
+    switch (event.key) {
+      case 'ArrowDown':
+        toRow(nextEnabled(rows, from, 1));
+        return;
+      case 'ArrowUp':
+        toRow(nextEnabled(rows, from, -1));
+        return;
+      case 'Home':
+        if (event.ctrlKey) toRow(nextEnabled(rows, -1, 1));
+        else {
+          event.preventDefault();
+          cells[0]?.focus();
+        }
+        return;
+      case 'End':
+        if (event.ctrlKey) toRow(nextEnabled(rows, count, -1));
+        else {
+          event.preventDefault();
+          cells[cells.length - 1]?.focus();
+        }
+        return;
+      case 'Enter':
+      case 'F2': {
+        if (event.ctrlKey) return;
+        event.preventDefault();
+        getFirstWidget(cellEl)?.focus();
+        return;
+      }
+      case ' ':
+        // A cell has no activation of its own; the page does not scroll.
+        event.preventDefault();
+        return;
+      default:
+    }
+    if (event.ctrlKey) return;
+    const intent = getArrowIntent(event.key, {
+      orientation: 'horizontal',
+      dir: getDirection(root),
+    });
+    if (intent === null) return;
+    event.preventDefault();
+    if (intent === 'next') cells[column + 1]?.focus();
+    else if (column > 0) cells[column - 1]?.focus();
+    else rowEl.focus();
+  };
+
   const handleKeyDown = useEventCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const root = event.currentTarget;
     // A key from a portal is the portal's; a text field in the content keeps its keys.
     const el = getOwnItem(root, event.target);
     const current = el ? getIndex(el) : null;
-    if (current === null || current >= count || isEditableTarget(event.target)) return;
+    if (el === null || current === null || current >= count) return;
+    // In a treegrid a key inside a cell is the cell's: the cell itself moves between cells, and
+    // Escape in a control inside one returns to the cell.
+    const eventTarget = event.target as Element;
+    const cellEl = treegrid && eventTarget !== el ? getCellOf(el, eventTarget) : null;
+    if (cellEl && eventTarget !== cellEl) {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        event.preventDefault();
+        cellEl.focus();
+      }
+      return;
+    }
+    if (isEditableTarget(event.target)) return;
     const row = rows[current];
     // Keys pressed before an awaited item renders move from it (possible only within one task).
     const awaited = focusStore.getSnapshot().pending;
     const from = (awaited === null ? undefined : model.getItem(awaited)?.index) ?? current;
+
+    if (cellEl) {
+      handleCellKeyDown(event, root, el, cellEl, current, from);
+      return;
+    }
 
     // Typeahead; a Space continues a search, and `*` starts none.
     if (event.key.length === 1 && (event.key !== '*' || isSearching())) {
@@ -456,7 +629,9 @@ const FlatTreeRoot = ({
         return;
       }
     }
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    // A treegrid's Ctrl+Home and Ctrl+End are Home and End.
+    const ctrlEdge = treegrid && event.ctrlKey && (event.key === 'Home' || event.key === 'End');
+    if ((event.altKey || event.ctrlKey || event.metaKey) && !ctrlEdge) return;
 
     let target: number | undefined;
     switch (event.key) {
@@ -510,12 +685,23 @@ const FlatTreeRoot = ({
             if (!row.item.disabled) model.expand(row.item.value);
             return;
           }
+          if (treegrid) {
+            // APG treegrid: an expanded row or a leaf moves into its first cell.
+            event.preventDefault();
+            moveTo(root, current, 0);
+            return;
+          }
           if (row.expanded) target = firstEnabledChild(rows, current);
         } else {
           // Collapse an expanded branch (focus stays), else move to the nearest enabled ancestor.
           if (row.isBranch && row.expanded && !row.item.disabled) {
             event.preventDefault();
             model.collapse(row.item.value);
+            return;
+          }
+          if (treegrid) {
+            // APG treegrid: on a collapsed row or a leaf the focus stays.
+            event.preventDefault();
             return;
           }
           for (let parent = row.parentValue; parent !== undefined && target === undefined;) {
@@ -592,10 +778,13 @@ const FlatTreeRoot = ({
     const lost = !active || active === doc.body || !active.isConnected;
     const snapshot = focusStore.getSnapshot();
     if (snapshot.pending !== null) {
-      focusStore.update({ pending: null });
+      focusStore.update({ pending: null, pendingCell: null });
       const row = model.getItem(snapshot.pending);
       const el = row ? getRenderedItem(root, row.index) : null;
-      if (el && (lost || root.contains(active))) el.focus();
+      if (el && (lost || root.contains(active))) {
+        if (snapshot.pendingCell === null) el.focus();
+        else focusCell(el, snapshot.pendingCell);
+      }
       return;
     }
     if (snapshot.focused === null || model.getItem(snapshot.focused)) return;
@@ -607,7 +796,24 @@ const FlatTreeRoot = ({
     moveTo(root, target);
   });
 
+  // A treegrid keeps one tab stop: the controls inside its cells are out of the Tab order (Enter on
+  // a cell moves focus to the first), also those that render later.
+  React.useLayoutEffect(() => {
+    if (treegrid && rootRef.current) parkCellWidgets(rootRef.current);
+  });
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!treegrid || !root || typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver(() => parkCellWidgets(root));
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [treegrid]);
+
   // Development diagnostics (C-DEV): emitted from effects, once per page.
+  const cellsIgnored = !treegrid && renderCells !== undefined;
+  React.useEffect(() => {
+    if (cellsIgnored) warnOnce('FlatTree:cells-without-treegrid', CELLS_WITHOUT_TREEGRID_MESSAGE);
+  }, [cellsIgnored]);
   const unnamed = !rest['aria-label'] && !rest['aria-labelledby'];
   React.useEffect(() => {
     if (unnamed) warnOnce('FlatTree:name', NAME_MESSAGE);
@@ -626,7 +832,11 @@ const FlatTreeRoot = ({
   }, [selectionMode, selected]);
 
   const renderRow = (row: FlatTreeRow) => (
-    <FlatTreeItem key={`item:${row.item.value}`} item={row}>
+    <FlatTreeItem
+      key={`item:${row.item.value}`}
+      item={row}
+      cells={treegrid ? renderCells?.(row) : undefined}
+    >
       {renderItem ? renderItem(row) : (row.item.label ?? row.item.value)}
     </FlatTreeItem>
   );
@@ -645,7 +855,8 @@ const FlatTreeRoot = ({
   return (
     <FlatTreeContext.Provider value={context}>
       <div
-        role="tree"
+        role={treegrid ? 'treegrid' : 'tree'}
+        aria-rowcount={treegrid ? count : undefined}
         aria-multiselectable={selectionMode === 'multiple' ? true : undefined}
         data-selection-mode={selectionMode}
         // A windowed tree's tab stop is an item: the scroller is none of its own (Firefox makes a
@@ -703,6 +914,13 @@ FlatTreeRoot.displayName = 'FlatTree';
  * searched). The focused item stays the focused item (rendered, and the tab stop) while focus is
  * in a popup that its content opened, such as a menu in a portal, so the popup can return focus
  * to it.
+ *
+ * `navigationMode="treegrid"` makes it a WAI-ARIA treegrid instead: `role="treegrid"`, each item a
+ * `role="row"` (with `aria-level`, `aria-posinset`, `aria-setsize`, `aria-rowindex` and
+ * `aria-expanded`) whose content is in `gridcell`s, with more cells from `renderCells` and the
+ * treegrid keys of APG (rows, cells, Enter into a cell's controls); the nested `Tree`'s own
+ * `navigationMode="treegrid"` changes the keyboard only and keeps its tree roles. Default
+ * rendering is unchanged.
  *
  * Selection, as the nested `Tree`: `selected` and `onItemSelect` (single selection and activation,
  * with radios in `selectionMode="single"`), `current`, and with `selectionMode="multiple"` a

@@ -5,10 +5,11 @@ import { isOwnEvent } from '../../lib/events';
 import type { VisibleFlatItem } from '../../lib/flatTree';
 import { CheckIcon, ChevronRightIcon, SubtractIcon } from '../../lib/icons';
 import { HIDDEN_PART_LOCKS, mergeSlotProps } from '../../lib/slotProps';
-import { disabledStyles, forcedColors } from '../../lib/styles';
+import { disabledStyles, focusRingInset, forcedColors } from '../../lib/styles';
 import type { CheckState } from '../../lib/treeCascade';
 import { useId } from '../../hooks/useId';
 import { useFlatTreeContext } from './FlatTree.context';
+import { CELL_ATTRIBUTE } from './FlatTree.treegrid';
 import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the FlatTreeItem sub-component. */
@@ -17,7 +18,13 @@ export interface FlatTreeItemProps extends Omit<React.HTMLAttributes<HTMLDivElem
   item: VisibleFlatItem & { checked?: CheckState };
   /** The item's content: what the tree's `renderItem` returns, else the item's label. */
   children?: React.ReactNode;
-  /** Ref to the `role="treeitem"` element. */
+  /**
+   * The content of the item's further cells, in order: what the tree's `renderCells` returns. Each
+   * is drawn in a `role="gridcell"` element after the item's own cell. Only a
+   * `navigationMode="treegrid"` tree draws them.
+   */
+  cells?: readonly React.ReactNode[];
+  /** Ref to the `role="treeitem"` element (`role="row"` in a treegrid). */
   ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -25,6 +32,15 @@ export interface FlatTreeItemProps extends Omit<React.HTMLAttributes<HTMLDivElem
 function isCheckboxClick(event: React.MouseEvent<HTMLElement>): boolean {
   const target = event.target as Element | null;
   return target?.closest?.('[data-flat-tree-checkbox]') != null;
+}
+
+/**
+ * Whether a click landed in one of a treegrid row's further cells (not its own content cell):
+ * what is in them, such as a button, is theirs, and never activates the row.
+ */
+function isFurtherCellClick(event: React.MouseEvent<HTMLElement>): boolean {
+  const cell = (event.target as Element | null)?.closest?.(`[${CELL_ATTRIBUTE}]`);
+  return cell != null && cell.getAttribute(CELL_ATTRIBUTE) !== '0';
 }
 
 /**
@@ -50,6 +66,7 @@ const PART_LOCKS = {
   tabIndex: undefined,
   'data-flat-tree-row': undefined,
   'data-flat-tree-checkbox': undefined,
+  [CELL_ATTRIBUTE]: undefined,
 } as const;
 
 /**
@@ -66,6 +83,11 @@ const BLOCK_CLICK = ['onClick'] as const;
  * the row, since the items are siblings. In a windowed tree it is exactly the window's `itemSize`
  * tall.
  *
+ * In a `navigationMode="treegrid"` tree the element is a `role="row"` with `aria-level`,
+ * `aria-posinset`, `aria-setsize`, `aria-rowindex` and `aria-expanded` on branches. Its content
+ * (chevron, check and label) sits in the first `gridcell`, and `cells` draw the others. A row
+ * carries no `aria-checked`: the checkbox, a `role="checkbox"` inside the first cell, does.
+ *
  * `ref`, `className` and the other props land on the treeitem element; its `onClick` receives the
  * clicks on the row, not those on the checkbox, and runs before the built-in activation (call
  * `event.preventDefault()` to skip it).
@@ -73,6 +95,7 @@ const BLOCK_CLICK = ['onClick'] as const;
 export const FlatTreeItem = ({
   item: row,
   children,
+  cells,
   className,
   style,
   onClick,
@@ -85,6 +108,14 @@ export const FlatTreeItem = ({
   const { item, level, position, setSize, isBranch, expanded, index } = row;
   const { value } = item;
   const disabled = item.disabled === true;
+  const treegrid = ctx.treegrid === true;
+  const cellCount = 1 + (treegrid ? (cells?.length ?? 0) : 0);
+  // In a treegrid the tab stop is the row, or one of its cells while a cell is the focused one.
+  const tabStopHere = ctx.tabStop === value;
+  const tabStopCell =
+    treegrid && tabStopHere && ctx.tabStopCell != null && ctx.tabStopCell < cellCount
+      ? ctx.tabStopCell
+      : null;
   const labelId = useId('flat-tree-item-label');
   // The tree's parts, merged only when given: a tree renders many items. A disabled item's parts
   // get no click of yours.
@@ -100,6 +131,7 @@ export const FlatTreeItem = ({
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     // A click from a portal opened in the content, or on the checkbox, is not the row's.
     if (!isOwnEvent(event) || isCheckboxClick(event)) return;
+    if (treegrid && isFurtherCellClick(event)) return;
     onClick?.(event);
     if (!event.defaultPrevented) ctx.activate(row);
   };
@@ -222,18 +254,49 @@ export const FlatTreeItem = ({
   if (level > 1) itemStyle.paddingInlineStart = `${level - 1}rem`;
   if (ctx.itemSize !== undefined) itemStyle.height = ctx.itemSize;
 
-  const rowClasses = wcn(
-    flatTreeItemClassNames.row,
-    'wave:box-border wave:flex wave:items-center wave:gap-1.5 wave:rounded wave:px-2 wave:py-1',
-    ctx.itemSize !== undefined && 'wave:h-full',
-    disabled ? 'wave:cursor-not-allowed' : 'wave:cursor-pointer wave:hover:bg-subtle-hover',
-    isSelected && wcn('wave:bg-subtle-selected wave:font-semibold', forcedColors.selectedContainer),
+  const selectedLook = wcn(
+    'wave:bg-subtle-selected wave:font-semibold',
+    forcedColors.selectedContainer,
   );
+  const rowClasses = treegrid
+    ? // The first cell: the hover and selected looks are the whole row's (the item's).
+      wcn(
+        flatTreeItemClassNames.row,
+        'wave:box-border wave:flex wave:min-w-0 wave:flex-1 wave:items-center wave:gap-1.5 wave:rounded wave:px-2 wave:py-1',
+        ctx.itemSize !== undefined && 'wave:h-full',
+        disabled ? 'wave:cursor-not-allowed' : 'wave:cursor-pointer',
+        focusRingInset,
+      )
+    : wcn(
+        flatTreeItemClassNames.row,
+        'wave:box-border wave:flex wave:items-center wave:gap-1.5 wave:rounded wave:px-2 wave:py-1',
+        ctx.itemSize !== undefined && 'wave:h-full',
+        disabled ? 'wave:cursor-not-allowed' : 'wave:cursor-pointer wave:hover:bg-subtle-hover',
+        isSelected && selectedLook,
+      );
+  const cellClasses = wcn(
+    flatTreeItemClassNames.cell,
+    'wave:box-border wave:flex wave:shrink-0 wave:items-center wave:gap-1 wave:rounded wave:px-2 wave:py-1',
+    ctx.itemSize !== undefined && 'wave:h-full',
+    focusRingInset,
+  );
+  const itemLook = treegrid
+    ? wcn(
+        'wave:box-border wave:flex wave:items-stretch wave:rounded',
+        !disabled && 'wave:hover:bg-subtle-hover',
+        isSelected && selectedLook,
+        focusRingInset,
+      )
+    : wcn(
+        // The focus ring is drawn on the row, inside the item's box.
+        'wave:box-border wave:block wave:outline-none',
+        'wave:[&:focus-visible>[data-flat-tree-row]]:outline-2 wave:[&:focus-visible>[data-flat-tree-row]]:-outline-offset-2 wave:[&:focus-visible>[data-flat-tree-row]]:outline-ring',
+      );
   const labelClasses = wcn(flatTreeItemClassNames.label, 'wave:min-w-0 wave:truncate');
 
   return (
     <div
-      role="treeitem"
+      role={treegrid ? 'row' : 'treeitem'}
       aria-selected={isSelected}
       aria-current={isCurrent ? true : undefined}
       aria-disabled={disabled ? true : undefined}
@@ -244,9 +307,7 @@ export const FlatTreeItem = ({
       data-disabled={disabled ? '' : undefined}
       className={wcn(
         flatTreeItemClassNames.root,
-        // The focus ring is drawn on the row, inside the item's box.
-        'wave:box-border wave:block wave:outline-none',
-        'wave:[&:focus-visible>[data-flat-tree-row]]:outline-2 wave:[&:focus-visible>[data-flat-tree-row]]:-outline-offset-2 wave:[&:focus-visible>[data-flat-tree-row]]:outline-ring',
+        itemLook,
         disabledStyles,
         appClassName,
         className,
@@ -262,20 +323,35 @@ export const FlatTreeItem = ({
       aria-setsize={setSize}
       aria-posinset={position}
       aria-expanded={isBranch ? expanded : undefined}
-      aria-checked={checkState === undefined ? undefined : ariaChecked}
+      aria-checked={checkState === undefined || treegrid ? undefined : ariaChecked}
+      aria-rowindex={treegrid ? index + 1 : undefined}
       data-index={index}
-      tabIndex={ctx.tabStop === value ? 0 : -1}
+      tabIndex={tabStopHere && tabStopCell === null ? 0 : -1}
       style={itemStyle}
       onClick={handleClick}
       ref={ref}
     >
       <div
         data-flat-tree-row=""
+        {...(treegrid && {
+          role: 'gridcell',
+          tabIndex: tabStopCell === 0 ? 0 : -1,
+          [CELL_ATTRIBUTE]: '0',
+        })}
         className={rowClasses}
         {...(parts?.row &&
           mergeSlotProps(parts.row, {
             className: rowClasses,
-            locked: { ...PART_LOCKS, ...HIDDEN_PART_LOCKS, 'data-flat-tree-row': '' },
+            locked: {
+              ...PART_LOCKS,
+              ...HIDDEN_PART_LOCKS,
+              'data-flat-tree-row': '',
+              ...(treegrid && {
+                role: 'gridcell',
+                tabIndex: tabStopCell === 0 ? 0 : -1,
+                [CELL_ATTRIBUTE]: '0',
+              }),
+            },
             blockHandlers,
           }))}
       >
@@ -294,6 +370,34 @@ export const FlatTreeItem = ({
           {children}
         </span>
       </div>
+      {treegrid &&
+        cells?.map((content, at) => {
+          const cellIndex = at + 1;
+          const tabIndex = tabStopCell === cellIndex ? 0 : -1;
+          return (
+            <div
+              key={cellIndex}
+              role="gridcell"
+              tabIndex={tabIndex}
+              {...{ [CELL_ATTRIBUTE]: String(cellIndex) }}
+              className={cellClasses}
+              {...(parts?.cell &&
+                mergeSlotProps(parts.cell, {
+                  className: cellClasses,
+                  locked: {
+                    ...PART_LOCKS,
+                    ...HIDDEN_PART_LOCKS,
+                    role: 'gridcell',
+                    tabIndex,
+                    [CELL_ATTRIBUTE]: String(cellIndex),
+                  },
+                  blockHandlers,
+                }))}
+            >
+              {content}
+            </div>
+          );
+        })}
     </div>
   );
 };

@@ -39,8 +39,9 @@ export type { TreeItemPersonaLayoutProps } from './Tree.itemPersonaLayout';
  * its actions and Shift+Tab returns. Keys and clicks on the actions never activate or check the
  * item. With `navigationMode="treegrid"`, Right (Left in right-to-left layouts) moves from an
  * item into its actions and Left returns, the actions take no Tab stop, and on an open parent Right
- * moves into its actions rather than to its first child (Down does); the roles stay `tree` and
- * `treeitem`.
+ * moves into its actions rather than to its first child (Down does). That mode changes the
+ * keyboard only: the roles stay `tree` and `treeitem`. For real `treegrid`, `row` and `gridcell`
+ * roles use `FlatTree` with `navigationMode="treegrid"`.
  *
  * Items are `Tree.Item` elements; nested items are written in their parent's children (directly,
  * in Fragments, or returned by a render function), not rendered by a component of their own.

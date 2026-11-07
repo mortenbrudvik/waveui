@@ -284,8 +284,10 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * `'tree'`: Tab from a focused item enters its actions. `'treegrid'`: the "next" arrow
    * (ArrowRight, ArrowLeft in RTL) moves into an item's actions and "previous" returns; on an
-   * expanded parent "next" no longer moves to the first child (ArrowDown does). The roles stay
-   * `tree` and `treeitem` (Fluent's `navigationMode`).
+   * expanded parent "next" no longer moves to the first child (ArrowDown does). `'treegrid'`
+   * changes the keyboard only: the roles stay `tree` and `treeitem` (Fluent's `navigationMode`),
+   * because a treegrid's rows need one flat list with `aria-level`. For real `role="treegrid"`
+   * rows and `gridcell`s use `FlatTree` with `navigationMode="treegrid"`.
    * @default 'tree'
    */
   navigationMode?: 'tree' | 'treegrid';

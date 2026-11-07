@@ -174,7 +174,7 @@ export const SLOT_PROPS_KEYS = {
   toasterClassNames: ['toast'],
   treeItemClassNames: ['row', 'indicator', 'label', 'aside', 'actions', 'group'],
   treeItemPersonaLayoutClassNames: ['media', 'main', 'description'],
-  flatTreeItemClassNames: ['row', 'expandIcon', 'indicator', 'label'],
+  flatTreeItemClassNames: ['row', 'expandIcon', 'indicator', 'label', 'cell'],
   navClassNames: ['list'],
   navCategoryClassNames: ['button', 'label', 'list'],
   navItemClassNames: ['listItem', 'content', 'actions'],

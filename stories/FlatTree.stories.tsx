@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import {
+  Button,
   FlatTree,
   useFlatTree,
   useVirtualWindow,
@@ -108,6 +109,50 @@ export const Checkable: Story = {
     defaultExpandedItems: ['docs', 'work'],
     defaultCheckedItems: ['work'],
   },
+};
+
+const SIZES: Record<string, string> = {
+  docs: '',
+  work: '',
+  report: '48 KB',
+  slides: '2.1 MB',
+  personal: '',
+  resume: '96 KB',
+  images: '',
+  photo1: '1.4 MB',
+  photo2: '212 KB',
+  readme: '3 KB',
+};
+
+/**
+ * `navigationMode="treegrid"`: the WAI-ARIA treegrid instead of the tree. The tree is a
+ * `role="treegrid"`, each item a `role="row"` with `aria-level`, `aria-posinset`, `aria-setsize`,
+ * `aria-rowindex` and `aria-expanded`, and its content in `gridcell`s: the first holds the chevron
+ * and the name, `renderCells` draws the others (a size, a button). Right expands a collapsed row,
+ * then moves into the cells; Left and Right move between cells, Up and Down keep the column, and
+ * Enter or F2 moves focus to the control in a cell (Escape returns). The nested `Tree` keeps the
+ * tree roles in its `navigationMode="treegrid"`.
+ */
+export const Treegrid: Story = {
+  args: {
+    'aria-label': 'Files',
+    navigationMode: 'treegrid',
+    style: { width: 420 },
+    defaultExpandedItems: ['docs', 'work'],
+    renderCells: (row) => [
+      SIZES[row.item.value],
+      <Button
+        key="open"
+        size="small"
+        appearance="subtle"
+        aria-label={`Open ${row.item.label ?? row.item.value}`}
+      >
+        Open
+      </Button>,
+    ],
+    slotProps: { cell: { className: 'min-w-20 justify-end' } },
+  },
+  argTypes: { renderCells: { control: false } },
 };
 
 const ENTRIES = 4000;

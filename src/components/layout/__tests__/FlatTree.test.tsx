@@ -1144,7 +1144,7 @@ describe('FlatTree — slotProps', () => {
 
   it('types each part for its element, and takes no children', () => {
     expectTypeOf<keyof TreeSlotProps>().toEqualTypeOf<
-      'row' | 'expandIcon' | 'indicator' | 'label'
+      'row' | 'expandIcon' | 'indicator' | 'label' | 'cell'
     >();
     expectTypeOf<NonNullable<TreeSlotProps['row']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLDivElement> | undefined
