@@ -869,24 +869,31 @@ function record1_0(label, names, measured, allowedExternals) {
  *     callback forms outweigh the prefix;
  *   - the presence core, the window, `createBrandTokens` and `waveTokens`: 0 and 0 (no class
  *     string, no `wcn` in their closures).
+ * 1.1 re-set the records of `MessageBar`, `Tree`, `Dialog`, `WaveProvider` with `Dialog`,
+ * `DataGrid` and `useVirtualWindow` to the size measured after the backlog features landed
+ * (`measured`; the budget is that size plus the margin again), deliberately: `WaveProvider
+ * classNames` and the token reset (the provider), `measureItems` (the window), the range and
+ * independent checks of Tree, and the toast and spinner features. The `baseline` of each stays the
+ * published 0.18.1 size, and `Button`, the presence core, `createBrandTokens` and `waveTokens`
+ * keep their 1.0 records.
  */
 export const RECORDED_IMPORTS_1_0 = [
   record1_0('Button', ['Button'], { minified: 12037, gzip: 4033 }, COMPONENT_EXTERNALS),
-  record1_0('MessageBar', ['MessageBar'], { minified: 30070, gzip: 10222 }, COMPONENT_EXTERNALS),
-  record1_0('Tree', ['Tree'], { minified: 51190, gzip: 17427 }, COMPONENT_EXTERNALS),
-  record1_0('Dialog', ['Dialog'], { minified: 73934, gzip: 24667 }, PORTAL_EXTERNALS),
+  record1_0('MessageBar', ['MessageBar'], { minified: 30860, gzip: 10553 }, COMPONENT_EXTERNALS),
+  record1_0('Tree', ['Tree'], { minified: 55392, gzip: 18773 }, COMPONENT_EXTERNALS),
+  record1_0('Dialog', ['Dialog'], { minified: 75951, gzip: 25376 }, PORTAL_EXTERNALS),
   record1_0(
     'WaveProvider + Dialog',
     ['WaveProvider', 'Dialog'],
-    { minified: 76487, gzip: 25640 },
+    { minified: 81036, gzip: 27326 },
     PORTAL_EXTERNALS,
   ),
-  record1_0('DataGrid', ['DataGrid'], { minified: 72123, gzip: 24325 }, PORTAL_EXTERNALS),
+  record1_0('DataGrid', ['DataGrid'], { minified: 72132, gzip: 24521 }, PORTAL_EXTERNALS),
   record1_0('usePresence + Presence', ['usePresence', 'Presence'], { minified: 5453, gzip: 2341 }, [
     'react',
     'react/jsx-runtime',
   ]),
-  record1_0('useVirtualWindow', ['useVirtualWindow'], { minified: 3868, gzip: 1817 }, ['react']),
+  record1_0('useVirtualWindow', ['useVirtualWindow'], { minified: 7661, gzip: 3117 }, ['react']),
   record1_0('createBrandTokens', ['createBrandTokens'], { minified: 3630, gzip: 1956 }, []),
   record1_0('waveTokens', ['waveTokens'], { minified: 3071, gzip: 969 }, []),
 ];
