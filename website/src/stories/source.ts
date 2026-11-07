@@ -8,11 +8,9 @@
  * the story's description), with `\n` line endings. Each file is parsed once per process.
  */
 import { readFileSync } from 'node:fs';
-import { dirname, isAbsolute, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isAbsolute, resolve } from 'node:path';
 import ts from 'typescript';
-
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+import { REPO_ROOT } from '../repoRoot';
 
 /** The story statements of each file read so far, by export name. */
 const cache = new Map<string, ReadonlyMap<string, string>>();

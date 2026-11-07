@@ -32,10 +32,10 @@
  *   (`buttonClassNames` for `Button`), or `null` when the registry has none (a hook, or Dialog,
  *   whose root renders no element).
  */
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import ts from 'typescript';
 import type { ComponentEntry } from '../catalog/catalog';
+import { REPO_ROOT } from '../repoRoot';
 
 export interface PropDoc {
   name: string;
@@ -75,7 +75,6 @@ export interface DocsSource {
   classNamesFile?: string;
 }
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const ROOT_TSCONFIG = resolve(REPO_ROOT, 'tsconfig.json');
 const LIBRARY: Required<DocsSource> = {
   entryFile: resolve(REPO_ROOT, 'src/index.ts'),

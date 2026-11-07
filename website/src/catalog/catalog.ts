@@ -23,9 +23,9 @@
  * - The list is sorted by category, then name.
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import ts from 'typescript';
+import { REPO_ROOT } from '../repoRoot';
 
 export interface ComponentEntry {
   /** The page address segment: `/waveui/docs/components/<slug>`. */
@@ -55,7 +55,6 @@ const SLUG_OVERRIDES: Readonly<Record<string, string>> = {
   'Components/Table/Features': 'table-features',
 };
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const STORIES_DIR = 'stories';
 const STORY_FILE = /\.stories\.tsx$/;
 

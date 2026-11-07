@@ -14,19 +14,17 @@
  *   never an error.
  * - **Missing exports**: a name that `dist/index.mjs` does not export is reported in one error that
  *   lists every missing name, before anything is measured.
- * - `getLibraryVersion()` reads the `version` of the repository's root `package.json`, found
- *   relative to this module.
+ * - `getLibraryVersion()` reads the `version` of the repository's root `package.json`
+ *   (`REPO_ROOT`, src/repoRoot.ts, which also holds in the bundled build).
  *
  * Build-time code: it runs in Node and is never sent to the browser.
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { measureImport } from '../../../scripts/verify-dist.mjs';
 import { getCatalog } from '../catalog/catalog';
-
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+import { REPO_ROOT } from '../repoRoot';
 
 /** The default cache file, git-ignored. */
 const DEFAULT_CACHE_FILE = resolve(REPO_ROOT, 'website/.cache/import-sizes.json');
