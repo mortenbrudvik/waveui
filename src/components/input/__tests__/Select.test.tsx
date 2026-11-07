@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Select, type SelectProps } from '../Select';
 import { inputInvalid } from '../../../lib/styles';
+import { selectClassNames } from '../../../lib/classNames';
 import type { CoreSize } from '../../../lib/types';
 import {
   testSystemProps,
@@ -388,5 +389,222 @@ describe('sizes and appearances (Phase 4 P4-01)', () => {
         <option>Norway</option>
       </Select>,
     );
+  });
+});
+
+describe('Select icon (form-basic-27)', () => {
+  const chevron = <svg data-testid="glyph" viewBox="0 0 16 16" />;
+  const select = () => screen.getByRole('combobox', { name: 'Letter' });
+
+  it('keeps the drawn chevron and the bare select without an icon', () => {
+    for (const icon of [undefined, null]) {
+      const { container, unmount } = render(
+        <Select aria-label="Letter" icon={icon}>
+          {options}
+        </Select>,
+      );
+      expect(container.firstElementChild).toBe(select());
+      expect(select()).toHaveClass('wave:bg-no-repeat', 'wave:forced-colors:appearance-auto');
+      expect(container.querySelector(`.${selectClassNames.icon}`)).toBeNull();
+      unmount();
+    }
+  });
+
+  it('draws content in a wrapper beside the select and drops the drawn chevron', () => {
+    const { container } = render(
+      <Select aria-label="Letter" icon={chevron} className="custom">
+        {options}
+      </Select>,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.tagName).toBe('SPAN');
+    expect(wrapper).toHaveClass(selectClassNames.wrapper, 'wave:relative');
+    expect(wrapper.children).toHaveLength(2);
+    expect(wrapper.firstElementChild).toBe(select());
+    // The select keeps `className`, the stable class and the look; the chevron image is gone.
+    expect(select()).toHaveClass(selectClassNames.root, 'custom', 'wave:bg-none');
+    expect(select()).not.toHaveClass('wave:bg-no-repeat');
+    expect(select()).not.toHaveClass('wave:forced-colors:appearance-auto');
+    const icon = wrapper.lastElementChild as HTMLElement;
+    expect(icon).toHaveClass(selectClassNames.icon, 'wave:pointer-events-none');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(icon).toContainElement(screen.getByTestId('glyph'));
+  });
+
+  it.each([
+    ['small', 'wave:size-3', 'wave:end-1.5', 'wave:pe-6'],
+    ['medium', 'wave:size-4', 'wave:end-2.5', 'wave:pe-8'],
+    ['large', 'wave:size-5', 'wave:end-3', 'wave:pe-10'],
+  ] as const)('sizes and places the icon of a %s select', (size, box, end, padding) => {
+    const { container } = render(
+      <Select aria-label="Letter" icon={chevron} size={size}>
+        {options}
+      </Select>,
+    );
+    expect(container.querySelector(`.${selectClassNames.icon}`)).toHaveClass(box, end);
+    expect(select()).toHaveClass(padding);
+  });
+
+  it('takes a slot object: its attributes and class stay on the icon span', () => {
+    const { container } = render(
+      <Select
+        aria-label="Letter"
+        icon={{ className: 'mine', 'data-kind': 'icon', children: <b>v</b> }}
+      >
+        {options}
+      </Select>,
+    );
+    const icon = container.querySelector(`.${selectClassNames.icon}`);
+    expect(icon).toHaveClass('mine');
+    expect(icon).toHaveAttribute('data-kind', 'icon');
+    expect(icon).toHaveTextContent('v');
+  });
+
+  it('takes a render function', () => {
+    const { container } = render(
+      <Select
+        aria-label="Letter"
+        icon={{
+          children: (Component, props) => (
+            <Component {...props} data-custom="">
+              <svg />
+            </Component>
+          ),
+        }}
+      >
+        {options}
+      </Select>,
+    );
+    const icon = container.querySelector(`.${selectClassNames.icon}`);
+    expect(icon).toHaveAttribute('data-custom');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it.each([false, '', []])('icon={%j} hides the chevron without a wrapper', (icon) => {
+    const { container } = render(
+      <Select aria-label="Letter" icon={icon}>
+        {options}
+      </Select>,
+    );
+    expect(container.firstElementChild).toBe(select());
+    expect(select()).toHaveClass('wave:bg-none');
+    expect(select()).not.toHaveClass('wave:bg-no-repeat', 'wave:forced-colors:appearance-auto');
+  });
+
+  it('dims the icon with a disabled select', () => {
+    const { container } = render(
+      <Select aria-label="Letter" icon={chevron} disabled>
+        {options}
+      </Select>,
+    );
+    expect(container.querySelector(`.${selectClassNames.icon}`)).toHaveClass('wave:opacity-50');
+    expect(select()).toBeDisabled();
+  });
+
+  it('keeps the error message after the wrapper', () => {
+    const { container } = render(
+      <Select aria-label="Letter" icon={chevron} error="Pick a letter">
+        {options}
+      </Select>,
+    );
+    expect(container.firstElementChild).toHaveClass(selectClassNames.wrapper);
+    expect(container.lastElementChild).toBe(screen.getByRole('alert'));
+    expect(select()).toHaveAccessibleDescription('Pick a letter');
+  });
+
+  it('keeps ref on the select', () => {
+    const ref = React.createRef<HTMLSelectElement>();
+    render(
+      <Select aria-label="Letter" icon={chevron} ref={ref}>
+        {options}
+      </Select>,
+    );
+    expect(ref.current).toBe(select());
+  });
+
+  it('is named by a Field label with an icon', () => {
+    renderWithFieldContext(<Select icon={chevron}>{options}</Select>);
+    expect(screen.getByRole('combobox', { name: FIELD_TEST_TEXT.label })).toBeInTheDocument();
+  });
+
+  it('places the icon with a logical offset in RTL', () => {
+    const { container } = renderWithProviders(
+      <Select aria-label="Letter" icon={chevron}>
+        {options}
+      </Select>,
+      { dir: 'rtl' },
+    );
+    expect(container.querySelector(`.${selectClassNames.icon}`)).toHaveClass('wave:end-2.5');
+  });
+
+  it('passes axe with an icon', async () => {
+    render(
+      <Select aria-label="Letter" icon={chevron}>
+        {options}
+      </Select>,
+    );
+    await expectNoA11yViolations();
+  });
+});
+
+describe('Select onValueChange (form-basic-28)', () => {
+  it('calls onValueChange with the value next to the native onChange', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onValueChange = vi.fn();
+    render(
+      <Select aria-label="Letter" onChange={onChange} onValueChange={onValueChange}>
+        {options}
+      </Select>,
+    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Letter' }), 'b');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0]).toHaveProperty('target');
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith('b');
+  });
+
+  it('supports a controlled select through onValueChange alone', async () => {
+    const user = userEvent.setup();
+    function Example() {
+      const [value, setValue] = React.useState('a');
+      return (
+        <>
+          <Select aria-label="Letter" value={value} onValueChange={setValue}>
+            {options}
+          </Select>
+          <output>{value}</output>
+        </>
+      );
+    }
+    render(<Example />);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Letter' }), 'Beta');
+    expect(screen.getByRole('status')).toHaveTextContent('b');
+  });
+
+  it('fires onValueChange once per change in StrictMode', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <Select aria-label="Letter" onValueChange={onValueChange}>
+          {options}
+        </Select>
+      </React.StrictMode>,
+    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Letter' }), 'b');
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the first selected value with multiple', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Select aria-label="Letter" multiple onValueChange={onValueChange}>
+        {options}
+      </Select>,
+    );
+    await user.selectOptions(screen.getByRole('listbox', { name: 'Letter' }), ['a', 'b']);
+    expect(onValueChange).toHaveBeenLastCalledWith('a');
   });
 });

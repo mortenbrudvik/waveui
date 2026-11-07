@@ -39,8 +39,10 @@ export interface UseRestoreFocusOptions {
    * it restores only while focus is inside the surface, so focus on `<body>` (where a hover-opened
    * surface leaves it) or elsewhere stays where it is. A surface opened from inside one that closes
    * by hover (its opener, else its trigger, lies in that surface: a submenu, a hover card in a
-   * hover card, at any depth) is taken along, and its close counts as a hover close too. Every
-   * other close keeps the rules above.
+   * hover card, at any depth) is taken along, and its close counts as a hover close too, and so
+   * is a surface with no such element (an app opened it with a `target`, no trigger and nothing
+   * focused) that renders in the layer of such a surface or in a layer below it (the layer tree,
+   * recorded when the surface opened). Every other close keeps the rules above.
    */
   isHoverClose?: () => boolean;
   /**
@@ -172,6 +174,12 @@ interface SurfaceEntry {
   getContainer(): HTMLElement | null;
   /** The element the surface was opened from: its captured opener, else its trigger. */
   getOpener(): HTMLElement | null;
+  /**
+   * The elements of the layers the surface was opened from: the layer it renders in (the one its
+   * `DismissLayerContext` names) and that layer's ancestors, as they were when the surface
+   * opened. Their surfaces are the ones that take it along when they close by hover.
+   */
+  getOpenedFrom(): readonly HTMLElement[];
 }
 
 function getSurfaceEntries(): Set<SurfaceEntry> {
@@ -181,19 +189,46 @@ function getSurfaceEntries(): Set<SurfaceEntry> {
 }
 
 /**
- * Whether the close of `entry` is a hover close: its own, or that of a surface holding the element
- * it was opened from (a submenu in a menu that closes by hover, a hover card inside a hover card,
- * at any depth), which takes it along.
+ * The elements of the layer `layerId` and of its ancestors, nearest first: where a surface that
+ * renders in that layer was opened from.
+ */
+function collectOpenedFrom(layerId: string | null): HTMLElement[] {
+  const elements: HTMLElement[] = [];
+  const seen = new Set<string>();
+  for (let id = layerId; id !== null && !seen.has(id);) {
+    seen.add(id);
+    const layer = getLayer(id);
+    if (!layer) break;
+    for (const element of layer.getElements()) {
+      if (element && !elements.includes(element)) elements.push(element);
+    }
+    id = layer.parentId;
+  }
+  return elements;
+}
+
+/**
+ * Whether the close of `entry` is a hover close: its own, or that of a surface it was opened from
+ * (a submenu in a menu that closes by hover, a hover card inside a hover card, at any depth),
+ * which takes it along. A surface is opened from another when the element it was opened from lies
+ * in that surface, or, with no such element (an app opened it with a `target`, no trigger and
+ * nothing focused), when it renders in that surface's layer or in a layer below it (the layer
+ * tree, recorded when it opened).
  */
 function isClosingByHover(entry: SurfaceEntry, seen = new Set<SurfaceEntry>()): boolean {
   if (seen.has(entry)) return false;
   seen.add(entry);
   if (entry.isHoverClose()) return true;
   const opener = entry.getOpener();
-  if (!opener) return false;
+  const openedFrom = entry.getOpenedFrom();
+  if (!opener && openedFrom.length === 0) return false;
   for (const other of getSurfaceEntries()) {
     const container = other === entry ? null : other.getContainer();
-    if (container && container.contains(opener) && isClosingByHover(other, seen)) return true;
+    if (!container) continue;
+    const holdsOpener = !!opener && container.contains(opener);
+    if ((holdsOpener || openedFrom.includes(container)) && isClosingByHover(other, seen)) {
+      return true;
+    }
   }
   return false;
 }
@@ -577,6 +612,7 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
   const layoutEnabledRef = useRef(false);
   const scheduledRef = useRef<object | null>(null);
   const entryRef = useRef<SurfaceEntry | null>(null);
+  const openedFromRef = useRef<readonly HTMLElement[]>([]);
   const { enabled } = options;
 
   // Track focus while mounted, so an opener removed in the commit that opens the surface is known.
@@ -589,6 +625,7 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
       getContainer: () => latestRef.current.options.container ?? null,
       getOpener: () =>
         capturedRef.current?.element ?? latestRef.current.options.triggerRef?.current ?? null,
+      getOpenedFrom: () => openedFromRef.current,
     };
     entryRef.current = entry;
     const surfaces = getSurfaceEntries();
@@ -607,7 +644,11 @@ export function useRestoreFocus(options: UseRestoreFocusOptions): void {
     latestRef.current = { options, parentLayerId };
     const wasEnabled = insertionEnabledRef.current;
     insertionEnabledRef.current = options.enabled;
-    if (options.enabled && !wasEnabled) capturedRef.current = captureOpener(options);
+    if (options.enabled && !wasEnabled) {
+      capturedRef.current = captureOpener(options);
+      // The layers it renders in, recorded now: they are gone by the time it closes.
+      openedFromRef.current = collectOpenedFrom(parentLayerId);
+    }
   });
 
   // `enabled` false → true with nothing captured: capture again in the layout phase. A surface

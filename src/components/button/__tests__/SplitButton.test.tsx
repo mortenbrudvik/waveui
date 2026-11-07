@@ -12,6 +12,7 @@ import {
   testFocusEvents,
   testNoImplicitSubmit,
   renderWithProviders,
+  expectNoA11yViolations,
 } from '../../../test-utils';
 import type { IconPosition, Size, Slot } from '../../../lib/types';
 import { composeStories } from '@storybook/react';
@@ -845,6 +846,77 @@ describe('SplitButton', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       expect(more).toHaveAttribute('aria-expanded', 'false');
       expect(more).toHaveFocus();
+    });
+  });
+
+  describe('shape (buttons-1)', () => {
+    it('renders no data-shape and keeps the corners by default', () => {
+      render(<SplitButton>Save</SplitButton>);
+      const group = screen.getByRole('group');
+      expect(group).not.toHaveAttribute('data-shape');
+      const [primary, menu] = within(group).getAllByRole('button');
+      expect(primary).not.toHaveAttribute('data-shape');
+      expect(primary).toHaveClass('wave:rounded', 'wave:rounded-e-none');
+      expect(menu).toHaveClass('wave:rounded', 'wave:rounded-s-none');
+    });
+
+    it.each([
+      ['circular', 'wave:rounded-full'],
+      ['square', 'wave:rounded-none'],
+    ] as const)(
+      'shape="%s" shapes the outer corners of both halves and keeps the joint square',
+      (shape, cls) => {
+        render(<SplitButton shape={shape}>Save</SplitButton>);
+        const group = screen.getByRole('group');
+        expect(group).toHaveAttribute('data-shape', shape);
+        const [primary, menu] = within(group).getAllByRole('button');
+        expect(primary).toHaveClass(cls, 'wave:rounded-e-none');
+        expect(primary).toHaveAttribute('data-shape', shape);
+        expect(menu).toHaveClass(cls, 'wave:rounded-s-none');
+        expect(menu).toHaveAttribute('data-shape', shape);
+      },
+    );
+  });
+
+  describe('menuButtonLabel (buttons-14)', () => {
+    it('is named "More options" by default', () => {
+      render(<SplitButton>Save</SplitButton>);
+      const menu = screen.getByRole('button', { name: 'More options' });
+      expect(menu).not.toHaveAttribute('aria-labelledby');
+    });
+
+    it('null names the menu half by the primary action', () => {
+      render(<SplitButton menuButtonLabel={null}>Save</SplitButton>);
+      const [primary, menu] = within(screen.getByRole('group')).getAllByRole('button');
+      expect(menu).not.toHaveAttribute('aria-label');
+      expect(primary.id).not.toBe('');
+      expect(menu).toHaveAttribute('aria-labelledby', primary.id);
+      expect(screen.getAllByRole('button', { name: 'Save' })).toEqual([primary, menu]);
+    });
+
+    it('uses the id of primaryActionButtonProps when it has one', () => {
+      render(
+        <SplitButton menuButtonLabel={null} primaryActionButtonProps={{ id: 'save-primary' }}>
+          Save
+        </SplitButton>,
+      );
+      const [primary, menu] = within(screen.getByRole('group')).getAllByRole('button');
+      expect(primary).toHaveAttribute('id', 'save-primary');
+      expect(menu).toHaveAttribute('aria-labelledby', 'save-primary');
+    });
+
+    it('an aria-label of menuButtonProps wins over null', () => {
+      render(
+        <SplitButton menuButtonLabel={null} menuButtonProps={{ 'aria-label': 'Save as…' }}>
+          Save
+        </SplitButton>,
+      );
+      expect(screen.getByRole('button', { name: 'Save as…' })).toBeInTheDocument();
+    });
+
+    it('has no accessibility violations', async () => {
+      render(<SplitButton menuButtonLabel={null}>Save</SplitButton>);
+      await expectNoA11yViolations();
     });
   });
 });

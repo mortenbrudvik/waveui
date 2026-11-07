@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
-import { hamburgerClassNames } from '../../lib/classNames';
+import { hamburgerClassNames, buttonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { NavigationIcon } from '../../lib/icons';
@@ -9,6 +9,7 @@ import type { Appearance, Size } from '../../lib/types';
 import { Button } from '../button/Button';
 import { unwrapButtonGlyph, withPartClass } from '../button/Button.slots';
 import { NavDrawerContext } from './NavDrawer.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * Hamburger: a Button with the navigation glyph that toggles the NavDrawer it sits in. Reads only
@@ -66,7 +67,8 @@ const GLYPH_SIZES: Readonly<Record<Size, number>> = {
  * that drawer and reports it with `aria-expanded` and `aria-controls`. Elsewhere (your page
  * header) it is a plain button: pass `aria-expanded={open}`, `aria-controls` (while the drawer's
  * panel is rendered) and, for an overlay drawer, `aria-haspopup="dialog"`, and toggle your state
- * in `onClick`. Fluent's `Hamburger`.
+ * in `onClick`, or spread what `useNavDrawerToggle` returns, which wires all of that and the
+ * drawer's `finalFocusRef`. Fluent's `Hamburger`.
  *
  * @example
  * <Hamburger
@@ -86,6 +88,8 @@ export const Hamburger = ({
   ref,
   ...rest
 }: HamburgerProps) => {
+  const appClassName = useAppClassName(buttonClassNames.root, hamburgerClassNames.root);
+
   const drawer = React.useContext(NavDrawerContext);
 
   // A required indicator (C-SLOTS): a button passed as `icon` is unwrapped, never nested, and a
@@ -152,7 +156,7 @@ export const Hamburger = ({
         hamburgerClassNames.icon,
       )}
       onClick={composeEventHandlers(onClick, toggle)}
-      className={wcn(hamburgerClassNames.root, className)}
+      className={wcn(hamburgerClassNames.root, appClassName, className)}
     >
       {label}
     </Button>

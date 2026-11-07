@@ -33,6 +33,7 @@ import {
   toPercent,
   toPosition,
 } from './colorUtils';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Texts of an AlphaSlider, for localisation. Every key is optional. */
 export interface AlphaSliderLabels {
@@ -151,6 +152,8 @@ export const AlphaSlider = ({
   slotProps,
   ...rest
 }: AlphaSliderProps) => {
+  const appClassName = useAppClassName(alphaSliderClassNames.root);
+
   const part = useColorPartState({ value, defaultValue, onValueChange, disabled });
   const { picker } = part;
   const pickerValueText = picker?.labels.valueText;
@@ -227,6 +230,7 @@ export const AlphaSlider = ({
       alphaSliderClassNames.root,
       'wave:group/alpha-slider wave:relative wave:flex wave:touch-none wave:select-none wave:data-[disabled]:cursor-not-allowed wave:data-[disabled]:opacity-50',
       vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
+      appClassName,
       className,
     ),
     style,

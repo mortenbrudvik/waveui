@@ -4,6 +4,7 @@ import { fn } from 'storybook/test';
 import { DatePicker, Field } from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
+import { motionCases } from './_motion';
 
 /** Local midnight `days` days from today (story ranges follow the current date). */
 function daysFromToday(days: number): Date {
@@ -192,4 +193,31 @@ export const SizesAndAppearances: Story = {
       )}
     />
   ),
+};
+
+/** The Motion story's popup: it zooms in from 95% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `DatePicker motion`. By default the calendar fades in and slides 4px away from the field, on the side it opened on, over 200ms, and fades out and slides back over 100ms (focus has moved back to the toggle by then). `null` turns it off; a class string replaces it (here a zoom).
+ * The popup stays in place, `inert`, while it exits; focus is already back where it was. Under
+ * reduced motion every popup appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionPopups(args) {
+    return (
+      <div className="flex flex-wrap gap-4">
+        {motionCases(fadeAndZoom).map(({ label, motion }) => (
+          <DatePicker
+            key={label}
+            {...args}
+            aria-label={label}
+            motion={motion}
+            placeholder={label}
+          />
+        ))}
+      </div>
+    );
+  },
 };

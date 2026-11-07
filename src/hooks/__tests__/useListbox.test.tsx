@@ -2008,14 +2008,51 @@ describe('useListbox — editable keys (APG)', () => {
       ['c', { ctrlKey: true }], // copy
       ['a', { metaKey: true }], // select all
       ['Shift', { shiftKey: true }],
-      ['ArrowLeft', {}],
-      ['Home', {}],
       ['F2', {}],
     ];
     for (const [k, init] of keeping) {
       key(k, init);
       expect(activeText(), `${k} ${JSON.stringify(init)}`).toBe('Banana');
     }
+  });
+
+  it('caret keys return visual focus to the textbox: the highlight is cleared and left to the input (APG)', () => {
+    render(<DataPicker items={ITEMS} defaultOpen autoHighlight={false} />);
+    const caret: Array<[string, Partial<KeyboardEventInit>]> = [
+      ['ArrowLeft', {}],
+      ['ArrowRight', {}],
+      ['Home', {}],
+      ['End', {}],
+      ['ArrowLeft', { shiftKey: true }], // extends the text selection
+      ['ArrowRight', { ctrlKey: true }], // word jump
+    ];
+    for (const [k, init] of caret) {
+      key('ArrowDown');
+      key('ArrowDown');
+      expect(activeText()).toBe('Banana');
+      expect(key(k, init).defaultPrevented, k).toBe(false);
+      expect(activeOption(), `${k} ${JSON.stringify(init)}`).toBeNull();
+      expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-activedescendant');
+      // The list stays open: only the highlight went.
+      expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'true');
+    }
+  });
+
+  it('caret keys with Alt are the arrow keys of the listbox, and a closed list has no highlight to clear', () => {
+    render(<DataPicker items={ITEMS} defaultOpen autoHighlight={false} />);
+    key('ArrowDown');
+    key('ArrowDown');
+    // Alt+ArrowLeft is not a listbox key either way, but it is no caret move: the highlight stays.
+    key('ArrowLeft', { altKey: true });
+    expect(activeText()).toBe('Banana');
+  });
+
+  it('a select-only combobox keeps its highlight for the caret keys (it has no caret)', () => {
+    render(<DataPicker items={ITEMS} defaultOpen autoHighlight={false} mode="select-only" />);
+    key('ArrowDown');
+    key('ArrowDown');
+    key('ArrowLeft');
+    expect(activeText()).toBe('Banana');
   });
 
   it('text keys in a read-only input keep the highlight (the text cannot change)', () => {

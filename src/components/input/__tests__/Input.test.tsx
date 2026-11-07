@@ -568,6 +568,21 @@ describe('Input — slotProps', () => {
   type InputSlotProps = NonNullable<InputProps['slotProps']>;
   const EVERY_PART: InputSlotProps = { root: {}, input: {} };
 
+  it('on the single <input>, root sets no tab stop or roving marker and input does', () => {
+    const { rerender } = render(
+      <Input
+        aria-label="Name"
+        slotProps={{ root: { tabIndex: -1, 'aria-disabled': true, 'data-roving-container': '' } }}
+      />,
+    );
+    const field = screen.getByRole('textbox', { name: 'Name' });
+    expect(field).not.toHaveAttribute('tabindex');
+    expect(field).not.toHaveAttribute('aria-disabled');
+    expect(field).not.toHaveAttribute('data-roving-container');
+    rerender(<Input aria-label="Name" slotProps={{ input: { tabIndex: -1 } }} />);
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAttribute('tabindex', '-1');
+  });
+
   it('renders the 0.17.1 markup without slotProps (attributes compared in sorted order)', () => {
     // Captured from 17abc07: the merged props may put the class before the locked attributes.
     expect(

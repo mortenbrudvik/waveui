@@ -243,6 +243,9 @@ export function resolved(theme: ThemeName, token: string): string {
 // The contrast matrix
 // ---------------------------------------------------------------------------------------------
 
+/** The ten chart series tokens (1.1), in series order. */
+export const CHART_SERIES = Array.from({ length: 10 }, (_, index) => `chart-${index + 1}`);
+
 /** The 12 persona palette hues (Avatar `color`, chart series), in tokens.css order. */
 export const PALETTE_HUES = [
   'red',
@@ -332,6 +335,9 @@ export const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ['warning-tint-foreground', 'card', 4.5],
   ['success-tint-foreground', 'background', 4.5],
   ['success-tint-foreground', 'card', 4.5],
+  // Badge and CounterBadge `ghost`: the color as text on the page.
+  ['error-tint-foreground', 'background', 4.5],
+  ['severe-tint-foreground', 'background', 4.5],
   ['error-foreground', 'error', 4.5],
   ['destructive-foreground', 'destructive', 4.5],
   ['success-foreground', 'success', 4.5],
@@ -385,6 +391,12 @@ export const CONTRAST_PAIRS: Array<[string, string, number]> = [
   ...PALETTE_HUES.flatMap((hue): Array<[string, string, number]> => [
     [`palette-${hue}-border`, 'background', 3],
     [`palette-${hue}-border`, `palette-${hue}-tint`, 3],
+  ]),
+  // Chart series (1.1): each mark on the page and on a card (WCAG 1.4.11). The ten as a set have
+  // their own test (tokens.chart.test.ts).
+  ...CHART_SERIES.flatMap((name): Array<[string, string, number]> => [
+    [name, 'background', 3],
+    [name, 'card', 3],
   ]),
 ];
 
@@ -518,6 +530,13 @@ export const NOT_TEXT_TOKENS: Record<string, string> = {
   'presence-glyph': 'glyph drawn on a presence fill (3:1)',
   'inverted-border': 'tooltip border',
   backdrop: 'translucent overlay scrim',
+  // Chart series (1.1): the marks of a chart, 3:1 on the page and on a card (CONTRAST_PAIRS).
+  ...Object.fromEntries(
+    CHART_SERIES.map((name) => [
+      name,
+      'a chart series mark (3:1 on background and card; the set has its own test)',
+    ]),
+  ),
   // Palette borders (0.17).
   ...Object.fromEntries(
     PALETTE_HUES.map((hue) => [

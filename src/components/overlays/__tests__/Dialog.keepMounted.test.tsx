@@ -46,9 +46,6 @@ const titleActions = () =>
 const nameField = () => screen.getByRole('textbox', { name: 'Name' });
 const wrapperOf = (element: Element | null) => element?.closest('[data-wave-portal]') ?? null;
 
-const OPEN_INSIDE_WARNING =
-  '[WaveUI] Dialog closed while a popup opened inside it is still open. With `unmountOnClose={false}` the popup stays open over the page: close it first, or keep the default `unmountOnClose`.';
-
 /** An uncontrolled Dialog with a trigger, a form, a freeform Combobox and a Dialog.Close; kept mounted. */
 function FormDialog(props: Partial<DialogProps>) {
   return (
@@ -494,7 +491,7 @@ describe('Dialog unmountOnClose', () => {
       );
     }
 
-    it('warns once when a controlled kept-mounted dialog closes while a popover inside is open', async () => {
+    it('closes a popover opened inside with a controlled kept-mounted dialog, and warns of nothing', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -503,16 +500,54 @@ describe('Dialog unmountOnClose', () => {
         await user.click(button('Help'));
         expect(screen.getByText('Help text')).toBeInTheDocument();
         rerender(<DialogWithPopover open={false} />);
-        expect(warn).not.toHaveBeenCalled();
         act(() => {
-          vi.advanceTimersByTime(0);
+          vi.advanceTimersByTime(10);
         });
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn).toHaveBeenCalledWith(OPEN_INSIDE_WARNING);
+        // The popover's layer was dismissed with the dialog's (`parent-closed`), not left over
+        // the page.
+        expect(screen.queryByText('Help text')).not.toBeInTheDocument();
+        expect(getTopmostLayer()).toBeNull();
+        expect(warn).not.toHaveBeenCalled();
       } finally {
         warn.mockRestore();
         vi.useRealTimers();
       }
+    });
+
+    it('reports a closed popover inside a dialog as parent-closed, once', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      function Harness({ open }: { open: boolean }) {
+        const [popoverOpen, setPopoverOpen] = React.useState(false);
+        return (
+          <Dialog open={open} onOpenChange={() => {}} unmountOnClose={false}>
+            <Dialog.Content title="Profile">
+              <Popover
+                open={popoverOpen}
+                onOpenChange={(next, details) => {
+                  onOpenChange(next, details);
+                  setPopoverOpen(next);
+                }}
+              >
+                <Popover.Trigger>
+                  <button type="button">Help</button>
+                </Popover.Trigger>
+                <Popover.Content>Help text</Popover.Content>
+              </Popover>
+            </Dialog.Content>
+          </Dialog>
+        );
+      }
+      const { rerender } = render(<Harness open />);
+      await user.click(button('Help'));
+      onOpenChange.mockClear();
+      rerender(<Harness open={false} />);
+      await act(async () => {});
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenCalledWith(false, {
+        reason: 'parent-closed',
+        event: expect.any(Event),
+      });
     });
 
     it('does not warn with the default unmountOnClose: the popover unmounts with the content', async () => {

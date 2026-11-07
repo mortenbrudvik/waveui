@@ -235,7 +235,10 @@ describe('Popover', () => {
     const onOpenChange = vi.fn();
     render(<Basic onOpenChange={onOpenChange} />);
     await user.click(screen.getByRole('button', { name: 'Toggle' }));
-    expect(onOpenChange).toHaveBeenCalledWith(true);
+    expect(onOpenChange).toHaveBeenCalledWith(true, {
+      reason: 'trigger',
+      event: expect.any(Event),
+    });
   });
 
   describe('trigger (overlays#5)', () => {
@@ -1836,18 +1839,27 @@ describe('Popover', () => {
         </>,
       );
       await user.keyboard('{Escape}');
-      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, {
+        reason: 'escape',
+        event: expect.any(Event),
+      });
       expect(onOpenChange).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: 'Outside' }));
       expect(onOpenChange).toHaveBeenCalledTimes(2);
-      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, {
+        reason: 'outside-press',
+        event: expect.any(Event),
+      });
       expect(screen.getByRole('dialog')).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: 'Toggle' }));
       expect(onOpenChange).toHaveBeenCalledTimes(3);
-      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+      expect(onOpenChange).toHaveBeenLastCalledWith(false, {
+        reason: 'trigger',
+        event: expect.any(Event),
+      });
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
@@ -1857,7 +1869,10 @@ describe('Popover', () => {
       render(<Basic open={false} onOpenChange={onOpenChange} />);
       await user.click(screen.getByRole('button', { name: 'Toggle' }));
       expect(onOpenChange).toHaveBeenCalledTimes(1);
-      expect(onOpenChange).toHaveBeenCalledWith(true);
+      expect(onOpenChange).toHaveBeenCalledWith(true, {
+        reason: 'trigger',
+        event: expect.any(Event),
+      });
       expect(dialog()).not.toBeInTheDocument();
     });
 
@@ -2061,7 +2076,7 @@ describe('Popover', () => {
       advance(300);
       await user.unhover(trigger());
       advance(600);
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true, false]);
       expect(dialog()).toBeInTheDocument();
       expect(document.body).toHaveFocus();
       await user.keyboard('{Escape}');
@@ -2089,7 +2104,7 @@ describe('Popover', () => {
       advance(300);
       await user.unhover(trigger());
       advance(600);
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true, false]);
       expect(dialog()).not.toBeInTheDocument();
       expect(document.body).toHaveFocus();
       rerender(<ParentCard forced />);
@@ -2097,7 +2112,7 @@ describe('Popover', () => {
       rerender(<ParentCard forced={false} />);
       expect(dialog()).not.toBeInTheDocument();
       expect(trigger()).toHaveFocus();
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true, false]);
     });
 
     it('a hover close that a controlled parent applies synchronously (flushSync) moves no focus', async () => {
@@ -2237,7 +2252,7 @@ describe('Popover', () => {
       expect(dialog()).toBeInTheDocument();
       await user.click(trigger());
       expect(dialog()).not.toBeInTheDocument();
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true, false]);
     });
 
     it('focus inside the content keeps it open after the pointer leaves; once focus and pointer are gone it closes', async () => {
@@ -2358,11 +2373,11 @@ describe('Popover', () => {
       );
       await user.hover(trigger());
       advance(300);
-      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true]);
       await user.unhover(trigger());
       advance(600);
       expect(dialog()).not.toBeInTheDocument();
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true, false]);
     });
 
     it('a controlled popover asks to open and to close on hover', async () => {
@@ -2386,7 +2401,7 @@ describe('Popover', () => {
       await user.unhover(trigger());
       advance(600);
       expect(dialog()).not.toBeInTheDocument();
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true, false]);
     });
 
     it('without openOnHover, hover opens nothing and a click toggles as before', async () => {
@@ -2522,7 +2537,7 @@ describe('Popover', () => {
           expect(screen.getByRole('dialog').style.transform).toBe('translate(420px, 268px)'),
         );
         expect(screen.getAllByRole('dialog')).toHaveLength(1);
-        expect(onOpenChange.mock.calls).toEqual([[true]]);
+        expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true]);
       });
 
       it('a macOS Ctrl+click on another row moves it instead of closing it', async () => {
@@ -2627,7 +2642,7 @@ describe('Popover', () => {
         mockRect(row(3), { x: 100, y: 120, width: 300, height: 30 });
         fireEvent.scroll(region());
         expect(dialog()).not.toBeInTheDocument();
-        expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+        expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true, false]);
       });
 
       it('suppresses the browser menu inside the content', () => {
@@ -3810,7 +3825,10 @@ describe('Popover.Content — slotProps', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
     rerender(<Open rootProps={{ onOpenChange }} slotProps={{ title: { onKeyDown: () => {} } }} />);
     fireEvent.keyDown(title(), { key: 'Escape' });
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChange).toHaveBeenCalledWith(false, {
+      reason: 'escape',
+      event: expect.any(Event),
+    });
   });
 
   it('calls your part handlers once per click in StrictMode', () => {

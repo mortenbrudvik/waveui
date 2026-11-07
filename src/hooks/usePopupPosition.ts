@@ -65,7 +65,8 @@ export interface UsePopupPositionOptions {
   /**
    * Hide the surface (`visibility: hidden`: its layout is unaffected, but its content cannot take
    * focus, so a surface that holds focus loses it) while the anchor is scrolled out of view or
-   * clipped away. @default false
+   * clipped away. An anchor without a box (zero width and height) is never taken for detached.
+   * @default false
    */
   hideWhenDetached?: boolean;
   /**
@@ -186,6 +187,21 @@ function createVirtualProxy(
   };
 }
 
+const hideReference = hideMiddleware({ strategy: 'referenceHidden' });
+
+/**
+ * floating-ui's `hide`, except that an anchor without a box is never detached: there is nothing to
+ * clip (a `display: contents` anchor, an element not laid out yet, jsdom), so its surface stays
+ * visible. It captures no options (floating-ui compares middleware functions by source text).
+ */
+const hideDetachedReference: Middleware = {
+  name: hideReference.name,
+  fn: (state) =>
+    state.rects.reference.width === 0 && state.rects.reference.height === 0
+      ? { data: { referenceHidden: false } }
+      : hideReference.fn(state),
+};
+
 /** Keeps the position updated while mounted; observers are used only where they exist. */
 function whileElementsMounted(
   reference: ReferenceType,
@@ -290,7 +306,7 @@ export function usePopupPosition(options: UsePopupPositionOptions): UsePopupPosi
   if (matchReferenceWidth || fitViewport) {
     middleware.push(sizeMiddleware({ padding, apply: sizeApply }));
   }
-  if (hideWhenDetached) middleware.push(hideMiddleware({ strategy: 'referenceHidden' }));
+  if (hideWhenDetached) middleware.push(hideDetachedReference);
   if (arrowRef) middleware.push(arrowMiddleware({ element: arrowRef }));
 
   // Alignment follows the hook's direction (not only the surface's computed CSS direction).

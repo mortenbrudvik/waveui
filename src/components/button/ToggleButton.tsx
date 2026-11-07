@@ -1,19 +1,26 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
-import { toggleButtonClassNames } from '../../lib/classNames';
+import { toggleButtonClassNames, buttonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { useControllable } from '../../hooks/useControllable';
-import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
+import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { withPartClass } from './Button.slots';
 import { buttonClassName } from './buttonStyles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
-/** Properties for the ToggleButton component. */
-export interface ToggleButtonProps extends Omit<
-  React.ButtonHTMLAttributes<HTMLButtonElement>,
-  'onChange'
-> {
+/**
+ * The ToggleButton's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props
+ * only). Every other prop comes from the rendered element (`as`).
+ */
+export interface ToggleButtonOwnProps {
+  /**
+   * The native change event does not exist on a button: `onChange` stays a type error, as it was
+   * before ToggleButton became polymorphic. Use `onPressedChange`.
+   */
+  onChange?: never;
   /** Controlled pressed state. */
   pressed?: boolean;
   /** Initial pressed state for uncontrolled usage.
@@ -34,6 +41,11 @@ export interface ToggleButtonProps extends Omit<
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Corner shape, as on {@link Button}.
+   * @default 'rounded'
+   */
+  shape?: Shape;
   /**
    * Icon slot rendered before the label (after it with `iconPosition="after"`). Decorative: it
    * renders with `aria-hidden="true"` (a slot object can override it). An icon-only toggle needs
@@ -63,9 +75,31 @@ export interface ToggleButtonProps extends Omit<
    * @default false
    */
   isAccessible?: boolean;
-  /** Ref to the rendered `<button>`. */
-  ref?: React.Ref<HTMLButtonElement>;
 }
+
+/**
+ * Props of {@link ToggleButton} rendered as `C` (default `'button'`). `ToggleButtonProps` without
+ * a type argument is the 0.x name: the props of a ToggleButton rendered as a `<button>`, including
+ * `ref`.
+ */
+export type ToggleButtonProps<C extends React.ElementType = 'button'> = PolymorphicProps<
+  C,
+  ToggleButtonOwnProps
+>;
+
+/** The props the implementation reads, for any `as`. */
+type ToggleButtonImplProps = Omit<ToggleButtonOwnProps, 'onChange'> & {
+  as?: React.ElementType;
+  className?: string;
+  role?: string;
+  href?: string;
+  disabled?: boolean;
+  'aria-disabled'?: React.AriaAttributes['aria-disabled'];
+  onClick?: React.MouseEventHandler<HTMLElement>;
+};
+
+/** `Button` widened to any element props, so `as` and the rest props pass through untyped. */
+const BaseButton = Button as React.ElementType;
 
 /**
  * The classes `buttonClassName({ pressed: true, accessible })` adds on top of the unpressed button,
@@ -119,6 +153,8 @@ function stateAttributeFor(role: string | undefined): 'pressed' | 'checked' | 'n
  * icon-only warning. The pressed look uses the shared pressed colors (selected tokens; a Highlight
  * outline in forced colors), or a brand fill with `isAccessible`.
  *
+ * - `as` renders another element or component with correctly typed props, as on Button
+ *   (`<ToggleButton as="a" href="/x">`); the pressed attributes follow the element's role.
  * - Uncontrolled: `defaultPressed`; controlled: `pressed` + `onPressedChange`.
  * - A consumer `onClick` runs first; calling `event.preventDefault()` in it cancels the toggle.
  * - It reports its state with `aria-pressed` without a `role` or with `role="button"`. With `role`
@@ -132,20 +168,26 @@ function stateAttributeFor(role: string | undefined): 'pressed' | 'checked' | 'n
  * <ToggleButton pressed={bold} onPressedChange={setBold}>Bold</ToggleButton>
  * <ToggleButton role="checkbox" isAccessible icon={<GridIcon />} aria-label="Grid" />
  */
-export const ToggleButton = ({
-  pressed,
-  defaultPressed = false,
-  onPressedChange,
-  appearance = 'outline',
-  size = 'medium',
-  disabled = false,
-  disabledFocusable = false,
-  isAccessible = false,
-  icon,
-  className,
-  onClick,
-  ...props
-}: ToggleButtonProps) => {
+export const ToggleButton: PolymorphicComponent<'button', ToggleButtonOwnProps> = (props) => {
+  const appClassName = useAppClassName(buttonClassNames.root, toggleButtonClassNames.root);
+
+  const {
+    as,
+    pressed,
+    defaultPressed = false,
+    onPressedChange,
+    appearance = 'outline',
+    size = 'medium',
+    disabled = false,
+    disabledFocusable = false,
+    isAccessible = false,
+    icon,
+    className,
+    onClick,
+    ...rest
+  } = props as ToggleButtonImplProps;
+  // An anchor with an `href` is a link: `aria-pressed` is not allowed on it, so it needs a `role`.
+  const role = rest.role ?? (as === 'a' && rest.href !== undefined ? 'link' : undefined);
   const [isPressed, setPressed] = useControllable(pressed, defaultPressed, onPressedChange);
 
   // With `disabledFocusable`, Button replaces this handler, so the toggle never runs.
@@ -153,11 +195,10 @@ export const ToggleButton = ({
 
   // Button shows the disabled look for `disabled`, `disabledFocusable` and a consumer
   // `aria-disabled` alike.
-  const ariaDisabled = props['aria-disabled'];
+  const ariaDisabled = rest['aria-disabled'];
   const disabledLook =
     disabled || disabledFocusable || ariaDisabled === true || ariaDisabled === 'true';
 
-  const role = props.role;
   const stateAttribute = stateAttributeFor(role);
   React.useEffect(() => {
     if (stateAttribute !== 'none') return;
@@ -168,8 +209,9 @@ export const ToggleButton = ({
   }, [stateAttribute, role]);
 
   return (
-    <Button
-      {...props}
+    <BaseButton
+      {...rest}
+      as={as}
       icon={withPartClass(icon, toggleButtonClassNames.icon)}
       appearance={appearance}
       size={size}
@@ -187,6 +229,7 @@ export const ToggleButton = ({
       className={wcn(
         toggleButtonClassNames.root,
         isPressed && getPressedLayer(appearance, disabledLook, isAccessible),
+        appClassName,
         className,
       )}
     />

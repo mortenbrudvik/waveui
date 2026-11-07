@@ -21,6 +21,8 @@ import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
+import { TABLE_SIZE_CLASSES, TableSizeContext, useTableSize } from './Table.context';
+import type { TableSize } from './Table.context';
 import { SELECTION_CELL_CLASSES, TableSelectionControl, markTablePart } from './Table.shared';
 import type { SortDirection } from './Table.shared';
 import {
@@ -34,9 +36,11 @@ import {
   getWindowNavigationModel,
   renderWindowRows,
   useDataGridWindow,
+  withFooterRowIndexes,
   type DataGridWindowRow,
 } from './DataGrid.window';
 import { useGridNavigation } from './useGridNavigation';
+import type { GridNavigationFocusMode } from './useGridNavigation';
 import type { TableColumnWidthsChangeDetails } from './useTableColumnSizing';
 import {
   DEFAULT_SELECTION_HEADER_LABEL,
@@ -70,6 +74,7 @@ import {
   type SelectionStore,
   type SelectionUniverse,
 } from './DataGrid.store';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export { createSelectionStore };
 export type { SelectionStore, SelectionUniverse };
@@ -175,6 +180,21 @@ export interface DataGridLabels {
 export type DataGridSelectionAppearance = 'brand' | 'neutral' | 'none';
 
 /**
+ * How focus moves in a DataGrid (`focusMode`): `'cell'` one Tab stop on a cell and arrow keys
+ * between cells (the APG grid), `'row'` one Tab stop on a body row and the arrow keys between rows
+ * (Fluent's `'row_unstable'`), `'none'` no navigation keys and no managed Tab stops.
+ */
+export type DataGridFocusMode = GridNavigationFocusMode;
+
+/**
+ * How the grid treats one cell (`DataGrid.Cell` and `DataGrid.HeaderCell` `focusMode`): `'cell'`
+ * (the default) as every cell; `'group'` the cell is its own focus target even with a single widget
+ * (Enter or F2 enters its widgets, Escape returns); `'none'` the cell and its widgets are outside
+ * the grid's keyboard navigation.
+ */
+export type DataGridCellFocusMode = 'cell' | 'group' | 'none';
+
+/**
  * The props of a row's selection cell (`DataGrid.Row` `selectionCellProps`), the automatic cell or
  * a `DataGrid.SelectionCell` child (whose own props win).
  */
@@ -242,6 +262,30 @@ export interface DataGridItemsProps<T = unknown> {
 
 /** Props of every DataGrid, whatever sort API it uses. `T` is the type of its `items`. */
 export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTMLTableElement> {
+  /**
+   * The density of the grid: `'medium'` (a one-line row is 44px tall), `'small'` (34px) or
+   * `'extra-small'` (24px, with the caption type size in the cells). It sets the padding of the
+   * cells, the header cells, the sort buttons and the selection cells, and the box of the media of
+   * a `Table.CellLayout`; a grid with a `virtualWindow` keeps its own row height. A class of your
+   * own on a part still wins. Rendered as `data-size`. Fluent's `size`.
+   * @default 'medium'
+   */
+  size?: TableSize;
+  /**
+   * How focus moves in the grid. `'cell'`: one Tab stop on a cell, and the arrow keys, Home/End,
+   * Ctrl+Home/Ctrl+End and PageUp/PageDown between cells; Enter or F2 enters a cell's widgets and
+   * Escape returns. `'row'`: one Tab stop on a body row (the header and a `<tfoot>` stay out), the
+   * arrow keys, Home/End and PageUp/PageDown between rows (on the row itself, never on a widget in
+   * it), the widgets of the other rows out of the Tab order and Tab inside the active row reaching
+   * its widgets; Space on a row still toggles its selection, and a row that holds focus is outlined.
+   * A grid with a `virtualWindow` navigates by cell whatever this says (a development warning).
+   * `'none'`: the grid handles no keys and writes no `tabindex`, so its widgets (sort buttons,
+   * selection controls) keep their own places in the Tab order and the cells are not focusable.
+   * Rendered as `data-focus-mode`. Fluent's `focusMode` (`'row'` is its `'row_unstable'`; its
+   * `'composite'`, a two-level row and cell model of its focus library, has no counterpart).
+   * @default 'cell'
+   */
+  focusMode?: DataGridFocusMode;
   /**
    * The row id of an item: the `rowId` of its row (for selection), for rows rendered from `items`.
    * Select-all and its checkbox use these ids, whether the rows are rendered or not. A row's own
@@ -333,7 +377,8 @@ export interface DataGridBaseProps<T = unknown> extends React.HTMLAttributes<HTM
    * The grid's scroll wrapper (the element of `containerProps`) becomes the window's scroller, so
    * give it a bounded height, a height or a maximum height in `containerProps`: without one the
    * window measures the whole list and renders every row (a development warning says so). Every
-   * row has the window's `itemSize` as its height: the grid sets it on each body row, drops the
+   * row has the window's `itemSize` as its height (a window that measures its rows lays the grid out
+   * from its estimate: table rows are not measured): the grid sets it on each body row, drops the
    * vertical padding of its cells and keeps their text on one line, so a cell's content must fit
    * in it. The columns are laid out from widths (as with `columnSizingOptions`), so they never
    * change width as rows come and go. The header stays at the top of the scroller: pass its height
@@ -573,6 +618,13 @@ export interface DataGridHeaderProps extends React.HTMLAttributes<HTMLTableSecti
 
 /** Properties for the DataGridHeaderCell sub-component. */
 export interface DataGridHeaderCellProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
+  /**
+   * How the grid treats this header cell (see `DataGrid.Cell` `focusMode`). A sortable header's
+   * sort button is its focus target already, so `'group'` is for a header with several widgets.
+   * Rendered as `data-focus-mode` while set. Fluent's `focusMode` of `DataGridHeaderCell`.
+   * @default 'cell'
+   */
+  focusMode?: DataGridCellFocusMode;
   /** Column ID used for sort tracking. Required for `sortable`. */
   columnId?: string;
   /**
@@ -727,6 +779,16 @@ export interface DataGridRowProps extends React.HTMLAttributes<HTMLTableRowEleme
 
 /** Properties for the DataGridCell sub-component. */
 export interface DataGridCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
+  /**
+   * How the grid treats this cell: `'cell'` as every cell; `'group'` makes the cell its own focus
+   * target even when it holds a single widget (Enter or F2 enters its widgets, Escape returns);
+   * `'none'` takes the cell and its widgets out of the grid's keyboard navigation: the arrow keys
+   * skip it, it is no focus target and the grid writes no `tabindex` in it, so a widget in it
+   * keeps its own place in the Tab order. Rendered as `data-focus-mode` while set (not for
+   * `'cell'`, a cell's default). Fluent's `focusMode` of `DataGridCell`.
+   * @default 'cell'
+   */
+  focusMode?: DataGridCellFocusMode;
   /** Cell content. */
   children: React.ReactNode;
   /** Ref to the `<td>` element. */
@@ -812,7 +874,11 @@ function DataGridRoot<T>(
 ): React.JSX.Element;
 function DataGridRoot<T = unknown>(props: DataGridProps<T>): React.JSX.Element;
 function DataGridRoot<T>(props: DataGridProps<T>) {
+  const appClassName = useAppClassName(dataGridClassNames.root);
+
   const {
+    size = 'medium',
+    focusMode = 'cell',
     items,
     getRowId,
     isSelectionDisabled,
@@ -1059,6 +1125,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
       selectOnRowClick,
       selectionAppearance,
       subtleSelection,
+      focusMode,
     }),
     [
       selectionMode,
@@ -1071,6 +1138,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
       selectOnRowClick,
       selectionAppearance,
       subtleSelection,
+      focusMode,
     ],
   );
 
@@ -1150,11 +1218,28 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     ? countHeaderRows(headerChild.props.children)
     : 1;
   const rowCount = items?.length ?? 0;
+  // The rows of a `<tfoot>` child: counted after the data rows in a windowed grid (below).
+  const footerChild = childOf('tfoot');
+  const footerRowCount =
+    windowed && isElementOfType<React.HTMLAttributes<HTMLTableSectionElement>>(footerChild, 'tfoot')
+      ? countHeaderRows(footerChild.props.children)
+      : 0;
+  const rowFocusIgnored = windowed && focusMode === 'row';
+  React.useEffect(() => {
+    if (rowFocusIgnored) {
+      warnOnce(
+        'DataGrid:focus-mode-row-windowed',
+        'DataGrid: `focusMode="row"` is ignored in a grid with a `virtualWindow`, which navigates ' +
+          'by cell. Use `focusMode="cell"` or remove the `virtualWindow`.',
+      );
+    }
+  }, [rowFocusIgnored]);
 
   // --- keyboard -------------------------------------------------------------
   // A windowed grid moves by the rows of the data: an unmounted target is scrolled in first.
   const { gridRef, gridProps, activeRowIndex, pendingRowIndex } = useGridNavigation({
-    model: getWindowNavigationModel(activeWindow, rowCount, headerRowCount),
+    model: getWindowNavigationModel(activeWindow, rowCount, headerRowCount, footerRowCount),
+    focusMode,
   });
   const windowState = useDataGridWindow({
     virtualWindow: activeWindow,
@@ -1238,6 +1323,17 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
     columns && hasItems && bodyChild === undefined ? (
       <DataGridBody key="wave-generated-body" />
     ) : null;
+  // In a windowed grid the `<tfoot>`'s rows are numbered after the data rows.
+  const footerNode =
+    footerRowCount > 0 && React.isValidElement<{ children?: React.ReactNode }>(footerChild)
+      ? React.cloneElement(
+          footerChild,
+          undefined,
+          withFooterRowIndexes(footerChild.props.children, headerRowCount + rowCount + 1),
+        )
+      : null;
+  const placeFooter = (node: React.ReactNode) =>
+    footerNode && node === footerChild ? footerNode : node;
   if (generatedHeader || generatedBody || sizing.colgroup) {
     // A `<caption>` stays the table's first child, before the column widths and the generated
     // header; a generated body goes before a `<tfoot>`, which ends the table.
@@ -1251,9 +1347,13 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
       ...flatChildren.filter(isCaption).map(renderFlatChild),
       sizing.colgroup,
       generatedHeader,
-      ...others.slice(0, bodyIndex).map(renderFlatChild),
+      ...others
+        .slice(0, bodyIndex)
+        .map((child) => renderFlatChild({ ...child, node: placeFooter(child.node) })),
       generatedBody,
-      ...others.slice(bodyIndex).map(renderFlatChild),
+      ...others
+        .slice(bodyIndex)
+        .map((child) => renderFlatChild({ ...child, node: placeFooter(child.node) })),
     ];
   }
 
@@ -1319,15 +1419,20 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                         role="grid"
                         aria-multiselectable={selectionMode === 'multiple' || undefined}
                         // With a window: every row of the data, rendered or not, and the header.
-                        aria-rowcount={windowed ? rowCount + headerRowCount : undefined}
+                        aria-rowcount={
+                          windowed ? rowCount + headerRowCount + footerRowCount : undefined
+                        }
                         data-selection-appearance={selectionAppearance}
                         data-subtle-selection={subtleSelection ? '' : undefined}
+                        data-size={size}
+                        data-focus-mode={focusMode}
                         data-resizing={sizing.resizing ? '' : undefined}
                         className={wcn(
                           dataGridClassNames.root,
                           'wave:w-full wave:border-separate wave:border-spacing-0',
                           // The group whose hover or focus draws the subtle select-all checkbox.
                           subtleSelection && 'wave:group/grid',
+                          appClassName,
                           className,
                         )}
                         // The widths are runtime data: the layout and the width are inline.
@@ -1345,11 +1450,13 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                           windowState.onPointerDownCapture,
                         )}
                       >
-                        <DataGridWindowContext.Provider value={windowState.context}>
-                          <DataGridWindowRowContext.Provider value={null}>
-                            {content}
-                          </DataGridWindowRowContext.Provider>
-                        </DataGridWindowContext.Provider>
+                        <TableSizeContext.Provider value={size}>
+                          <DataGridWindowContext.Provider value={windowState.context}>
+                            <DataGridWindowRowContext.Provider value={null}>
+                              {content}
+                            </DataGridWindowRowContext.Provider>
+                          </DataGridWindowContext.Provider>
+                        </TableSizeContext.Provider>
                       </table>
                     </div>
                   </DataGridFixedLayoutContext.Provider>
@@ -1418,6 +1525,8 @@ const DataGridItemRow = React.memo(function DataGridItemRow({
  * row for each run of rows it leaves out.
  */
 const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyProps<T>) => {
+  const appClassName = useAppClassName(dataGridBodyClassNames.root);
+
   const itemsContext = React.useContext(DataGridItemsContext);
   const windowContext = React.useContext(DataGridWindowContext);
   const rows = itemsContext?.rows ?? null;
@@ -1481,7 +1590,11 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
 
   return (
     <DataGridSectionContext.Provider value="body">
-      <tbody ref={ref} className={wcn(dataGridBodyClassNames.root, className)} {...rest}>
+      <tbody
+        ref={ref}
+        className={wcn(dataGridBodyClassNames.root, appClassName, className)}
+        {...rest}
+      >
         {content}
       </tbody>
     </DataGridSectionContext.Provider>
@@ -1518,7 +1631,9 @@ const DataGridRow = ({
   ref,
   ...rest
 }: DataGridRowProps) => {
-  const { selectionMode, store, toggleRow, selectOnRowClick, selectionAppearance } =
+  const appClassName = useAppClassName(dataGridRowClassNames.root);
+
+  const { selectionMode, store, toggleRow, selectOnRowClick, selectionAppearance, focusMode } =
     useDataGridContext('DataGrid.Row');
   // In a windowed grid: the row's place (and, for a body row, its fixed height).
   const windowRow = React.useContext(DataGridWindowRowContext);
@@ -1732,6 +1847,9 @@ const DataGridRow = ({
           'wave:group/table-row',
           !inHeader && BODY_ROW_CLASSES[selectionAppearance],
           selectable && isSelected && forcedColors.selectedContainer,
+          // The row mode: the row holds focus (its Tab stop).
+          focusMode === 'row' && !inHeader && focusRingInset,
+          appClassName,
           className,
         )}
         aria-selected={selectable ? isSelected : undefined}
@@ -1781,6 +1899,7 @@ function DataGridBodySelectionCell({
 }: DataGridBodySelectionCellProps) {
   const { selectionMode, toggleRow, radioName, subtleSelection } = useDataGridContext(component);
   const row = useDataGridRowContext(component);
+  const size = useTableSize();
   // A body row of a windowed grid has the window's height: no block padding, the control centred.
   const windowedRow = React.useContext(DataGridWindowRowContext)?.index !== undefined;
   const { rowId } = row;
@@ -1795,6 +1914,7 @@ function DataGridBodySelectionCell({
         stableClassName,
         dataGridRowClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
+        TABLE_SIZE_CLASSES.selectionCell[size],
         windowedRow && 'wave:py-0 wave:align-middle',
         focusRingInset,
         row.selectionCellProps?.className,
@@ -1848,6 +1968,7 @@ const DataGridSelectionCell = ({
   ref,
   ...rest
 }: DataGridSelectionCellProps) => {
+  const appClassName = useAppClassName(dataGridSelectionCellClassNames.root);
   const { selectionMode } = useDataGridContext('DataGrid.SelectionCell');
   const section = React.useContext(DataGridSectionContext);
   const firstHeaderRowHint = React.useContext(DataGridHeaderRowHintContext);
@@ -1888,7 +2009,7 @@ const DataGridSelectionCell = ({
         stableClassName={dataGridSelectionCellClassNames.root}
         cellProps={{
           ...rest,
-          className: wcn(rowProps?.className, className),
+          className: wcn(rowProps?.className, appClassName, className),
           disabled: disabled ?? rowProps?.disabled,
           invisible: invisible ?? rowProps?.invisible,
           'aria-label': ariaLabel ?? rowProps?.['aria-label'],
@@ -1905,7 +2026,7 @@ const DataGridSelectionCell = ({
       ref={ref}
       component="DataGrid.SelectionCell"
       stableClassName={dataGridSelectionCellClassNames.root}
-      className={className}
+      className={wcn(appClassName, className)}
       controlRef={controlRef}
       aria-describedby={ariaDescribedBy}
     />
@@ -1921,7 +2042,10 @@ markTablePart(DataGridSelectionCell, 'dataGridSelectionCell');
  * its class says otherwise. In a body row of a grid with a `virtualWindow` it has no vertical
  * padding: the row has the window's height, which its content must fit in.
  */
-const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) => {
+const DataGridCell = ({ focusMode, children, className, ref, ...rest }: DataGridCellProps) => {
+  const appClassName = useAppClassName(dataGridCellClassNames.root);
+
+  const size = useTableSize();
   const fixedLayout = React.useContext(DataGridFixedLayoutContext);
   // A body row of a windowed grid has the window's height: its cells add no vertical padding.
   const windowedRow = React.useContext(DataGridWindowRowContext)?.index !== undefined;
@@ -1929,14 +2053,17 @@ const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) 
     <td
       ref={ref}
       role="gridcell"
+      data-focus-mode={focusMode === 'cell' ? undefined : focusMode}
       className={wcn(
         dataGridCellClassNames.root,
         cellBase,
         'wave:relative wave:text-body-1',
+        TABLE_SIZE_CLASSES.cell[size],
         (fixedLayout || windowedRow) &&
           'wave:overflow-hidden wave:text-ellipsis wave:whitespace-nowrap',
         windowedRow && 'wave:py-0 wave:align-middle',
         focusRingInset,
+        appClassName,
         className,
       )}
       {...rest}
@@ -1999,6 +2126,12 @@ export {
  * and column sizing still cover every item. The grid then carries `aria-rowcount` and its rows
  * `aria-rowindex`, so assistive technology reads each row's place in the whole list. Fluent's
  * DataGrid has no built-in counterpart.
+ *
+ * `size` sets the density (medium, small or extra-small), and `focusMode` how focus moves: by cell
+ * (the default), by row or not at all (Fluent's `focusMode`); a cell opts out of the arrow-key
+ * navigation, or becomes its own focus target, with its own `focusMode`. The rows of a `<tfoot>`
+ * child of a windowed grid are numbered after the data rows (`aria-rowindex`, `aria-rowcount`)
+ * and navigated like the others.
  *
  * Cells, headers and footer rows of your own read and change the grid through three hooks:
  * `useDataGridSort` (the sort, and `setSort`, which calls `onSortChange` as a sortable header

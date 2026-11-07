@@ -8,6 +8,7 @@ import { getDirection } from '../../lib/direction';
 import { isEditableTarget, isOwnEvent } from '../../lib/events';
 import { getFirstTabbable, getTabbableElements, isConnectedAndFocusable } from '../../lib/focus';
 import {
+  Z_INDEX,
   getOpenLayers,
   isInsideLayerTree,
   subscribeLayers,
@@ -19,6 +20,7 @@ import { focusRing } from '../../lib/styles';
 import { bindToasterHandle, isToastOptions } from '../../lib/toaster';
 import type { ToasterHandle } from '../../lib/toaster';
 import type { MotionSlot, Status } from '../../lib/types';
+import type { Politeness } from '../../hooks/useAnnounce';
 import { useDirection } from '../../hooks/useDirection';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
@@ -31,6 +33,7 @@ import { StatusText, getStatusLabel } from './MessageBar.status';
 import { ToastContext, ToasterContext } from './Toast.context';
 import type { ToastContextValue, ToastPartRegistration, ToastRegistration } from './Toast.context';
 import { ToastRoot } from './Toast.root';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -74,6 +77,31 @@ export interface ToastOptions {
    * @default 'Dismiss'
    */
   dismissLabel?: string;
+  /**
+   * `inverted` draws the toast on the inverted surface, as a Tooltip is (Fluent's `Toast`
+   * `appearance`). The toast carries it as `data-appearance`.
+   * @default 'default'
+   */
+  appearance?: ToastAppearance;
+  /**
+   * Whether the toast shows its Dismiss button. `false` leaves the toast without one (Delete,
+   * Backspace, Escape, `dismissToast` and the timeout still dismiss it), for a toast the user must
+   * not close from the pointer, such as one that reports a running task.
+   * @default true
+   */
+  showDismissButton?: boolean;
+  /** As {@link ToastDispatchOptions.politeness}. */
+  politeness?: Politeness;
+  /** As {@link ToastDispatchOptions.position}. */
+  position?: ToastPosition;
+  /** As {@link ToastDispatchOptions.priority}. */
+  priority?: number;
+  /** As {@link ToastDispatchOptions.pauseOnHover}. */
+  pauseOnHover?: boolean;
+  /** As {@link ToastDispatchOptions.pauseOnWindowBlur}. */
+  pauseOnWindowBlur?: boolean;
+  /** As {@link ToastDispatchOptions.onStatusChange}. */
+  onStatusChange?: ToastStatusChangeHandler;
 }
 
 /** Options of `dispatchToast(content, options)`, the form that shows your own React content. */
@@ -101,6 +129,101 @@ export interface ToastDispatchOptions {
    * comes first), for a toast whose visible text is no good announcement, such as a progress toast.
    */
   announcement?: string;
+  /**
+   * How urgently the toast is announced: `assertive` or `polite`. Without it the toast's status
+   * decides (`error` is assertive, every other status polite). Fluent's `politeness`.
+   * @default by status
+   */
+  politeness?: Politeness;
+  /**
+   * Where this toast appears, instead of the Toaster's `position`. Toasts of a position other than
+   * the Toaster's stack there in an element of their own inside the Toaster's region, and do not
+   * move aside for an open Drawer (only the Toaster's own position does). Fluent's `position`.
+   * @default the Toaster's `position`
+   */
+  position?: ToastPosition;
+  /**
+   * Orders the toasts that wait beyond the Toaster's `limit`: when a place frees up, the waiting
+   * toast with the highest priority appears first (the earliest dispatch among equals). A toast
+   * that is already shown stays, whatever its priority, and shown toasts keep the order of their
+   * dispatch (Fluent shows the highest priorities first and can move a shown toast back to its
+   * queue). Fluent's `priority`.
+   * @default 0
+   */
+  priority?: number;
+  /**
+   * Whether the countdown pauses while the pointer is in the toast region. `false` lets the toast
+   * time out while it is hovered. Focus in the region always pauses the countdown, so keyboard
+   * and screen-reader users keep their time. Fluent's `pauseOnHover` (which defaults to `false`
+   * there).
+   * @default true
+   */
+  pauseOnHover?: boolean;
+  /**
+   * Whether the countdown pauses while the browser window is in the background (it has lost focus,
+   * or the page is not shown). `false` keeps it running there. Fluent's `pauseOnWindowBlur` (which
+   * defaults to `false` there).
+   * @default true
+   */
+  pauseOnWindowBlur?: boolean;
+  /**
+   * Called when the toast's lifecycle changes: `queued` (it waits beyond the Toaster's `limit`),
+   * `visible` (it is shown, announced, its timer running), `dismissed` (its exit begins; the
+   * `reason` says why) and `unmounted` (it is gone). `visible` is reported again when a toast that
+   * exits is revived by its id. Not called for the Toaster's own unmount. Fluent's `onStatusChange`.
+   */
+  onStatusChange?: ToastStatusChangeHandler;
+}
+
+/** Where a toast is in its lifecycle (`ToastDispatchOptions.onStatusChange`). */
+export type ToastStatus = 'queued' | 'visible' | 'dismissed' | 'unmounted';
+
+/**
+ * Why a toast was dismissed: its `timeout` ran out, a Dismiss button or `Toast.Close` was
+ * activated (`close`), Delete or Backspace (`keyboard`), Escape (`escape`), or code called
+ * `dismissToast` or `dismissAllToasts` (`controller`).
+ */
+export type ToastDismissReason = 'timeout' | 'close' | 'keyboard' | 'escape' | 'controller';
+
+/** The second argument of a toast's `onStatusChange`. */
+export interface ToastStatusChangeDetails {
+  /** The id of the toast. */
+  toastId: string;
+  /** Why the toast was dismissed, for the `dismissed` status; `undefined` otherwise. */
+  reason: ToastDismissReason | undefined;
+}
+
+/** A toast's `onStatusChange` callback. */
+export type ToastStatusChangeHandler = (
+  status: ToastStatus,
+  details: ToastStatusChangeDetails,
+) => void;
+
+/** Appearance of a Toast: `inverted` draws it on the inverted surface. */
+export type ToastAppearance = 'default' | 'inverted';
+
+/**
+ * What {@link ToastController.updateToast} changes of a toast: any option of the dispatch (the
+ * ones you leave out keep their value) and, for a toast dispatched with content, the `content`.
+ */
+export type ToastUpdate = Partial<Omit<ToastOptions, 'toastId'>> & {
+  /** The id of the toast to update. */
+  toastId: string;
+  /**
+   * New content of a toast dispatched with `dispatchToast(content)`. Ignored, with a development
+   * warning, for one built from text options.
+   */
+  content?: React.ReactNode;
+};
+
+/** What a Toaster passes to its `announce` prop for each toast. */
+export interface ToastAnnouncement {
+  /** The id of the toast. */
+  toastId: string;
+  /** The text to read: the severity text, then the title, body and actions, or the `announcement`. */
+  message: string;
+  /** `assertive` for an `error` toast (or the toast's own `politeness`), `polite` otherwise. */
+  politeness: Politeness;
 }
 
 /** The toast API returned by {@link useToastController}. */
@@ -127,6 +250,23 @@ export interface ToastController {
    * ones are removed.
    */
   dismissAllToasts: () => void;
+  /**
+   * Changes a shown or waiting toast: the options you pass are merged over the toast's (the ones
+   * you leave out keep their value, unlike dispatching again with the id, which replaces them) and
+   * `content` replaces the content of a toast dispatched with content. The toast keeps its place
+   * and its timer, which restarts only when you pass a `timeout`, and it is announced again only
+   * when the text that is read changes (pass `announcement` to keep what is read while a progress
+   * toast updates). An unknown or dismissed id is ignored. Fluent's `updateToast`.
+   */
+  updateToast: (update: ToastUpdate) => void;
+  /**
+   * Pauses the countdown of the toast with this id until `playToast`, on top of the pauses of the
+   * pointer, focus and the window (a toast that is paused by hand does not time out while the
+   * pointer leaves). Unknown ids are ignored. Fluent's `pauseToast`.
+   */
+  pauseToast: (id: string) => void;
+  /** Lets the countdown of a toast paused with `pauseToast` run again. Fluent's `playToast`. */
+  playToast: (id: string) => void;
 }
 
 /** What a dispatch stores: the options form, or your content with its options. */
@@ -139,6 +279,13 @@ type ToastEntry = DispatchedToast & {
   /** Increases with every dispatch, so a replaced toast is announced again. */
   seq: number;
   /**
+   * The dispatch counter's value that started the timer: `seq`, and a newer one after an update
+   * that passes a `timeout` (or a pause option), so the timer restarts without a new announcement.
+   */
+  timerSeq: number;
+  /** The `priority` option as a number (`0` without one): the order the waiting toasts appear in. */
+  priority: number;
+  /**
    * Whether the toast is shown (rendered, announced, its timer running) or still waits beyond the
    * Toaster's `limit`. Only {@link promoteQueued} sets it; it never goes back to `false`.
    */
@@ -150,24 +297,65 @@ type ToastEntry = DispatchedToast & {
   dismissed: boolean;
 };
 
+/** A `priority` option as the number the queue orders by: finite, else `0`. */
+function resolvePriority(priority: number | undefined): number {
+  return typeof priority === 'number' && Number.isFinite(priority) ? priority : 0;
+}
+
 /**
- * Flags the oldest waiting toasts as shown while fewer than `limit` toasts are shown and not
- * dismissed. Returns `toasts` itself when nothing changes, so the Toaster's render-time update
- * settles.
+ * Flags the waiting toasts as shown while fewer than `limit` toasts are shown and not dismissed:
+ * the one with the highest `priority` first, the earliest dispatch among equals. Returns `toasts`
+ * itself when nothing changes, so the Toaster's render-time update settles.
  */
 function promoteQueued(toasts: ToastEntry[], limit: number): ToastEntry[] {
   let active = 0;
-  let waiting = false;
+  const waiting: ToastEntry[] = [];
   for (const toast of toasts) {
-    if (!toast.shown) waiting = true;
+    if (!toast.shown) waiting.push(toast);
     else if (!toast.dismissed) active += 1;
   }
-  if (!waiting || active >= limit) return toasts;
-  return toasts.map((toast) => {
-    if (toast.shown || active >= limit) return toast;
-    active += 1;
-    return { ...toast, shown: true };
-  });
+  if (waiting.length === 0 || active >= limit) return toasts;
+  // Array.prototype.sort is stable, so equal priorities keep their order in the list.
+  const promoted = new Set(
+    waiting.sort((a, b) => b.priority - a.priority).slice(0, Math.max(0, limit - active)),
+  );
+  return toasts.map((toast) => (promoted.has(toast) ? { ...toast, shown: true } : toast));
+}
+
+/**
+ * Merges an update into the toast it names (`toasts` itself when there is none or it is
+ * dismissed): the options over its options, the `content` over a content toast's. An update that
+ * passes `timeout`, `pauseOnHover` or `pauseOnWindowBlur` restarts the timer through a new
+ * `timerSeq`; the announcement's `seq` stays.
+ */
+function mergeUpdate(toasts: ToastEntry[], update: ToastUpdate, timerSeq: number): ToastEntry[] {
+  const index = toasts.findIndex((toast) => toast.id === update.toastId);
+  if (index === -1 || toasts[index].dismissed) return toasts;
+  const toast = toasts[index];
+  const { toastId: _toastId, content, ...patch } = update;
+  const defined: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) if (value !== undefined) defined[key] = value;
+  const restartsTimer =
+    'timeout' in defined || 'pauseOnHover' in defined || 'pauseOnWindowBlur' in defined;
+  let merged: DispatchedToast;
+  if (toast.form === 'options') {
+    merged = { form: 'options', options: { ...toast.options, ...defined } };
+  } else {
+    const { title: _title, body: _body, ...options } = defined as Partial<ToastOptions>;
+    merged = {
+      form: 'content',
+      content: content !== undefined ? content : toast.content,
+      options: { ...toast.options, ...options },
+    };
+  }
+  const next = toasts.slice();
+  next[index] = {
+    ...toast,
+    ...merged,
+    priority: resolvePriority(merged.options.priority),
+    timerSeq: restartsTimer ? timerSeq : toast.timerSeq,
+  };
+  return next;
 }
 
 /** Dismisses a shown toast (it exits) and drops a waiting one; `toasts` itself when nothing changes. */
@@ -233,6 +421,9 @@ const INERT_CONTROLLER: ToastController = {
     (isToastOptions(first) ? first.toastId : second?.toastId) ?? '',
   dismissToast: () => {},
   dismissAllToasts: () => {},
+  updateToast: () => {},
+  pauseToast: () => {},
+  playToast: () => {},
 };
 
 /** The C-CONTEXT message without the `[WaveUI] ` prefix, which `reportMissingContext` adds. */
@@ -288,26 +479,41 @@ interface RunningTimer {
   handle: ReturnType<typeof setTimeout> | null;
   remaining: number;
   startedAt: number;
+  /** Whether the pointer in the region pauses it (`pauseOnHover`). */
+  pauseOnHover: boolean;
+  /** Whether the window in the background pauses it (`pauseOnWindowBlur`). */
+  pauseOnWindowBlur: boolean;
+}
+
+/** What a dispatch decides about the pauses of its toast's timer (both on by default). */
+interface TimerPauseOptions {
+  pauseOnHover?: boolean;
+  pauseOnWindowBlur?: boolean;
 }
 
 /**
- * Auto-dismiss timers of one Toaster. A timer runs only while neither the pointer nor focus is in
- * the toast region (D14), the window is in the foreground and the Toaster is mounted; otherwise it
- * is suspended and keeps its remaining time. Every method is called from event handlers or
- * effects, never during render.
+ * Auto-dismiss timers of one Toaster. A timer runs only while focus is not in the toast region
+ * (D14), the pointer is not in it (unless the toast opted out with `pauseOnHover: false`), the
+ * window is in the foreground (unless it opted out with `pauseOnWindowBlur: false`), the toast
+ * is not paused by hand and the Toaster is mounted; otherwise it is suspended and keeps its
+ * remaining time. Every method is called from event handlers or effects, never during render.
  */
 interface ToastTimers {
   /**
-   * Starts the timer of the shown toast `id` for its dispatch `seq`, once: a call with the `seq`
-   * already started does nothing, a new `seq` (the toast was replaced) restarts it. A timeout that
-   * is not a positive finite number means none. A toast replaced while the region is paused stays
-   * paused.
+   * Starts the timer of the shown toast `id` for its timer sequence `seq`, once: a call with the
+   * `seq` already started does nothing, a new `seq` (the toast was replaced, or updated with a
+   * new timeout) restarts it. A timeout that is not a positive finite number means none. A toast
+   * replaced while the region is paused stays paused.
    */
-  start(id: string, seq: number, timeout: number): void;
-  /** Cancels the timer of `id`. */
+  start(id: string, seq: number, timeout: number, pauses?: TimerPauseOptions): void;
+  /** Cancels the timer of `id` and forgets its manual pause. */
   remove(id: string): void;
-  /** Cancels every timer; the region's pause is kept. */
+  /** Cancels every timer and manual pause; the region's pause is kept. */
   clear(): void;
+  /** Pauses the timer of `id` by hand, until {@link ToastTimers.play}. */
+  pause(id: string): void;
+  /** Ends the manual pause of `id`. */
+  play(id: string): void;
   /** `true` while the pointer (`'hover'`) or focus (`'focus'`) is in the toast region. */
   setPaused(reason: PauseReason, paused: boolean): void;
   /** Whether the region is paused for `reason`. */
@@ -320,9 +526,11 @@ interface ToastTimers {
 
 function createToastTimers(onExpire: (id: string) => void): ToastTimers {
   const timers = new Map<string, RunningTimer>();
-  /** Why the region pauses every timer. */
+  /** Why the region pauses its timers. */
   const pauses = new Set<PauseReason>();
-  /** The dispatch (`seq`) whose timer was started last, per toast. */
+  /** The toasts paused by hand. */
+  const manual = new Set<string>();
+  /** The timer sequence that was started last, per toast. */
   const started = new Map<string, number>();
   let inBackground = false;
   let suspended = false;
@@ -330,7 +538,12 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
   const sync = (id: string) => {
     const timer = timers.get(id);
     if (!timer) return;
-    const canRun = !suspended && !inBackground && pauses.size === 0;
+    const canRun =
+      !suspended &&
+      !(inBackground && timer.pauseOnWindowBlur) &&
+      !pauses.has('focus') &&
+      !(pauses.has('hover') && timer.pauseOnHover) &&
+      !manual.has(id);
     if (canRun && timer.handle === null) {
       timer.startedAt = Date.now();
       timer.handle = setTimeout(() => {
@@ -354,21 +567,37 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
   };
 
   return {
-    start(id, seq, timeout) {
+    start(id, seq, timeout, options) {
       if (started.get(id) === seq) return;
       started.set(id, seq);
       stop(id);
       if (!(timeout > 0) || !Number.isFinite(timeout)) return;
-      timers.set(id, { handle: null, remaining: timeout, startedAt: 0 });
+      timers.set(id, {
+        handle: null,
+        remaining: timeout,
+        startedAt: 0,
+        pauseOnHover: options?.pauseOnHover !== false,
+        pauseOnWindowBlur: options?.pauseOnWindowBlur !== false,
+      });
       sync(id);
     },
     remove(id) {
       stop(id);
       started.delete(id);
+      manual.delete(id);
     },
     clear() {
       for (const id of Array.from(timers.keys())) stop(id);
       started.clear();
+      manual.clear();
+    },
+    pause(id) {
+      manual.add(id);
+      sync(id);
+    },
+    play(id) {
+      manual.delete(id);
+      sync(id);
     },
     isPaused(reason) {
       return pauses.has(reason);
@@ -394,10 +623,13 @@ function createToastTimers(onExpire: (id: string) => void): ToastTimers {
 /* ------------------------------------------------------------------ */
 
 /**
- * Corner of the viewport a {@link Toaster} shows its toasts in (`ToasterProps.position`).
- * `start`/`end` follow the writing direction; `left`/`right` are physical.
+ * Place of the viewport a {@link Toaster} shows its toasts in (`ToasterProps.position`): a corner,
+ * or, with `top` and `bottom`, the middle of an edge. `start`/`end` follow the writing direction;
+ * `left`/`right` are physical.
  */
 export type ToastPosition =
+  | 'top'
+  | 'bottom'
   | 'top-start'
   | 'top-end'
   | 'bottom-start'
@@ -434,6 +666,34 @@ export interface ToasterProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default Infinity
    */
   limit?: number;
+  /**
+   * How far the toasts sit from the window edges, in pixels: a number for both axes, or
+   * `{ horizontal, vertical }` (the horizontal distance is from the side the position names and
+   * is ignored for the centered `top` and `bottom`). A toast that moves aside for an open Drawer
+   * keeps this distance from it. A value that is not a finite number of 0 or more counts as 16.
+   * Fluent's `offset` (`{ horizontal, vertical }`).
+   * @default 16
+   */
+  offset?: ToasterOffset;
+  /**
+   * Renders the toast region where the Toaster is, instead of in a portal on `document.body`: for
+   * a Shadow DOM or an isolated subtree whose stacking and theme classes the portal would leave.
+   * The region keeps `position: fixed` (a containing block such as a `transform` positions it
+   * inside that element) and the toast layer's z-index. While a modal opens, the page
+   * behind it is made inert: an inline region inside that page is then not reachable, so place
+   * the Toaster beside the app, not inside it, when toasts must stay usable over a Dialog.
+   * Fluent's `inline`.
+   * @default false
+   */
+  inline?: boolean;
+  /**
+   * Replaces the Toaster's live regions: it is called once for each toast that is shown (and again
+   * when its text changes, or the toast is dispatched again), with the text the toast's live region
+   * would have read and its politeness, so the app can send it through its own announcer
+   * (`useAnnounce`'s `announce`, an `ariaNotify` call). Given, the Toaster's two live regions stay
+   * mounted and empty. Not called for a toast that is dismissed. Fluent's `announce`.
+   */
+  announce?: (announcement: ToastAnnouncement) => void;
   /** Keyboard shortcuts; Escape, Delete and Backspace need none (see the component docs). */
   shortcuts?: ToasterShortcuts;
   /**
@@ -507,6 +767,10 @@ const TOAST_PART_LOCKS = {
  * non-modal panel covers that side or that edge (see {@link getPanelOffsets}); unset, each is `0`.
  */
 const positionClasses: Record<ToastPosition, string> = {
+  // Centered: both insets and the fixed width, with auto margins on the inline axis. Only the block
+  // margin follows a panel (a panel at the bottom or top edge), never the inline one.
+  top: 'wave:top-4 wave:inset-x-0 wave:mx-auto wave:mt-(--wave-toaster-offset-block)',
+  bottom: 'wave:bottom-4 wave:inset-x-0 wave:mx-auto wave:mb-(--wave-toaster-offset-block)',
   'top-start':
     'wave:top-4 wave:start-4 wave:ms-(--wave-toaster-offset) wave:mt-(--wave-toaster-offset-block)',
   'top-end':
@@ -527,6 +791,57 @@ const positionClasses: Record<ToastPosition, string> = {
 
 /** The toasts' distance from the window edges (`*-4`), also the tolerance for "at the edge". */
 const EDGE_GAP = 16;
+
+/**
+ * The distance of the toasts from the window edges in pixels: one number for both axes, or
+ * `horizontal` (from the side, ignored for a centered position) and `vertical` (from the top or
+ * bottom edge). A value that is not a finite number of 0 or more counts as the default, 16.
+ */
+export type ToasterOffset = number | { horizontal?: number; vertical?: number };
+
+/** One axis of a {@link ToasterOffset} as pixels, or `undefined` for the default distance. */
+function offsetPixels(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+/** The two distances of an `offset` prop; `undefined` where the default applies. */
+function resolveOffset(offset: ToasterOffset | undefined): {
+  horizontal: number | undefined;
+  vertical: number | undefined;
+} {
+  if (typeof offset === 'number') {
+    return { horizontal: offsetPixels(offset), vertical: offsetPixels(offset) };
+  }
+  return { horizontal: offsetPixels(offset?.horizontal), vertical: offsetPixels(offset?.vertical) };
+}
+
+/** Whether `position` is centered on its edge (`top` or `bottom`). */
+function isCentered(position: ToastPosition): boolean {
+  return position === 'top' || position === 'bottom';
+}
+
+/**
+ * Inline style that moves a region to its custom `offset`: the edge properties of `position` at
+ * the given pixels, over the classes' 16px. `undefined` when no distance is custom.
+ */
+function offsetStyle(
+  position: ToastPosition,
+  offset: { horizontal: number | undefined; vertical: number | undefined },
+): React.CSSProperties | undefined {
+  const style: React.CSSProperties = {};
+  if (offset.vertical !== undefined) {
+    if (position.startsWith('top')) style.top = offset.vertical;
+    else style.bottom = offset.vertical;
+  }
+  if (offset.horizontal !== undefined && !isCentered(position)) {
+    const side = position.slice(position.indexOf('-') + 1);
+    if (side === 'start') style.insetInlineStart = offset.horizontal;
+    else if (side === 'end') style.insetInlineEnd = offset.horizontal;
+    else if (side === 'left') style.left = offset.horizontal;
+    else style.right = offset.horizontal;
+  }
+  return Object.keys(style).length > 0 ? style : undefined;
+}
 
 /** Whether the toasts sit at the right edge of the window (`end` is the right in LTR). */
 function isOnRightSide(position: ToastPosition, viewport: HTMLElement): boolean {
@@ -573,36 +888,52 @@ function getPanelElements(): Set<HTMLElement> {
  * they keep their corner. Each axis takes the largest offset of its panels, so a side panel and a
  * bottom panel open together move the toasts on both axes; an axis without room keeps `0`.
  */
-function getPanelOffsets(viewport: HTMLElement, position: ToastPosition): PanelOffsets {
+function getPanelOffsets(
+  viewport: HTMLElement,
+  position: ToastPosition,
+  gaps: { horizontal: number; vertical: number },
+  extraPanels: ReadonlySet<HTMLElement>,
+): PanelOffsets {
   const panels = getPanelLayers();
-  if (panels.length === 0) return NO_PANEL_OFFSETS;
+  if (panels.length === 0 && extraPanels.size === 0) return NO_PANEL_OFFSETS;
   const doc = viewport.ownerDocument;
   const view = doc.defaultView;
   if (!view) return NO_PANEL_OFFSETS;
   // The box fixed elements are placed in: the window without its scrollbars.
   const width = doc.documentElement.clientWidth || view.innerWidth;
   const height = doc.documentElement.clientHeight || view.innerHeight;
-  const right = isOnRightSide(position, viewport);
+  const centered = isCentered(position);
+  const right = centered ? false : isOnRightSide(position, viewport);
   const top = position.startsWith('top');
   // Whether the toasts fit in what an offset leaves of the window's width or height.
-  const fitsInline = (offset: number) => width - offset >= viewport.offsetWidth + 2 * EDGE_GAP;
-  const fitsBlock = (offset: number) => height - offset >= viewport.offsetHeight + 2 * EDGE_GAP;
+  const fitsInline = (offset: number) =>
+    width - offset >= viewport.offsetWidth + 2 * gaps.horizontal;
+  const fitsBlock = (offset: number) =>
+    height - offset >= viewport.offsetHeight + 2 * gaps.vertical;
 
   let inline = 0;
   let block = 0;
-  for (const layer of panels) {
-    for (const el of layer.getElements()) {
-      if (!el?.isConnected) continue;
-      const box = el.getBoundingClientRect();
-      if (box.width <= 0 || box.height <= 0) continue;
-      const onSide = right ? box.right >= width - EDGE_GAP : box.left <= EDGE_GAP;
-      const onEdge = top ? box.top <= EDGE_GAP : box.bottom >= height - EDGE_GAP;
-      if (!onSide || !onEdge) continue;
-      const inlineOffset = right ? width - box.left : box.right;
-      const blockOffset = top ? box.bottom : height - box.top;
-      if (fitsInline(inlineOffset)) inline = Math.max(inline, inlineOffset);
-      else if (fitsBlock(blockOffset)) block = Math.max(block, blockOffset);
+  const elements = [...panels.flatMap((layer) => layer.getElements()), ...extraPanels];
+  for (const el of elements) {
+    if (!el?.isConnected) continue;
+    const box = el.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) continue;
+    // A centered position has no side: a panel counts when it covers the middle of the window.
+    const onSide = centered
+      ? box.left <= width / 2 && box.right >= width / 2
+      : right
+        ? box.right >= width - EDGE_GAP
+        : box.left <= EDGE_GAP;
+    const onEdge = top ? box.top <= EDGE_GAP : box.bottom >= height - EDGE_GAP;
+    if (!onSide || !onEdge) continue;
+    const blockOffset = top ? box.bottom : height - box.top;
+    if (centered) {
+      if (fitsBlock(blockOffset)) block = Math.max(block, blockOffset);
+      continue;
     }
+    const inlineOffset = right ? width - box.left : box.right;
+    if (fitsInline(inlineOffset)) inline = Math.max(inline, inlineOffset);
+    else if (fitsBlock(blockOffset)) block = Math.max(block, blockOffset);
   }
   return {
     inline: inline > 0 && fitsInline(inline) ? Math.ceil(inline) : 0,
@@ -622,8 +953,8 @@ interface Announcement {
   /** The dispatch it belongs to: a replacement (a new `seq`) is announced again. */
   seq: number;
   text: string;
-  /** `error` toasts are announced assertively, every other status politely. */
-  assertive: boolean;
+  /** The toast's own `politeness`, else `assertive` for `error` toasts and `polite` for the rest. */
+  politeness: Politeness;
 }
 
 /**
@@ -645,7 +976,7 @@ LiveMessage.displayName = 'LiveMessage';
 interface ToastContainerProps {
   entry: ToastEntry;
   timers: ToastTimers;
-  onDismiss: (id: string) => void;
+  onDismiss: (id: string, reason: ToastDismissReason) => void;
   onExited: (id: string) => void;
   getFocusFallback: (from: HTMLElement | null) => HTMLElement | null;
   announce: (id: string, announcement: Announcement) => void;
@@ -920,7 +1251,7 @@ function ToastContainer({
   // `Toast.Close` and the Dismiss button: the Toast's `onDismiss`, then the dismissal (D9, D11).
   const dismiss = useEventCallback(() => {
     toastRef.current?.onDismiss?.();
-    onDismiss(id);
+    onDismiss(id, 'close');
   });
   const context = React.useMemo<ToastContextValue>(
     () => ({ titleId, dismiss, registerPart, registerToast }),
@@ -944,7 +1275,7 @@ function ToastContainer({
     if (entry.dismissed || !node) return;
     const timeout =
       entry.options.timeout ?? (hasAction(node, toastRef.current) ? 0 : DEFAULT_TIMEOUT);
-    timers.start(entry.id, entry.seq, timeout);
+    timers.start(entry.id, entry.timerSeq, timeout, entry.options);
   }, [entry, timers]);
 
   // What screen readers hear (D13), once per dispatch after the content has mounted: the severity
@@ -966,7 +1297,12 @@ function ToastContainer({
     announce(entry.id, {
       seq: entry.seq,
       text: [label, text].filter(Boolean).join(' '),
-      assertive: status === 'error',
+      politeness:
+        entry.options.politeness === 'assertive' || entry.options.politeness === 'polite'
+          ? entry.options.politeness
+          : status === 'error'
+            ? 'assertive'
+            : 'polite',
     });
   }, [entry, announce, ownStatusTextId, toast]);
 
@@ -997,7 +1333,7 @@ function ToastContainer({
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     if (event.defaultPrevented || !isOwnEvent(event) || isEditableTarget(event.target)) return;
     event.preventDefault();
-    onDismiss(id);
+    onDismiss(id, 'keyboard');
   };
 
   if (!isMounted) return null;
@@ -1041,6 +1377,8 @@ function ToastContainer({
               statusLabel={entry.options.statusLabel}
               title={entry.options.title}
               dismissLabel={entry.options.dismissLabel}
+              appearance={entry.options.appearance}
+              showDismissButton={entry.options.showDismissButton}
             >
               {entry.options.body}
             </ToastRoot>
@@ -1076,10 +1414,22 @@ ToastContainer.displayName = 'ToastContainer';
  *   those, the dispatch's `announcement`.
  *   The toasts themselves are not live regions. Each message stays in its live region for 2
  *   seconds (or until its toast goes), so browsing the region later meets the text only once.
+ *   A toast's `politeness` overrides the status default, and the `announce` prop sends every
+ *   message to your own announcer instead of these regions.
+ * - **Where:** `position` is a corner or, with `top` and `bottom`, the middle of an edge;
+ *   `offset` sets the distance from the edges in pixels; a toast dispatched with its own
+ *   `position` stacks there, in the same region. `inline` renders the region where the Toaster is
+ *   instead of in a portal.
+ * - **Dispatch options:** `politeness`, `position`, `priority` (the order the toasts that wait
+ *   beyond `limit` appear in), `pauseOnHover`, `pauseOnWindowBlur` (both on by default, and focus
+ *   in the region always pauses) and `onStatusChange` (`queued`, `visible`, `dismissed`,
+ *   `unmounted`, with the reason of a dismissal). The controller also has `updateToast` (merge
+ *   new options or content into a toast), `pauseToast` and `playToast`.
  * - While an open panel covers the toasts' corner (a modal or non-modal Drawer on the same side,
  *   or at the bottom), the toasts move beside it, or above a bottom one (below it for top toasts),
- *   so they never hide its focused controls (WCAG 2.4.11). Without room there (a full-width panel
- *   on a narrow screen) they keep their corner.
+ *   so they never hide its focused controls (WCAG 2.4.11), and they stay there while the panel
+ *   slides out. Without room there (a full-width panel on a narrow screen) they keep their
+ *   corner. Toasts with a `position` of their own do not move aside.
  * - Timers pause while the pointer or focus is anywhere in the toast region, a menu or popover
  *   opened from a toast included (someone reading or operating one toast is reading the stack),
  *   and while the window is in the background (it has lost focus, or the page is not shown, as in
@@ -1106,8 +1456,11 @@ ToastContainer.displayName = 'ToastContainer';
  * </Toaster>
  */
 export const Toaster = ({
-  position = 'bottom-end',
+  position: positionProp = 'bottom-end',
   limit: limitProp,
+  offset,
+  inline = false,
+  announce: announceProp,
   shortcuts,
   toaster: handle,
   motion,
@@ -1124,20 +1477,30 @@ export const Toaster = ({
   ref,
   ...rest
 }: ToasterProps) => {
+  const appClassName = useAppClassName(toasterClassNames.root);
+
+  // A position outside the union (untyped code) is the default.
+  const position: ToastPosition = Object.hasOwn(positionClasses, positionProp)
+    ? positionProp
+    : 'bottom-end';
   const [toasts, setToasts] = React.useState<ToastEntry[]>([]);
   // Each toast's message, written by its container after the toast mounts (a layout effect), so
   // the severity is the rendered Toast's and the text what the toast renders.
   const [announcements, setAnnouncements] = React.useState<ReadonlyMap<string, Announcement>>(
     () => new Map(),
   );
-  const announce = React.useCallback((id: string, announcement: Announcement) => {
+  // The app's own announcer (`announce`) is called once per message: what it was last given.
+  const customAnnounce = useEventCallback(announceProp);
+  const hasCustomAnnounce = announceProp !== undefined;
+  const handedOverRef = React.useRef(new Map<string, Announcement>());
+  const announce = useEventCallback((id: string, announcement: Announcement) => {
     setAnnouncements((prev) => {
       const current = prev.get(id);
       if (
         current &&
         current.seq === announcement.seq &&
         current.text === announcement.text &&
-        current.assertive === announcement.assertive
+        current.politeness === announcement.politeness
       ) {
         return prev;
       }
@@ -1145,19 +1508,87 @@ export const Toaster = ({
       next.set(id, announcement);
       return next;
     });
-  }, []);
+    const handedOver = handedOverRef.current.get(id);
+    if (
+      announceProp === undefined ||
+      !announcement.text ||
+      (handedOver &&
+        handedOver.seq === announcement.seq &&
+        handedOver.text === announcement.text &&
+        handedOver.politeness === announcement.politeness)
+    ) {
+      return;
+    }
+    handedOverRef.current.set(id, announcement);
+    customAnnounce({
+      toastId: id,
+      message: announcement.text,
+      politeness: announcement.politeness,
+    });
+  });
   const limit = resolveLimit(limitProp);
-  // Every container's motion, which slides from the edge of the stack the position names (D14).
-  const motionClassName = useMotionClasses(
-    motion,
-    toastMotion[position.startsWith('top') ? 'top' : 'bottom'],
-  );
+  // The distances of the toasts from the window edges, and the position of the toasts that use the
+  // Toaster's own (D14: every container's motion slides from the edge its stack sits on).
+  const offsets = resolveOffset(offset);
+  const horizontalGap = offsets.horizontal ?? EDGE_GAP;
+  const verticalGap = offsets.vertical ?? EDGE_GAP;
+  const topMotionClassName = useMotionClasses(motion, toastMotion.top);
+  const bottomMotionClassName = useMotionClasses(motion, toastMotion.bottom);
   // Waiting toasts are shown here, during render, with the current limit (adjust state while
   // rendering, C-HOOKS): every path that frees a place or raises the limit promotes them, and a
   // lowered limit never hides a shown toast. `promoteQueued` returns the same array once settled.
   const settled = promoteQueued(toasts, limit);
   if (settled !== toasts) setToasts(settled);
   const shownToasts = settled.filter((toast) => toast.shown);
+  // The latest entries, for the callbacks and listeners that must not close over a render's.
+  const toastsRef = React.useRef<ToastEntry[]>(settled);
+  React.useLayoutEffect(() => {
+    toastsRef.current = settled;
+  });
+
+  // Why each toast was dismissed, for `onStatusChange`: written where the dismissal is requested.
+  const reasonsRef = React.useRef(new Map<string, ToastDismissReason>());
+  // `onStatusChange` (D-lifecycle): after each commit, every toast whose status differs from the one
+  // last reported is reported (`queued`, `visible`, `dismissed`), and so is one that left the list
+  // (`unmounted`, after a `dismissed` it never had a place to show). The record outlives StrictMode's
+  // simulated remount, so nothing is reported twice.
+  const reportedRef = React.useRef(
+    new Map<string, { status: ToastStatus; handler: ToastStatusChangeHandler | undefined }>(),
+  );
+  React.useEffect(() => {
+    const reported = reportedRef.current;
+    const report = (
+      id: string,
+      status: ToastStatus,
+      handler: ToastStatusChangeHandler | undefined,
+    ) => {
+      handler?.(status, {
+        toastId: id,
+        reason: status === 'dismissed' ? reasonsRef.current.get(id) : undefined,
+      });
+    };
+    const present = new Set<string>();
+    for (const toast of settled) {
+      present.add(toast.id);
+      const status: ToastStatus = !toast.shown
+        ? 'queued'
+        : toast.dismissed
+          ? 'dismissed'
+          : 'visible';
+      const handler = toast.options.onStatusChange;
+      const previous = reported.get(toast.id);
+      reported.set(toast.id, { status, handler });
+      if (previous?.status !== status) report(toast.id, status, handler);
+    }
+    for (const [id, record] of Array.from(reported)) {
+      if (present.has(id)) continue;
+      reported.delete(id);
+      if (record.status !== 'dismissed') report(id, 'dismissed', record.handler);
+      report(id, 'unmounted', record.handler);
+      reasonsRef.current.delete(id);
+      handedOverRef.current.delete(id);
+    }
+  }, [settled]);
 
   // Development diagnostics (C-DEV): emitted from an effect, once per page.
   React.useEffect(() => {
@@ -1190,16 +1621,32 @@ export const Toaster = ({
     let mutationObserver: MutationObserver | null = null;
     let observed: HTMLElement | null = null;
     let observedPanels = new Set<HTMLElement>();
+    // A panel whose layer has closed but that still slides out (a Drawer's exit): the toasts keep
+    // clear of it until it is gone, instead of moving back over it as the exit starts.
+    let exiting = new Set<HTMLElement>();
+    let exitFrame = 0;
     const observePanels = () => {
       const panels = getPanelElements();
-      for (const el of observedPanels) if (!panels.has(el)) observer?.unobserve(el);
-      for (const el of panels) if (!observedPanels.has(el)) observer?.observe(el);
+      exiting = new Set(
+        [...observedPanels].filter(
+          (el) =>
+            !panels.has(el) && el.isConnected && el.getAttribute('data-presence') === 'exiting',
+        ),
+      );
+      // The exiting panels stay observed, so the end of their exit measures again.
+      const next = new Set([...panels, ...exiting]);
+      for (const el of observedPanels) if (!next.has(el)) observer?.unobserve(el);
+      for (const el of next) if (!observedPanels.has(el)) observer?.observe(el);
       const changed =
-        panels.size !== observedPanels.size || [...panels].some((el) => !observedPanels.has(el));
-      observedPanels = panels;
+        next.size !== observedPanels.size || [...next].some((el) => !observedPanels.has(el));
+      observedPanels = next;
+      // An exit that ends without an animation event (none ran, or reduced motion) is found by
+      // looking again on the next frame while any panel still exits.
+      cancelAnimationFrame(exitFrame);
+      if (exiting.size > 0) exitFrame = requestAnimationFrame(() => update());
       if (!changed || !mutationObserver) return;
       mutationObserver.disconnect();
-      for (const el of panels) {
+      for (const el of next) {
         mutationObserver.observe(el, { attributes: true, attributeFilter: ['class', 'style'] });
       }
     };
@@ -1211,7 +1658,14 @@ export const Toaster = ({
         observed = viewport;
       }
       observePanels();
-      const next = viewport ? getPanelOffsets(viewport, position) : NO_PANEL_OFFSETS;
+      const next = viewport
+        ? getPanelOffsets(
+            viewport,
+            position,
+            { horizontal: horizontalGap, vertical: verticalGap },
+            exiting,
+          )
+        : NO_PANEL_OFFSETS;
       setPanelOffsets((current) =>
         current.inline === next.inline && current.block === next.block ? current : next,
       );
@@ -1224,6 +1678,7 @@ export const Toaster = ({
     document.addEventListener('transitionend', update, true);
     document.addEventListener('animationend', update, true);
     return () => {
+      cancelAnimationFrame(exitFrame);
       unsubscribe();
       observer?.disconnect();
       mutationObserver?.disconnect();
@@ -1231,11 +1686,13 @@ export const Toaster = ({
       document.removeEventListener('transitionend', update, true);
       document.removeEventListener('animationend', update, true);
     };
-  }, [position, dir]);
+  }, [position, dir, horizontalGap, verticalGap]);
 
-  const [timers] = React.useState(() =>
-    createToastTimers((id) => setToasts((prev) => markDismissed(prev, id))),
-  );
+  const expire = useEventCallback((id: string) => {
+    reasonsRef.current.set(id, 'timeout');
+    setToasts((prev) => markDismissed(prev, id));
+  });
+  const [timers] = React.useState(() => createToastTimers(expire));
 
   // Timers run only while mounted (StrictMode's simulated unmount suspends and resumes them) and
   // pause while the window is in the background: after the window loses focus, and while the page
@@ -1284,7 +1741,15 @@ export const Toaster = ({
       setToasts((prev) => {
         const index = prev.findIndex((t) => t.id === id);
         const shown = index === -1 ? false : prev[index].shown;
-        const entry: ToastEntry = { ...dispatched, id, seq, shown, dismissed: false };
+        const entry: ToastEntry = {
+          ...dispatched,
+          id,
+          seq,
+          timerSeq: seq,
+          priority: resolvePriority(dispatched.options.priority),
+          shown,
+          dismissed: false,
+        };
         if (index === -1) return [...prev, entry];
         const next = prev.slice();
         next[index] = entry;
@@ -1295,18 +1760,59 @@ export const Toaster = ({
     [prefix],
   );
 
-  const dismissToast = React.useCallback(
-    (id: string) => {
+  // A dismissal, with its reason for `onStatusChange`.
+  const requestDismiss = React.useCallback(
+    (id: string, reason: ToastDismissReason) => {
+      reasonsRef.current.set(id, reason);
       timers.remove(id);
       setToasts((prev) => markDismissed(prev, id));
     },
     [timers],
   );
+  const dismissToast = React.useCallback(
+    (id: string) => requestDismiss(id, 'controller'),
+    [requestDismiss],
+  );
 
-  const dismissAllToasts = React.useCallback(() => {
-    timers.clear();
-    setToasts((prev) => markAllDismissed(prev));
-  }, [timers]);
+  const requestDismissAll = React.useCallback(
+    (reason: ToastDismissReason) => {
+      for (const toast of toastsRef.current) reasonsRef.current.set(toast.id, reason);
+      timers.clear();
+      setToasts((prev) => markAllDismissed(prev));
+    },
+    [timers],
+  );
+  const dismissAllToasts = React.useCallback(
+    () => requestDismissAll('controller'),
+    [requestDismissAll],
+  );
+
+  // Merges the options (and content) of an update into the toast it names; a toast whose timeout
+  // or pause options change restarts its timer (a new `timerSeq`), and its text is announced
+  // again only if it changed (the container's announcement is keyed by it).
+  const updateToast = React.useCallback((update: ToastUpdate) => {
+    if (typeof update?.toastId !== 'string') return;
+    const current = toastsRef.current.find((toast) => toast.id === update.toastId);
+    if (current && !current.dismissed) {
+      if (current.form === 'options' && update.content !== undefined) {
+        warnOnce(
+          'Toaster:update-content',
+          'Toaster: `updateToast` was given `content` for a toast built from text options; it is ignored. Update `title` and `body` instead.',
+        );
+      }
+      if (current.form === 'content' && (update.title !== undefined || update.body !== undefined)) {
+        warnOnce(
+          'Toaster:update-text',
+          'Toaster: `updateToast` was given `title` or `body` for a toast dispatched with content; they are ignored. Update `content` instead.',
+        );
+      }
+    }
+    counterRef.current += 1;
+    const timerSeq = counterRef.current;
+    setToasts((prev) => mergeUpdate(prev, update, timerSeq));
+  }, []);
+  const pauseToast = React.useCallback((id: string) => timers.pause(id), [timers]);
+  const playToast = React.useCallback((id: string) => timers.play(id), [timers]);
 
   // The exit of a dismissed toast ended: remove it and its message (one revived meanwhile stays).
   const removeExited = React.useCallback((id: string) => {
@@ -1324,8 +1830,15 @@ export const Toaster = ({
   }, []);
 
   const controller = React.useMemo<ToastController>(
-    () => ({ dispatchToast, dismissToast, dismissAllToasts }),
-    [dispatchToast, dismissToast, dismissAllToasts],
+    () => ({
+      dispatchToast,
+      dismissToast,
+      dismissAllToasts,
+      updateToast,
+      pauseToast,
+      playToast,
+    }),
+    [dispatchToast, dismissToast, dismissAllToasts, updateToast, pauseToast, playToast],
   );
 
   // A handle from createToaster() (P3-08, D33): bound in a layout effect, so dispatches that waited
@@ -1358,10 +1871,7 @@ export const Toaster = ({
   const getFocusFallback = React.useCallback((from: HTMLElement | null): HTMLElement | null => {
     const viewport = viewportRef.current;
     const containers = viewport
-      ? Array.from(viewport.children).filter(
-          (el): el is HTMLElement =>
-            el instanceof HTMLElement && el.hasAttribute('data-wave-toast'),
-        )
+      ? Array.from(viewport.querySelectorAll<HTMLElement>('[data-wave-toast]'))
       : [];
     const onContainer = !!from && from.ownerDocument.activeElement === from;
     const index = from ? containers.indexOf(from) : -1;
@@ -1434,11 +1944,7 @@ export const Toaster = ({
     return () => document.removeEventListener('pointerover', handlePointerOver);
   }, [timers]);
 
-  // The latest entries and every container element, for the shortcut's document listener.
-  const toastsRef = React.useRef<ToastEntry[]>(settled);
-  React.useLayoutEffect(() => {
-    toastsRef.current = settled;
-  });
+  // Every container element, for the shortcut's document listener.
   const containersRef = React.useRef(new Map<string, HTMLElement>());
   const registerContainer = React.useCallback((id: string, node: HTMLElement | null) => {
     if (node) containersRef.current.set(id, node);
@@ -1523,7 +2029,7 @@ export const Toaster = ({
     const origin = previousFocusRef.current;
     previousFocusRef.current = null;
     if (origin?.isConnected) origin.focus({ preventScroll: true });
-    dismissAllToasts();
+    requestDismissAll('escape');
   };
 
   // Each shown toast's message for its first 2 s, while it is not dismissed (a waiting toast is
@@ -1534,13 +2040,27 @@ export const Toaster = ({
     if (toast.dismissed) continue;
     const announcement = announcements.get(toast.id);
     if (!announcement || announcement.seq !== toast.seq || !announcement.text) continue;
-    const message = <LiveMessage key={announcement.seq} text={announcement.text} />;
-    (announcement.assertive ? assertive : polite).push(message);
+    // The app's own announcer, when given, reads the message instead of the live regions.
+    if (hasCustomAnnounce) continue;
+    // Keyed by the text too, so a toast whose text changes (an update) is read again.
+    const message = (
+      <LiveMessage key={`${announcement.seq}:${announcement.text}`} text={announcement.text} />
+    );
+    (announcement.politeness === 'assertive' ? assertive : polite).push(message);
   }
 
+  // The region's inline style: its custom distances from the edges and, inline, the toast layer's
+  // z-index (a portal gives that), then yours, then the room an open panel takes. Unchanged
+  // (`style` itself) when none applies.
+  const ownStyle: React.CSSProperties | undefined = (() => {
+    const placement = offsetStyle(position, offsets);
+    if (!placement && !inline) return undefined;
+    return { ...placement, ...(inline && { zIndex: Z_INDEX.toast }) };
+  })();
   const viewportStyle =
-    panelOffsets.inline > 0 || panelOffsets.block > 0
+    panelOffsets.inline > 0 || panelOffsets.block > 0 || ownStyle
       ? ({
+          ...ownStyle,
           ...style,
           ...(panelOffsets.inline > 0 && { '--wave-toaster-offset': `${panelOffsets.inline}px` }),
           ...(panelOffsets.block > 0 && {
@@ -1549,10 +2069,45 @@ export const Toaster = ({
         } as React.CSSProperties)
       : style;
 
+  // The toasts that use the Toaster's own position sit in the region; those with a position of
+  // their own of another place are stacked in an element of that position inside it.
+  const positionOf = (toast: ToastEntry): ToastPosition => {
+    const own = toast.options.position;
+    return own !== undefined && Object.hasOwn(positionClasses, own) ? own : position;
+  };
+  const stacks = new Map<ToastPosition, ToastEntry[]>();
+  const regionToasts: ToastEntry[] = [];
+  for (const toast of shownToasts) {
+    const toastPosition = positionOf(toast);
+    if (toastPosition === position) {
+      regionToasts.push(toast);
+      continue;
+    }
+    const stack = stacks.get(toastPosition);
+    if (stack) stack.push(toast);
+    else stacks.set(toastPosition, [toast]);
+  }
+  const renderToast = (toast: ToastEntry) => (
+    <ToastContainer
+      key={toast.id}
+      entry={toast}
+      timers={timers}
+      onDismiss={requestDismiss}
+      onExited={removeExited}
+      getFocusFallback={getFocusFallback}
+      announce={announce}
+      registerContainer={registerContainer}
+      motionClassName={
+        positionOf(toast).startsWith('top') ? topMotionClassName : bottomMotionClassName
+      }
+      part={slotProps?.toast}
+    />
+  );
+
   return (
     <ToasterContext.Provider value={controller}>
       {children}
-      <Portal layer="toast">
+      <Portal layer="toast" disabled={inline}>
         <div
           ref={viewportRefs}
           role="region"
@@ -1595,6 +2150,7 @@ export const Toaster = ({
             toasterClassNames.root,
             'wave:fixed wave:flex wave:w-80 wave:max-w-[calc(100vw-2rem)] wave:flex-col wave:gap-2',
             positionClasses[position],
+            appClassName,
             className,
           )}
         >
@@ -1606,19 +2162,28 @@ export const Toaster = ({
             {assertive}
           </div>
           {/* Shown toasts, exiting ones included: getFocusFallback walks the containers in this order. */}
-          {shownToasts.map((toast) => (
-            <ToastContainer
-              key={toast.id}
-              entry={toast}
-              timers={timers}
-              onDismiss={dismissToast}
-              onExited={removeExited}
-              getFocusFallback={getFocusFallback}
-              announce={announce}
-              registerContainer={registerContainer}
-              motionClassName={motionClassName}
-              part={slotProps?.toast}
-            />
+          {regionToasts.map(renderToast)}
+          {/* The toasts that chose another position: one fixed stack for each, in the region so the
+              pause, focus and keyboard handling are shared. The panel room is the region's alone. */}
+          {Array.from(stacks, ([stackPosition, stacked]) => (
+            <div
+              key={stackPosition}
+              data-position={stackPosition}
+              className={wcn(
+                toasterClassNames.stack,
+                'wave:fixed wave:flex wave:w-80 wave:max-w-[calc(100vw-2rem)] wave:flex-col wave:gap-2',
+                positionClasses[stackPosition],
+              )}
+              style={
+                {
+                  '--wave-toaster-offset': '0px',
+                  '--wave-toaster-offset-block': '0px',
+                  ...offsetStyle(stackPosition, offsets),
+                } as React.CSSProperties
+              }
+            >
+              {stacked.map(renderToast)}
+            </div>
           ))}
         </div>
       </Portal>

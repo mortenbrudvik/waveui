@@ -217,7 +217,7 @@ describe('Tree', () => {
     );
     expect(item('Documents')).toHaveAttribute('aria-expanded', 'true');
     await user.click(screen.getByText('Images'));
-    expect(onExpandedItemsChange).toHaveBeenCalledWith(['docs', 'images']);
+    expect(onExpandedItemsChange).toHaveBeenCalledWith(['docs', 'images'], expect.anything());
     expect(Object.isFrozen(onExpandedItemsChange.mock.calls[0][0])).toBe(false);
     unmount();
     render(
@@ -808,11 +808,11 @@ describe('Tree - expanded state (overlays#25)', () => {
     );
     expect(screen.getByText('Work')).toBeInTheDocument();
     await user.click(screen.getByText('Images'));
-    expect(onExpandedItemsChange).toHaveBeenCalledWith(['docs', 'images']);
+    expect(onExpandedItemsChange).toHaveBeenCalledWith(['docs', 'images'], expect.anything());
     // The parent did not accept the change.
     expect(item('Images')).toHaveAttribute('aria-expanded', 'false');
     await user.click(screen.getByText('Documents'));
-    expect(onExpandedItemsChange).toHaveBeenLastCalledWith([]);
+    expect(onExpandedItemsChange).toHaveBeenLastCalledWith([], expect.anything());
   });
 
   it('controlled expandedItems follow the parent state', async () => {
@@ -840,7 +840,7 @@ describe('Tree - expanded state (overlays#25)', () => {
       </Tree>,
     );
     await user.click(screen.getByText('Images'));
-    expect(onExpandedItemsChange).toHaveBeenCalledWith(['images']);
+    expect(onExpandedItemsChange).toHaveBeenCalledWith(['images'], expect.anything());
     expect(screen.getByText('Photo.jpg')).toBeInTheDocument();
   });
 

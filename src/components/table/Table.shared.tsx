@@ -10,6 +10,7 @@ import type { SlotPart } from '../../lib/slotProps';
 import { focusRingInset } from '../../lib/styles';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { unwrapButtonGlyph } from '../button/Button.slots';
+import { TABLE_SIZE_CLASSES, useTableSize } from './Table.context';
 
 // ---------------------------------------------------------------------------
 // Part markers
@@ -271,6 +272,7 @@ export const TableSortButton = ({
   children,
   ...rest
 }: TableSortButtonProps) => {
+  const size = useTableSize();
   const { glyph, button } = unwrapButtonGlyph(sortIcon);
   React.useEffect(() => {
     if (button) {
@@ -304,6 +306,7 @@ export const TableSortButton = ({
   const classes = wcn(
     className,
     'wave:inline-flex wave:w-full wave:cursor-pointer wave:select-none wave:items-center wave:gap-1 wave:border-0 wave:bg-transparent wave:px-4 wave:py-3 wave:text-start wave:text-inherit wave:[font:inherit] wave:uppercase wave:tracking-wider',
+    TABLE_SIZE_CLASSES.sortButton[size],
     focusRingInset,
   );
   return (

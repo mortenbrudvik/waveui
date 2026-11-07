@@ -4,9 +4,10 @@ import { tagGroupClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { getFirstTabbable, isHiddenInput } from '../../lib/focus';
-import type { Orientation, TagAppearance, TagShape, TagSize } from '../../lib/types';
+import type { Orientation, SelectionMode, TagAppearance, TagShape, TagSize } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { TOOLBAR_ITEM_SELECTOR, useToolbarNavigation } from '../button/Toolbar.navigation';
@@ -19,6 +20,7 @@ import {
   TagGroupHostContext,
 } from './TagGroup.context';
 import type { TagGroupContextValue, TagGroupMode } from './TagGroup.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Props of {@link TagGroup}: the element that holds the tags (a `<div>`). */
 export interface TagGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'defaultValue'> {
@@ -56,6 +58,16 @@ export interface TagGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>
    * @default false
    */
   dismissible?: boolean;
+  /**
+   * How many InteractionTags a selecting group (`value`, `defaultValue` or `onValueChange`) keeps
+   * selected: `'multiple'`, each Primary toggles its own value, or `'single'`, a Primary selects
+   * its value and replaces the selected one (pressing the selected tag again deselects it, as a
+   * List's single selection). `onValueChange` then receives an array of at most one value. Naming
+   * follows List's `selectionMode`; Fluent's TagGroup has no single selection. A `value` with
+   * several values in `'single'` mode warns in development and shows them all as selected.
+   * @default 'multiple'
+   */
+  selectionMode?: SelectionMode;
   /**
    * Called with the tag's `value` on every dismissal: a click, Enter or Space on a Dismiss
    * button, or Delete or Backspace on a tag (Fluent's `onDismiss(event, { value })`). Remove the
@@ -112,6 +124,9 @@ const KNOWN_SHAPES: ReadonlySet<string> = new Set(['circular', 'rounded']);
 function duplicateValueMessage(value: string): string {
   return `TagGroup: several tags share the value "${value}". Give every tag of a group its own \`value\`: \`onDismiss\` and the selection cannot tell them apart.`;
 }
+
+const SINGLE_SEVERAL_MESSAGE =
+  'TagGroup: a group with selectionMode="single" received several selected values. Pass one value, or use selectionMode="multiple".';
 
 const LISTBOX_ROLE_MESSAGE =
   'TagGroup: `role="listbox"` is not supported (an option cannot hold a Dismiss button); the group keeps the toolbar keyboard. Use InteractionTags in the default toolbar for selectable tags, or Listbox for a list of values.';
@@ -206,6 +221,13 @@ function hasToolbarControl(root: HTMLElement): boolean {
  *   and values without a tag are kept. Dismissing a selected InteractionTag calls `onDismiss`
  *   and then `onValueChange` without its value. Plain Tags are never selected; selection is
  *   multiple only (RadioGroup or `Toolbar.RadioGroup` for a single choice).
+ * - **Single selection**: `selectionMode="single"` keeps at most one value selected: a Primary
+ *   selects its tag and deselects the previous one, and pressing the selected one deselects it.
+ * - **Field**: inside a `Field` the group takes the Field's `id` and is labelled by its label and
+ *   described by its hint and validation message (a toolbar is no labelable element, so the label
+ *   names it through `aria-labelledby`); `required` falls back to the Field's. A toolbar has no
+ *   `aria-invalid` or `aria-required`: the Field's validation message is what a screen reader
+ *   reads.
  * - **Forms**: a selecting group with `name` submits one entry per selected value, also from
  *   outside its form with `form`; `required` blocks the submission of an empty selection and
  *   moves focus to the group's Tab stop (native validation only, no `aria-required`); a form
@@ -252,6 +274,7 @@ export const TagGroup = ({
   shape: shapeProp = DEFAULT_SHAPE,
   disabled = false,
   dismissible = false,
+  selectionMode = 'multiple',
   onDismiss,
   fallbackFocusRef,
   value: valueProp,
@@ -259,7 +282,11 @@ export const TagGroup = ({
   onValueChange,
   name,
   form,
-  required = false,
+  required: requiredProp,
+  id,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
+  'aria-describedby': ariaDescribedBy,
   className,
   onKeyDown,
   onFocus,
@@ -269,6 +296,8 @@ export const TagGroup = ({
   children,
   ...rest
 }: TagGroupProps) => {
+  const appClassName = useAppClassName(tagGroupClassNames.root);
+
   const role = roleProp ?? 'toolbar';
   const mode: TagGroupMode = role === 'list' ? 'list' : 'toolbar';
   const isToolbar = mode === 'toolbar';
@@ -309,10 +338,48 @@ export const TagGroup = ({
     (value: string) => selecting && selectedValues.has(value),
     [selecting, selectedValues],
   );
+  const single = selectionMode === 'single';
   const toggle = useEventCallback((value: string) => {
     if (!selecting || disabled) return;
-    setValues((current) => toggleValue(current, value).values);
+    setValues((current) =>
+      single
+        ? current.length === 1 && current[0] === value
+          ? EMPTY_VALUES
+          : [value]
+        : toggleValue(current, value).values,
+    );
   });
+  const severalSelected = single && selecting && values.length > 1;
+  React.useEffect(() => {
+    if (severalSelected) warnOnce('TagGroup:single-several-selected', SINGLE_SEVERAL_MESSAGE);
+  }, [severalSelected]);
+
+  // The Field's wiring (C-ROUTING): the label cannot reach a `<div>` through `htmlFor`, so the
+  // group is named by `aria-labelledby`, and described by the Field's hint and message. A toolbar
+  // or a list takes no `aria-invalid` or `aria-required`, so those two are left out.
+  const field = useFieldContext();
+  // A group a host component renders (TagPicker's tags) is no control of the Field: the host's
+  // combobox is, and keeps the Field's id and description. An `id` given to the hook keeps it from
+  // claiming the Field's control id, and the group uses its own props as they are.
+  const hosted = host !== null;
+  const wired = useFieldControl(
+    {
+      id: hosted ? (id ?? '') : id,
+      'aria-label': ariaLabel,
+      'aria-labelledby': ariaLabelledBy,
+      'aria-describedby': ariaDescribedBy,
+    },
+    { labelable: false },
+  );
+  const fieldProps = hosted
+    ? {
+        id,
+        'aria-label': ariaLabel,
+        'aria-labelledby': ariaLabelledBy,
+        'aria-describedby': ariaDescribedBy,
+      }
+    : wired;
+  const required = requiredProp ?? field?.required ?? false;
   // A dismissed InteractionTag leaves the selection (D39); a value that is not selected changes
   // nothing (the same array is no change, so `onValueChange` is not called).
   const deselect = useEventCallback((value: string) => {
@@ -417,6 +484,10 @@ export const TagGroup = ({
           data-disabled={disabled ? '' : undefined}
           data-wave-tag-group=""
           {...rest}
+          id={fieldProps.id}
+          aria-label={fieldProps['aria-label']}
+          aria-labelledby={fieldProps['aria-labelledby']}
+          aria-describedby={fieldProps['aria-describedby']}
           ref={mergedRef}
           role={role}
           // `aria-orientation` is allowed on a toolbar, not on a list (axe `aria-allowed-attr`);
@@ -439,6 +510,7 @@ export const TagGroup = ({
             'wave:relative wave:inline-flex wave:flex-wrap wave:items-center',
             tagGroupGapClasses[size],
             orientation === 'vertical' && 'wave:flex-col wave:items-start',
+            appClassName,
             className,
           )}
         >

@@ -111,7 +111,7 @@ describe('Menu openOnContext', () => {
     );
     expect(fileMenu()).toBeInTheDocument();
     expect(item('Open')).toHaveFocus();
-    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
     await waitFor(() => expect(translateOf(fileMenu())).toEqual({ x: 100, y: 204 }));
     expect(fileMenu()).toHaveAttribute('data-side', 'bottom');
   });
@@ -160,18 +160,18 @@ describe('Menu openOnContext', () => {
       act(() => row('draft.md').focus());
       await act(async () => {});
       expect(fileMenu()).toBe(surface);
-      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
 
       fireEvent.contextMenu(row('draft.md'), point);
       expect(fileMenu()).toBe(surface);
       expect(item('Open')).toHaveFocus();
       await waitFor(() => expect(translateOf(fileMenu())).toEqual({ x: 150, y: 304 }));
-      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
       // Focus returns to the row of the second gesture.
       await user.keyboard('{Escape}');
       expect(queryFileMenu()).not.toBeInTheDocument();
       expect(row('draft.md')).toHaveFocus();
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     },
   );
 
@@ -360,7 +360,7 @@ describe('Menu openOnContext', () => {
       await user.click(row('notes.txt'));
       expect(queryFileMenu()).not.toBeInTheDocument();
       expect(row('notes.txt')).toHaveFocus();
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     });
 
     it('focus the app moves into the region closes it, also after a right click has ended', async () => {
@@ -878,5 +878,70 @@ describe('Menu.Popover target', () => {
       ],
     ]);
     warn.mockClear();
+  });
+});
+
+describe('Menu openOnContext: a long press where the browser fires no contextmenu (iOS Safari)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const touchDown = (name: string, clientX: number, clientY: number) =>
+    fireEvent.pointerDown(row(name), {
+      pointerType: 'touch',
+      pointerId: 3,
+      isPrimary: true,
+      clientX,
+      clientY,
+    });
+
+  it('a touch held for 600 ms opens the menu at the point and focuses its first item, reporting context-menu once', async () => {
+    const onOpenChange = vi.fn();
+    render(<FileList menu={{ onOpenChange }} />);
+    touchDown('notes.txt', 100, 200);
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+    await waitFor(() => expect(translateOf(fileMenu())).toEqual({ x: 100, y: 204 }));
+    expect(item('Open')).toHaveFocus();
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({ reason: 'context-menu' }),
+    );
+    // The contextmenu that other browsers add after a long press does not open it again.
+    fireEvent.contextMenu(row('notes.txt'), { clientX: 100, clientY: 200 });
+    await act(async () => {});
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(translateOf(fileMenu())).toEqual({ x: 100, y: 204 });
+  });
+
+  it('a touch released early opens nothing', async () => {
+    render(<FileList />);
+    touchDown('notes.txt', 100, 200);
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+    fireEvent.pointerUp(row('notes.txt'), { pointerType: 'touch', pointerId: 3 });
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(queryFileMenu()).not.toBeInTheDocument();
+  });
+
+  it('a mouse press held for as long opens nothing', async () => {
+    render(<FileList />);
+    fireEvent.pointerDown(row('notes.txt'), {
+      pointerType: 'mouse',
+      pointerId: 1,
+      isPrimary: true,
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(queryFileMenu()).not.toBeInTheDocument();
   });
 });

@@ -1283,11 +1283,11 @@ describe('AvatarGroup and AvatarGroup.Item — slotProps', () => {
   const ITEM =
     'wave-avatar-group__item wave:inline-flex wave:rounded-full wave:ring-2 wave:ring-background';
   const SURFACE =
-    'wave-avatar-group__surface wave:min-w-32 wave:max-w-xs wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-2 wave:text-body-1 wave:text-foreground wave:shadow-16 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring';
+    'wave-avatar-group__surface wave:min-w-32 wave:max-w-xs wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-2 wave:text-body-1 wave:text-foreground wave:shadow-16 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1';
   const OPEN_PINS = [
     `<span class="${ITEM}">`,
     `<span class="${ITEM} wave:-ms-2">`,
-    `<div aria-label="2 more" class="${SURFACE}" data-align="start" data-side="bottom" data-state="open" id="avatar-group-overflow-_id0_" role="dialog" tabindex="-1">`,
+    `<div aria-label="2 more" class="${SURFACE}" data-align="start" data-presence="entered" data-side="bottom" data-state="open" id="avatar-group-overflow-_id0_" role="dialog" tabindex="-1">`,
     '<ul class="wave-avatar-group__list wave:m-0 wave:flex wave:list-none wave:flex-col wave:gap-1 wave:p-0">',
     '<li class="wave-avatar-group__list-item wave:px-1 wave:py-0.5">',
     '<li class="wave-avatar-group__list-item wave:px-1 wave:py-0.5">',

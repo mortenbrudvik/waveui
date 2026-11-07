@@ -1220,8 +1220,8 @@ describe('InteractionTag', () => {
       string | undefined
     >();
     const elements = [
-      // @ts-expect-error the Primary is not polymorphic in 0.11
-      <InteractionTag.Primary key="1" as="a" />,
+      // polymorphic since 1.1: an anchor takes its own props
+      <InteractionTag.Primary key="1" as="a" href="/x" />,
       // @ts-expect-error a part takes no size: the InteractionTag's applies
       <InteractionTag.Primary key="2" size="small" />,
       // @ts-expect-error Fluent's hasSecondaryAction is not needed

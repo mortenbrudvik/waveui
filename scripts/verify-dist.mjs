@@ -869,24 +869,31 @@ function record1_0(label, names, measured, allowedExternals) {
  *     callback forms outweigh the prefix;
  *   - the presence core, the window, `createBrandTokens` and `waveTokens`: 0 and 0 (no class
  *     string, no `wcn` in their closures).
+ * 1.1 re-set the records of `MessageBar`, `Tree`, `Dialog`, `WaveProvider` with `Dialog`,
+ * `DataGrid` and `useVirtualWindow` to the size measured after the backlog features landed
+ * (`measured`; the budget is that size plus the margin again), deliberately: `WaveProvider
+ * classNames` and the token reset (the provider), `measureItems` (the window), the range and
+ * independent checks of Tree, and the toast and spinner features. The `baseline` of each stays the
+ * published 0.18.1 size, and `Button`, the presence core, `createBrandTokens` and `waveTokens`
+ * keep their 1.0 records.
  */
 export const RECORDED_IMPORTS_1_0 = [
   record1_0('Button', ['Button'], { minified: 12037, gzip: 4033 }, COMPONENT_EXTERNALS),
-  record1_0('MessageBar', ['MessageBar'], { minified: 30070, gzip: 10222 }, COMPONENT_EXTERNALS),
-  record1_0('Tree', ['Tree'], { minified: 51190, gzip: 17427 }, COMPONENT_EXTERNALS),
-  record1_0('Dialog', ['Dialog'], { minified: 73934, gzip: 24667 }, PORTAL_EXTERNALS),
+  record1_0('MessageBar', ['MessageBar'], { minified: 30860, gzip: 10553 }, COMPONENT_EXTERNALS),
+  record1_0('Tree', ['Tree'], { minified: 55392, gzip: 18773 }, COMPONENT_EXTERNALS),
+  record1_0('Dialog', ['Dialog'], { minified: 75951, gzip: 25376 }, PORTAL_EXTERNALS),
   record1_0(
     'WaveProvider + Dialog',
     ['WaveProvider', 'Dialog'],
-    { minified: 76487, gzip: 25640 },
+    { minified: 81036, gzip: 27326 },
     PORTAL_EXTERNALS,
   ),
-  record1_0('DataGrid', ['DataGrid'], { minified: 72123, gzip: 24325 }, PORTAL_EXTERNALS),
+  record1_0('DataGrid', ['DataGrid'], { minified: 72132, gzip: 24521 }, PORTAL_EXTERNALS),
   record1_0('usePresence + Presence', ['usePresence', 'Presence'], { minified: 5453, gzip: 2341 }, [
     'react',
     'react/jsx-runtime',
   ]),
-  record1_0('useVirtualWindow', ['useVirtualWindow'], { minified: 3868, gzip: 1817 }, ['react']),
+  record1_0('useVirtualWindow', ['useVirtualWindow'], { minified: 7661, gzip: 3117 }, ['react']),
   record1_0('createBrandTokens', ['createBrandTokens'], { minified: 3630, gzip: 1956 }, []),
   record1_0('waveTokens', ['waveTokens'], { minified: 3071, gzip: 969 }, []),
 ];
@@ -1039,6 +1046,7 @@ export const MODULE_ONLY_NAMES = [
   'ListboxOptionPositionContext',
   'ListboxSurfaceParts',
   'MENU_PART_LOCKS',
+  'MeasuredLayoutInput',
   'MenuListElementContext',
   'MessageBarContext',
   'ModalBackdrop',
@@ -1144,12 +1152,16 @@ export const MODULE_ONLY_NAMES = [
   'UseTagOverflowOptions',
   'UseToolbarNavigationOptions',
   'VirtualLayoutInput',
+  'VirtualSizes',
   'WAVE_TOKEN_NAMES',
+  'allItemValues',
   'buildFlatTreeIndex',
   'carouselFadeMotion',
   'carouselSlideMotion',
   'cellBase',
   'checkBrandRamp',
+  'checkItems',
+  'checkItemsIndependent',
   'clampColumnWidth',
   'clearIds',
   'collapseMotion',
@@ -1157,6 +1169,7 @@ export const MODULE_ONLY_NAMES = [
   'collectTokenStyle',
   'composeAfterPart',
   'computeCheckStates',
+  'computeMeasuredLayout',
   'computeVirtualLayout',
   'containsValue',
   'createCategoryStore',
@@ -1164,6 +1177,7 @@ export const MODULE_ONLY_NAMES = [
   'createOptionText',
   'createSelectionStore',
   'createTableFeaturePlugin',
+  'createVirtualSizes',
   'createWcn',
   'dialogBackdropMotion',
   'dialogMotion',
@@ -1186,6 +1200,7 @@ export const MODULE_ONLY_NAMES = [
   'initialColumnWidth',
   'inlineDrawerMotion',
   'inlineDrawerStructure',
+  'isButtonType',
   'isDismissKey',
   'isForeignEvent',
   'isHiddenByCss',
@@ -1193,6 +1208,7 @@ export const MODULE_ONLY_NAMES = [
   'isSelectionCellElement',
   'isTextEntryElement',
   'lockPositionStyle',
+  'markButton',
   'markNavPart',
   'markTablePart',
   'mergeTokenOverrides',
@@ -1214,8 +1230,10 @@ export const MODULE_ONLY_NAMES = [
   'returnFocusToGridCell',
   'sameIds',
   'scrollOffsetForIndex',
+  'scrollOffsetForMeasuredIndex',
   'scrollSeparatorClasses',
   'selectAllIds',
+  'setVirtualSizes',
   'sortTableRows',
   'summarizeSelection',
   'tabIndicatorMotion',
@@ -1224,6 +1242,7 @@ export const MODULE_ONLY_NAMES = [
   'toastMotion',
   'toastStructure',
   'toggleCheck',
+  'toggleCheckIndependent',
   'toggleId',
   'tokenVariable',
   'tooltipMotion',
@@ -1263,8 +1282,13 @@ export const MODULE_ONLY_NAMES = [
   'useTagPickerControlContext',
   'useTeachingPopoverContext',
   'useToolbarNavigation',
+  'virtualIndexAt',
+  'virtualOffsetOf',
+  'virtualSizeOf',
   'visibleFlatItems',
   'wcn',
+  'withFooterRowIndexes',
+  'withVirtualEstimate',
   'withoutRenderFunction',
 ];
 
@@ -1571,7 +1595,7 @@ const COMPONENT_NAME = /^[A-Z](?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]*$/;
 /**
  * Public names that `dist/index.d.ts` must declare and export: a utility, a component, a props
  * type, a compound, a hook and a class-name constant. The build passes with
- * an empty roll-up: vite-plugin-dts 4 rolls up only `export { }` when TypeScript writes the
+ * an empty roll-up: the declaration plugin rolls up only `export { }` when TypeScript writes the
  * declarations somewhere else than it expects (TypeScript 6 without `rootDir` in tsconfig.json).
  * Without this list, only `npm run test:pack`, which type-checks the packed tarball, would notice.
  */

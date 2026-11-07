@@ -1,9 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import type * as React from 'react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
-import { Field, TimePicker } from '../src';
+import { Field, TimePicker, useVirtualWindow } from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
+import { motionCases } from './_motion';
+
+const formatHours = (value: string) => value.replace(':', 'h');
+const parseHours = (text: string) => {
+  const match = /^(\d{1,2})h(\d{2})$/.exec(text.trim());
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
+};
 
 const meta = {
   title: 'Components/Input/TimePicker',
@@ -143,4 +151,67 @@ export const SizesAndAppearances: Story = {
       )}
     />
   ),
+};
+
+/** `showSeconds` writes the value as `HH:mm:ss` and accepts typed seconds; the list stays on whole minutes. */
+export const Seconds: Story = {
+  args: { showSeconds: true, format: '24h', defaultValue: '09:30:15' },
+};
+
+/**
+ * `formatTime` writes a time and `parseTime` reads typed text: here `9h30`. Keep both stable
+ * (module-level functions or `useCallback`): an inline `formatTime` makes the options on every
+ * render.
+ */
+export const CustomFormat: Story = {
+  args: {
+    formatTime: formatHours,
+    parseTime: parseHours,
+    minTime: '08:00',
+    maxTime: '12:00',
+    defaultValue: '09:30',
+  },
+};
+
+/** `freeform={false}` limits the selection to the listed times: `9:15` is reported as `'not-listed'`. */
+export const ListedTimesOnly: Story = {
+  args: { freeform: false, format: '24h', onInvalidInput: fn() },
+};
+
+/** The Motion story's popup: it zooms in from 95% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `TimePicker motion`. By default the list fades in and slides 4px away from the field, on the side it opened on, over 200ms, and fades out and slides back over 100ms (the time list stays in the popup while it exits, so its option ids stay valid; a list whose options changed as it closed leaves at once). `null` turns it off; a class string replaces it (here a zoom).
+ * The popup stays in place, `inert`, while it exits; focus is already back where it was. Under
+ * reduced motion every popup appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionPopups(args) {
+    return (
+      <div className="flex flex-wrap gap-4">
+        {motionCases(fadeAndZoom).map(({ label, motion }) => (
+          <TimePicker
+            key={label}
+            {...args}
+            aria-label={label}
+            motion={motion}
+            placeholder={label}
+          />
+        ))}
+      </div>
+    );
+  },
+};
+
+function WindowedTimes(args: React.ComponentProps<typeof TimePicker>) {
+  const virtualWindow = useVirtualWindow({ itemSize: 32 });
+  return <TimePicker {...args} virtualWindow={virtualWindow} />;
+}
+
+/** A step of one minute makes 1,440 options; `virtualWindow` mounts only the ones in view. */
+export const Windowed: Story = {
+  args: { step: 1, format: '24h' },
+  render: (args) => <WindowedTimes {...args} />,
 };

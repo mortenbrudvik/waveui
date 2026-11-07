@@ -2,6 +2,7 @@ import * as React from 'react';
 import { wcn } from '../../lib/cn';
 import { joinIds } from '../../lib/aria';
 import { selectClassNames } from '../../lib/classNames';
+import { renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import {
   inputAppearanceClasses,
   inputFocus,
@@ -13,6 +14,7 @@ import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
 import { useInputLook } from './inputLook';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Select component. */
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
@@ -47,6 +49,26 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
    */
   appearance?: InputAppearance;
+  /**
+   * The chevron at the inline end (Fluent UI's `icon` slot). `null` or `undefined` keep the
+   * drawn chevron; `false`, or anything that renders nothing, draws none; content replaces it.
+   * With content a `<span>` wraps the `<select>` and the icon: the `<select>` still receives
+   * `ref`, `className` and the other props, and the icon is decorative (`aria-hidden`), carries
+   * the stable class `wave-select__icon`, takes no pointer events (the click reaches the select)
+   * and dims with a disabled select. The wrapper (`wave-select__wrapper`) is as wide as its
+   * container, so size a Select with an icon through a container, not a width class on it. The
+   * icon takes the box of its size (12px, 16px, 20px); give it an `svg` that fills it.
+   * @default the drawn chevron
+   */
+  icon?: Slot<'span'>;
+  /**
+   * Called with the selected option's value on every change, next to the native `onChange` event
+   * handler (`onValueChange={setCountry}` instead of
+   * `onChange={(e) => setCountry(e.target.value)}`). Fluent UI's `onChange(event, data)` with
+   * `data.value`. With `multiple` it receives the first selected option's value (the select's
+   * `value`); read `event.currentTarget.selectedOptions` in `onChange` for all of them.
+   */
+  onValueChange?: (value: string) => void;
   /** Ref to the `<select>` element. */
   ref?: React.Ref<HTMLSelectElement>;
 }
@@ -61,9 +83,16 @@ const SELECT_SIZE: Readonly<Record<CoreSize, string>> = {
     'wave:ps-4 wave:pe-10 wave:bg-[size:6px_6px,6px_6px] wave:bg-[position:right_20px_center,right_14px_center] wave:wave-rtl:bg-[position:left_14px_center,left_20px_center]',
 };
 
+/** Padding, box and inline-end offset of the `icon` of each size (Fluent's 12, 16 and 20px). */
+const SELECT_ICON: Readonly<Record<CoreSize, { padding: string; icon: string }>> = {
+  small: { padding: 'wave:ps-2 wave:pe-6', icon: 'wave:size-3 wave:end-1.5' },
+  medium: { padding: 'wave:ps-3 wave:pe-8', icon: 'wave:size-4 wave:end-2.5' },
+  large: { padding: 'wave:ps-4 wave:pe-10', icon: 'wave:size-5 wave:end-3' },
+};
+
 /**
  * A native `<select>` with Fluent styling: a 1px border with an accessible bottom stroke, a token
- * chevron at the inline end and a primary bottom border while focused. Give it a name with a
+ * chevron at the inline end (replaceable through `icon`) and a primary bottom border while focused. Give it a name with a
  * `Field` label, `aria-label` or `aria-labelledby`. Inside a `Field` it picks up the label, hint,
  * error, `required` (native attribute) and invalid state automatically.
  *
@@ -86,6 +115,9 @@ export const Select = ({
   size: sizeProp,
   htmlSize,
   appearance: appearanceProp,
+  icon,
+  onChange,
+  onValueChange,
   className,
   children,
   ref,
@@ -99,6 +131,8 @@ export const Select = ({
   required,
   ...props
 }: SelectProps) => {
+  const appClassName = useAppClassName(selectClassNames.root);
+
   const { invalid, messageId, message } = useControlErrorMessage(
     error,
     errorMessageProps,
@@ -120,6 +154,18 @@ export const Select = ({
   const invalidLook = isInvalidLook(invalid, fieldProps['aria-invalid']);
   const { size, appearance } = useInputLook(sizeProp, appearanceProp);
 
+  // `null` and `undefined` keep the drawn chevron; content draws the icon in a wrapper; anything
+  // else that renders nothing (`false`) draws no chevron at all.
+  const drawnChevron = icon == null;
+  const hasIcon = !drawnChevron && slotRendersContent(icon);
+  const handleChange =
+    onChange || onValueChange
+      ? (event: React.ChangeEvent<HTMLSelectElement>) => {
+          onChange?.(event);
+          onValueChange?.(event.currentTarget.value);
+        }
+      : undefined;
+
   const control = (
     <select
       ref={ref}
@@ -132,19 +178,26 @@ export const Select = ({
         inputTextClasses[size],
         inputAppearanceClasses[appearance],
         'wave:text-foreground',
-        // Chevron: two token-colored gradient halves of a small triangle at the inline end.
-        'wave:bg-no-repeat',
-        SELECT_SIZE[size],
-        'wave:bg-[image:linear-gradient(45deg,transparent_50%,var(--wave-muted-foreground)_50%),linear-gradient(135deg,var(--wave-muted-foreground)_50%,transparent_50%)]',
-        // Forced colors drop the background chevron: show the native arrow instead.
-        'wave:forced-colors:appearance-auto wave:forced-colors:bg-none',
+        drawnChevron
+          ? [
+              // Chevron: two token-colored gradient halves of a small triangle at the inline end.
+              'wave:bg-no-repeat',
+              SELECT_SIZE[size],
+              'wave:bg-[image:linear-gradient(45deg,transparent_50%,var(--wave-muted-foreground)_50%),linear-gradient(135deg,var(--wave-muted-foreground)_50%,transparent_50%)]',
+              // Forced colors drop the background chevron: show the native arrow instead.
+              'wave:forced-colors:appearance-auto wave:forced-colors:bg-none',
+            ]
+          : // An `icon` (or none): no drawn chevron, and no native arrow in forced colors either.
+            [SELECT_ICON[size].padding, 'wave:bg-none'],
         inputFocus,
         'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
         invalidLook && inputInvalid,
+        appClassName,
         className,
       )}
       {...props}
       {...fieldProps}
+      onChange={handleChange}
       aria-errormessage={joinIds(ariaErrorMessage, messageId)}
       size={htmlSize}
     >
@@ -152,10 +205,30 @@ export const Select = ({
     </select>
   );
 
-  if (!message) return control;
+  const field = hasIcon ? (
+    <span className={wcn(selectClassNames.wrapper, 'wave:relative wave:block wave:w-full')}>
+      {control}
+      {renderSlot(
+        icon,
+        'span',
+        wcn(
+          selectClassNames.icon,
+          'wave:pointer-events-none wave:absolute wave:inset-y-0 wave:my-auto',
+          'wave:flex wave:items-center wave:justify-center wave:text-muted-foreground wave:[&>svg]:size-full',
+          SELECT_ICON[size].icon,
+          props.disabled && 'wave:opacity-50',
+        ),
+        { 'aria-hidden': true },
+      )}
+    </span>
+  ) : (
+    control
+  );
+
+  if (!message) return field;
   return (
     <>
-      {control}
+      {field}
       {message}
     </>
   );

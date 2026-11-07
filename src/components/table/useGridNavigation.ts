@@ -17,6 +17,12 @@ export interface GridNavigationModel {
    */
   headerRowCount: number;
   /**
+   * How many footer rows (the rows of a `<tfoot>`) are below the data rows. They stay mounted, are
+   * navigated after the last data row, and Ctrl+End goes to the last of them.
+   * @default 0
+   */
+  footerRowCount?: number;
+  /**
    * Brings data row `index` into the mounted rows (scrolls the window to it). Called once for each
    * row a key moves focus to that is not mounted; focus moves to the row's cell in the commit that
    * mounts it. Ctrl+Home in a grid with header rows also calls it for row 0, so the first rows
@@ -40,7 +46,21 @@ export interface UseGridNavigationOptions {
    * rows are the whole grid.
    */
   model?: GridNavigationModel;
+  /**
+   * How focus moves in the grid. `'cell'`: one Tab stop on a cell and arrow keys between cells
+   * (see the hook's description). `'row'`: one Tab stop on a body row, ArrowUp/ArrowDown,
+   * PageUp/PageDown and Home/End (Ctrl too) between rows, and the widgets of the other rows out of
+   * the Tab order; the cells are not focus targets, and Tab inside the active row reaches its
+   * widgets. A grid with a `model` navigates by cell whatever this says. `'none'`: no keys, and
+   * the hook writes no `tabindex`, so every widget keeps its own place in the Tab order. Fluent's
+   * `focusMode` of DataGrid (`'row'` is its `'row_unstable'`; its `'composite'` has no counterpart).
+   * @default 'cell'
+   */
+  focusMode?: GridNavigationFocusMode;
 }
+
+/** How focus moves in a grid (see {@link UseGridNavigationOptions.focusMode}). */
+export type GridNavigationFocusMode = 'cell' | 'row' | 'none';
 
 /** Handlers {@link useGridNavigation} needs on the grid element (compose them with the consumer's). */
 export interface GridNavigationHandlers {
@@ -125,6 +145,19 @@ const WIDGET_CANDIDATE_SELECTOR = `${FOCUSABLE_SELECTOR}, ${COMPOSITE_SELECTOR}`
  */
 const AUXILIARY_ATTRIBUTE = 'data-grid-auxiliary';
 
+/**
+ * The attribute of a cell that sets how the grid treats it: `none` (the cell and its widgets are
+ * outside the grid's keyboard navigation: arrow keys skip it, it is no focus target and the grid
+ * writes no `tabindex` in it), `group` (the cell is its own focus target even with a single
+ * widget, entered with Enter or F2 and left with Escape) or `cell` (the default).
+ */
+const CELL_FOCUS_MODE_ATTRIBUTE = 'data-focus-mode';
+
+/** Whether the grid leaves `cell` out of its keyboard navigation (`data-focus-mode="none"`). */
+function isOptedOut(cell: Element): boolean {
+  return cell.getAttribute(CELL_FOCUS_MODE_ATTRIBUTE) === 'none';
+}
+
 /** The attribute of a windowed grid's data rows that holds their 0-based index in the data. */
 const ROW_INDEX_ATTRIBUTE = 'data-row-index';
 
@@ -145,6 +178,7 @@ const OBSERVED_ATTRIBUTES = [
   'aria-selected',
   AUXILIARY_ATTRIBUTE,
   ROW_INDEX_ATTRIBUTE,
+  CELL_FOCUS_MODE_ATTRIBUTE,
 ];
 
 /**
@@ -229,6 +263,27 @@ function getRows(grid: HTMLTableElement): HTMLTableRowElement[] {
   return Array.from(grid.rows).filter((row) => row.cells.length > 0 && !row.hidden);
 }
 
+/** The rows of the grid's `<tbody>` sections that are not hidden (the rows the row mode moves between). */
+function getBodyRows(grid: HTMLTableElement): HTMLTableRowElement[] {
+  return Array.from(grid.tBodies).flatMap((body) =>
+    Array.from(body.rows).filter((row) => !row.hidden),
+  );
+}
+
+/** The body row of `grid` that holds `node` (a nested table's rows are not the grid's), or `null`. */
+function getBodyRow(grid: HTMLTableElement, node: EventTarget | null): HTMLTableRowElement | null {
+  for (let el = node instanceof Element ? node : null; el && el !== grid; el = el.parentElement) {
+    if (
+      el.localName === 'tr' &&
+      el.parentElement?.localName === 'tbody' &&
+      el.closest('table') === grid
+    ) {
+      return el as HTMLTableRowElement;
+    }
+  }
+  return null;
+}
+
 /** Browsers clamp `colSpan` to 1..1000 (`rowSpan` 0 covers the rest of its row group). */
 const MAX_COL_SPAN = 1000;
 
@@ -270,13 +325,44 @@ function getColumnMap(rows: readonly HTMLTableRowElement[]): ColumnMap {
   return map;
 }
 
-/** The cell of a row (as {@link getColumnMap} maps it) at `column`, else the last one before it. */
+/**
+ * The cell of a row (as {@link getColumnMap} maps it) at `column`, else the last one before it, and
+ * failing that the first one after it. A cell the grid leaves out (`data-focus-mode="none"`) is
+ * never returned.
+ */
 function getCellAtColumn(
   rowMap: ReadonlyArray<HTMLTableCellElement | undefined>,
   column: number,
 ): HTMLTableCellElement | null {
-  for (let index = Math.min(column, rowMap.length - 1); index >= 0; index -= 1) {
+  const start = Math.min(column, rowMap.length - 1);
+  for (let index = start; index >= 0; index -= 1) {
     const cell = rowMap[index];
+    if (cell && !isOptedOut(cell)) return cell;
+  }
+  for (let index = Math.max(start + 1, 0); index < rowMap.length; index += 1) {
+    const cell = rowMap[index];
+    if (cell && !isOptedOut(cell)) return cell;
+  }
+  return null;
+}
+
+/** The first cell the grid navigates from `start` in direction `step` (`null`: none). */
+function scanCells(
+  cells: HTMLCollectionOf<HTMLTableCellElement>,
+  start: number,
+  step: 1 | -1,
+): HTMLTableCellElement | null {
+  for (let index = start; index >= 0 && index < cells.length; index += step) {
+    const cell = cells.item(index);
+    if (cell && !isOptedOut(cell)) return cell;
+  }
+  return null;
+}
+
+/** The first cell of `rows` that the grid navigates (`null`: none). */
+function getFirstNavigableCell(rows: readonly HTMLTableRowElement[]): HTMLTableCellElement | null {
+  for (const row of rows) {
+    const cell = scanCells(row.cells, 0, 1);
     if (cell) return cell;
   }
   return null;
@@ -304,13 +390,26 @@ function getGridRows(
 ): HTMLTableRowElement[] {
   if (!model) return getRows(grid);
   const headerRowCount = toCount(model.headerRowCount);
+  const footerRowCount = toCount(model.footerRowCount ?? 0);
   let headers = 0;
+  let footers = 0;
   return getRows(grid).filter((row) => {
     if (getRowIndex(row) !== null) return true;
-    if (headers >= headerRowCount || row.getAttribute('aria-hidden') === 'true') return false;
+    if (row.getAttribute('aria-hidden') === 'true') return false;
+    if (isFooterRow(row)) {
+      if (footers >= footerRowCount) return false;
+      footers += 1;
+      return true;
+    }
+    if (headers >= headerRowCount) return false;
     headers += 1;
     return true;
   });
+}
+
+/** Whether `row` is a row of a `<tfoot>`. */
+function isFooterRow(row: Element): boolean {
+  return row.parentElement?.localName === 'tfoot';
 }
 
 /**
@@ -549,7 +648,18 @@ export function returnFocusToGridCell(element: Element): boolean {
  *   brings data row 0 back under the header rows. The active cell is kept by its row and column:
  *   `activeRowIndex` and `pendingRowIndex` name the rows the owner keeps mounted, and while the
  *   active row is not mounted anyway, a cell of the nearest mounted row holds the tab stop until
- *   the row is back. ArrowLeft/ArrowRight and Home/End work in the row as above.
+ *   the row is back. The footer rows (`footerRowCount`, the rows of a `<tfoot>`) follow the data
+ *   rows, stay mounted and take part in these moves. ArrowLeft/ArrowRight and Home/End work in
+ *   the row as above.
+ * - **Modes.** `focusMode: 'row'` replaces the cell model with one Tab stop on a body row (the
+ *   header and footer rows stay out): ArrowUp/ArrowDown, PageUp/PageDown and Home/End, pressed on
+ *   the row itself, move between rows; the widgets of the other rows get `tabindex="-1"`, and Tab
+ *   inside the active row reaches its own. `'none'` writes no `tabindex` and handles no key, and
+ *   what an earlier mode wrote is given back.
+ * - **Cells that opt out.** A cell with `data-focus-mode="none"` is no focus target and the hook
+ *   writes no `tabindex` in it (its widgets keep their own place in the Tab order); the arrow
+ *   keys, Home/End and the vertical moves pass over it, and a key pressed in it is left alone.
+ *   `data-focus-mode="group"` makes a cell its own target even with a single widget.
  *
  * Keys are ignored when the event's default was prevented (a widget that handled the key, a
  * consumer handler), or with Alt/Meta held. The tab indexes are written to the DOM (layout effect
@@ -559,6 +669,10 @@ export function returnFocusToGridCell(element: Element): boolean {
  */
 export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGridNavigationResult {
   const { model } = options;
+  // A windowed grid (a model) navigates by cell; the row mode has no windowing.
+  const requestedMode = options.focusMode ?? 'cell';
+  const mode: GridNavigationFocusMode = model && requestedMode === 'row' ? 'cell' : requestedMode;
+  const modeRef = React.useRef(mode);
   const pageSize = Math.max(1, options.pageSize ?? 10);
   const [grid, setGrid] = React.useState<HTMLTableElement | null>(null);
   /** The model of the last commit (read by the handlers, the observer and the effects). */
@@ -644,6 +758,8 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
    */
   const getTarget = React.useCallback(
     (cell: HTMLTableCellElement, widgets: CellWidget[], checkRadioGroup: boolean): HTMLElement => {
+      // A `group` cell is its own target, whatever it holds: its widgets are entered with Enter.
+      if (cell.getAttribute(CELL_FOCUS_MODE_ATTRIBUTE) === 'group') return cell;
       let only: CellWidget | null = null;
       for (const widget of widgets) {
         if (widget.auxiliary) continue;
@@ -679,9 +795,37 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
     [stamped, written],
   );
 
+  /** Gives back the `tabindex` this hook wrote on `el` (an author's own is never touched). */
+  const unstamp = React.useCallback(
+    (el: Element) => {
+      if (!stamped.has(el)) return;
+      stamped.delete(el);
+      retained.delete(el);
+      if (el.hasAttribute('tabindex')) {
+        written.set(el, null);
+        el.removeAttribute('tabindex');
+      }
+    },
+    [retained, stamped, written],
+  );
+
+  /** Gives back every `tabindex` this hook wrote inside `root`, `root` included. */
+  const release = React.useCallback(
+    (root: Element) => {
+      unstamp(root);
+      for (const el of Array.from(root.querySelectorAll('[tabindex]'))) unstamp(el);
+    },
+    [unstamp],
+  );
+
   /** Writes the tab indexes of one cell and its widgets (only attributes that change). */
   const syncCell = React.useCallback(
     (cell: HTMLTableCellElement, isActive: boolean, isInteraction: boolean) => {
+      // A cell the grid leaves out keeps its widgets' own places in the Tab order.
+      if (isOptedOut(cell)) {
+        release(cell);
+        return;
+      }
       const widgets = getWidgets(cell, isActive);
       if (isInteraction) {
         retained.delete(cell);
@@ -723,7 +867,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
         setTabIndex(widget.element, isStop ? 0 : -1);
       }
     },
-    [getTarget, getWidgets, retained, setTabIndex, stamped, written],
+    [getTarget, getWidgets, release, retained, setTabIndex, stamped, written],
   );
 
   /** With a model: publishes the active and the pending row index to the owner's render. */
@@ -745,6 +889,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       let gone =
         !active ||
         !active.isConnected ||
+        isOptedOut(active) ||
         !rows.includes(active.parentElement as HTMLTableRowElement);
       const placed =
         currentModel && activeRowRef.current
@@ -769,7 +914,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
         }
       }
       if (gone) {
-        active = rows[0]?.cells[0] ?? null;
+        active = getFirstNavigableCell(rows);
         activeCellRef.current = active;
         if (active) targets.add(active);
         if (currentModel && !placed) activeRowRef.current = null;
@@ -899,7 +1044,8 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
     ) => {
       const currentModel = modelRef.current;
       if (!currentModel) return;
-      const headers = rows.filter((row) => getRowIndex(row) === null);
+      const headers = rows.filter((row) => getRowIndex(row) === null && !isFooterRow(row));
+      const footers = rows.filter((row) => getRowIndex(row) === null && isFooterRow(row));
       /** Where each mounted data row is in `rows`, by its index. */
       const mounted = new Map<number, number>();
       rows.forEach((row, at) => {
@@ -907,7 +1053,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
         if (index !== null) mounted.set(index, at);
       });
       const rowCount = toCount(currentModel.rowCount);
-      const last = headers.length + rowCount - 1;
+      const last = headers.length + rowCount + footers.length - 1;
       const columns = getColumnMap(rows);
       const pending = pendingRef.current;
       /** The row the move starts from (header rows, then data rows) and its visual column. */
@@ -919,7 +1065,9 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       } else {
         const row = cell.parentElement as HTMLTableRowElement;
         const index = getRowIndex(row);
-        from = index === null ? headers.indexOf(row) : headers.length + index;
+        if (index !== null) from = headers.length + index;
+        else if (isFooterRow(row)) from = headers.length + rowCount + footers.indexOf(row);
+        else from = headers.indexOf(row);
         column = Math.max(columns[rows.indexOf(row)].indexOf(cell), 0);
       }
       let start: number;
@@ -953,12 +1101,14 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
           break;
       }
       for (let position = start; position >= 0 && position <= last; position += step) {
-        const at =
-          position < headers.length
-            ? rows.indexOf(headers[position])
-            : (mounted.get(position - headers.length) ?? -1);
+        const dataPosition = position - headers.length;
+        let at: number;
+        if (position < headers.length) at = rows.indexOf(headers[position]);
+        else if (dataPosition < rowCount) at = mounted.get(dataPosition) ?? -1;
+        else at = rows.indexOf(footers[dataPosition - rowCount]);
         if (at < 0) {
-          requestRow(position - headers.length, column);
+          // A data row that is not mounted is awaited; a footer row is always mounted.
+          if (dataPosition < rowCount) requestRow(dataPosition, column);
           break;
         }
         const candidate = getCellAtColumn(columns[at], column);
@@ -978,9 +1128,9 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
   );
 
   React.useLayoutEffect(() => {
-    if (!grid) return;
+    if (!grid || mode !== 'cell') return;
     sync(grid);
-    if (typeof MutationObserver === 'undefined') return;
+    if (typeof MutationObserver === 'undefined') return () => release(grid);
     const observer = new MutationObserver((records) => {
       let relevant = false;
       let all = false;
@@ -1030,22 +1180,88 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       attributes: true,
       attributeFilter: OBSERVED_ATTRIBUTES,
     });
-    return () => observer.disconnect();
-  }, [grid, resolvePending, sync, written]);
+    return () => {
+      observer.disconnect();
+      // Another mode (or none) takes the Tab order back.
+      release(grid);
+    };
+  }, [grid, mode, release, resolvePending, sync, written]);
+
+  // The row mode: one body row holds the Tab stop, and the widgets of the other rows are out of the
+  // Tab order. The grid's own writes are never taken as changes.
+  const rowStopRef = React.useRef<HTMLTableRowElement | null>(null);
+  const syncRow = React.useCallback(
+    (row: HTMLTableRowElement, isActive: boolean) => {
+      setTabIndex(row, isActive ? 0 : -1);
+      for (const cell of Array.from(row.cells)) {
+        for (const widget of getWidgets(cell, false)) {
+          if (widget.composite) continue;
+          if (isActive) unstamp(widget.element);
+          else setTabIndex(widget.element, -1);
+        }
+      }
+    },
+    [getWidgets, setTabIndex, unstamp],
+  );
+  const syncRows = React.useCallback(
+    (table: HTMLTableElement) => {
+      const rows = getBodyRows(table);
+      let active = rowStopRef.current;
+      if (!active || !active.isConnected || !rows.includes(active)) active = rows[0] ?? null;
+      rowStopRef.current = active;
+      for (const row of rows) syncRow(row, row === active);
+    },
+    [syncRow],
+  );
+  React.useLayoutEffect(() => {
+    if (!grid || mode !== 'row') return;
+    syncRows(grid);
+    if (typeof MutationObserver === 'undefined') return () => release(grid);
+    const observer = new MutationObserver((records) => {
+      const relevant = records.some(
+        (record) =>
+          record.type === 'childList' ||
+          !(
+            record.attributeName === 'tabindex' &&
+            record.target instanceof Element &&
+            written.has(record.target) &&
+            written.get(record.target) === record.target.getAttribute('tabindex')
+          ),
+      );
+      if (relevant) syncRows(grid);
+    });
+    observer.observe(grid, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: OBSERVED_ATTRIBUTES,
+    });
+    return () => {
+      observer.disconnect();
+      release(grid);
+      rowStopRef.current = null;
+    };
+  }, [grid, mode, release, syncRows, written]);
+
+  // The none mode writes nothing: it only gives back what another mode wrote.
+  React.useLayoutEffect(() => {
+    if (grid && mode === 'none') release(grid);
+  }, [grid, mode, release]);
 
   // A widget that handles its leaving keys itself returns through `returnFocusToGridCell`.
   React.useLayoutEffect(() => {
-    if (!grid) return;
+    if (!grid || mode !== 'cell') return;
     const returnTo = (cell: HTMLTableCellElement) => focusCell(grid, cell);
     cellReturns.set(grid, returnTo);
     return () => {
       if (cellReturns.get(grid) === returnTo) cellReturns.delete(grid);
     };
-  }, [grid, focusCell]);
+  }, [grid, mode, focusCell]);
 
   // After every commit: the model of this render, and focus on an awaited row that the commit
   // mounted. Without a model, no row is kept by its index.
   React.useLayoutEffect(() => {
+    modeRef.current = mode;
     modelRef.current = model;
     if (!model) {
       activeRowRef.current = null;
@@ -1056,12 +1272,71 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
     if (grid) resolvePending(grid);
   });
 
+  /** The row mode: `row` holds the Tab stop; the rows before it give it up. */
+  const setActiveRow = React.useCallback(
+    (row: HTMLTableRowElement) => {
+      const previous = rowStopRef.current;
+      rowStopRef.current = row;
+      if (previous && previous !== row && previous.isConnected) syncRow(previous, false);
+      syncRow(row, true);
+    },
+    [syncRow],
+  );
+
+  /** The keys of the row mode: only on a body row itself, never on a widget in it. */
+  const onRowKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLTableElement>) => {
+      if (event.altKey || event.metaKey) return;
+      const table = event.currentTarget;
+      const row = event.target;
+      if (!(row instanceof HTMLTableRowElement) || getBodyRow(table, row) !== row) return;
+      const rows = getBodyRows(table);
+      const index = rows.indexOf(row);
+      const last = rows.length - 1;
+      let target: number;
+      switch (event.key) {
+        case 'ArrowDown':
+          target = index + 1;
+          break;
+        case 'ArrowUp':
+          target = index - 1;
+          break;
+        case 'PageDown':
+          target = Math.min(index + pageSizeRef.current, last);
+          break;
+        case 'PageUp':
+          target = Math.max(index - pageSizeRef.current, 0);
+          break;
+        case 'Home':
+          target = 0;
+          break;
+        case 'End':
+          target = last;
+          break;
+        default:
+          return;
+      }
+      // A handled key never scrolls the page, even at the grid's edge.
+      event.preventDefault();
+      const next = rows[target];
+      if (next && next !== row) {
+        setActiveRow(next);
+        next.focus();
+      }
+    },
+    [setActiveRow],
+  );
+
   const onKeyDown = React.useCallback<React.KeyboardEventHandler<HTMLTableElement>>(
     (event) => {
       const table = event.currentTarget;
       if (event.defaultPrevented) return;
+      if (modeRef.current !== 'cell') {
+        if (modeRef.current === 'row') onRowKeyDown(event);
+        return;
+      }
       const cell = getCell(table, event.target);
-      if (!cell) return;
+      if (!cell || isOptedOut(cell)) return;
       const widgets = getWidgets(cell, true);
       // A lone non-text widget is in navigation mode when focused, even an unchecked radio that
       // the radio group rule keeps from holding the tab stop.
@@ -1109,7 +1384,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       const lastRow = rows.length - 1;
       const ctrl = event.ctrlKey;
       /** Left/Right, Home/End: target row and cell index in it (`Infinity`: the row's last cell). */
-      let next: [row: number, column: number] | null = null;
+      let next: [row: number, column: number, step: 1 | -1] | null = null;
       /** Up/Down, PageUp/PageDown: the first row to try and the direction to keep going in. */
       let vertical: [row: number, step: 1 | -1] | null = null;
 
@@ -1121,7 +1396,7 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
             orientation: 'horizontal',
             dir: getDirection(table),
           });
-          next = [rowIndex, columnIndex + (intent === 'next' ? 1 : -1)];
+          next = [rowIndex, columnIndex + (intent === 'next' ? 1 : -1), intent === 'next' ? 1 : -1];
           break;
         }
         case 'ArrowDown':
@@ -1131,10 +1406,10 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
           if (!ctrl) vertical = [rowIndex - 1, -1];
           break;
         case 'Home':
-          next = ctrl ? [0, 0] : [rowIndex, 0];
+          next = ctrl ? [0, 0, 1] : [rowIndex, 0, 1];
           break;
         case 'End':
-          next = ctrl ? [lastRow, Infinity] : [rowIndex, Infinity];
+          next = ctrl ? [lastRow, Infinity, -1] : [rowIndex, Infinity, -1];
           break;
         case 'PageDown':
           if (!ctrl) vertical = [Math.min(rowIndex + pageSizeRef.current, lastRow), 1];
@@ -1167,15 +1442,18 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
           }
         }
       } else if (next) {
-        // Left/Right stop at the row's edges (no cell there).
-        const [nextRow, nextColumn] = next;
+        // Left/Right stop at the row's edges (no cell there); a cell the grid leaves out is passed.
+        const [nextRow, nextColumn, step] = next;
         const rowCells = rows[nextRow].cells;
-        destination =
-          nextColumn === Infinity ? rowCells[rowCells.length - 1] : rowCells.item(nextColumn);
+        destination = scanCells(
+          rowCells,
+          nextColumn === Infinity ? rowCells.length - 1 : nextColumn,
+          step,
+        );
       }
       if (destination && destination !== cell) focusCell(table, destination);
     },
-    [activate, focusCell, getTarget, getWidgets, moveByRow],
+    [activate, focusCell, getTarget, getWidgets, moveByRow, onRowKeyDown],
   );
 
   const onFocus = React.useCallback<React.FocusEventHandler<HTMLTableElement>>(
@@ -1183,8 +1461,13 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       const table = event.currentTarget;
       // React types `target` as the handler's element type; it is the focused descendant.
       const target: EventTarget = event.target;
+      if (modeRef.current !== 'cell') {
+        const row = modeRef.current === 'row' ? getBodyRow(table, target) : null;
+        if (row && row !== rowStopRef.current) setActiveRow(row);
+        return;
+      }
       const cell = getCell(table, target);
-      if (!cell) return;
+      if (!cell || isOptedOut(cell)) return;
       let interaction = false;
       if (target !== cell) {
         const widgets = getWidgets(cell, true);
@@ -1198,11 +1481,12 @@ export function useGridNavigation(options: UseGridNavigationOptions = {}): UseGr
       }
       activate(table, cell, interaction);
     },
-    [activate, getTarget, getWidgets],
+    [activate, getTarget, getWidgets, setActiveRow],
   );
 
   const onBlur = React.useCallback<React.FocusEventHandler<HTMLTableElement>>(
     (event) => {
+      if (modeRef.current !== 'cell') return;
       const table = event.currentTarget;
       // React types `target` as the handler's element type; it is the blurred descendant.
       const left: EventTarget = event.target;

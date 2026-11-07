@@ -17,6 +17,14 @@ export type {
   ToastPosition,
   ToastDispatchOptions,
   ToasterShortcuts,
+  ToasterOffset,
+  ToastAppearance,
+  ToastAnnouncement,
+  ToastDismissReason,
+  ToastStatus,
+  ToastStatusChangeDetails,
+  ToastStatusChangeHandler,
+  ToastUpdate,
 } from './Toaster';
 
 /**

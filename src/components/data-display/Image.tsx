@@ -3,6 +3,7 @@ import { wcn } from '../../lib/cn';
 import { imageClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import type { Shape } from '../../lib/types';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * How an image fits its box (the `width`/`height` attributes, or a size set with `className`):
@@ -100,6 +101,8 @@ export const Image = ({
   ref,
   ...rest
 }: ImageProps) => {
+  const appClassName = useAppClassName(imageClassNames.root);
+
   // Required by the types; untyped code may still leave it out (C-DEV: from an effect, once).
   const missingAlt = (alt as string | undefined) === undefined;
   React.useEffect(() => {
@@ -125,6 +128,7 @@ export const Image = ({
         fit === 'default' && 'wave:h-auto',
         shadow && 'wave:shadow-4',
         bordered && 'wave:border wave:border-border',
+        appClassName,
         className,
       )}
       {...rest}

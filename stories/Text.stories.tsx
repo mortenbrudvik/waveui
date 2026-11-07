@@ -107,6 +107,47 @@ export const FontsAndWeights: Story = {
   ),
 };
 
+/**
+ * `truncate` cuts a line at its box with an ellipsis, `wrap={false}` keeps one line, `italic`,
+ * `underline` and `strikethrough` decorate, and `align` and `block` place the text in its box.
+ */
+export const LayoutAndDecoration: Story = {
+  name: 'Layout and decoration',
+  argTypes: {
+    truncate: { control: false },
+    wrap: { control: false },
+    align: { control: false },
+  },
+  render: (args) => (
+    <div className="flex w-72 flex-col gap-3">
+      <Text {...args} truncate>
+        A long line that is cut with an ellipsis where the box ends.
+      </Text>
+      <Text {...args} wrap={false}>
+        One line that does not wrap and runs out of its box.
+      </Text>
+      <Text {...args} block align="center">
+        Centered in a block
+      </Text>
+      <Text {...args} block align="end">
+        Aligned to the end
+      </Text>
+      <Text {...args} italic>
+        Italic
+      </Text>
+      <Text {...args} underline>
+        Underline
+      </Text>
+      <Text {...args} strikethrough>
+        Strikethrough
+      </Text>
+      <Text {...args} underline strikethrough>
+        Underline and strikethrough
+      </Text>
+    </div>
+  ),
+};
+
 /** Text inherits its color; add one with `className` and the variant stays applied. */
 export const MutedCaption: Story = {
   args: {

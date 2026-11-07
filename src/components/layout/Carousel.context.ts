@@ -14,8 +14,8 @@ export interface CarouselContextValue {
   /** Whether the button is at the end of the slides without `loop` (kept focusable, `aria-disabled`). */
   previousDisabled: boolean;
   nextDisabled: boolean;
-  goPrevious: () => void;
-  goNext: () => void;
+  goPrevious: (event: Event) => void;
+  goNext: (event: Event) => void;
   controlsLayout: CarouselControlsLayout;
   /** The resolved direction, for mirroring the chevrons. */
   dir: 'ltr' | 'rtl';

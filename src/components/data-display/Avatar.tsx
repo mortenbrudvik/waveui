@@ -21,6 +21,7 @@ import {
   avatarSizeClassesFor,
   type AvatarSize,
 } from './Avatar.sizes';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { AvatarNumericSize, AvatarSize } from './Avatar.sizes';
 export type { AvatarColor, AvatarNamedColor } from './Avatar.colors';
@@ -330,6 +331,8 @@ export const Avatar = ({
   slotProps,
   ...rest
 }: AvatarProps) => {
+  const appClassName = useAppClassName(avatarClassNames.root);
+
   // The media box of a surrounding Tag or InteractionTag, for an Avatar without its own `size`.
   const box = React.useContext(AvatarSizeContext);
   const imageSlot =
@@ -579,7 +582,7 @@ export const Avatar = ({
 
   if (!hasBadge) {
     // One element: the root is the visual, so the part applies to it after the avatar's props.
-    const rootClassName = wcn(avatarClassNames.root, visualClassName, className);
+    const rootClassName = wcn(avatarClassNames.root, visualClassName, appClassName, className);
     return (
       <span
         {...a11yProps}
@@ -603,6 +606,7 @@ export const Avatar = ({
       className={wcn(
         avatarClassNames.root,
         'wave:relative wave:inline-flex wave:shrink-0',
+        appClassName,
         className,
       )}
     >

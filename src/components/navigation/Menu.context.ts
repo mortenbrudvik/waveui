@@ -4,7 +4,7 @@ import type { ContextMenuAnchor } from '../../hooks/useContextMenuAnchor';
 import type { HoverIntent, HoverIntentGroup } from '../../hooks/useHoverIntent';
 import { reportMissingContext } from '../../lib/dev';
 import type { DismissReason } from '../../lib/layers';
-import type { VirtualElement } from '../../lib/types';
+import type { OpenChangeDetails, VirtualElement } from '../../lib/types';
 
 /*
  * The contexts of Menu and its parts: the menu (`MenuContext`, one per `<Menu>`), the menu list
@@ -13,6 +13,33 @@ import type { VirtualElement } from '../../lib/types';
  * component. The public hooks of the same names (`useMenuContext`, `useMenuListContext`) and their
  * narrow value types are in `Menu.hooks.ts`: they map these values and never expose them.
  */
+
+/**
+ * Why a popup menu opens or closes (`onOpenChange`'s `details.reason`): `trigger-click` (a click on
+ * `Menu.Trigger`), `trigger-key` (Enter, Space or an arrow key on the trigger), `hover` (a hover
+ * opening or closing: `openOnHover`, a submenu), `context-menu` (a context gesture, or a context
+ * menu closing because another one opened outside it), `item-click` (an item was activated, or
+ * `useMenuContext().close()` was called), `tab` (Tab closes every menu of the chain), `arrow-key`
+ * (ArrowLeft, ArrowRight in RTL, closes a submenu), `escape`, `outside-press` and `focus-outside`
+ * (the dismiss layer), `scroll` (`closeOnScroll`, or a scroll that moves a context menu's anchor)
+ * and `parent` (an uncontrolled submenu closes because its parent menu was closed from outside).
+ */
+export type MenuOpenChangeReason =
+  | 'trigger-click'
+  | 'trigger-key'
+  | 'hover'
+  | 'context-menu'
+  | 'item-click'
+  | 'tab'
+  | 'arrow-key'
+  | 'escape'
+  | 'outside-press'
+  | 'focus-outside'
+  | 'scroll'
+  | 'parent';
+
+/** Second argument of `Menu`'s `onOpenChange`: the reason and the DOM event behind the change. */
+export type MenuOpenChangeDetails = OpenChangeDetails<MenuOpenChangeReason>;
 
 /** Which item an opening focuses (`'none'`: a hover opening, which leaves focus where it is). */
 export type InitialFocus = 'first' | 'last' | 'none';
@@ -38,7 +65,7 @@ export interface MenuSurfaceApi {
 /** What an open submenu registers with the menu it is nested in. */
 export interface OpenSubmenu {
   /** Closes the submenu: its own open submenu first, then itself. */
-  close(): void;
+  close(details?: MenuOpenChangeDetails): void;
   /** Whether focus is inside the submenu's list or anything opened from it. */
   containsFocus(): boolean;
   /** Whether focus is inside the submenu's list or the list of one of its open submenus. */
@@ -52,9 +79,9 @@ export interface MenuContextValue {
   /** Whether the popup menu is open (always `false` for a static menu). */
   open: boolean;
   /** Opens or closes the popup menu. */
-  setOpen: (open: boolean) => void;
+  setOpen: (open: boolean, details?: MenuOpenChangeDetails) => void;
   /** Opens the menu and focuses its first or last enabled item (or focuses it when already open). */
-  openWithFocus: (target: InitialFocus) => void;
+  openWithFocus: (target: InitialFocus, details?: MenuOpenChangeDetails) => void;
   /** Returns (and resets) the item the next opening should focus. */
   takeInitialFocus: () => InitialFocus;
   /** Registers the open surface (`null` unregisters it). */
@@ -65,8 +92,10 @@ export interface MenuContextValue {
   labelledBy: string;
   /** Reports the id the trigger element renders. */
   onTriggerId: (id: string) => void;
-  /** The popup surface's id. */
+  /** The popup surface's id: the `id` of `Menu.Popover` when it has one, else a generated one. */
   menuId: string;
+  /** Reports the id a `Menu.Popover` was given (`undefined` again when it unmounts or drops it). */
+  onMenuId: (id: string | undefined) => void;
   /** The trigger element, for focus and positioning. */
   triggerRef: React.RefObject<HTMLElement | null>;
   /** The trigger element, held in state. */
@@ -89,13 +118,13 @@ export interface MenuContextValue {
    * closes its open submenu first (innermost first), then itself. The hover close does the same,
    * marked as one (`isHoverClose`).
    */
-  requestClose: () => void;
+  requestClose: (details?: MenuOpenChangeDetails) => void;
   /**
    * Closes the whole chain from an item or Tab: focus goes to the return target of the top menu
    * (the root trigger; under a static root, the top submenu's trigger item) when focus is inside
    * the chain or lost, then the top menu closes (its submenus first). A static root does nothing.
    */
-  closeChain: () => void;
+  closeChain: (details?: MenuOpenChangeDetails) => void;
   /**
    * An open submenu registers here (from a layout effect keyed on its open state); a second one
    * closes the first. Returns the unregister function.
@@ -109,6 +138,13 @@ export interface MenuContextValue {
    * chain's lists.
    */
   listContainsFocus: () => boolean;
+  /**
+   * Whether the popover renders where the menu is rendered instead of in a portal (`inline`; a
+   * submenu inherits its parent's).
+   */
+  inline: boolean;
+  /** The element the popover is portaled into (`mountNode`; a submenu inherits its parent's). */
+  mountNode: HTMLElement | null;
   /** Milliseconds before a hover opening (a submenu inherits its parent's). */
   openDelay: number;
   /** Milliseconds before a hover close (a submenu inherits its parent's). */
@@ -166,9 +202,10 @@ export interface MenuListContextValue {
   /**
    * Called by an item that was activated and should close its menu. A popover surface closes the
    * whole chain (`closeChain`: focus goes to the root trigger first, then every menu closes); a
-   * static list does nothing.
+   * static list does nothing. `event` is the click or key behind the activation (`onOpenChange`'s
+   * `details.event`); without one the details carry an untrusted `click` event.
    */
-  closeFromItem: () => void;
+  closeFromItem: (event?: unknown) => void;
   /**
    * Development only (a no-op in production): a checkable item registers its `name`/`value` from
    * an effect and unregisters on cleanup; a second registration of the same pair in one list warns
@@ -227,6 +264,7 @@ export const INERT_MENU_CONTEXT: MenuContextValue = {
   labelledBy: 'wave-menu-inert-trigger',
   onTriggerId: noop,
   menuId: 'wave-menu-inert',
+  onMenuId: noop,
   triggerRef: { current: null },
   triggerElement: null,
   setTriggerElement: noop,
@@ -238,6 +276,8 @@ export const INERT_MENU_CONTEXT: MenuContextValue = {
   closeChain: noop,
   registerOpenSubmenu: () => noop,
   listContainsFocus: () => false,
+  inline: false,
+  mountNode: null,
   openDelay: 250,
   closeDelay: 250,
   dismiss: noop,
@@ -247,7 +287,14 @@ export const INERT_MENU_CONTEXT: MenuContextValue = {
   hoverTriggerHandlers: { onPointerEnter: noop, onPointerMove: noop, onPointerLeave: noop },
   hoverSurfaceHandlers: { onPointerEnter: noop, onPointerLeave: noop },
   openOnContext: false,
-  contextTriggerHandlers: { onContextMenu: noop, onKeyDown: noop },
+  contextTriggerHandlers: {
+    onContextMenu: noop,
+    onKeyDown: noop,
+    onPointerDown: noop,
+    onPointerMove: noop,
+    onPointerUp: noop,
+    onPointerCancel: noop,
+  },
   contextSurfaceHandlers: { onContextMenu: noop },
   contextAnchor: null,
   fromContext: false,

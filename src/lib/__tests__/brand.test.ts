@@ -18,6 +18,7 @@ import {
   type BrandStop,
   type BrandTokens,
 } from '../brand';
+import { __resetWarnings } from '../dev';
 import type { WaveTokenOverrides } from '../tokens';
 import brandSource from '../brand.ts?raw';
 
@@ -430,6 +431,23 @@ describe('createBrandTokens checks a full ramp in development (R8)', () => {
     ]);
   });
 
+  it('runs the check without a `process` global too (an unbundled import in a browser)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ramp = { ...DEFAULT_BRAND_RAMP, 80: '#b4d6fa' };
+    createBrandTokens(ramp);
+    const withProcess = warn.mock.calls.map(([message]) => message);
+    expect(withProcess.length).toBeGreaterThan(0);
+    warn.mockClear();
+    __resetWarnings(); // the warnings are once per key
+    vi.stubGlobal('process', undefined);
+    try {
+      expect(createBrandTokens(ramp)).toEqual({ ...DEFAULT_TOKENS, brand80: '#b4d6fa' });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(warn.mock.calls.map(([message]) => message)).toEqual(withProcess);
+  });
+
   it('logs nothing in production and still returns the ramp unchanged', () => {
     vi.stubEnv('NODE_ENV', 'production');
     const warn = vi.spyOn(console, 'warn');
@@ -438,6 +456,20 @@ describe('createBrandTokens checks a full ramp in development (R8)', () => {
       brand80: '#b4d6fa',
     });
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('runs the check without a `process` global, as every other development warning does', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('process', undefined);
+    try {
+      createBrandTokens({ ...DEFAULT_BRAND_RAMP, 80: '#b4d6fa' });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(warn).toHaveBeenCalled();
+    expect(
+      warn.mock.calls.every(([message]) => String(message).includes('createBrandTokens: in the')),
+    ).toBe(true);
   });
 
   it.each(BRAND_SEEDS)('passes the generated ramp of %s without a warning', (seed) => {

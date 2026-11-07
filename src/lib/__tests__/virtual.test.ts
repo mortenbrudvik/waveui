@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeMeasuredLayout,
   computeVirtualLayout,
+  createVirtualSizes,
   scrollOffsetForIndex,
+  scrollOffsetForMeasuredIndex,
+  setVirtualSizes,
+  virtualIndexAt,
+  virtualOffsetOf,
+  virtualSizeOf,
+  withVirtualEstimate,
   type ScrollOffsetInput,
   type VirtualEntry,
   type VirtualLayoutInput,
@@ -463,5 +471,203 @@ describe('scrollOffsetForIndex', () => {
       expect(offset(30, 'auto', { scrollTop: 305 })).toBe(300);
       expect(offset(35, 'auto', { scrollTop: 305 })).toBe(310);
     });
+  });
+});
+
+describe('measured sizes', () => {
+  it('estimates every row until it is measured', () => {
+    const sizes = createVirtualSizes(40);
+    expect(virtualSizeOf(sizes, 7)).toBe(40);
+    expect(virtualOffsetOf(sizes, 0)).toBe(0);
+    expect(virtualOffsetOf(sizes, 10)).toBe(400);
+  });
+
+  it('keeps the offset of a row as the sum of the sizes before it', () => {
+    const sizes = setVirtualSizes(createVirtualSizes(40), [
+      [2, 100],
+      [5, 10],
+    ]);
+    expect(virtualSizeOf(sizes, 2)).toBe(100);
+    expect(virtualOffsetOf(sizes, 2)).toBe(80);
+    expect(virtualOffsetOf(sizes, 3)).toBe(180);
+    expect(virtualOffsetOf(sizes, 5)).toBe(260);
+    expect(virtualOffsetOf(sizes, 6)).toBe(270);
+    expect(virtualOffsetOf(sizes, 10)).toBe(270 + 4 * 40);
+  });
+
+  it('agrees with a plain running sum for random measurements', () => {
+    let seed = 7;
+    const random = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    const truth = Array.from({ length: 300 }, () => 20);
+    let sizes = createVirtualSizes(20);
+    for (let round = 0; round < 40; round++) {
+      const updates: [number, number][] = [];
+      for (let k = 0; k < 15; k++) {
+        const index = Math.floor(random() * 300);
+        const size = 5 + Math.floor(random() * 90);
+        updates.push([index, size]);
+        truth[index] = size;
+      }
+      sizes = setVirtualSizes(sizes, updates);
+    }
+    let running = 0;
+    for (let index = 0; index <= 300; index++) {
+      expect(virtualOffsetOf(sizes, index)).toBeCloseTo(running, 6);
+      if (index < 300) {
+        expect(virtualSizeOf(sizes, index)).toBe(truth[index]);
+        running += truth[index];
+      }
+    }
+  });
+
+  it('returns the same value when nothing changed', () => {
+    const sizes = setVirtualSizes(createVirtualSizes(40), [[3, 60]]);
+    expect(setVirtualSizes(sizes, [[3, 60]])).toBe(sizes);
+    expect(setVirtualSizes(sizes, [[3, 60.004]])).toBe(sizes);
+    // A row measured as the estimate is the estimate: no entry is recorded for it.
+    expect(setVirtualSizes(createVirtualSizes(40), [[3, 40]]).indexes).toEqual([]);
+    expect(setVirtualSizes(sizes, [])).toBe(sizes);
+  });
+
+  it('ignores entries that are not a row index with a positive size', () => {
+    const sizes = createVirtualSizes(40);
+    expect(
+      setVirtualSizes(sizes, [
+        [-1, 10],
+        [1.5, 10],
+        [2, 0],
+        [2, -3],
+        [2, Number.NaN],
+        [Number.NaN, 10],
+      ]),
+    ).toBe(sizes);
+  });
+
+  it('takes a new estimate for the rows that are not measured', () => {
+    const sizes = setVirtualSizes(createVirtualSizes(40), [[2, 100]]);
+    const next = withVirtualEstimate(sizes, 20);
+    expect(virtualOffsetOf(next, 2)).toBe(40);
+    expect(virtualOffsetOf(next, 3)).toBe(140);
+    expect(withVirtualEstimate(sizes, 40)).toBe(sizes);
+    expect(createVirtualSizes(-5).estimate).toBe(1);
+    expect(createVirtualSizes(Number.NaN).estimate).toBe(1);
+  });
+
+  it('finds the row at an offset', () => {
+    const sizes = setVirtualSizes(createVirtualSizes(40), [
+      [0, 10],
+      [1, 100],
+    ]);
+    // Row 0 covers [0, 10), row 1 [10, 110), then 40 each.
+    expect(virtualIndexAt(sizes, 0)).toBe(0);
+    expect(virtualIndexAt(sizes, -50)).toBe(0);
+    expect(virtualIndexAt(sizes, 9.9)).toBe(0);
+    expect(virtualIndexAt(sizes, 10)).toBe(1);
+    expect(virtualIndexAt(sizes, 109)).toBe(1);
+    expect(virtualIndexAt(sizes, 110)).toBe(2);
+    expect(virtualIndexAt(sizes, 149)).toBe(2);
+    expect(virtualIndexAt(sizes, 150)).toBe(3);
+    expect(virtualIndexAt(sizes, 100_000)).toBe(2 + Math.floor((100_000 - 110) / 40) + 0);
+  });
+
+  it('inverts the offset of every row, and bounds the answer by a count', () => {
+    let sizes = createVirtualSizes(30);
+    sizes = setVirtualSizes(
+      sizes,
+      Array.from({ length: 50 }, (_, index) => [index * 2, 10 + index] as const),
+    );
+    for (let index = 0; index < 120; index++) {
+      const top = virtualOffsetOf(sizes, index);
+      expect(virtualIndexAt(sizes, top)).toBe(index);
+      expect(virtualIndexAt(sizes, top + virtualSizeOf(sizes, index) - 0.5)).toBe(index);
+    }
+    expect(virtualIndexAt(sizes, 1_000_000, 120)).toBe(120);
+    expect(virtualIndexAt(sizes, 5, 0)).toBe(0);
+  });
+
+  it('works with rows smaller than the estimate', () => {
+    const sizes = setVirtualSizes(
+      createVirtualSizes(100),
+      Array.from({ length: 1000 }, (_, index) => [index, 1] as const),
+    );
+    expect(virtualIndexAt(sizes, 999)).toBe(999);
+    expect(virtualIndexAt(sizes, 1000)).toBe(1000);
+  });
+});
+
+describe('computeMeasuredLayout', () => {
+  const sizes = setVirtualSizes(createVirtualSizes(40), [
+    [18, 100],
+    [19, 10],
+  ]);
+  const measured = (overrides: Partial<Parameters<typeof computeMeasuredLayout>[0]> = {}) =>
+    computeMeasuredLayout({
+      count: 100,
+      sizes,
+      firstVisible: 20,
+      lastVisible: 24,
+      overscan: 2,
+      ...overrides,
+    });
+
+  it('renders the rows in view with the overscan and spacers sized by the measured rows', () => {
+    // Items 18 to 26; the spacer before them holds 18 rows of 40 and the one after 73 rows.
+    expect(shape(measured())).toEqual(['[720]', 18, 19, 20, 21, 22, 23, 24, 25, 26, '[2920]']);
+  });
+
+  it('adds up to the height of the whole list', () => {
+    const total = (entries: readonly VirtualEntry[]) =>
+      entries.reduce(
+        (sum, entry) =>
+          sum + (entry.kind === 'item' ? virtualSizeOf(sizes, entry.index) : entry.size),
+        0,
+      );
+    for (const first of [0, 5, 18, 50, 99]) {
+      const entries = measured({ firstVisible: first, lastVisible: first + 3, keep: [60, 2] });
+      expect(total(entries)).toBeCloseTo(virtualOffsetOf(sizes, 100), 6);
+      expect(spacers(entries).every((spacer) => spacer.size > 0)).toBe(true);
+    }
+  });
+
+  it('keeps rows outside the window and merges touching runs', () => {
+    expect(
+      shape(measured({ firstVisible: 40, lastVisible: 40, overscan: 0, keep: [2, 3, 41] })),
+    ).toEqual(['[80]', 2, 3, '[1470]', 40, 41, '[2320]']);
+  });
+
+  it('clamps the view to the list and renders nothing for an empty one', () => {
+    expect(items(measured({ firstVisible: 500, lastVisible: 504, overscan: 0 }))).toEqual([99]);
+    expect(items(measured({ firstVisible: 3, lastVisible: 1, overscan: 0 }))).toEqual([3]);
+    expect(measured({ count: 0 })).toEqual([]);
+    expect(measured({ count: Number.NaN })).toEqual([]);
+  });
+
+  it('keys the spacers as the fixed layout does', () => {
+    const keys = spacers(measured()).map((spacer) => spacer.key);
+    expect(keys).toEqual(['spacer-18', 'spacer-end']);
+  });
+});
+
+describe('scrollOffsetForMeasuredIndex', () => {
+  const sizes = setVirtualSizes(createVirtualSizes(40), [[3, 100]]);
+  const offset = (index: number, align: ScrollOffsetInput['align'], scrollTop = 0) =>
+    scrollOffsetForMeasuredIndex({ index, align, sizes, scrollTop, viewportSize: 200 });
+
+  it('places a row at the start, the centre or the end of the viewport', () => {
+    // Row 3 is [120, 220).
+    expect(offset(3, 'start')).toBe(120);
+    expect(offset(3, 'center')).toBe(170 - 100);
+    expect(offset(3, 'end')).toBe(220 - 200);
+    expect(offset(0, 'center')).toBe(0);
+  });
+
+  it('scrolls the least that shows the row whole', () => {
+    expect(offset(3, 'auto', 100)).toBe(100);
+    expect(offset(3, 'auto', 0)).toBe(20);
+    expect(offset(3, 'auto', 500)).toBe(120);
+    expect(offset(7, 'auto', 0)).toBe(virtualOffsetOf(sizes, 8) - 200);
   });
 });

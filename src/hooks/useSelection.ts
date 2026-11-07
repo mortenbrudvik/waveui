@@ -108,11 +108,16 @@ export function useSelection({
       details: UseSelectionChangeDetails,
     ) => {
       detailsRef.current = details;
-      setIds((prev) => {
-        const next = [...update(new Set(prev))];
-        return sameIds(prev, next) ? prev : next;
-      });
-      detailsRef.current = undefined;
+      try {
+        setIds((prev) => {
+          const next = [...update(new Set(prev))];
+          return sameIds(prev, next) ? prev : next;
+        });
+      } finally {
+        // A throw from the update or the consumer's callback must not leave these details for a
+        // later change to report.
+        detailsRef.current = undefined;
+      }
     },
     [setIds],
   );

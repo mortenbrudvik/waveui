@@ -502,3 +502,20 @@ describe('server rendering (D9)', () => {
     }
   });
 });
+
+describe('Accordion.Panel - a percentage max-height while it collapses', () => {
+  it('lifts the region’s maximum height unless the collapse element is entered', () => {
+    render(
+      <Accordion defaultOpenItem="a">
+        <Accordion.Item value="a">
+          <Accordion.Trigger>Alpha</Accordion.Trigger>
+          <Accordion.Panel className="max-h-[50%]">Panel</Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>,
+    );
+    const collapse = document.querySelector(`.${accordionPanelClassNames.collapse}`);
+    expect(collapse).toHaveClass('wave:not-data-[presence=entered]:*:max-h-none');
+    expect(collapse).toHaveAttribute('data-presence', 'entered');
+    expect(screen.getByRole('region')).toHaveClass('max-h-[50%]');
+  });
+});

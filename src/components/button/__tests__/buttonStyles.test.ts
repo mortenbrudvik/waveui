@@ -9,6 +9,7 @@ import {
   buttonPressedClasses,
   buttonPressedAccessibleClasses,
   buttonDisabledClasses,
+  buttonShapeClasses,
   buttonClassName,
 } from '../buttonStyles';
 import { wcn } from '../../../lib/cn';
@@ -538,5 +539,31 @@ describe('buttonStyles', () => {
         ).toEqual([]);
       },
     );
+  });
+
+  describe('shape (buttons-1)', () => {
+    it('leaves the class string of the default shape untouched', () => {
+      expect(buttonClassName({ shape: 'rounded' })).toBe(buttonClassName());
+      expect(classesOf(buttonClassName())).toContain('wave:rounded');
+    });
+
+    it.each([
+      ['circular', 'wave:rounded-full'],
+      ['square', 'wave:rounded-none'],
+    ] as const)('%s replaces the base radius with %s', (shape, cls) => {
+      const classes = classesOf(buttonClassName({ shape }));
+      expect(classes).toContain(cls);
+      expect(classes).not.toContain('wave:rounded');
+      expect(classes).toEqual(expect.arrayContaining(classesOf(buttonShapeClasses[shape]!)));
+    });
+
+    it('keeps a shape with the pressed layer and icon-only sizing', () => {
+      const classes = classesOf(
+        buttonClassName({ shape: 'circular', iconOnly: true, pressed: true }),
+      );
+      expect(classes).toEqual(
+        expect.arrayContaining(['wave:rounded-full', 'wave:w-8', 'wave:bg-selected']),
+      );
+    });
   });
 });

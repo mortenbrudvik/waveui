@@ -66,6 +66,7 @@ import {
   tagStartInsetClasses,
 } from './tagStyles';
 import type { TagLook } from './tagStyles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The Tag's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
@@ -102,6 +103,18 @@ export interface TagOwnProps {
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Like `disabled` (the dimmed look, `data-disabled`, no `onDismiss`, no click) but the tag's
+   * controls stay focusable and in the Tab order and a TagGroup's arrow-key order: the Dismiss
+   * button renders `aria-disabled="true"`, `data-disabled` and `data-disabled-focusable` instead
+   * of the native `disabled`, and its click, Enter, Space, Delete and Backspace do nothing. A link
+   * root (`as="a"`) keeps its `href` and its Tab stop; a button root (`as="button"`) and an element
+   * that takes a native `disabled` or a component get `aria-disabled` and `data-disabled-focusable`
+   * instead of `disabled`, and no click reaches `onClick`. Wins over `disabled` and over a disabled
+   * TagGroup's. Fluent's Tag has no counterpart.
+   * @default false
+   */
+  disabledFocusable?: boolean;
   /**
    * Draws the selected look (the brand fill) and sets `data-selected`. A Tag is not interactive,
    * so the state is not announced: for a tag the user selects, use `InteractionTag` (its
@@ -604,6 +617,8 @@ interface TagDismissButtonProps {
   disabledFocusable: boolean;
   /** The tag's effective `disabled`. */
   disabled: boolean;
+  /** The tag's `disabledFocusable`: the button stays focusable while disabled. */
+  focusable: boolean;
   /** The visually hidden first half of the name. */
   dismissLabel: string;
   /** The id of the tag's primary text, the second half of the name. */
@@ -628,6 +643,7 @@ function TagDismissButton({
   contentMayName,
   literalTextLabel,
   disabledFocusable,
+  focusable,
   disabled,
   dismissLabel,
   contentId,
@@ -672,7 +688,7 @@ function TagDismissButton({
   // makes it unavailable but focusable (it wins over `disabled` and `onDismiss`).
   const hold = useHeldFocus(disabled);
   const stateProps = disabled
-    ? hold.held
+    ? hold.held || focusable
       ? MERGED_DISABLED_FOCUSABLE_PROPS
       : NATIVELY_DISABLED_PROPS
     : disabledFocusable
@@ -816,12 +832,15 @@ function isInListItem(root: HTMLElement): boolean {
  * <Tag dismissible dismissLabel="Remove" dismissIcon={<CloseIcon />}>Cherry</Tag>
  */
 export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
+  const appClassName = useAppClassName(tagClassNames.root);
+
   const {
     as,
     appearance: appearanceProp,
     size: sizeProp,
     shape: shapeProp,
     disabled: disabledProp,
+    disabledFocusable: disabledFocusableProp,
     selected = false,
     value,
     media,
@@ -864,7 +883,9 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     ? shapeProp
     : (group?.shape ?? 'circular');
   // A disabled group disables every tag: a tag's own `disabled={false}` cannot re-enable it.
-  const disabled = (group?.disabled ?? false) || disabledProp === true;
+  // `disabledFocusable` disables the tag too, keeping its controls focusable.
+  const focusableDisabled = disabledFocusableProp === true;
+  const disabled = (group?.disabled ?? false) || disabledProp === true || focusableDisabled;
   const dismissible = dismissibleProp ?? group?.dismissible ?? false;
   // Disabled wins over the selected look; both attributes still reflect the props.
   const look: TagLook = selected && !disabled ? 'selected' : appearance;
@@ -884,9 +905,14 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   const isButtonRoot = Component === 'button';
   const inactiveRoot = (isLinkRoot || isButtonRoot) && disabled;
   const rootHold = useHeldFocus(inactiveRoot);
-  const buttonRootHeld = isButtonRoot && rootHold.held;
+  // `disabledFocusable` keeps a link, a button, an element that takes a native `disabled` or a
+  // component root focusable (unavailable, not disabled).
+  const takesNativeDisabled =
+    typeof Component !== 'string' || NATIVE_DISABLED_ELEMENTS.has(Component);
+  const focusableRoot = focusableDisabled && (isLinkRoot || takesNativeDisabled);
+  const buttonRootHeld = isButtonRoot && !focusableRoot && rootHold.held;
   // A disabled link or button root calls no click handler: nor do the parts of its text.
-  const textBlock = inactiveRoot ? BLOCK_CLICK : undefined;
+  const textBlock = inactiveRoot || focusableRoot ? BLOCK_CLICK : undefined;
 
   const {
     buttonProps: slotButtonProps,
@@ -976,9 +1002,9 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
     typeof Component !== 'string' || elements.has(Component);
   const elementProps: UnknownProps = {};
   if (takesNative(NATIVE_DISABLED_ELEMENTS) && (disabled || disabledProp !== undefined)) {
-    elementProps.disabled = disabled && !buttonRootHeld;
+    elementProps.disabled = disabled && !buttonRootHeld && !focusableRoot;
   }
-  if (buttonRootHeld) {
+  if (buttonRootHeld || (focusableRoot && !isLinkRoot)) {
     // The focusable disabled state, its click blocked below (D25).
     elementProps['aria-disabled'] = true;
     elementProps['data-disabled-focusable'] = '';
@@ -986,7 +1012,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   if (value !== undefined && takesNative(NATIVE_VALUE_ELEMENTS)) elementProps.value = value;
   if (linkDisabled) {
     elementProps['aria-disabled'] = true;
-    if (rootHold.held) {
+    if (rootHold.held || focusableRoot) {
       elementProps['data-disabled-focusable'] = '';
     } else {
       elementProps.href = undefined;
@@ -1004,7 +1030,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
   const hiddenByHost = value !== undefined && (group?.hiddenValues?.has(value) ?? false);
 
   const handleClick =
-    linkDisabled || buttonRootHeld
+    linkDisabled || buttonRootHeld || focusableRoot
       ? (event: React.MouseEvent<HTMLElement>) => {
           // A click from a portal opened inside the tag is not the root's (C-COMPOSE).
           if (isOwnEvent(event)) blockRootClick(event);
@@ -1119,6 +1145,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
           : tagAppearanceClasses[appearance],
         disabled && [dimDisabled && TAG_DISABLED_DIM_CLASSES, forcedColors.disabled],
         tagShapeClasses[shape],
+        appClassName,
         className,
       )}
       onClick={handleClick}
@@ -1161,6 +1188,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
           contentMayName={contentMayName}
           literalTextLabel={literalTextLabel}
           disabledFocusable={disabledFocusable}
+          focusable={focusableDisabled}
           disabled={disabled}
           dismissLabel={dismissLabel}
           contentId={contentId}

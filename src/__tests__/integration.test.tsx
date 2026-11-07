@@ -630,6 +630,7 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useTableSelection',
       'useTableColumnSizing',
       'useFlatTree',
+      'useNavDrawerToggle',
     ]) {
       expect(barrel[name], name).toBeTypeOf('function');
     }
@@ -681,7 +682,13 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   });
 
   it('exports the 0.17 token helpers from their server-safe modules, and keeps the seams of those modules out', () => {
-    const helpers = ['getTokenStyle', 'createBrandTokens', 'waveTokens', 'chartPalette'];
+    const helpers = [
+      'getTokenStyle',
+      'createBrandTokens',
+      'waveTokens',
+      'chartPalette',
+      'chartSeries',
+    ];
     for (const name of ['getTokenStyle', 'createBrandTokens']) {
       expect(barrel[name], name).toBeTypeOf('function');
     }
@@ -689,8 +696,10 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     expect(Wave.createBrandTokens).toBe(brandModule.createBrandTokens);
     expect(Wave.waveTokens).toBe(waveTokensModule.waveTokens);
     expect(Wave.chartPalette).toBe(waveTokensModule.chartPalette);
+    expect(Wave.chartSeries).toBe(waveTokensModule.chartSeries);
     expect(Object.isFrozen(Wave.waveTokens)).toBe(true);
     expect(Object.isFrozen(Wave.chartPalette)).toBe(true);
+    expect(Object.isFrozen(Wave.chartSeries)).toBe(true);
     // Every other value of the three modules is a seam (MODULE_ONLY_NAMES of verify-dist).
     const internal = [
       ...Object.keys(tokensCore),
@@ -891,6 +900,8 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
       'useNavListChildCheck',
       'markNavPart',
       'getNavPartKind',
+      'markButton',
+      'isButtonType',
       'NavDrawerContext',
       'NavDrawerLayoutContext',
       'TagPickerRoot',
@@ -3520,7 +3531,7 @@ describe('menus and commands across components', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       expect(button('File')).toHaveFocus();
       expect(button('File')).toHaveAttribute('aria-expanded', 'false');
-      expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+      expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
 
       await openView(user);
       expect(checkedOf(checkbox('Gridlines'))).toBe('true');
@@ -3957,7 +3968,7 @@ describe('menus and commands across components', () => {
       advance(1000);
       expect(card).toBeInTheDocument();
       expect(menuNamed('Contact')).toBeInTheDocument();
-      expect(onOpenChange.mock.calls).toEqual([[true]]);
+      expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true]);
 
       await user.keyboard('{Escape}');
       expect(queryMenuNamed('Contact')).not.toBeInTheDocument();
@@ -9743,7 +9754,7 @@ describe('the Toaster beside real drawers (0.11 spec §4.6 #5)', () => {
     expect(blockOffset()).toBe('');
   });
 
-  it('bottom-start toasts move clear of an open start overlay NavDrawer and come back when it closes', () => {
+  it('bottom-start toasts move clear of an open start overlay NavDrawer and come back when it closes', async () => {
     const ui = (open: boolean) => (
       <Toaster position="bottom-start">
         <NavDrawer open={open} onOpenChange={() => {}} ref={stubPanelRect(p6Rect(0, 0, 320, 768))}>
@@ -9756,6 +9767,12 @@ describe('the Toaster beside real drawers (0.11 spec §4.6 #5)', () => {
     const { rerender } = render(ui(true));
     expect(offset()).toBe('320px');
     rerender(ui(false));
+    // The toasts stay clear of the panel while it exits, and return once it is gone.
+    await act(async () => {
+      for (let frame = 0; frame < 5; frame += 1) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      }
+    });
     expect(offset()).toBe('');
   });
 });
@@ -10537,9 +10554,15 @@ describe('Phase 8 parts across components (0.13)', () => {
         fireEvent.pointerMove(track, pointer(120));
         fireEvent.pointerUp(track, pointer(120));
       });
-      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(
+        2,
+        expect.objectContaining({ reason: 'drag' }),
+      );
       await user.click(within(region).getByRole('button', { name: 'Next slide' }));
-      expect(onValueChange).toHaveBeenLastCalledWith(4);
+      expect(onValueChange).toHaveBeenLastCalledWith(
+        4,
+        expect.objectContaining({ reason: 'next' }),
+      );
       expect(screen.getByRole('dialog', { name: 'Gallery' })).toBeInTheDocument();
       await expectNoA11yViolations(document.body);
     });

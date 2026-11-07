@@ -206,6 +206,11 @@ import type {
   MenuListContextValue,
   MenuPopoverProps,
   MenuProps,
+  MenuOpenChangeDetails,
+  MenuOpenChangeReason,
+  NavCategoryToggleDetails,
+  NavDensity,
+  NavSelectDetails,
   MenuSplitGroup,
   MenuSplitGroupProps,
   MenuTriggerProps,
@@ -363,8 +368,10 @@ import type {
   ToasterShortcuts,
   ToastFooterProps,
   ToastOptions,
+  Politeness,
   ToastPosition,
   ToastProps,
+  ToastStatusChangeHandler,
   ToastTitleProps,
   toggleButtonClassNames,
   ToggleButtonProps,
@@ -832,7 +839,9 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<DropdownProps['labels']>().toEqualTypeOf<DropdownLabels | undefined>();
     expectTypeOf<DropdownLabels['clear']>().toEqualTypeOf<string | undefined>();
     expectTypeOf<TimePickerProps['expandIcon']>().toEqualTypeOf<Slot<'span'> | undefined>();
-    expectTypeOf<TimePickerInvalidReason>().toEqualTypeOf<'unparseable' | 'out-of-range'>();
+    expectTypeOf<TimePickerInvalidReason>().toEqualTypeOf<
+      'unparseable' | 'out-of-range' | 'not-listed'
+    >();
     expectTypeOf<NonNullable<TimePickerProps['onInvalidInput']>>().toEqualTypeOf<
       (text: string, reason: TimePickerInvalidReason) => void
     >();
@@ -868,7 +877,13 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<DialogModalType | undefined>();
     expectTypeOf<DialogOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<ModalOpenChangeReason>().toEqualTypeOf<
-      'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press'
+      | 'trigger'
+      | 'close'
+      | 'close-button'
+      | 'escape'
+      | 'outside-press'
+      | 'focus-outside'
+      | 'parent-closed'
     >();
     expectTypeOf<DialogOpenChangeDetails['reason']>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<DialogOpenChangeDetails>().toEqualTypeOf<
@@ -1157,7 +1172,9 @@ describe('0.10 listbox primitives, useActiveDescendant and the date types from t
     >();
     expectTypeOf<typeof useListboxPopup>().parameter(0).toEqualTypeOf<UseListboxPopupOptions>();
     expectTypeOf<typeof useListboxPopup>().returns.toEqualTypeOf<UseListboxPopupResult>();
-    expectTypeOf<DismissReason>().toEqualTypeOf<'escape' | 'outside-press' | 'focus-outside'>();
+    expectTypeOf<DismissReason>().toEqualTypeOf<
+      'escape' | 'outside-press' | 'focus-outside' | 'parent-closed'
+    >();
     expectTypeOf<UseListboxPopupOptions['onDismiss']>().toEqualTypeOf<
       (reason: DismissReason) => void
     >();
@@ -1411,6 +1428,12 @@ describe('0.8 notifications, color, trees and class names from the package entry
       status?: Status;
       statusLabel?: string;
       announcement?: string;
+      politeness?: Politeness;
+      position?: ToastPosition;
+      priority?: number;
+      pauseOnHover?: boolean;
+      pauseOnWindowBlur?: boolean;
+      onStatusChange?: ToastStatusChangeHandler;
     }>();
 
     expectTypeOf<ToastProps['icon']>().toEqualTypeOf<Slot<'span'> | undefined>();
@@ -1710,8 +1733,15 @@ describe('0.11 tags, drawers and the app shell from the package entry', () => {
     expectTypeOf<NavDrawerProps['size']>().toEqualTypeOf<DrawerSize | undefined>();
     expectTypeOf<NavDrawerProps['type']>().toEqualTypeOf<DrawerType | undefined>();
     expectTypeOf<NavDrawerProps['onItemSelect']>().toEqualTypeOf<
-      ((value: string) => void) | undefined
+      ((value: string, details?: NavSelectDetails) => void) | undefined
     >();
+    expectTypeOf<NavDrawerProps['density']>().toEqualTypeOf<NavDensity | undefined>();
+    expectTypeOf<NavDensity>().toEqualTypeOf<'small' | 'medium'>();
+    expectTypeOf<NavCategoryToggleDetails>().toEqualTypeOf<{
+      event: Event;
+      category: string;
+      open: boolean;
+    }>();
     expectTypeOf<NavDrawerProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
     expectTypeOf<NavDrawerHeaderProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
     expectTypeOf<NavDrawerFooterProps['ref']>().toEqualTypeOf<Ref<HTMLDivElement> | undefined>();
@@ -2111,6 +2141,7 @@ describe('0.16 data at scale from the package entry', () => {
     expectTypeOf<GridNavigationModel>().toEqualTypeOf<{
       rowCount: number;
       headerRowCount: number;
+      footerRowCount?: number;
       scrollToRow(index: number): void;
     }>();
   });
@@ -2243,6 +2274,7 @@ describe('0.17 theming from the package entry', () => {
     expectTypeOf<Entry['waveTokens']>().toExtend<WaveTokens>();
     expectTypeOf<Entry['waveTokens']['brand80']>().toEqualTypeOf<'var(--wave-brand-80)'>();
     expectTypeOf<Entry['chartPalette']>().toEqualTypeOf<readonly WaveTokenName[]>();
+    expectTypeOf<Entry['chartSeries']>().toEqualTypeOf<readonly WaveTokenName[]>();
 
     // @ts-expect-error a misspelled token name
     const typo: WaveTokenOverrides = { primry: '#c43e00' };
@@ -2397,6 +2429,32 @@ describe('0.18 customization surface from the package entry', () => {
     expectTypeOf<UseRadioGroupItemResult['props']['role']>().toEqualTypeOf<'radio'>();
     expectTypeOf<UseRadioGroupItemResult['props']['tabIndex']>().toEqualTypeOf<0 | -1>();
     expectTypeOf<UseRadioGroupItemResult['checked']>().toEqualTypeOf<boolean>();
+  });
+
+  it('Menu onOpenChange: an optional details argument with a reason and the event', () => {
+    expectTypeOf<MenuProps['onOpenChange']>().toEqualTypeOf<
+      ((open: boolean, details?: MenuOpenChangeDetails) => void) | undefined
+    >();
+    expectTypeOf<MenuOpenChangeDetails>().toEqualTypeOf<{
+      reason: MenuOpenChangeReason;
+      event: Event;
+    }>();
+    expectTypeOf<MenuOpenChangeReason>().toEqualTypeOf<
+      | 'trigger-click'
+      | 'trigger-key'
+      | 'hover'
+      | 'context-menu'
+      | 'item-click'
+      | 'tab'
+      | 'arrow-key'
+      | 'escape'
+      | 'outside-press'
+      | 'focus-outside'
+      | 'scroll'
+      | 'parent'
+    >();
+    // A callback written for one argument still fits.
+    expectTypeOf<(open: boolean) => void>().toExtend<NonNullable<MenuProps['onOpenChange']>>();
   });
 
   it('useMenuContext and useMenuListContext, narrow views of a Menu and its list', () => {

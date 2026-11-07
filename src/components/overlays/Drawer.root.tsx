@@ -46,6 +46,7 @@ import {
   type DrawerBodyProps,
 } from './Drawer.parts';
 import { scrollSeparatorClasses, useScrollState } from './Drawer.scroll';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The Drawer root: its props, the child scan, the layout and the development checks, on the drawer
@@ -147,6 +148,15 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    */
   modalType?: DrawerModalType;
   /**
+   * Light dismiss of a `non-modal` drawer, as Dialog's `lightDismiss`: a press on the page and
+   * focus moving out of the drawer close it, with the reasons `outside-press` and `focus-outside`
+   * in `onOpenChange`; the element that opened it counts as inside, so its trigger still toggles
+   * it. Without it a non-modal drawer closes only on Escape from inside, the Close button and
+   * `Drawer.Close`. Ignored with `modal`, `alert` and by an inline drawer. A WaveUI addition.
+   * @default false
+   */
+  lightDismiss?: boolean;
+  /**
    * The backdrop of a modal or alert drawer, as `Dialog.Content`'s `backdrop`: a `div` behind the
    * panel, `aria-hidden`. Shorthand content renders inside it; a slot object's `className` (merged
    * last), `style`, data attributes, `ref` and handlers go to it, and its `appearance`
@@ -189,7 +199,8 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * under a `WaveProvider` with `motion="none"`, which otherwise turns the default off. The
    * panel's motion decides when the drawer unmounts or hides: a replacement longer than the
    * panel's exit is cut off there. Ignored with `modalType="non-modal"` and by an inline drawer
-   * (a development warning says so). Fluent's `OverlayDrawer` `backdropMotion`.
+   * (a development warning says so, except for `null`, which asks for no motion anyway). Fluent's
+   * `OverlayDrawer` `backdropMotion`.
    * @default the fade above
    */
   backdropMotion?: MotionSlot | null;
@@ -252,6 +263,16 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * @default true
    */
   unmountOnClose?: boolean;
+  /**
+   * The element an overlay drawer's panel and backdrop render into, in place of the
+   * `WaveProvider`'s `portalContainer` or `document.body` (Fluent's `mountNode`; a nested
+   * `WaveProvider` with its own `portalContainer` was the only way before). It keeps the theme
+   * classes, direction and token overrides of the provider around the Drawer. Ignored by an
+   * inline drawer. The panel is `position: fixed`, so the node needs no positioning of its own
+   * unless a transform or filter on it makes it the containing block.
+   * @default the provider's `portalContainer`, else `document.body`
+   */
+  mountNode?: HTMLElement | null;
   /**
    * The drawer's content, placed by the Drawer, also from a Fragment (`{isMobile && <>…</>}`) and
    * when written in a Server Component: `Drawer.Trigger` children render in place (outside the
@@ -435,6 +456,8 @@ function DrawerBuiltInHeader({
   closeButton,
   part,
 }: DrawerBuiltInHeaderProps) {
+  const appClassName = useAppClassName(drawerTitleClassNames.root);
+
   const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
   const hasTitleAction = slotRendersContent(titleAction);
   if (!hasTitle && !hasTitleAction && closeButton === null) return null;
@@ -452,7 +475,11 @@ function DrawerBuiltInHeader({
       {hasTitle && (
         <h2
           id={titleId}
-          className={wcn(drawerTitleClassNames.root, 'wave:text-subtitle-1 wave:font-semibold')}
+          className={wcn(
+            drawerTitleClassNames.root,
+            'wave:text-subtitle-1 wave:font-semibold',
+            appClassName,
+          )}
         >
           {title}
         </h2>
@@ -536,6 +563,7 @@ export const DrawerRoot = ({
   position = 'end',
   size = 'small',
   modalType = 'modal',
+  lightDismiss = false,
   backdrop,
   motion,
   backdropMotion,
@@ -551,6 +579,7 @@ export const DrawerRoot = ({
   slotProps,
   ...rest
 }: DrawerProps) => {
+  const appClassName = useAppClassName(drawerClassNames.root);
   const [openState, requestOpen] = useModalOpenState(openProp, defaultOpen, onOpenChange);
   // An overlay's panel lives in a portal, which renders only in the browser: until then (the
   // server HTML, hydration) it reports itself closed, so the trigger's aria-expanded and
@@ -668,11 +697,13 @@ export const DrawerRoot = ({
       size={size}
       separator={separator}
       modalType={modalType}
+      lightDismiss={lightDismiss}
       unmountOnClose={unmountOnClose}
       inlineAs="aside"
       trigger={trigger}
       finalFocusRef={finalFocusRef}
       rootClassName={drawerClassNames.root}
+      appClassName={appClassName}
       backdropClassName={drawerClassNames.backdrop}
       collapseClassName={drawerClassNames.collapse}
       backdrop={backdrop}

@@ -19,6 +19,8 @@ import type { TagAppearance, TagShape, TagSize } from '../../lib/types';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import { useButtonSemantics } from '../button/Button.semantics';
 import {
   MERGED_DISABLED_FOCUSABLE_PROPS,
   mergedAriaDisabledClasses,
@@ -63,6 +65,7 @@ import {
   tagStartInsetClasses,
 } from './tagStyles';
 import type { TagLook } from './tagStyles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Props of InteractionTag: the element that holds the Primary and Secondary buttons. */
 export interface InteractionTagProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -97,6 +100,17 @@ export interface InteractionTagProps extends React.HTMLAttributes<HTMLDivElement
    */
   disabled?: boolean;
   /**
+   * Marks both buttons unavailable like `disabled` (the dimmed look, no activation, `data-disabled`)
+   * but keeps them focusable and in the Tab order and the TagGroup's arrow-key order: for a tag
+   * that needs a Tooltip saying why it is unavailable, or that disables itself when it is
+   * activated. The buttons render `aria-disabled="true"`, `data-disabled` and
+   * `data-disabled-focusable` instead of the native `disabled`; clicks, Enter, Space and Delete
+   * are prevented and no handler of yours or the group's runs. Wins over `disabled`, also over a
+   * disabled TagGroup's. Fluent's tags have no counterpart.
+   * @default false
+   */
+  disabledFocusable?: boolean;
+  /**
    * Outside a selecting TagGroup: draws the selected look and makes the Primary a toggle:
    * `aria-pressed="true"`, or `"false"` for `selected={false}`. Leave it `undefined` for an
    * action that is not a toggle (no `aria-pressed`). Inside a selecting TagGroup (`value`,
@@ -109,8 +123,12 @@ export interface InteractionTagProps extends React.HTMLAttributes<HTMLDivElement
   ref?: React.Ref<HTMLDivElement>;
 }
 
-/** Props of InteractionTag.Primary: the tag's main action (or its toggle in a selecting TagGroup). */
-export interface InteractionTagPrimaryProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+/**
+ * The own props of InteractionTag.Primary, the tag's main action (or its toggle in a selecting
+ * TagGroup): the component-specific props only. Every other prop comes from the element it renders
+ * (`as`, a `<button>` by default).
+ */
+export interface InteractionTagPrimaryOwnProps {
   /**
    * A visual before the text (an Avatar, sized for the tag: 24, 20 or 16px, unless it sets its
    * own `size`). Decorative (`aria-hidden`): the button is named by its text.
@@ -125,10 +143,18 @@ export interface InteractionTagPrimaryProps extends React.ButtonHTMLAttributes<H
   secondaryText?: React.ReactNode;
   /**
    * Disables the Primary natively; or-ed with the InteractionTag's `disabled` (it cannot
-   * re-enable a disabled tag).
+   * re-enable a disabled tag). With `as` other than a `<button>` the element gets
+   * `aria-disabled="true"` and `tabIndex={-1}` instead, and an `<a>` drops its `href`, as Button's.
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Makes the Primary unavailable but focusable (`aria-disabled`, `data-disabled`,
+   * `data-disabled-focusable`; no activation, no handler of yours or the tag's toggle); or-ed
+   * with the InteractionTag's `disabledFocusable`. Wins over `disabled`.
+   * @default false
+   */
+  disabledFocusable?: boolean;
   /**
    * Props for the elements the Primary draws around its text, by part, merged into each part's
    * own (Fluent UI's `primaryText` and `secondaryText` slot props): your classes after the
@@ -159,8 +185,26 @@ export interface InteractionTagPrimaryProps extends React.ButtonHTMLAttributes<H
      */
     secondaryText?: SlotPart<'span'>;
   };
-  ref?: React.Ref<HTMLButtonElement>;
 }
+
+/**
+ * Props of {@link InteractionTagPrimary} rendered as `C` (default `'button'`).
+ * `InteractionTagPrimaryProps` without a type argument is the props of a Primary that is a
+ * `<button>`, `ref` included.
+ */
+export type InteractionTagPrimaryProps<C extends React.ElementType = 'button'> = PolymorphicProps<
+  C,
+  InteractionTagPrimaryOwnProps
+>;
+
+/** The props the Primary reads, for any `as` (the public typing is `PolymorphicComponent`). */
+type InteractionTagPrimaryImplProps = InteractionTagPrimaryOwnProps &
+  React.HTMLAttributes<HTMLElement> & {
+    as?: React.ElementType;
+    ref?: React.Ref<HTMLElement>;
+    href?: string;
+    disabled?: boolean;
+  };
 
 /** Props of InteractionTag.Secondary: the tag's separate Dismiss button. */
 export interface InteractionTagSecondaryProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -177,6 +221,13 @@ export interface InteractionTagSecondaryProps extends React.ButtonHTMLAttributes
    * @default false
    */
   disabled?: boolean;
+  /**
+   * Makes the Secondary unavailable but focusable (`aria-disabled`, `data-disabled`,
+   * `data-disabled-focusable`; no click, no dismissal); or-ed with the InteractionTag's
+   * `disabledFocusable`. Wins over `disabled`.
+   * @default false
+   */
+  disabledFocusable?: boolean;
   /**
    * Props for the glyph the Secondary draws, merged into its own: your classes after its own
    * (yours win a conflict), your styles over its styles, your attributes and handlers added, your
@@ -212,8 +263,10 @@ interface InteractionTagContextValue {
   shape: TagShape;
   /** The look of both buttons: the appearance, or the selected look over it. */
   look: TagLook;
-  /** Whether the tag is disabled (its own `disabled`, or its TagGroup's). */
+  /** Whether the tag is disabled (its own `disabled` or `disabledFocusable`, or its TagGroup's). */
   disabled: boolean;
+  /** Whether its buttons stay focusable while disabled (`disabledFocusable`). */
+  focusable: boolean;
   /** Whether the tag is selected (`data-selected`). */
   selected: boolean;
   /** The Primary's `aria-pressed`: `undefined` for an action that is not a toggle. */
@@ -304,6 +357,7 @@ const INERT_CONTEXT: InteractionTagContextValue = {
   shape: 'circular',
   look: 'filled',
   disabled: false,
+  focusable: false,
   selected: false,
   pressed: undefined,
   dimDisabled: true,
@@ -344,11 +398,12 @@ const SELECTED_IN_GROUP_MESSAGE =
 
 /**
  * The state props of a tag button: natively disabled, or, while it keeps the focus it had when it
- * was disabled, the focusable disabled state (its click blocked).
+ * was disabled or when `disabledFocusable` asks for it, the focusable disabled state (its click
+ * blocked).
  */
-function buttonStateProps(disabled: boolean, held: boolean) {
+function buttonStateProps(disabled: boolean, held: boolean, focusable: boolean) {
   if (!disabled) return undefined;
-  return held ? MERGED_DISABLED_FOCUSABLE_PROPS : { disabled: true };
+  return held || focusable ? MERGED_DISABLED_FOCUSABLE_PROPS : { disabled: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -362,6 +417,7 @@ const InteractionTagRoot = ({
   size: sizeProp,
   shape: shapeProp,
   disabled: disabledProp = false,
+  disabledFocusable = false,
   selected: selectedProp,
   role,
   hidden,
@@ -370,6 +426,8 @@ const InteractionTagRoot = ({
   ref,
   ...rest
 }: InteractionTagProps) => {
+  const appClassName = useAppClassName(interactionTagClassNames.root);
+
   const group = useTagGroupContext();
   const rootRef = React.useRef<HTMLDivElement>(null);
   const mergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
@@ -390,7 +448,10 @@ const InteractionTagRoot = ({
     ? shapeProp
     : (group?.shape ?? 'circular');
   // A disabled group disables every tag: the tag's own `disabled={false}` cannot re-enable it.
-  const disabled = (group?.disabled ?? false) || disabledProp;
+  // `disabledFocusable` disables the tag too, keeping its buttons focusable (and winning over the
+  // group's native `disabled`).
+  const focusable = disabledFocusable === true;
+  const disabled = (group?.disabled ?? false) || disabledProp || focusable;
   const dimDisabled = group?.dimDisabled ?? true;
 
   // In a group that reports dismissals or selects, the tag's value (else a generated id).
@@ -432,6 +493,7 @@ const InteractionTagRoot = ({
       shape,
       look,
       disabled,
+      focusable,
       selected,
       pressed,
       dimDisabled,
@@ -446,6 +508,7 @@ const InteractionTagRoot = ({
       shape,
       look,
       disabled,
+      focusable,
       selected,
       pressed,
       dimDisabled,
@@ -464,6 +527,7 @@ const InteractionTagRoot = ({
         data-shape={shape}
         data-selected={selected ? '' : undefined}
         data-disabled={disabled ? '' : undefined}
+        data-disabled-focusable={disabled && focusable ? '' : undefined}
         data-wave-tag-item=""
         role={role ?? listItemRole}
         hidden={hiddenByHost || hidden}
@@ -472,6 +536,7 @@ const InteractionTagRoot = ({
         className={wcn(
           interactionTagClassNames.root,
           'wave:group/interaction-tag wave:inline-flex wave:items-stretch',
+          appClassName,
           className,
         )}
       >
@@ -496,26 +561,48 @@ InteractionTagRoot.displayName = 'InteractionTag';
  * and Backspace on it click the tag's Secondary when there is one. Its props, `ref` and
  * `className` go to the button. Flat name of `InteractionTag.Primary`, for React Server
  * Components.
+ *
+ * Polymorphic: `as` renders another element or component (a link chip, `as="a"` with `href`;
+ * a router link) with its props type-checked. A `<button>` is the default and keeps `type="button"`;
+ * another element that is not interactive by itself gets `role="button"`, a tab stop and Enter
+ * and Space activation, and a disabled one `aria-disabled`, as Button's `as`. A tag that is a
+ * toggle renders `aria-pressed`, which belongs on a button: pass it an element that has the
+ * `button` role. Fluent's `InteractionTagPrimary` is a `<button>` only.
  */
-export const InteractionTagPrimary = ({
-  media,
-  icon,
-  secondaryText,
-  disabled: disabledProp = false,
-  'aria-pressed': ariaPressed,
-  slotProps,
-  className,
-  children,
-  onClick,
-  onKeyDown,
-  onFocus,
-  onBlur,
-  ref,
-  ...rest
-}: InteractionTagPrimaryProps) => {
+export const InteractionTagPrimary: PolymorphicComponent<
+  'button',
+  InteractionTagPrimaryOwnProps
+> = (props) => {
+  const appClassName = useAppClassName(interactionTagPrimaryClassNames.root);
+
+  const {
+    as,
+    media,
+    icon,
+    secondaryText,
+    disabled: disabledProp = false,
+    disabledFocusable: disabledFocusableProp = false,
+    'aria-pressed': ariaPressed,
+    slotProps,
+    className,
+    children,
+    onClick,
+    onKeyDown,
+    onKeyUp,
+    onFocus,
+    onBlur,
+    ref,
+    ...rest
+  } = props as InteractionTagPrimaryImplProps;
+  const Component: React.ElementType = as ?? 'button';
+  const tagName = typeof Component === 'string' ? Component : null;
+  const isButton = Component === 'button';
   const tag = useInteractionTagContext('InteractionTag.Primary');
   const { size, look, shape } = tag;
-  const disabled = tag.disabled || disabledProp;
+  // `disabledFocusable` (the tag's or the Primary's) wins over `disabled`: the Primary is
+  // unavailable but stays focusable.
+  const focusable = tag.focusable || disabledFocusableProp === true;
+  const disabled = tag.disabled || disabledProp || focusable;
   const hold = useHeldFocus(disabled);
   // Its text names the Secondary while it renders (D43).
   const registerPrimary = tag.primaries.register;
@@ -536,14 +623,14 @@ export const InteractionTagPrimary = ({
 
   // In a selecting TagGroup a click (also Enter and Space) toggles the tag's value, after the
   // consumer's `onClick`; never for a click from a portal opened from the Primary (C-COMPOSE).
-  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     if (!disabled && isOwnEvent(event)) tag.toggle();
   };
 
   // Delete and Backspace dismiss the tag through the Secondary's own click, so whatever cancels
   // that click (its `onClick`'s `preventDefault()`, a disabled or held Secondary) cancels them
   // too. Not from a portal opened from the Primary, and not while the Primary itself is held.
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (disabled || event.target !== event.currentTarget || !isDismissKey(event)) return;
     const secondaryButton = tag.secondaryRef?.current;
     if (!secondaryButton || secondaryButton.disabled) return;
@@ -557,6 +644,20 @@ export const InteractionTagPrimary = ({
   const secondaryTextPart = slotProps?.secondaryText;
   const textBlock = disabled ? BLOCK_CLICK : undefined;
   const primaryTextId = tag.primaryTextId || undefined;
+  // The activation semantics of the element: a `<button>` keeps its own (the state props below);
+  // another element gets Button's role, tab stop, keys and disabled attributes.
+  const semantics = useButtonSemantics({
+    tag: isButton ? 'button' : tagName,
+    href: rest.href,
+    disabled: isButton ? false : disabled,
+    disabledFocusable: isButton ? false : focusable,
+    onClick: composeEventHandlers(onClick, handleClick),
+    onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
+    onKeyUp,
+    onBlur: composeEventHandlers(onBlur, hold.onBlur, { checkDefaultPrevented: false }),
+  });
+  const elementProps: Record<string, unknown> = { ...rest };
+  for (const [key, value] of Object.entries(semantics.defaults)) elementProps[key] ??= value;
   const primaryTextClassName = wcn(
     interactionTagPrimaryClassNames.primaryText,
     hasSecondary && TAG_PRIMARY_TEXT_TWO_LINE_CLASSES,
@@ -580,20 +681,20 @@ export const InteractionTagPrimary = ({
   );
 
   return (
-    <button
-      type="button"
+    <Component
       // The tag's state (`selected`, or a selecting TagGroup's value) decides; a consumer
       // `aria-pressed` applies only to a Primary that is no toggle of the tag's.
       aria-pressed={tag.pressed ?? ariaPressed}
       data-selected={tag.selected ? '' : undefined}
-      {...rest}
+      {...elementProps}
       ref={ref}
-      onClick={composeEventHandlers(onClick, handleClick)}
-      // After `onClick`: a held Primary's click is blocked, the toggle included.
-      {...buttonStateProps(disabled, hold.held)}
-      onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
+      onClick={semantics.handlers.onClick}
+      onKeyDown={semantics.handlers.onKeyDown}
+      onKeyUp={semantics.handlers.onKeyUp}
       onFocus={composeEventHandlers(onFocus, hold.onFocus, { checkDefaultPrevented: false })}
-      onBlur={composeEventHandlers(onBlur, hold.onBlur, { checkDefaultPrevented: false })}
+      onBlur={semantics.handlers.onBlur}
+      // After the handlers: an unavailable Primary's click is blocked, the toggle included.
+      {...(isButton ? buttonStateProps(disabled, hold.held, focusable) : semantics.enforced)}
       className={wcn(
         interactionTagPrimaryClassNames.root,
         INTERACTION_TAG_BUTTON_BASE_CLASSES,
@@ -611,6 +712,7 @@ export const InteractionTagPrimary = ({
         disabledClasses(disabled, tag.dimDisabled),
         focusRing,
         size === 'extra-small' && INTERACTION_TAG_EXTRA_SMALL_HIT_CLASSES,
+        appClassName,
         className,
       )}
     >
@@ -649,7 +751,7 @@ export const InteractionTagPrimary = ({
       ) : (
         primaryText
       )}
-    </button>
+    </Component>
   );
 };
 InteractionTagPrimary.displayName = 'InteractionTagPrimary';
@@ -681,6 +783,7 @@ const BUTTON_CHILD_MESSAGE =
 export const InteractionTagSecondary = ({
   dismissLabel = 'Dismiss',
   disabled: disabledProp = false,
+  disabledFocusable: disabledFocusableProp = false,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
   slotProps,
@@ -693,9 +796,12 @@ export const InteractionTagSecondary = ({
   ref,
   ...rest
 }: InteractionTagSecondaryProps) => {
+  const appClassName = useAppClassName(interactionTagSecondaryClassNames.root);
+
   const tag = useInteractionTagContext('InteractionTag.Secondary');
   const { size, look } = tag;
-  const disabled = tag.disabled || disabledProp;
+  const focusable = tag.focusable || disabledFocusableProp === true;
+  const disabled = tag.disabled || disabledProp || focusable;
   const hold = useHeldFocus(disabled);
   const dismissLabelId = useId('interaction-tag-dismiss');
   const contentId = useId('interaction-tag-dismiss-content');
@@ -784,7 +890,7 @@ export const InteractionTagSecondary = ({
       aria-label={ariaLabel}
       aria-labelledby={labelledBy}
       onClick={composeEventHandlers(onClick, handleClick)}
-      {...buttonStateProps(disabled, hold.held)}
+      {...buttonStateProps(disabled, hold.held, focusable)}
       onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
       onFocus={composeEventHandlers(onFocus, hold.onFocus, { checkDefaultPrevented: false })}
       onBlur={composeEventHandlers(onBlur, hold.onBlur, { checkDefaultPrevented: false })}
@@ -803,6 +909,7 @@ export const InteractionTagSecondary = ({
         disabledClasses(disabled, tag.dimDisabled),
         focusRing,
         size === 'extra-small' && INTERACTION_TAG_EXTRA_SMALL_HIT_CLASSES,
+        appClassName,
         className,
       )}
     >

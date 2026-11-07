@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import * as React from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Drawer, type DrawerProps } from '../Drawer';
 import { Dialog } from '../Dialog';
@@ -481,7 +481,8 @@ describe('Drawer unmountOnClose', () => {
       await user.click(button('Open filters'));
       expect(offset()).toBe('320px');
       await user.keyboard('{Escape}');
-      expect(offset()).toBe('');
+      // The toasts stay clear of the panel while it exits, and return once its exit has ended.
+      await waitFor(() => expect(offset()).toBe(''));
     });
   });
 
@@ -513,7 +514,7 @@ describe('Drawer unmountOnClose', () => {
       );
     }
 
-    it('warns once when a controlled kept-mounted drawer closes while a popover inside is open', async () => {
+    it('closes a popover opened inside with a controlled kept-mounted overlay drawer, and warns of nothing', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -522,12 +523,12 @@ describe('Drawer unmountOnClose', () => {
         await user.click(button('Help'));
         expect(screen.getByText('Help text')).toBeInTheDocument();
         rerender(<DrawerWithPopover open={false} />);
-        expect(warn).not.toHaveBeenCalled();
         act(() => {
-          vi.advanceTimersByTime(0);
+          vi.advanceTimersByTime(10);
         });
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn).toHaveBeenCalledWith(OPEN_INSIDE_WARNING);
+        // The popover's layer was dismissed with the drawer's (`parent-closed`).
+        expect(screen.queryByText('Help text')).not.toBeInTheDocument();
+        expect(warn).not.toHaveBeenCalled();
       } finally {
         warn.mockRestore();
         vi.useRealTimers();

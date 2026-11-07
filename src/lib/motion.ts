@@ -54,7 +54,8 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   while the panel keeps its size. It holds no duration: the element adds its size's from
  *   `drawerDurations`.
  * - `popupMotion`, a positioned popup (Popover.Content, Menu.Popover and its submenus, the
- *   InfoButton note and the TeachingPopover surface): opacity and translate. It enters from
+ *   InfoButton note, the TeachingPopover surface, the listbox popups of the pickers, the DatePicker
+ *   calendar and the AvatarGroup overflow popup): opacity and translate. It enters from
  *   transparent and moved 4px toward its anchor, on the axis of the side it opened on (the
  *   resolved physical side the surface renders as `data-side`: a popup below its anchor starts
  *   4px higher, one to its right 4px further left), over the normal duration (200 ms) with the mid
@@ -79,6 +80,9 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   has once entered: a column sized by its content would grow to the part's longest unbreakable
  *   line (a long link, a label that does not wrap), and the part would be wider, its end side
  *   clipped and its lines broken anew, for as long as it moves.
+ *   While the element is not entered it also lifts the part's own maximum height: a percentage
+ *   maximum would follow the moving track instead of the page and squeeze the part, where the track
+ *   should only clip it. Entered, the maximum applies again, as before.
  * - `collapseMotion`, the motion of that element: its row track and its opacity. It enters from
  *   an empty, transparent track and exits back to one over the normal duration (200 ms) with the
  *   max easy-ease curve, both ways, so the space the part takes opens and closes while the content
@@ -107,7 +111,10 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   transparent while it slides 8px in from beyond the stack's edge (from below at the bottom,
  *   from above at the top). It exits over the normal duration (200 ms) with the easy-ease curve:
  *   the toast fades out in place first, then the track and the margin close after a delay of the
- *   same normal duration, so the toasts around it glide together once it has faded. The margin
+ *   same normal duration, so the toasts around it glide together once it has faded. The container
+ *   clips while it exits, but the clip itself waits out that delay (a discrete `overflow`
+ *   transition), so the toast's shadow shows while it fades; a browser that does not transition
+ *   `overflow` clips from the first frame, as 0.15 did. The margin
  *   makes up for the gap the region keeps after each toast, so nothing moves when the exited
  *   container unmounts. Under reduced motion nothing is transitioned, so the delay goes too.
  * - `messageBarGroupItemStructure`, the element around each bar of a MessageBarGroup (not motion:
@@ -247,10 +254,12 @@ export const tooltipMotion =
  * The structure of the element around a disclosure's collapsing part (Accordion's region, a Tree
  * group, a Nav category's list): no box while open, a clipping one-track grid of rows while it
  * enters or exits, with the part at the top of the track at its own height (clipped, not
- * squeezed) and in a whole column with a zero minimum (the width it has once entered).
+ * squeezed) and in a whole column with a zero minimum (the width it has once entered). While it is
+ * not entered it also lifts the part's own maximum height: a percentage maximum would resolve
+ * against the moving track, so the part is clipped by the track instead and keeps its height.
  */
 export const collapseStructure =
-  'wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-start wave:overflow-hidden wave:data-[presence=entered]:contents';
+  'wave:grid wave:grid-cols-[minmax(0,1fr)] wave:grid-rows-[minmax(0,1fr)] wave:items-start wave:overflow-hidden wave:data-[presence=entered]:contents wave:not-data-[presence=entered]:*:max-h-none';
 
 /**
  * A disclosure's default collapse, on the element around its part: the row track opens from zero
@@ -283,9 +292,9 @@ export const toastStructure =
  * that edge together, 250 ms; it fades out over 200 ms, then closes over 200 ms more.
  */
 export const toastMotion: Readonly<Record<'top' | 'bottom', string>> = {
-  top: 'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:-translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
+  top: 'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:transition-[grid-template-rows,margin-bottom,opacity,translate,overflow] wave:data-[presence=exiting]:[transition-behavior:allow-discrete] wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s,var(--wave-duration-normal)] wave:motion-reduce:transition-none wave:motion-reduce:data-[presence=exiting]:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:-translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
   bottom:
-    'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s] wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
+    'wave:transition-[grid-template-rows,margin-bottom,opacity,translate] wave:duration-wave-gentle wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-normal wave:data-[presence=exiting]:ease-wave-easy-ease wave:data-[presence=exiting]:transition-[grid-template-rows,margin-bottom,opacity,translate,overflow] wave:data-[presence=exiting]:[transition-behavior:allow-discrete] wave:data-[presence=exiting]:[transition-delay:var(--wave-duration-normal),var(--wave-duration-normal),0s,0s,var(--wave-duration-normal)] wave:motion-reduce:transition-none wave:motion-reduce:data-[presence=exiting]:transition-none wave:data-[presence=entering]:starting:grid-rows-[minmax(0,0fr)] wave:data-[presence=entering]:starting:-mb-2 wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=entering]:starting:translate-y-2 wave:data-[presence=exiting]:grid-rows-[minmax(0,0fr)] wave:data-[presence=exiting]:-mb-2 wave:data-[presence=exiting]:opacity-0',
 };
 
 /**

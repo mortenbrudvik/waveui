@@ -13,6 +13,7 @@ import {
   useOptionalMenuContext,
 } from './Menu.context';
 import { BLOCK_CLICK, MENU_PART_LOCKS, menuItemClasses } from './Menu.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the MenuItem sub-component. */
 export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -26,8 +27,37 @@ export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
    * (`dir="auto"`), so "Ctrl+," keeps its order in an RTL menu.
    */
   shortcut?: string;
-  /** Whether the menu item is disabled (`aria-disabled`; skipped by keyboard navigation). */
+  /**
+   * Content shown at the end of the item instead of `shortcut` (Fluent's `secondaryContent` slot,
+   * which `shortcut` stands for as a string): a count, a badge, a key-binding drawn by your own
+   * component. It takes the shortcut's place, element and parts (`slotProps.shortcut`, the
+   * `shortcut` stable class, `dir="auto"`), and wins over `shortcut` while it renders content (a
+   * value that renders nothing leaves `shortcut` as it is). Typeahead and the item's name ignore
+   * it, as they ignore `shortcut`; the item's accessible name includes its text, as it does the
+   * shortcut's.
+   */
+  secondaryContent?: React.ReactNode;
+  /**
+   * A second, smaller line of text under the label (Fluent's `subText` slot). It is part of the
+   * item's accessible name, as in Fluent, which nests it in the label's element. Typeahead
+   * matches the label only. A value that renders nothing draws no line.
+   */
+  subText?: React.ReactNode;
+  /**
+   * Whether the menu item is disabled (`aria-disabled`; skipped by keyboard navigation, unless
+   * `disabledFocusable`).
+   */
   disabled?: boolean;
+  /**
+   * Unavailable but still reachable by the keyboard, as Fluent's disabled menu items are: the item
+   * is disabled as with `disabled` (`aria-disabled`, `data-disabled`, never activated, no
+   * `onClick`) and also carries `data-disabled-focusable`, which keeps it in the menu's arrow-key
+   * and typeahead order, so a screen-reader user can find it and read why it is unavailable. The
+   * pointer does not focus it while it hovers it (a disabled item looks unavailable). Wins over
+   * `disabled`, like the button family's `disabledFocusable`.
+   * @default false
+   */
+  disabledFocusable?: boolean;
   /**
    * Keep a popup menu open after this item is activated. `true` or `false` here wins over the
    * Menu's `persistOnItemClick`.
@@ -78,6 +108,12 @@ export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
      */
     shortcut?: SlotPart<'span'>;
     /**
+     * The `<span>` of `subText`, under the label, rendered while `subText` renders content (stable
+     * class `wave-menu-item__sub-text`). Locked: no role, tab index or roving container marker,
+     * and the menu's markers. A click on it is a click on the item, after your handler.
+     */
+    subText?: SlotPart<'span'>;
+    /**
      * The chevron `<svg>` at the end of a submenu's trigger item, rendered only there and mirrored
      * in a right-to-left menu (stable class `wave-menu-item__submenu-indicator`). Locked:
      * `aria-hidden` and `focusable` (it is a drawing), no role, tab index or roving container
@@ -112,6 +148,10 @@ export interface MenuItemRowProps {
   label: React.ReactNode;
   /** The shortcut text (rendered with `dir="auto"`). */
   shortcut?: string;
+  /** The `secondaryContent`: rendered in the shortcut's element and winning over `shortcut`. */
+  secondaryContent?: React.ReactNode;
+  /** The `subText`: the second line under the label. */
+  subText?: React.ReactNode;
   /** Content at the row's end: the submenu chevron or a switch. */
   end?: React.ReactNode;
   /**
@@ -122,11 +162,18 @@ export interface MenuItemRowProps {
   markLabel?: boolean;
   /**
    * Stable classes of the row's parts, written literally by each item kind (the check column,
-   * the icon box, the label and the shortcut).
+   * the icon box, the label, the shortcut and the sub text).
    */
   partClassNames?: MenuItemRowPartClassNames;
-  /** The item's `slotProps` parts of the label and the shortcut, merged only when given. */
-  parts?: { content?: SlotPart<'span'>; shortcut?: SlotPart<'span'> };
+  /**
+   * The item's `slotProps` parts of the label, the shortcut and the sub text, merged only when
+   * given.
+   */
+  parts?: {
+    content?: SlotPart<'span'>;
+    shortcut?: SlotPart<'span'>;
+    subText?: SlotPart<'span'>;
+  };
   /** The item's own `disabled`: the parts' click handlers are not called while it is set. */
   disabled?: boolean;
 }
@@ -137,6 +184,7 @@ export interface MenuItemRowPartClassNames {
   icon?: string;
   content?: string;
   shortcut?: string;
+  subText?: string;
 }
 
 /**
@@ -171,6 +219,8 @@ export function MenuItemRow({
   icon,
   label,
   shortcut,
+  secondaryContent,
+  subText,
   end,
   markLabel = true,
   partClassNames,
@@ -194,11 +244,44 @@ export function MenuItemRow({
           { 'aria-hidden': true, 'data-menu-icon': '' },
         )
       : null;
-  const contentClasses = wcn(partClassNames?.content, 'wave:flex-1');
+  // A sub text puts the label and a second line in a column that fills the row; the label then
+  // fills only its own line.
+  const hasSubText = slotRendersContent(subText);
+  const contentClasses = wcn(partClassNames?.content, !hasSubText && 'wave:flex-1');
   const labelMarker = markLabel && hasLabel && typeof label !== 'string' ? '' : undefined;
-  const shortcutClasses =
-    shortcut &&
-    wcn(partClassNames?.shortcut, 'wave:ms-4 wave:text-caption-1 wave:text-muted-foreground');
+  // `secondaryContent` takes the shortcut's place while it renders content.
+  const hasSecondaryContent = slotRendersContent(secondaryContent);
+  const secondary = hasSecondaryContent ? materialiseSlotContent(secondaryContent) : shortcut;
+  const hasSecondary = hasSecondaryContent || !!shortcut;
+  const shortcutClasses = hasSecondary
+    ? wcn(partClassNames?.shortcut, 'wave:ms-4 wave:text-caption-1 wave:text-muted-foreground')
+    : undefined;
+  const subTextClasses = wcn(
+    partClassNames?.subText,
+    'wave:text-caption-1 wave:text-muted-foreground',
+  );
+
+  const renderLabel = () => (
+    <span
+      className={contentClasses}
+      data-menu-label={labelMarker}
+      // The parts are merged only when given: a menu renders many items.
+      {...(parts?.content &&
+        mergeSlotProps(parts.content, {
+          className: contentClasses,
+          // The label names the item: a part neither renames nor hides it.
+          locked: {
+            ...MENU_PART_LOCKS,
+            'aria-label': undefined,
+            ...HIDDEN_PART_LOCKS,
+            'data-menu-label': labelMarker,
+          },
+          blockHandlers: disabled ? BLOCK_CLICK : undefined,
+        }))}
+    >
+      {materialiseSlotContent(label)}
+    </span>
+  );
 
   return (
     <>
@@ -217,28 +300,29 @@ export function MenuItemRow({
         hasLabel && renderColumnSpace('checkmark')
       )}
       {iconNode ?? (hasLabel && renderColumnSpace('icon'))}
-      <span
-        className={contentClasses}
-        data-menu-label={labelMarker}
-        // The parts are merged only when given: a menu renders many items.
-        {...(parts?.content &&
-          mergeSlotProps(parts.content, {
-            className: contentClasses,
-            // The label names the item: a part neither renames nor hides it.
-            locked: {
-              ...MENU_PART_LOCKS,
-              'aria-label': undefined,
-              ...HIDDEN_PART_LOCKS,
-              'data-menu-label': labelMarker,
-            },
-            blockHandlers: disabled ? BLOCK_CLICK : undefined,
-          }))}
-      >
-        {materialiseSlotContent(label)}
-      </span>
+      {hasSubText ? (
+        <span className="wave:flex wave:min-w-0 wave:flex-1 wave:flex-col">
+          {renderLabel()}
+          {/* Whitespace between the two texts (ignored by the flex layout) keeps the item's name
+              from running them together. */}{' '}
+          <span
+            className={subTextClasses}
+            {...(parts?.subText &&
+              mergeSlotProps(parts.subText, {
+                className: subTextClasses,
+                locked: MENU_PART_LOCKS,
+                blockHandlers: disabled ? BLOCK_CLICK : undefined,
+              }))}
+          >
+            {materialiseSlotContent(subText)}
+          </span>
+        </span>
+      ) : (
+        renderLabel()
+      )}
       {/* The shortcut takes its direction from its own text (`dir="auto"` also isolates it): in an
           RTL menu, "Ctrl+," would otherwise be reordered to ",+Ctrl". */}
-      {shortcut && (
+      {hasSecondary && (
         <span
           dir="auto"
           className={shortcutClasses}
@@ -249,7 +333,7 @@ export function MenuItemRow({
               blockHandlers: disabled ? BLOCK_CLICK : undefined,
             }))}
         >
-          {shortcut}
+          {secondary}
         </span>
       )}
       {end}
@@ -344,7 +428,7 @@ export function useMenuItemActivation({
     if (event.defaultPrevented || hasSubmenu) return;
     if (keepOpenOnSpace && clickFromSpaceRef.current) return;
     if (persistOnClick ?? list?.menu.persistOnItemClick ?? false) return;
-    list?.closeFromItem();
+    list?.closeFromItem(event.nativeEvent);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
@@ -370,6 +454,32 @@ export function useMenuItemActivation({
   };
 
   return { onClick: handleClick, onKeyDown: handleKeyDown };
+}
+
+/**
+ * Internal: what `disabled` and `disabledFocusable` make of an item. Either makes it unavailable
+ * (never activated, no `onClick`); `disabledFocusable` also marks it `data-disabled-focusable`,
+ * which keeps it in the menu's roving order (`useRovingTabIndex` skips every other
+ * `aria-disabled="true"` item). `ariaDisabled` is the consumer's own attribute, which only a
+ * available item keeps.
+ */
+export function getMenuItemDisabledProps(
+  disabled: boolean,
+  disabledFocusable: boolean,
+  ariaDisabled: React.AriaAttributes['aria-disabled'],
+): {
+  unavailable: boolean;
+  'aria-disabled': React.AriaAttributes['aria-disabled'];
+  'data-disabled': '' | undefined;
+  'data-disabled-focusable': '' | undefined;
+} {
+  const unavailable = disabled || disabledFocusable;
+  return {
+    unavailable,
+    'aria-disabled': unavailable ? true : ariaDisabled,
+    'data-disabled': unavailable ? '' : undefined,
+    'data-disabled-focusable': disabledFocusable ? '' : undefined,
+  };
 }
 
 /**
@@ -424,7 +534,10 @@ export function useMenuItemPlacementWarning(componentName: string): void {
 export const MenuItem = ({
   icon,
   shortcut,
+  secondaryContent,
+  subText,
   disabled = false,
+  disabledFocusable = false,
   persistOnClick,
   onClick,
   onKeyDown,
@@ -434,6 +547,8 @@ export const MenuItem = ({
   slotProps,
   ...rest
 }: MenuItemProps) => {
+  const appClassName = useAppClassName(menuItemClassNames.root);
+
   const isSubmenuTrigger = React.useContext(MenuSubmenuTriggerContext);
   useMenuItemPlacementWarning('Menu.Item');
 
@@ -441,10 +556,16 @@ export const MenuItem = ({
   const stringLabel = typeof children === 'string' ? children : undefined;
   const ownRovingText = (rest as Record<string, unknown>)['data-roving-text'] !== undefined;
 
+  const { unavailable, ...disabledProps } = getMenuItemDisabledProps(
+    disabled,
+    disabledFocusable,
+    rest['aria-disabled'],
+  );
+
   // A submenu trigger item opens its submenu (the trigger's composed onClick): activating it never
   // closes its own menu.
   const activation = useMenuItemActivation({
-    disabled,
+    disabled: unavailable,
     persistOnClick,
     onClick,
     onKeyDown,
@@ -457,28 +578,30 @@ export const MenuItem = ({
       data-roving-text={stringLabel}
       {...rest}
       ref={ref}
-      aria-disabled={disabled ? true : rest['aria-disabled']}
-      data-disabled={disabled ? '' : undefined}
+      {...disabledProps}
       data-has-submenu={isSubmenuTrigger ? '' : undefined}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={wcn(menuItemClassNames.root, menuItemClasses, className)}
+      className={wcn(menuItemClassNames.root, menuItemClasses, appClassName, className)}
     >
       <MenuItemRow
         icon={icon}
         label={children}
         shortcut={shortcut}
+        secondaryContent={secondaryContent}
+        subText={subText}
         markLabel={!ownRovingText}
         partClassNames={{
           icon: menuItemClassNames.icon,
           content: menuItemClassNames.content,
           shortcut: menuItemClassNames.shortcut,
+          subText: menuItemClassNames.subText,
         }}
         parts={slotProps}
-        disabled={disabled}
+        disabled={unavailable}
         end={
           isSubmenuTrigger
-            ? renderSubmenuIndicator(slotProps?.submenuIndicator, disabled)
+            ? renderSubmenuIndicator(slotProps?.submenuIndicator, unavailable)
             : undefined
         }
       />
@@ -519,6 +642,8 @@ function renderSubmenuIndicator(
  * Also exported as `MenuDivider` (import the flat name from React Server Components).
  */
 export const MenuDivider = ({ className, ref, ...rest }: MenuDividerProps) => {
+  const appClassName = useAppClassName(menuDividerClassNames.root);
+
   return (
     <div
       role="separator"
@@ -527,6 +652,7 @@ export const MenuDivider = ({ className, ref, ...rest }: MenuDividerProps) => {
       className={wcn(
         menuDividerClassNames.root,
         'wave:my-1 wave:border-t wave:border-border',
+        appClassName,
         className,
       )}
     />

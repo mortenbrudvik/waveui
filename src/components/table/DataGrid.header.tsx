@@ -29,6 +29,7 @@ import {
   DataGridWindowRowContext,
   type DataGridWindowRow,
 } from './DataGrid.window';
+import { TABLE_SIZE_CLASSES, useTableSize } from './Table.context';
 import {
   SELECTION_CELL_CLASSES,
   TableSelectionControl,
@@ -40,6 +41,7 @@ import type {
   DataGridHeaderProps,
   DataGridSelectionCellProps,
 } from './DataGrid';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export const cellBase = 'wave:px-4 wave:py-3 wave:border-b wave:border-border';
 
@@ -76,6 +78,7 @@ function DataGridSelectionHeaderCell({
 }: DataGridSelectionHeaderCellProps) {
   const { store, toggleAll, selectAllLabel, selectionHeaderLabel, subtleSelection } =
     useDataGridContext('DataGrid.Header');
+  const size = useTableSize();
   const selectAllPart = React.useContext(DataGridSelectAllPartContext);
   const state = React.useSyncExternalStore(
     store.subscribeSelectAll,
@@ -107,6 +110,7 @@ function DataGridSelectionHeaderCell({
         stableClassName,
         dataGridHeaderClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
+        TABLE_SIZE_CLASSES.selectionCell[size],
         'wave:text-start',
         focusRingInset,
         className,
@@ -155,6 +159,7 @@ export function DataGridSelectionHeaderSlot({
   ref,
 }: DataGridSelectionHeaderCellProps & { initialFirst: boolean }) {
   const slots = React.useContext(DataGridHeaderSlotsContext) ?? INERT_HEADER_SLOTS;
+  const size = useTableSize();
   const [slot] = React.useState(() => ({}));
   const cellRef = React.useRef<HTMLTableCellElement | null>(null);
   const mergedRef = useMergedRefs<HTMLTableCellElement>(cellRef, ref);
@@ -198,6 +203,7 @@ export function DataGridSelectionHeaderSlot({
         stableClassName,
         dataGridHeaderClassNames.selectionCell,
         SELECTION_CELL_CLASSES,
+        TABLE_SIZE_CLASSES.selectionCell[size],
         focusRingInset,
         className,
       )}
@@ -279,6 +285,8 @@ export const DataGridHeader = ({
   ref,
   ...rest
 }: DataGridHeaderProps) => {
+  const appClassName = useAppClassName(dataGridHeaderClassNames.root);
+
   const { selectionMode } = useDataGridContext('DataGrid.Header');
   const windowed = React.useContext(DataGridWindowContext) !== null;
   const [thead, setThead] = React.useState<HTMLTableSectionElement | null>(null);
@@ -334,6 +342,7 @@ export const DataGridHeader = ({
               // A windowed grid scrolls in its wrapper: the header stays at its top, over the
               // rows (on the section: a header cell is positioned for its resize handle).
               windowed && 'wave:sticky wave:top-0 wave:z-1',
+              appClassName,
               className,
             )}
             {...rest}
@@ -360,6 +369,7 @@ DataGridHeader.displayName = 'DataGridHeader';
  * button, and F2 on the cell or the button moves focus to the handle.
  */
 export const DataGridHeaderCell = ({
+  focusMode,
   columnId,
   sortable = false,
   sortIcon,
@@ -372,8 +382,11 @@ export const DataGridHeaderCell = ({
   ref,
   ...rest
 }: DataGridHeaderCellProps) => {
+  const appClassName = useAppClassName(dataGridHeaderCellClassNames.root);
+
   const { sort, requestSort } = useDataGridSortContext('DataGrid.HeaderCell');
   const resize = React.useContext(DataGridResizeContext);
+  const size = useTableSize();
   const fixedLayout = React.useContext(DataGridFixedLayoutContext);
   const labelId = useId('wave-datagrid-header-label');
   /** The column this header sorts, or `undefined` when it is not sortable. */
@@ -424,16 +437,19 @@ export const DataGridHeaderCell = ({
       aria-sort={sortColumnId !== undefined ? (sortedDirection ?? 'none') : undefined}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy ?? contentId}
+      data-focus-mode={focusMode === 'cell' ? undefined : focusMode}
       className={wcn(
         dataGridHeaderCellClassNames.root,
         cellBase,
         'wave:text-start wave:align-middle wave:font-semibold wave:text-caption-1 wave:uppercase wave:tracking-wider',
+        TABLE_SIZE_CLASSES.header[size],
         focusRingInset,
         sortColumnId !== undefined && 'wave:p-0 wave:hover:bg-subtle-hover',
         // Columns laid out from widths: what does not fit is clipped, not drawn over the next.
         fixedLayout && 'wave:overflow-hidden',
         // The box the resize handle is drawn in, along the end edge.
         resizeColumnId !== undefined && 'wave:relative',
+        appClassName,
         className,
       )}
       {...rest}

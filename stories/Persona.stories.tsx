@@ -9,7 +9,16 @@ const meta = {
     ...sizeArgType,
     status: {
       control: 'select',
-      options: ['available', 'busy', 'away', 'offline', 'do-not-disturb', 'out-of-office'],
+      options: [
+        'available',
+        'busy',
+        'away',
+        'offline',
+        'do-not-disturb',
+        'out-of-office',
+        'blocked',
+        'unknown',
+      ],
     },
   },
   args: {

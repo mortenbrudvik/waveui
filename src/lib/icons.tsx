@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { withFlipClass } from './flipIcon';
 
 /**
  * Props of the shared internal icons. Every other SVG attribute is forwarded to the `<svg>`.
@@ -15,6 +16,16 @@ export interface IconProps extends React.SVGProps<SVGSVGElement> {
   size?: number | string;
   /** Accessible name; makes the icon a named image instead of a decorative one. */
   title?: string;
+  /**
+   * Mirrors the glyph horizontally when the icon's own direction is right-to-left (Wave's
+   * `wave-rtl` flip, added after your `className`), for a glyph that points along
+   * the reading direction (a chevron, an arrow). Fluent's `flipInRtl` icon option is the
+   * counterpart, here a prop instead of a property of the icon. The icon's own direction is the
+   * `dir` of the closest element that sets one, so a `WaveProvider dir="rtl"` subtree flips it.
+   * For an icon of your own use `flipIconInRtl`.
+   * @default false
+   */
+  flipInRtl?: boolean;
 }
 
 /** An internal icon component. */
@@ -60,7 +71,14 @@ function createIcon({
           strokeLinejoin: 'round',
         };
 
-  const Icon = ({ size = defaultSize, title, children, ...rest }: IconProps) => {
+  const Icon = ({
+    size = defaultSize,
+    title,
+    flipInRtl,
+    className,
+    children,
+    ...rest
+  }: IconProps) => {
     const a11yProps: React.SVGProps<SVGSVGElement> = title
       ? { role: 'img' }
       : { 'aria-hidden': true, focusable: 'false' };
@@ -74,6 +92,7 @@ function createIcon({
         {...paintProps}
         {...a11yProps}
         {...rest}
+        className={flipInRtl ? withFlipClass(className) : className}
       >
         {title ? <title>{title}</title> : null}
         {content}
@@ -449,4 +468,29 @@ export const PresenceOofIcon = /* @__PURE__ */ createIcon({
   defaultSize: 16,
   paint: 'stroke',
   content: <path d="M11.4 8H4.8m2.9-3L4.7 8l3 3" strokeWidth={1.8} />,
+});
+
+/** Presence "blocked": a diagonal bar across the badge, which no other status draws. */
+export const PresenceBlockedIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-blocked',
+  displayName: 'PresenceBlockedIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: <path d="M4.9 11.1l6.2-6.2" strokeWidth={2} />,
+});
+
+/** Presence "unknown": a question mark. */
+export const PresenceUnknownIcon = /* @__PURE__ */ createIcon({
+  name: 'presence-unknown',
+  displayName: 'PresenceUnknownIcon',
+  viewBox: '0 0 16 16',
+  defaultSize: 16,
+  paint: 'stroke',
+  content: (
+    <>
+      <path d="M6.2 6.3a1.9 1.9 0 1 1 2.9 1.6c-.7.4-1.1.8-1.1 1.5" strokeWidth={1.5} />
+      <path d="M8 11.9h.01" strokeWidth={1.8} />
+    </>
+  ),
 });

@@ -175,8 +175,8 @@ export const avatarGroupItemClassNames = {
 /** AvatarGroup.Popover: `root` on the overflow button (which also carries the group's button class). */
 export const avatarGroupPopoverClassNames = { root: 'wave-avatar-group-popover' } as const;
 
-/** Badge: `root` on the badge span. */
-export const badgeClassNames = { root: 'wave-badge' } as const;
+/** Badge: `root` on the badge span; `icon` on the span around its icon. */
+export const badgeClassNames = { root: 'wave-badge', icon: 'wave-badge__icon' } as const;
 
 /**
  * CounterBadge (also carries Badge's root): `root` on the badge span (a count it does not show
@@ -397,12 +397,14 @@ export const toastFooterClassNames = { root: 'wave-toast-footer' } as const;
 /**
  * Toaster: `root` on the portaled toast region; `toast` on the `role="group"` container the
  * Toaster renders around each toast; `toastContent` on the element inside each container, its
- * only child, which holds the toast's status text and content (0.15).
+ * only child, which holds the toast's status text and content (0.15); `stack` on the element
+ * inside the region that stacks the toasts dispatched with a `position` other than the Toaster's.
  */
 export const toasterClassNames = {
   root: 'wave-toaster',
   toast: 'wave-toaster__toast',
   toastContent: 'wave-toaster__toast-content',
+  stack: 'wave-toaster__stack',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -429,10 +431,15 @@ export const textareaClassNames = {
   errorMessage: 'wave-textarea__error-message',
 } as const;
 
-/** Select: `root` on the `<select>`; `errorMessage` on the message after it, as Input's. */
+/**
+ * Select: `root` on the `<select>`; `errorMessage` on the message after it, as Input's; with an
+ * `icon`, `wrapper` on the `<span>` around the select and the icon, and `icon` on the icon span.
+ */
 export const selectClassNames = {
   root: 'wave-select',
   errorMessage: 'wave-select__error-message',
+  wrapper: 'wave-select__wrapper',
+  icon: 'wave-select__icon',
 } as const;
 
 /**
@@ -602,7 +609,10 @@ export const dropdownClassNames = {
  * `expandIcon` on its glyph; `clearButton` on the clear button; `listbox` on the `role="listbox"`
  * list; `option` on each Option it renders (which also carries Option's classes); `createOption`
  * on the create option of `allowCreate`; `overflowCount` on the "+N" count of the single-line
- * layout; `surface` on the portaled popup; `emptyMessage` on the "No matches" row.
+ * layout; `surface` on the portaled popup; `emptyMessage` on the "No matches" row; `spacer` on
+ * each spacer element of the list with a `virtualWindow` (the elements that stand in for the
+ * options that are not rendered); `secondaryAction` on the element around the `secondaryAction`
+ * content, after the trigger.
  */
 export const tagPickerClassNames = {
   root: 'wave-tag-picker',
@@ -618,6 +628,8 @@ export const tagPickerClassNames = {
   overflowCount: 'wave-tag-picker__overflow-count',
   surface: 'wave-tag-picker__surface',
   emptyMessage: 'wave-tag-picker__empty-message',
+  spacer: 'wave-tag-picker__spacer',
+  secondaryAction: 'wave-tag-picker__secondary-action',
 } as const;
 
 /**
@@ -658,7 +670,8 @@ export const tagPickerOptionClassNames = {
  * on the clear button; `expandButton` on the expand button and `expandIcon` on its glyph;
  * `errorMessage` on the `role="alert"` message; `listbox` on the `role="listbox"` list; `option`
  * on each option; `checkIcon` on each option's check column; `surface` on the portaled popup;
- * `emptyMessage` on its status row.
+ * `emptyMessage` on its status row; `spacer` on each spacer element of the list with a
+ * `virtualWindow` (the elements that stand in for the options that are not rendered).
  */
 export const timePickerClassNames = {
   root: 'wave-time-picker',
@@ -672,6 +685,7 @@ export const timePickerClassNames = {
   checkIcon: 'wave-time-picker__check-icon',
   surface: 'wave-time-picker__surface',
   emptyMessage: 'wave-time-picker__empty-message',
+  spacer: 'wave-time-picker__spacer',
 } as const;
 
 /**
@@ -917,12 +931,14 @@ export const accordionItemClassNames = { root: 'wave-accordion-item' } as const;
 
 /**
  * Accordion.Trigger: `root` on the `<button>`; `heading` on the heading element around it (`<h1>`
- * to `<h6>`, from `headingLevel`); `expandIcon` on the chevron `<svg>`.
+ * to `<h6>`, from `headingLevel`); `expandIcon` on the chevron `<svg>` (a `<span>` around a custom
+ * `expandIcon`); `icon` on the leading icon `<span>`.
  */
 export const accordionTriggerClassNames = {
   root: 'wave-accordion-trigger',
   heading: 'wave-accordion-trigger__heading',
   expandIcon: 'wave-accordion-trigger__expand-icon',
+  icon: 'wave-accordion-trigger__icon',
 } as const;
 
 /**
@@ -1095,8 +1111,8 @@ export const menuClassNames = { root: 'wave-menu' } as const;
 
 /**
  * Menu.Item: `root` on the `role="menuitem"` element; `checkmark` on the check column; `icon` on
- * the icon span; `content` on the label span; `shortcut` on the shortcut span;
- * `submenuIndicator` on the chevron `<svg>` of a submenu trigger.
+ * the icon span; `content` on the label span; `shortcut` on the shortcut span (it also holds
+ * `secondaryContent`); `subText` on the secondary line under the label; `submenuIndicator` on the chevron `<svg>` of a submenu trigger.
  */
 export const menuItemClassNames = {
   root: 'wave-menu-item',
@@ -1104,6 +1120,7 @@ export const menuItemClassNames = {
   icon: 'wave-menu-item__icon',
   content: 'wave-menu-item__content',
   shortcut: 'wave-menu-item__shortcut',
+  subText: 'wave-menu-item__sub-text',
   submenuIndicator: 'wave-menu-item__submenu-indicator',
 } as const;
 
@@ -1118,6 +1135,7 @@ export const menuItemCheckboxClassNames = {
   icon: 'wave-menu-item-checkbox__icon',
   content: 'wave-menu-item-checkbox__content',
   shortcut: 'wave-menu-item-checkbox__shortcut',
+  subText: 'wave-menu-item-checkbox__sub-text',
 } as const;
 
 /**
@@ -1130,6 +1148,7 @@ export const menuItemRadioClassNames = {
   icon: 'wave-menu-item-radio__icon',
   content: 'wave-menu-item-radio__content',
   shortcut: 'wave-menu-item-radio__shortcut',
+  subText: 'wave-menu-item-radio__sub-text',
 } as const;
 
 /**
@@ -1142,6 +1161,7 @@ export const menuItemSwitchClassNames = {
   icon: 'wave-menu-item-switch__icon',
   content: 'wave-menu-item-switch__content',
   shortcut: 'wave-menu-item-switch__shortcut',
+  subText: 'wave-menu-item-switch__sub-text',
   track: 'wave-menu-item-switch__track',
   thumb: 'wave-menu-item-switch__thumb',
 } as const;
@@ -1155,6 +1175,7 @@ export const menuItemLinkClassNames = {
   icon: 'wave-menu-item-link__icon',
   content: 'wave-menu-item-link__content',
   shortcut: 'wave-menu-item-link__shortcut',
+  subText: 'wave-menu-item-link__sub-text',
 } as const;
 
 /** Menu.Divider: `root` on the `role="separator"` element. */
@@ -1353,8 +1374,14 @@ export const dialogTitleClassNames = {
   action: 'wave-dialog-title__action',
 } as const;
 
-/** Dialog.Footer: `root` on the footer element. */
-export const dialogFooterClassNames = { root: 'wave-dialog-footer' } as const;
+/**
+ * Dialog.Footer: `root` on the footer element; `startActions` on the group of its `startActions`
+ * slot at the inline start.
+ */
+export const dialogFooterClassNames = {
+  root: 'wave-dialog-footer',
+  startActions: 'wave-dialog-footer__start-actions',
+} as const;
 
 /**
  * Popover.Content: `root` on the portaled `role="dialog"` surface; `beak` on the arrow; `title`
@@ -1366,10 +1393,14 @@ export const popoverContentClassNames = {
   title: 'wave-popover-content__title',
 } as const;
 
-/** Tooltip: `root` on the span around your child; `content` on the portaled tooltip. */
+/**
+ * Tooltip: `root` on the span around your child; `content` on the portaled tooltip; `beak` on its
+ * arrow (`withArrow`).
+ */
 export const tooltipClassNames = {
   root: 'wave-tooltip',
   content: 'wave-tooltip__content',
+  beak: 'wave-tooltip__beak',
 } as const;
 
 /**
@@ -1523,10 +1554,15 @@ export const teachingPopoverCarouselFooterClassNames = {
 // table
 // ---------------------------------------------------------------------------
 
-/** Table: `root` on the `<table>`; `container` on the scroll wrapper around it. */
+/**
+ * Table: `root` on the `<table>`; `container` on the scroll wrapper around it; `spacer` on each
+ * spacer row of a table with a `virtualWindow` (the rows that stand in for the rows that are not
+ * rendered).
+ */
 export const tableClassNames = {
   root: 'wave-table',
   container: 'wave-table__container',
+  spacer: 'wave-table__spacer',
 } as const;
 
 /** Table.Header: `root` on the `<thead>`. */

@@ -112,7 +112,7 @@ describe('TagPicker free tagging (allowCreate)', () => {
     await user.keyboard('{ArrowDown}{ArrowDown}');
     expect(activeOption()).toBe(createOption('a'));
     await user.keyboard('{Enter}');
-    expect(onOptionCreate).toHaveBeenCalledWith('a');
+    expect(onOptionCreate).toHaveBeenCalledWith('a', { event: expect.any(Event) });
     expect(tags()).toEqual(['a']);
   });
 
@@ -129,7 +129,7 @@ describe('TagPicker free tagging (allowCreate)', () => {
     );
     await user.type(combobox(), 'infra');
     await user.click(createOption()!);
-    expect(onOptionCreate).toHaveBeenCalledWith('infra');
+    expect(onOptionCreate).toHaveBeenCalledWith('infra', { event: expect.any(Event) });
     expect(tags()).toEqual(['infra']);
     expect(combobox()).toHaveFocus();
   });
@@ -207,7 +207,7 @@ describe('TagPicker free tagging (allowCreate)', () => {
     await user.type(combobox(), '  infra  ');
     expectCreateOption('infra');
     await user.keyboard('{Enter}');
-    expect(onOptionCreate).toHaveBeenCalledWith('infra');
+    expect(onOptionCreate).toHaveBeenCalledWith('infra', { event: expect.any(Event) });
     expect(tags()).toEqual(['infra']);
   });
 

@@ -17,11 +17,13 @@ import type {
   DayOfWeek,
   FirstWeekOfYear,
   InputAppearance,
+  MotionSlot,
   PopupPositioningOptions,
 } from '../../lib/types';
 import { warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR } from '../../lib/focus';
 import { CalendarIcon, DismissIcon } from '../../lib/icons';
+import { popupMotion } from '../../lib/motion';
 import {
   disabledStyles,
   focusRing,
@@ -36,12 +38,15 @@ import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
+import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
+import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
@@ -58,6 +63,7 @@ import {
 } from './dateUtils';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
+import { PickerClearButton } from './PickerClearButton';
 import {
   pickerButtonOffset,
   pickerEndPadding,
@@ -65,6 +71,7 @@ import {
   pickerIconButtonClasses,
 } from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Why typed text was not accepted (see {@link DatePickerProps.onInvalidInput}). */
 export type DatePickerInvalidReason = 'unparseable' | 'out-of-range' | 'disabled';
@@ -185,6 +192,17 @@ export interface DatePickerProps extends Omit<
    * @default `{}`: the calendar opens 4px below the field
    */
   positioning?: PopupPositioningOptions;
+  /**
+   * The calendar's motion. By default it fades in and slides 4px away from the field, on the side
+   * it opened on, over 200 ms with a decelerating curve, and fades out and slides back over 100 ms
+   * with an accelerating curve (focus has moved out of it by then); under reduced motion it
+   * appears and disappears at once. `null` turns the motion off (the surface still renders its
+   * `data-presence` phases, which then end at once); a class string or `{ className }` replaces
+   * the default classes with yours (see `MotionSlot`), also under a `WaveProvider` with
+   * `motion="none"`, which otherwise turns the default off. Fluent's popup `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
   /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
@@ -388,8 +406,8 @@ export interface DatePickerProps extends Omit<
     /**
      * The `role="dialog"` `<div>` of the calendar, rendered in a portal while it is open (stable
      * class `wave-date-picker__surface`). Locked: `id` (the toggle controls it), `role`,
-     * `aria-modal`, `data-state`, `data-presence`, `data-side`, `data-align`, `hidden`, `inert`
-     * and `aria-hidden`; your `aria-labelledby` ids join the heading's. Your `style` merges, but
+     * `aria-modal`, `data-state`, `data-presence`, `inert` while it exits, `data-side`,
+     * `data-align`, `hidden` and `aria-hidden`; your `aria-labelledby` ids join the heading's. Your `style` merges, but
      * the position the positioning sets wins. Your `onKeyDown` runs before Escape closes the
      * calendar (`preventDefault()` keeps it open).
      */
@@ -588,6 +606,8 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
  *   once the picker has hydrated.
  */
 export const DatePicker = (props: DatePickerProps) => {
+  const appClassName = useAppClassName(datePickerClassNames.root);
+
   const {
     value: valueProp,
     defaultValue,
@@ -602,6 +622,7 @@ export const DatePicker = (props: DatePickerProps) => {
     disabled = false,
     size: sizeProp,
     positioning,
+    motion,
     appearance: appearanceProp,
     readOnly,
     clearable = false,
@@ -820,11 +841,15 @@ export const DatePicker = (props: DatePickerProps) => {
     align: 'start',
     ...resolvePositioning(positioning, {}),
   });
+  // The calendar mounts and unmounts through the presence core; everything else keys on `isOpen`.
+  const { isMounted, ref: presenceRef, presenceProps } = usePresence(isOpen, { appear: true });
+  const motionClassName = useMotionClasses(motion, popupMotion);
   const surfaceRefs = useMergedRefs<HTMLDivElement>(
     surfaceRef,
     setSurface,
     setFloating,
     slotProps?.surface?.ref,
+    presenceRef,
   );
 
   useFocusTrap(surface, {
@@ -843,6 +868,15 @@ export const DatePicker = (props: DatePickerProps) => {
     triggerRef: toggleRef,
     finalFocusRef: restoreTargetRef,
     onlyIfFocusInside: true,
+  });
+
+  // Focus leaves the calendar in the closing commit, to where `useRestoreFocus` puts it (the
+  // restore target, else the toggle), since the surface stays mounted, inert, while it exits.
+  useFocusBeforeClose({
+    open: isOpen,
+    surfaceRef,
+    captureOpener: () => toggleRef.current,
+    candidates: (opener) => [restoreTargetRef.current, opener],
   });
 
   // A new opening starts without a restore target (the toggle returns focus to itself, Escape to
@@ -970,17 +1004,19 @@ export const DatePicker = (props: DatePickerProps) => {
     className: wcn(
       datePickerClassNames.surface,
       'wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-3 wave:text-foreground wave:shadow-16',
+      motionClassName,
     ),
     locked: {
       ...HIDDEN_PART_LOCKS,
-      // No presence phase: the calendar mounts open (a part cannot pretend otherwise).
-      'data-presence': undefined,
+      // The presence phase, and `inert` while the calendar exits (a part cannot pretend otherwise).
+      'data-presence': presenceProps['data-presence'],
+      inert: presenceProps.inert,
       id: dialogId,
       role: 'dialog',
       'aria-modal': 'true',
       'aria-labelledby': headingId,
       ...placement,
-      'data-state': 'open',
+      'data-state': isOpen ? 'open' : 'closed',
       onKeyDown: handleDialogKeyDown,
     },
   });
@@ -1005,6 +1041,7 @@ export const DatePicker = (props: DatePickerProps) => {
     className: wcn(
       datePickerClassNames.root,
       'wave:relative wave:inline-flex wave:flex-col',
+      appClassName,
       className,
     ),
     style,
@@ -1080,7 +1117,8 @@ export const DatePicker = (props: DatePickerProps) => {
           ref={inputRefs}
         />
         {showClear && (
-          <button
+          <PickerClearButton
+            fallbackRef={inputRef}
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot
             // change it).
             type="button"
@@ -1102,7 +1140,7 @@ export const DatePicker = (props: DatePickerProps) => {
             })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-          </button>
+          </PickerClearButton>
         )}
         <button
           type="button"
@@ -1151,7 +1189,7 @@ export const DatePicker = (props: DatePickerProps) => {
         required={validates}
         onInvalid={() => inputRef.current?.focus()}
       />
-      {isOpen && (
+      {isMounted && (
         <Portal layerId={layerId}>
           <div {...surfaceProps} style={surfaceStyle} ref={surfaceRefs}>
             <CalendarView

@@ -15,6 +15,7 @@ export type {
   DialogContentProps,
   DialogFooterProps,
   DialogTitleProps,
+  DialogTitleElement,
   DialogTriggerProps,
   DialogTriggerRenderProps,
   DialogCloseProps,
@@ -27,6 +28,10 @@ export type {
   PopoverTriggerProps,
   PopoverTriggerChildProps,
   PopoverContentProps,
+  PopoverOpenChangeReason,
+  PopoverOpenChangeDetails,
+  PopoverAppearance,
+  PopoverSize,
 } from './Popover';
 
 export { Tooltip } from './Tooltip';

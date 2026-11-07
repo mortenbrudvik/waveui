@@ -276,3 +276,109 @@ export const Motion: Story = {
     );
   },
 };
+
+/**
+ * `appearance` on `Popover`: `neutral` (the default), `brand` (the brand fill) or `inverted` (a
+ * dark surface in the light theme); the beak takes the surface's fill. `size` pads the content
+ * `small` (12px), `medium` (16px) or `large` (20px). `withArrow={false}` draws no beak.
+ */
+export const AppearancesAndSizes: Story = {
+  render: function AppearancesAndSizesPopovers({ children: _children, ...args }) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {(['neutral', 'brand', 'inverted'] as const).map((appearance) => (
+          <Popover key={appearance} {...args} appearance={appearance}>
+            <Popover.Trigger>
+              <Button>{appearance}</Button>
+            </Popover.Trigger>
+            <Popover.Content title={`A ${appearance} popover`}>
+              <p style={{ margin: 0 }}>Content that reads on the {appearance} surface.</p>
+            </Popover.Content>
+          </Popover>
+        ))}
+        {(['small', 'large'] as const).map((size) => (
+          <Popover key={size} {...args} size={size} withArrow={false}>
+            <Popover.Trigger>
+              <Button>{size}, no arrow</Button>
+            </Popover.Trigger>
+            <Popover.Content title={`A ${size} popover`}>
+              <p style={{ margin: 0 }}>Padded {size}.</p>
+            </Popover.Content>
+          </Popover>
+        ))}
+      </div>
+    );
+  },
+};
+
+/**
+ * `trapFocus`: focus moves into the content when it opens and Tab cycles inside it; Escape and a
+ * press outside still close it, and focus returns to the trigger. The page is not made inert.
+ * `role="group"` (here on a second popover) is for content that only presents information: the
+ * trigger then carries no `aria-haspopup`.
+ */
+export const FocusTrapAndRole: Story = {
+  render: function FocusTrapPopovers({ children: _children, ...args }) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Popover {...args} trapFocus>
+          <Popover.Trigger>
+            <Button>Rename (focus trapped)</Button>
+          </Popover.Trigger>
+          <Popover.Content title="Rename">
+            <Input aria-label="New name" />
+            <Button size="small" className="mt-3">
+              Save
+            </Button>
+          </Popover.Content>
+        </Popover>
+        <Popover {...args}>
+          <Popover.Trigger>
+            <Button>Details (group)</Button>
+          </Popover.Trigger>
+          <Popover.Content title="Details" role="group">
+            <p style={{ margin: 0 }}>Created yesterday by Ada.</p>
+          </Popover.Content>
+        </Popover>
+      </div>
+    );
+  },
+};
+
+/**
+ * `inline` renders the content in place, not in a portal: it stays inside this bordered box and
+ * follows the DOM order, so Tab from the trigger reaches it. `closeOnScroll` closes a popover when
+ * the page or any container scrolls. `onOpenChange` reports `details.reason`.
+ */
+export const InlineAndCloseOnScroll: Story = {
+  render: function InlinePopovers({ children: _children, ...args }) {
+    return (
+      <div className="flex flex-wrap items-start gap-4">
+        <div
+          className="relative rounded-md border border-wave-border p-4"
+          style={{ minHeight: 160 }}
+        >
+          <Popover {...args} inline>
+            <Popover.Trigger>
+              <Button>Inline popover</Button>
+            </Popover.Trigger>
+            <Popover.Content title="In place">
+              <p style={{ margin: 0 }}>Rendered inside the box.</p>
+            </Popover.Content>
+          </Popover>
+        </div>
+        <div className="h-24 w-64 overflow-auto rounded-md border border-wave-border p-2">
+          <Popover {...args} closeOnScroll>
+            <Popover.Trigger>
+              <Button>Closes on scroll</Button>
+            </Popover.Trigger>
+            <Popover.Content title="Scroll away">
+              <p style={{ margin: 0 }}>Scroll this box to close me.</p>
+            </Popover.Content>
+          </Popover>
+          <div style={{ height: 200 }} aria-hidden="true" />
+        </div>
+      </div>
+    );
+  },
+};

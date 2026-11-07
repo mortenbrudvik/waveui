@@ -133,7 +133,7 @@ const DTS =
   "export declare const buttonClassNames: { readonly root: 'wave-button'; readonly icon: 'wave-button__icon' };\n" +
   '\nexport { }\n';
 
-/** What vite-plugin-dts rolls up when TypeScript writes the declarations elsewhere. */
+/** What the declaration plugin rolls up when TypeScript writes the declarations elsewhere. */
 const EMPTY_ROLL_UP = 'export { }\n';
 
 /**
@@ -4565,17 +4565,17 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     const portal = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
     const records = [
       [['Button'], [12037, 4033], components],
-      [['MessageBar'], [30070, 10222], components],
-      [['Tree'], [51190, 17427], components],
-      [['Dialog'], [73934, 24667], portal],
-      [['WaveProvider', 'Dialog'], [76487, 25640], portal],
-      [['DataGrid'], [72123, 24325], portal],
+      [['MessageBar'], [30860, 10553], components],
+      [['Tree'], [55392, 18773], components],
+      [['Dialog'], [75951, 25376], portal],
+      [['WaveProvider', 'Dialog'], [81036, 27326], portal],
+      [['DataGrid'], [72132, 24521], portal],
       [
         ['usePresence', 'Presence'],
         [5453, 2341],
         ['react', 'react/jsx-runtime'],
       ],
-      [['useVirtualWindow'], [3868, 1817], ['react']],
+      [['useVirtualWindow'], [7661, 3117], ['react']],
       [['createBrandTokens'], [3630, 1956], []],
       [['waveTokens'], [3071, 969], []],
     ];
@@ -4601,13 +4601,13 @@ describe('the 0.18 probes (INTEGRATION)', () => {
       ]),
     ).toEqual([
       ['Button', 958, 168],
-      ['MessageBar', 849, 21],
-      ['Tree', 807, 156],
-      ['Dialog', 1335, 201],
-      ['WaveProvider + Dialog', 1340, 182],
-      ['DataGrid', -1183, -601],
+      ['MessageBar', 1639, 352],
+      ['Tree', 5009, 1502],
+      ['Dialog', 3352, 910],
+      ['WaveProvider + Dialog', 5889, 1868],
+      ['DataGrid', -1174, -405],
       ['usePresence + Presence', 0, 0],
-      ['useVirtualWindow', 0, 0],
+      ['useVirtualWindow', 3793, 1300],
       ['createBrandTokens', 0, 0],
       ['waveTokens', 0, 0],
     ]);

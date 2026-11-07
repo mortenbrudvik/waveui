@@ -21,6 +21,7 @@ import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { isFocusInSurfaceTree, PopoverBeak, usePopoverTabOrder } from '../overlays/Popover.shared';
 import { Portal } from '../portal/Portal';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the InfoButton component. */
 export interface InfoButtonProps extends Omit<
@@ -218,6 +219,8 @@ export const InfoButton = ({
   slotProps,
   ...rest
 }: InfoButtonProps) => {
+  const appClassName = useAppClassName(infoButtonClassNames.root);
+
   // A size from untyped code renders, and reports, the default.
   const size: CoreSize = sizeProp === 'small' || sizeProp === 'large' ? sizeProp : 'medium';
   const generatedId = useId('info-button');
@@ -514,6 +517,7 @@ export const InfoButton = ({
           GLYPH[size].margin,
           'wave:not-disabled:not-aria-disabled:hover:text-foreground',
           focusRing,
+          appClassName,
           className,
         )}
         onClick={composeEventHandlers(onClick, handleClick)}

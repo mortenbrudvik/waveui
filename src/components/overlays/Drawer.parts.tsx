@@ -28,6 +28,7 @@ import {
   useDrawerContext,
 } from './Drawer.context';
 import { scrollSeparatorClasses } from './Drawer.scroll';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The Drawer's parts. Imports the context and scroll modules only (never the root or
@@ -260,6 +261,8 @@ export const DrawerTitle = ({
   ref,
   ...rest
 }: DrawerTitleProps) => {
+  const appClassName = useAppClassName(drawerTitleClassNames.root);
+
   const { id: titleId, ref: titleRef } = useModalTitle('Drawer.Title', 'Drawer', id, ref);
   const Heading: `h${HeadingLevel}` = `h${headingLevel}`;
   return (
@@ -270,6 +273,7 @@ export const DrawerTitle = ({
       className={wcn(
         drawerTitleClassNames.root,
         'wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
+        appClassName,
         className,
       )}
     >
@@ -359,6 +363,8 @@ function useWarnWhen(condition: boolean, key: string, message: string): void {
  * and the backdrop of an overlay, and `Drawer.Close`, still close it). Fluent's `DrawerHeader`.
  */
 export const DrawerHeader = ({ className, children, ref, ...rest }: DrawerHeaderProps) => {
+  const appClassName = useAppClassName(drawerHeaderClassNames.root);
+
   useDrawerContext('Drawer.Header');
   const placed = usePlaced();
   const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
@@ -373,6 +379,7 @@ export const DrawerHeader = ({ className, children, ref, ...rest }: DrawerHeader
         drawerHeaderClassNames.root,
         'wave:flex wave:shrink-0 wave:flex-col wave:gap-2 wave:p-4',
         scrollSeparatorClasses.header,
+        appClassName,
         className,
       )}
     >
@@ -405,6 +412,8 @@ export const DrawerHeaderTitle = ({
   slotProps,
   ...rest
 }: DrawerHeaderTitleProps) => {
+  const appClassName = useAppClassName(drawerHeaderTitleClassNames.root);
+
   const { requestOpen, closeLabel, closeButton } = useDrawerContext('Drawer.HeaderTitle');
   const inHeader = React.useContext(DrawerHeaderContext);
   // The heading's ref registers it as the drawer's title: a part's ref goes beside it.
@@ -423,6 +432,7 @@ export const DrawerHeaderTitle = ({
       className={wcn(
         drawerHeaderTitleClassNames.root,
         'wave:flex wave:items-start wave:gap-2',
+        appClassName,
         className,
       )}
     >
@@ -474,6 +484,8 @@ export const DrawerHeaderNavigation = ({
   ref,
   ...rest
 }: DrawerHeaderNavigationProps) => {
+  const appClassName = useAppClassName(drawerHeaderNavigationClassNames.root);
+
   useDrawerContext('Drawer.HeaderNavigation');
   return (
     <nav
@@ -482,6 +494,7 @@ export const DrawerHeaderNavigation = ({
       className={wcn(
         drawerHeaderNavigationClassNames.root,
         'wave:flex wave:items-center wave:gap-1',
+        appClassName,
         className,
       )}
     >
@@ -501,12 +514,18 @@ DrawerHeaderNavigation.displayName = 'DrawerHeaderNavigation';
  * body, with a development warning. Fluent's `DrawerBody`.
  */
 export const DrawerBody = ({ className, children, ref, ...rest }: DrawerBodyProps) => {
+  const appClassName = useAppClassName(drawerBodyClassNames.root);
+
   useDrawerContext('Drawer.Body');
   // The Drawer renders a placed Body's props on its scrolling body and its children in place, so
   // this element renders only for a Body its scan did not place.
   useWarnWhen(true, BODY_UNSCANNED_WARNING_KEY, BODY_UNSCANNED_WARNING);
   return (
-    <div {...rest} ref={ref} className={wcn(drawerBodyClassNames.root, focusRingInset, className)}>
+    <div
+      {...rest}
+      ref={ref}
+      className={wcn(drawerBodyClassNames.root, focusRingInset, appClassName, className)}
+    >
       <DrawerPartContext.Provider value="content">{children}</DrawerPartContext.Provider>
     </div>
   );
@@ -523,6 +542,8 @@ DrawerBody.displayName = 'DrawerBody';
  * whose children render nothing renders no element. Fluent's `DrawerFooter`.
  */
 export const DrawerFooter = ({ className, children, ref, ...rest }: DrawerFooterProps) => {
+  const appClassName = useAppClassName(drawerFooterClassNames.root);
+
   useDrawerContext('Drawer.Footer');
   const placed = usePlaced();
   const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
@@ -537,6 +558,7 @@ export const DrawerFooter = ({ className, children, ref, ...rest }: DrawerFooter
         drawerFooterClassNames.root,
         'wave:flex wave:shrink-0 wave:flex-wrap wave:items-center wave:gap-2 wave:p-4',
         scrollSeparatorClasses.footer,
+        appClassName,
         className,
       )}
     >

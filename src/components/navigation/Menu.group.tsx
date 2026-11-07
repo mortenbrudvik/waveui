@@ -5,6 +5,7 @@ import { flattenChildren, isElementOfType } from '../../lib/children';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { useId } from '../../hooks/useId';
 import { MenuColumnSpacers } from './Menu.items';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the MenuGroup sub-component. */
 export interface MenuGroupProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -66,6 +67,8 @@ function useMenuGroupContext(componentName: string): MenuGroupContextValue {
  * Also exported as `MenuGroup` (import the flat name from React Server Components).
  */
 export const MenuGroup = ({ children, className, ref, ...rest }: MenuGroupProps) => {
+  const appClassName = useAppClassName(menuGroupClassNames.root);
+
   const generatedId = useId('menu-group-header');
   // A static scan, so the reference is in the server HTML and never points at a missing id.
   const header = flattenChildren(children).find(({ node }) =>
@@ -95,7 +98,7 @@ export const MenuGroup = ({ children, className, ref, ...rest }: MenuGroupProps)
         {...rest}
         ref={ref}
         aria-labelledby={labelledBy}
-        className={wcn(menuGroupClassNames.root, className)}
+        className={wcn(menuGroupClassNames.root, appClassName, className)}
       >
         {children}
       </div>
@@ -114,6 +117,8 @@ MenuGroup.displayName = 'MenuGroup';
  * Also exported as `MenuGroupHeader` (import the flat name from React Server Components).
  */
 export const MenuGroupHeader = (props: MenuGroupHeaderProps) => {
+  const appClassName = useAppClassName(menuGroupHeaderClassNames.root);
+
   const { id, className, children, ref, ...rest } = props;
   const group = useMenuGroupContext('Menu.GroupHeader');
 
@@ -153,6 +158,7 @@ export const MenuGroupHeader = (props: MenuGroupHeaderProps) => {
       className={wcn(
         menuGroupHeaderClassNames.root,
         'wave:flex wave:items-center wave:gap-2 wave:px-3 wave:pb-1 wave:pt-2 wave:text-caption-1 wave:font-semibold wave:text-muted-foreground',
+        appClassName,
         className,
       )}
     >

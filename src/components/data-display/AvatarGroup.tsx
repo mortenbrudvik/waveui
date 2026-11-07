@@ -4,6 +4,7 @@ import { wcn } from '../../lib/cn';
 import { avatarGroupClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
+import type { MotionSlot } from '../../lib/types';
 import { avatarSizeClassesFor, type AvatarSize } from './Avatar.sizes';
 import { AvatarGroupContext } from './AvatarGroup.context';
 import { partitionAvatarGroupItems, type AvatarGroupLayout } from './AvatarGroup.partition';
@@ -16,6 +17,7 @@ import {
   type AvatarGroupOpenChangeDetails,
   type AvatarGroupPopoverProps,
 } from './AvatarGroup.parts';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export { AvatarGroupItem, AvatarGroupPopover };
 export type { AvatarGroupItemProps, AvatarGroupOpenChangeDetails, AvatarGroupPopoverProps };
@@ -77,6 +79,18 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Ref to the root `<div>`. */
   ref?: React.Ref<HTMLDivElement>;
   /**
+   * The overflow popup's motion. By default it fades in and slides 4px away from the overflow
+   * button, on the side it opened on, over 200 ms with a decelerating curve, and fades out and
+   * slides back over 100 ms with an accelerating curve (focus has moved back to the button by
+   * then); under reduced motion it appears and disappears at once. `null` turns the motion off
+   * (the popup still renders its `data-presence` phases, which then end at once); a class string
+   * or `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
+   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. Fluent's popup
+   * `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
+  /**
    * Props for the elements the group draws, by part, merged into each part's own: your classes
    * after the part's (yours win a conflict), your styles over its styles, your attributes and
    * handlers added (yours run first), your ref attached. Every attribute the group sets on a part
@@ -103,9 +117,9 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
     /**
      * The overflow popup (stable class `wave-avatar-group__surface`), rendered in a portal while
      * open. Locked: its `id` (the button's `aria-controls`), `role="dialog"`, `aria-label`, no
-     * `aria-modal`, `tabIndex={-1}` (focus moves to it as it opens), `data-state`, `data-side`
-     * and `data-align`, `hidden`, `inert` and `aria-hidden` unset, and its position, which wins
-     * over your style. Its key handler moves Tab through the popup and closes it when Tab leaves:
+     * `aria-modal`, `tabIndex={-1}` (focus moves to it as it opens), `data-state`,
+     * `data-presence`, `inert` while it exits, `data-side` and `data-align`, `hidden` and
+     * `aria-hidden` unset, and its position, which wins over your style. Its key handler moves Tab through the popup and closes it when Tab leaves:
      * `preventDefault()` in your `onKeyDown` skips that: the popup neither moves focus nor
      * closes, and focus stays where it is unless your handler moves it.
      */
@@ -144,6 +158,7 @@ const AvatarGroupRoot = ({
   open,
   defaultOpen,
   onOpenChange,
+  motion,
   className,
   children,
   ref,
@@ -152,6 +167,8 @@ const AvatarGroupRoot = ({
   slotProps,
   ...props
 }: AvatarGroupProps) => {
+  const appClassName = useAppClassName(avatarGroupClassNames.root);
+
   // Fragments are flattened, so each member counts, overlaps and is listed on its own (C-COMPOUND).
   // A consumer-written AvatarGroup.Popover is the overflow part, not a member.
   const parts = flattenChildren(children);
@@ -170,8 +187,8 @@ const AvatarGroupRoot = ({
   const list = slotProps?.list;
   const listItem = slotProps?.listItem;
   const groupContext = React.useMemo(
-    () => ({ size: resolvedSize, layout, hasInlineItems, surface, list, listItem }),
-    [resolvedSize, layout, hasInlineItems, surface, list, listItem],
+    () => ({ size: resolvedSize, layout, hasInlineItems, surface, list, listItem, motion }),
+    [resolvedSize, layout, hasInlineItems, surface, list, listItem, motion],
   );
   // The wrappers merge a part only when given, so a group without `slotProps` allocates nothing.
   const itemPart = slotProps?.item;
@@ -207,6 +224,7 @@ const AvatarGroupRoot = ({
         avatarGroupClassNames.root,
         'wave:inline-flex wave:items-center',
         layout !== 'stack' && 'wave:gap-1',
+        appClassName,
         className,
       )}
     >

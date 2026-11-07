@@ -15,6 +15,7 @@ import { useFormReset } from '../../hooks/useFormReset';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * Forced colors: the focusable box keeps system-color utilities, so the browser still forces its
@@ -267,6 +268,8 @@ export const Checkbox = ({
   slotProps,
   ...rest
 }: CheckboxProps) => {
+  const appClassName = useAppClassName(checkboxClassNames.root);
+
   const hasChildren = slotRendersContent(children);
   React.useEffect(() => {
     if (hasChildren) {
@@ -405,6 +408,7 @@ export const Checkbox = ({
       unavailable
         ? 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100'
         : 'wave:cursor-pointer',
+      appClassName,
       className,
     ),
     style,

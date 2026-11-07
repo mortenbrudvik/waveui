@@ -26,6 +26,8 @@ export {
 } from './Menu';
 export type {
   MenuProps,
+  MenuOpenChangeDetails,
+  MenuOpenChangeReason,
   MenuItemProps,
   MenuDividerProps,
   MenuTriggerProps,
@@ -56,6 +58,9 @@ export {
 } from './Nav';
 export type {
   NavProps,
+  NavDensity,
+  NavSelectDetails,
+  NavCategoryToggleDetails,
   NavCategoryProps,
   NavItemProps,
   NavItemOwnProps,
@@ -84,6 +89,14 @@ export type {
   NavDrawerBodyProps,
   NavDrawerFooterProps,
 } from './NavDrawer';
+
+export { useNavDrawerToggle } from './NavDrawer.toggle';
+export type {
+  UseNavDrawerToggleOptions,
+  UseNavDrawerToggleResult,
+  NavDrawerToggleHamburgerProps,
+  NavDrawerToggleDrawerProps,
+} from './NavDrawer.toggle';
 
 export { Hamburger } from './Hamburger';
 export type { HamburgerProps } from './Hamburger';

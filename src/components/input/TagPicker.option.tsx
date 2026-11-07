@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
-import { tagPickerOptionClassNames } from '../../lib/classNames';
+import { tagPickerOptionClassNames, optionClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot } from '../../lib/slot';
 import { collectOptionLabels, markListboxElement } from '../../hooks/useListbox';
 import { Option } from './Option';
 import type { OptionProps } from './Option';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * One entry of `options`, the array form of TagPicker's options. The component of the same name,
@@ -24,6 +25,12 @@ export interface TagPickerOption {
   media?: React.ReactNode;
   /** A second line under the label in the option (a role, an e-mail address); tags do not show it. */
   secondaryContent?: React.ReactNode;
+  /**
+   * The option cannot be picked: it stays in the list, dimmed (`aria-disabled`), and a click or
+   * Enter does not add it; the arrow keys and typeahead skip it. As `disabled` on an `Option`.
+   * @default false
+   */
+  disabled?: boolean;
 }
 
 /**
@@ -71,6 +78,8 @@ function TagPickerOptionImpl({
   children,
   ...rest
 }: TagPickerOptionProps) {
+  const appClassName = useAppClassName(optionClassNames.root, tagPickerOptionClassNames.root);
+
   const resolved = optionLabel(value, label, textValue, children);
   const missingLabel = resolved === undefined;
   React.useEffect(() => {
@@ -120,7 +129,7 @@ function TagPickerOptionImpl({
       value={value}
       label={resolved ?? value}
       textValue={textValue}
-      className={wcn(tagPickerOptionClassNames.root, className)}
+      className={wcn(tagPickerOptionClassNames.root, appClassName, className)}
     >
       {content}
     </Option>

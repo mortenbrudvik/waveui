@@ -1,15 +1,20 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
-import { menuButtonClassNames } from '../../lib/classNames';
+import { menuButtonClassNames, buttonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
-import type { Size, Appearance, Slot } from '../../lib/types';
+import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import type { Size, Appearance, Shape, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { unwrapButtonGlyph, withPartClass } from './Button.slots';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
-/** Properties for the MenuButton component. */
-export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+/**
+ * The MenuButton's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props
+ * only). Every other prop comes from the rendered element (`as`).
+ */
+export interface MenuButtonOwnProps {
   /** Visual style variant.
    * @default 'outline'
    */
@@ -18,6 +23,11 @@ export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Corner shape, as on {@link Button}.
+   * @default 'rounded'
+   */
+  shape?: Shape;
   /**
    * Icon slot rendered before the label. Decorative: it renders with `aria-hidden="true"` (a slot
    * object can override it). A menu button without a label (only the icon and/or the indicator)
@@ -35,8 +45,10 @@ export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
    */
   menuIcon?: Slot<'span'>;
   /**
-   * Whether the associated menu is open (`aria-expanded`). Leave it unset when the button is
-   * wrapped in `Menu.Trigger`, which supplies `aria-expanded` itself.
+   * Whether the associated menu is open (`aria-expanded`). Without it the button reports
+   * `aria-expanded="false"`, so a menu button always exposes its state; leave it unset when the
+   * button is wrapped in `Menu.Trigger`, which supplies `aria-expanded` itself and wins.
+   * @default false
    */
   expanded?: boolean;
   /**
@@ -49,9 +61,32 @@ export interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
    * @default false
    */
   disabledFocusable?: boolean;
-  /** Ref to the rendered `<button>`. */
-  ref?: React.Ref<HTMLButtonElement>;
 }
+
+/**
+ * Props of {@link MenuButton} rendered as `C` (default `'button'`). `MenuButtonProps` without a
+ * type argument is the 0.x name: the props of a MenuButton rendered as a `<button>`, including
+ * `ref`.
+ */
+export type MenuButtonProps<C extends React.ElementType = 'button'> = PolymorphicProps<
+  C,
+  MenuButtonOwnProps
+>;
+
+/** The props the implementation reads, for any `as`. */
+type MenuButtonImplProps = MenuButtonOwnProps & {
+  as?: React.ElementType;
+  className?: string;
+  children?: React.ReactNode;
+  title?: string;
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
+  'aria-haspopup'?: React.AriaAttributes['aria-haspopup'] | null;
+  'aria-expanded'?: React.AriaAttributes['aria-expanded'] | null;
+};
+
+/** `Button` widened to any element props, so `as` and the rest props pass through untyped. */
+const BaseButton = Button as React.ElementType;
 
 /**
  * Minimum width and horizontal padding per size of a menu button without a label (an icon, the
@@ -72,10 +107,13 @@ const unlabelledSizeClasses: Record<Size, string> = {
  * Button. Without a label (only an icon and/or the chevron) it has no minimum width, and it warns
  * in development when it also has no `aria-label`, `aria-labelledby` or `title`.
  *
+ * `as` renders another element or component with correctly typed props, as on Button.
+ *
  * Use it as the child of `Menu.Trigger`, which supplies `id`, `aria-expanded`, `aria-controls`,
  * the open/keyboard handlers and the ref. A defined `aria-haspopup`/`aria-expanded` prop wins over
  * the built-in `"menu"` and `expanded` defaults, so the trigger's live state always wins; an
- * `undefined` or `null` one (a wrapper forwarding its own unset props) keeps the defaults.
+ * `undefined` or `null` one (a wrapper forwarding its own unset props) keeps the defaults. On its
+ * own (no `Menu.Trigger`, no `expanded`) it reports `aria-expanded="false"`.
  *
  * @example
  * <Menu>
@@ -83,18 +121,21 @@ const unlabelledSizeClasses: Record<Size, string> = {
  *   <Menu.Popover>…</Menu.Popover>
  * </Menu>
  */
-export const MenuButton = ({
-  appearance = 'outline',
-  size = 'medium',
-  icon,
-  menuIcon,
-  expanded,
-  className,
-  children,
-  'aria-haspopup': ariaHasPopup,
-  'aria-expanded': ariaExpanded,
-  ...props
-}: MenuButtonProps) => {
+export const MenuButton: PolymorphicComponent<'button', MenuButtonOwnProps> = (props) => {
+  const appClassName = useAppClassName(buttonClassNames.root, menuButtonClassNames.root);
+
+  const {
+    appearance = 'outline',
+    size = 'medium',
+    icon,
+    menuIcon,
+    expanded,
+    className,
+    children,
+    'aria-haspopup': ariaHasPopup,
+    'aria-expanded': ariaExpanded,
+    ...rest
+  } = props as MenuButtonImplProps;
   // The indicator sits inside the button: a button passed as `menuIcon` is unwrapped (its children
   // are the indicator), never nested (C-SLOTS).
   const { glyph, button: menuIconButton } = unwrapButtonGlyph(menuIcon);
@@ -133,9 +174,9 @@ export const MenuButton = ({
   // A generator label is read once by the check; its items are what renders.
   const label = materialiseSlotContent(children);
   const unlabelled = indicator !== null && !slotRendersContent(label);
-  const ariaLabel = props['aria-label'];
-  const ariaLabelledBy = props['aria-labelledby'];
-  const title = props.title;
+  const ariaLabel = rest['aria-label'];
+  const ariaLabelledBy = rest['aria-labelledby'];
+  const title = rest.title;
   React.useEffect(() => {
     if (unlabelled && !ariaLabel && !ariaLabelledBy && !title) {
       warnOnce(
@@ -148,10 +189,10 @@ export const MenuButton = ({
   // `aria-haspopup`/`aria-expanded` defaults apply wherever the consumer's value is `undefined` or
   // `null` (as Button does for `type`, `role` and `tabIndex`), so a forwarded unset prop keeps them.
   return (
-    <Button
-      {...props}
+    <BaseButton
+      {...rest}
       aria-haspopup={ariaHasPopup ?? 'menu'}
-      aria-expanded={ariaExpanded ?? expanded}
+      aria-expanded={ariaExpanded ?? expanded ?? false}
       appearance={appearance}
       size={size}
       icon={withPartClass(icon, menuButtonClassNames.icon)}
@@ -159,12 +200,13 @@ export const MenuButton = ({
         menuButtonClassNames.root,
         'wave:gap-1.5',
         unlabelled && unlabelledSizeClasses[size],
+        appClassName,
         className,
       )}
     >
       {label}
       {indicator}
-    </Button>
+    </BaseButton>
   );
 };
 

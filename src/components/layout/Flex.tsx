@@ -5,6 +5,7 @@ import { hasWarned, isDev, warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 const directionMap = {
   row: 'wave:flex-row',
@@ -111,6 +112,8 @@ type FlexImplProps = FlexOwnProps &
  * </Flex>
  */
 export const Flex: PolymorphicComponent<'div', FlexOwnProps> = (props) => {
+  const appClassName = useAppClassName(flexClassNames.root);
+
   const {
     as,
     direction = 'row',
@@ -160,6 +163,7 @@ export const Flex: PolymorphicComponent<'div', FlexOwnProps> = (props) => {
         grow && 'wave:grow',
         shrink === true && 'wave:shrink',
         shrink === false && 'wave:shrink-0',
+        appClassName,
         className,
       )}
       {...rest}

@@ -17,7 +17,12 @@ import {
   inputPaddingClasses,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
+import type {
+  CoreSize,
+  InputAppearance,
+  MotionSlot,
+  PopupPositioningOptions,
+} from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -33,6 +38,7 @@ import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import { HiddenInput } from '../internal/HiddenInput';
 import { showsExpandButton } from './Combobox.expand';
+import { PickerClearButton } from './PickerClearButton';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import {
@@ -58,6 +64,7 @@ import {
 } from './pickerStyles';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Dropdown                                                          */
@@ -186,6 +193,19 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    */
   positioning?: PopupPositioningOptions;
   /**
+   * The popup surface's motion. By default it fades in and slides 4px away from the dropdown button, on the
+   * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
+   * 100 ms with an accelerating curve (the list stays in the surface while it exits); under
+   * reduced motion it appears and disappears at once. The list does not fade out when its options
+   * changed as it closed (a filter reset by the selection), nor does the "No matches" row. `null`
+   * turns the motion off (the surface still renders its `data-presence` phases, which then end at
+   * once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's popup `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
+  /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
@@ -252,7 +272,7 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    * within its own maximum height (15rem, 240 pixels at the default root size, less where the
    * viewport has no room). Every option is exactly `itemSize` tall (the list sets its height,
    * after the option's own `style`), so an option's content must fit in it: the default `Option`
-   * with one line of text is 32 pixels tall.
+   * with one line of text is 32 pixels tall. With a window that measures its rows (`useVirtualWindow({ itemSize, measureItems: true })`, `itemSize` being the estimate) an option has the height of its content instead, and carries the window's `itemProps`.
    *
    * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
    * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the
@@ -316,7 +336,9 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
      * `autoFocus`, `name`, `form` and `required` (the value is submitted by the Dropdown's
      * hidden input), `hidden`, `inert` and `aria-hidden` (a focusable control is never hidden).
      * Your handlers run before the Dropdown's: `preventDefault()` in your `onClick` keeps the
-     * list as it is, in your `onKeyDown` skips the listbox keys.
+     * list as it is, in your `onKeyDown` skips the listbox keys, in your `onPointerDown` keeps
+     * the press from focusing the button (WebKit does not focus a clicked `<button>`, so the
+     * Dropdown does, with the primary button, and the keys work after a mouse click).
      */
     button?: SlotPart<'button'>;
     /**
@@ -341,8 +363,8 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
     listbox?: SlotPart<'ul'>;
     /**
      * The popup `<div>` around the list, rendered in a portal while it shows (stable class
-     * `wave-dropdown__surface`). Locked: `data-side`, `data-align`, `role`, `id`, `hidden`,
-     * `inert` and `aria-hidden`; your `style` merges, but the position, the size limits and the
+     * `wave-dropdown__surface`). Locked: `data-side`, `data-align`, `data-state`,
+     * `data-presence`, `inert` while it exits, `role`, `id`, `hidden` and `aria-hidden`; your `style` merges, but the position, the size limits and the
      * visibility the positioning sets win.
      */
     surface?: SlotPart<'div'>;
@@ -365,6 +387,8 @@ const NO_LABELS: ReadonlyMap<string, string> = new Map<string, string>();
 const BLOCK_CLICK = ['onClick'] as const;
 
 const DropdownRoot = (props: DropdownProps<boolean>) => {
+  const appClassName = useAppClassName(dropdownClassNames.root);
+
   const {
     multiselect = false,
     value: valueProp,
@@ -380,6 +404,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     disabled = false,
     size: sizeProp,
     positioning,
+    motion,
     appearance: appearanceProp,
     name,
     form,
@@ -588,6 +613,16 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         )
       : displayText;
 
+  // WebKit (Safari) does not focus a `<button>` that a mouse press clicks, so the opened list would
+  // have no keyboard focus (Home, End, PageDown and typeahead do nothing): the press focuses it,
+  // as Chromium and Firefox do on mousedown. A programmatic focus after a pointer press shows no
+  // focus ring.
+  const focusOnPress = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    const button = event.currentTarget;
+    if (button.ownerDocument.activeElement !== button) button.focus({ preventScroll: true });
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
       // Open with nothing shown (no options): close, but leave Escape to an enclosing layer
@@ -627,6 +662,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     className: wcn(
       dropdownClassNames.root,
       'wave:relative wave:inline-flex wave:flex-col',
+      appClassName,
       className,
     ),
     style,
@@ -686,6 +722,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
               autoFocus,
               tabIndex,
               onClick: () => setOpen((current) => !current),
+              onPointerDown: focusOnPress,
               onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
               onKeyUp: composeEventHandlers(onKeyUp, listbox.onKeyUp),
               onFocus,
@@ -741,7 +778,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             ))}
         </button>
         {showClear && (
-          <button
+          <PickerClearButton
+            fallbackRef={buttonRef}
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
@@ -771,7 +809,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-          </button>
+          </PickerClearButton>
         )}
       </div>
       <PickerListboxSurface
@@ -787,6 +825,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
           activeWindow && 'wave:[overflow-anchor:none]',
         )}
         surfaceClassName={dropdownClassNames.surface}
+        motion={motion}
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
         listProps={activeWindow ? { ref: listScrollRef } : undefined}

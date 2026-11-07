@@ -176,6 +176,13 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
    * Ignored inline.
    */
   modalType: ModalType;
+  /**
+   * Overlay only: a non-modal panel closes on a press outside it and on focus moving out of it
+   * (`outside-press`, `focus-outside`); the element that opened it counts as inside. Ignored by a
+   * modal, an alert and an inline panel.
+   * @default false
+   */
+  lightDismiss?: boolean;
   /** `false` keeps the panel mounted while closed, `hidden` and `inert`. */
   unmountOnClose: boolean;
   /**
@@ -195,6 +202,8 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
    * variant's root (`wcn(drawerClassNames.root, navDrawerClassNames.root)`).
    */
   rootClassName: string;
+  /** The app-wide classes of `WaveProvider classNames` for the panel's roots, after its own. */
+  appClassName?: string;
   /**
    * The backdrop's stable class(es), first in its `wcn()`: `drawerClassNames.backdrop`, followed by
    * a variant's (`wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)`).
@@ -225,9 +234,15 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
   /**
    * The backdrop's motion slot (overlay `modal` and `alert` only): `undefined` the default fade
    * over the duration of the panel's size, `null` none, a value replaces it. Given on a non-modal
-   * or inline panel (`null` included), it is ignored with the `backdrop-ignored` warning.
+   * or inline panel it is ignored with the `backdrop-ignored` warning (`null`, which asks for no
+   * motion, is no value and warns about nothing).
    */
   backdropMotion?: MotionSlot | null;
+  /**
+   * Overlay only: the element the panel and its backdrop render into, in place of the
+   * `WaveProvider`'s `portalContainer` or `document.body`. Ignored inline.
+   */
+  mountNode?: HTMLElement | null;
   /** The panel's id (always set: triggers point `aria-controls` at it). */
   id: string;
   /** Merged with the shell's own ref and the presence ref. */
@@ -270,16 +285,19 @@ export const DrawerPanel = ({
   size,
   separator,
   modalType,
+  lightDismiss = false,
   unmountOnClose,
   inlineAs,
   trigger,
   finalFocusRef,
   rootClassName,
+  appClassName,
   backdropClassName,
   collapseClassName,
   backdrop,
   motion,
   backdropMotion,
+  mountNode,
   id,
   className,
   onKeyDown,
@@ -358,25 +376,33 @@ export const DrawerPanel = ({
 
   // A backdrop press asks to close, except an alert's (Escape still does; useModalLayer registers
   // its layer without outside presses).
+  const lightDismissing = nonModalOverlay && lightDismiss;
   const backdropPress = useBackdropPress(panelRef, modalType !== 'alert');
-  const onDismiss = useModalDismiss(requestOpen, componentName, backdropPress.afterOutsidePress);
-  // Only an overlay is a layer: an inline panel is page content (no trap, isolation, scroll lock,
-  // Escape or outside press; toasts keep their corner). The overlay's layer is the one the Toaster
-  // measures (`modal`, or `dialog` for a non-modal one).
-  const layer = useModalLayer({
-    open: open && overlay,
-    modalType,
-    onDismiss,
-    refs: [panelRef],
-    container: overlayPanel,
-    triggerRef: trigger.focusRef,
-    finalFocusRef,
-  });
+  const onDismiss = useModalDismiss(
+    requestOpen,
+    componentName,
+    backdropPress.afterOutsidePress,
+    lightDismissing,
+  );
   // A non-modal overlay keeps its place in the page's keyboard order right after its opener
   // (D87.5). Both hooks are always called (C-HOOKS, D91). The opener is captured whenever the
   // overlay opens, so a modal panel that turns non-modal while open (focus inside it by then)
   // still knows it.
   const opener = useModalOpener(open && overlay, trigger, overlayPanel);
+  // Only an overlay is a layer: an inline panel is page content (no trap, isolation, scroll lock,
+  // Escape or outside press; toasts keep their corner). The overlay's layer is the one the Toaster
+  // measures (`modal`, or `dialog` for a non-modal one). With light dismiss the opener is part of
+  // the layer: a press on it is no outside press, so its trigger toggles the panel.
+  const layer = useModalLayer({
+    open: open && overlay,
+    modalType,
+    onDismiss,
+    refs: lightDismissing ? [panelRef, opener] : [panelRef],
+    container: overlayPanel,
+    triggerRef: trigger.focusRef,
+    finalFocusRef,
+    lightDismiss: lightDismissing,
+  });
   const onTabOrderKeyDown = usePopoverTabOrder({
     enabled: open && nonModalOverlay,
     surface: overlayPanel,
@@ -390,7 +416,7 @@ export const DrawerPanel = ({
   const backdropIgnored =
     (nonModal || inline) &&
     ((backdrop !== undefined && backdrop !== null && typeof backdrop !== 'boolean') ||
-      backdropMotion !== undefined);
+      (backdropMotion !== undefined && backdropMotion !== null));
   React.useEffect(() => {
     if (!backdropIgnored) return;
     warnOnce(
@@ -442,6 +468,7 @@ export const DrawerPanel = ({
             rootClassName,
             inlinePanelClasses,
             getInlinePanelClasses(position, size),
+            appClassName,
             className,
           )}
         >
@@ -452,7 +479,7 @@ export const DrawerPanel = ({
   }
 
   return (
-    <Portal ref={portalRef} layerId={layer.layerId}>
+    <Portal ref={portalRef} layerId={layer.layerId} container={mountNode ?? undefined}>
       {/* The backdrop of a modal or alert panel, the panel's sibling; a non-modal one has none.
           Both carry the presence attributes (D7, D103): hidden and inert while kept closed, so a
           closed panel leaves no backdrop over the page. */}
@@ -484,6 +511,7 @@ export const DrawerPanel = ({
           OVERLAY_PANEL_CLASSES,
           getOverlayPanelClasses(position, size),
           panelMotion,
+          appClassName,
           className,
         )}
       >

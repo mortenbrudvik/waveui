@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
 import { badgeClassNames, counterBadgeClassNames } from '../../lib/classNames';
-import type { BadgeColor } from '../../lib/types';
-import { badgeColorClasses } from './Badge.colors';
+import type { BadgeColor, Shape, Size } from '../../lib/types';
+import { badgeColorClasses, badgeDotClasses, badgeShapeClasses } from './Badge.colors';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the CounterBadge component. */
 export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -16,10 +17,25 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
    * @default 99
    */
   overflowCount?: number;
-  /** Visual style of the counter badge.
+  /**
+   * Visual style of the counter badge: `'filled'` a solid fill, `'outline'` a border, `'ghost'`
+   * the color as text alone, with no fill and no border. A `dot` has no text, so `'ghost'` draws
+   * it as `'filled'`. Fluent's `appearance`.
    * @default 'filled'
    */
-  appearance?: 'filled' | 'outline';
+  appearance?: 'filled' | 'outline' | 'ghost';
+  /**
+   * Corners: `'circular'` a pill, `'rounded'` softly rounded corners, `'square'` none; a `dot`
+   * follows it too. Fluent's `shape`.
+   * @default 'circular'
+   */
+  shape?: Shape;
+  /**
+   * Size of the counter: 14px tall for `'extra-small'`, 16px `'small'`, 20px `'medium'`, 24px
+   * `'large'` and 32px `'extra-large'`. A `dot` is always 6px and ignores it. Fluent's `size`.
+   * @default 'medium'
+   */
+  size?: Size;
   /**
    * Semantic color, from Badge's palette: `brand`, `danger`, `important`, `informative`, `severe`,
    * `subtle`, `success`, `warning`. `important` follows Badge (see `BadgeProps.color`): Fluent's
@@ -46,6 +62,15 @@ export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement>
   ref?: React.Ref<HTMLSpanElement>;
 }
 
+/** Height, minimum width, padding and text of a count per size. */
+const sizeClasses: Record<Size, string> = {
+  'extra-small': 'wave:h-3.5 wave:min-w-3.5 wave:px-1 wave:text-[10px] wave:leading-[14px]',
+  small: 'wave:h-4 wave:min-w-4 wave:px-1 wave:text-[10px] wave:leading-4',
+  medium: 'wave:h-5 wave:min-w-5 wave:px-1.5 wave:text-caption-1',
+  large: 'wave:h-6 wave:min-w-6 wave:px-2 wave:text-body-2',
+  'extra-large': 'wave:h-8 wave:min-w-8 wave:px-2.5 wave:text-body-1',
+};
+
 /** Whether a naming attribute holds more than whitespace (an empty one names nothing). */
 function isName(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
@@ -71,6 +96,8 @@ export const CounterBadge = ({
   count = 0,
   overflowCount = 99,
   appearance = 'filled',
+  shape = 'circular',
+  size = 'medium',
   color = 'brand',
   dot = false,
   showZero = false,
@@ -78,6 +105,8 @@ export const CounterBadge = ({
   ref,
   ...props
 }: CounterBadgeProps) => {
+  const appClassName = useAppClassName(badgeClassNames.root, counterBadgeClassNames.root);
+
   if (!dot && (count < 0 || (count === 0 && !showZero))) return null;
 
   // Before 0.6 `color` was the span's HTML attribute (any string): a value outside the palette
@@ -87,16 +116,18 @@ export const CounterBadge = ({
   // A dot has no text to carry the contrast: it takes the dot colors, which stand out from the
   // page on their own.
   const appearanceClasses = dot
-    ? appearance === 'filled'
+    ? appearance === 'filled' || appearance === 'ghost'
       ? c.dot
       : wcn('wave:bg-transparent wave:border', c.dotBorder)
     : appearance === 'filled'
       ? c.filled
-      : wcn(
-          'wave:bg-transparent wave:border',
-          c.border,
-          resolvedColor === 'brand' ? 'wave:text-primary' : 'wave:text-foreground',
-        );
+      : appearance === 'ghost'
+        ? wcn('wave:bg-transparent', c.ghost)
+        : wcn(
+            'wave:bg-transparent wave:border',
+            c.border,
+            resolvedColor === 'brand' ? 'wave:text-primary' : 'wave:text-foreground',
+          );
 
   // A name on a role-less <span> is not announced by screen readers: name it as an image. An empty
   // or whitespace-only name adds no role (an unnamed role="img" fails axe).
@@ -108,16 +139,18 @@ export const CounterBadge = ({
       role={named ? 'img' : undefined}
       data-color={resolvedColor}
       data-appearance={appearance}
+      data-shape={shape}
+      data-size={size}
       data-dot={dot ? '' : undefined}
       className={wcn(
         badgeClassNames.root,
         counterBadgeClassNames.root,
-        'wave:inline-flex wave:items-center wave:justify-center wave:rounded-full',
-        dot
-          ? // In forced colors the background would become Canvas and hide the dot.
-            'wave:h-1.5 wave:w-1.5 wave:min-w-0 wave:p-0 wave:forced-colors:forced-color-adjust-none wave:forced-colors:bg-[CanvasText]'
-          : 'wave:h-5 wave:min-w-5 wave:px-1.5 wave:text-caption-1 wave:font-semibold',
+        'wave:inline-flex wave:items-center wave:justify-center',
+        badgeShapeClasses[shape],
+        // In forced colors the dot's background would become Canvas and hide it: see the classes.
+        dot ? badgeDotClasses : wcn('wave:font-semibold', sizeClasses[size]),
         appearanceClasses,
+        appClassName,
         className,
       )}
       {...props}

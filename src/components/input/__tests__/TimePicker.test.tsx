@@ -2536,7 +2536,7 @@ describe('TimePicker — slotProps', () => {
         '<input aria-activedescendant="timepicker-listbox-_id0_-opt-0" aria-autocomplete="list" aria-controls="timepicker-listbox-_id0_" aria-expanded="true" aria-haspopup="listbox" aria-label="Time" autocomplete="off" class="wave-time-picker__input wave:h-8 wave:w-full wave:px-3 wave:text-body-1 wave:rounded wave:border wave:border-input wave:border-b-stroke-accessible wave:bg-background wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden wave:focus:border-b-2 wave:focus:border-b-primary wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100 wave:pe-14" placeholder="Select a time" role="combobox" type="text" value="9:30 AM">',
         '<button aria-label="Clear time" class="wave-time-picker__clear-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-7 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" type="button">',
         '<button aria-controls="timepicker-listbox-_id0_" aria-expanded="true" aria-label="Show times" class="wave-time-picker__expand-button wave:absolute wave:flex wave:h-6 wave:w-6 wave:items-center wave:justify-center wave:rounded wave:bg-transparent wave:p-0 wave:text-muted-foreground wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:hover:text-foreground wave:end-1 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring wave:disabled:cursor-not-allowed wave:disabled:opacity-50 wave:aria-disabled:cursor-not-allowed wave:aria-disabled:opacity-50 wave:aria-disabled:focus-visible:opacity-100" tabindex="-1" type="button">',
-        '<div class="wave-time-picker__surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8" data-align="start" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<div class="wave-time-picker__surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8 wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1" data-align="start" data-presence="entered" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
         '<ul aria-label="Time" class="wave-time-picker__listbox wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden" id="timepicker-listbox-_id0_" role="listbox" tabindex="-1">',
         '<li aria-selected="false" class="wave-time-picker__option wave:flex wave:cursor-pointer wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:hover:bg-subtle-hover wave:data-[active]:bg-subtle-hover wave:data-[active]:outline-2 wave:data-[active]:outline-ring wave:data-[active]:-outline-offset-2 wave:data-[selected]:bg-subtle-selected wave:data-[selected]:font-semibold" id="timepicker-listbox-_id0_-opt-1" role="option">',
         '<li aria-selected="true" class="wave-time-picker__option wave:flex wave:cursor-pointer wave:items-center wave:gap-2 wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-foreground wave:hover:bg-subtle-hover wave:data-[active]:bg-subtle-hover wave:data-[active]:outline-2 wave:data-[active]:outline-ring wave:data-[active]:-outline-offset-2 wave:data-[selected]:bg-subtle-selected wave:data-[selected]:font-semibold wave:forced-colors:outline-2 wave:forced-colors:outline-[Highlight] wave:forced-colors:-outline-offset-2" data-active="" data-selected="" id="timepicker-listbox-_id0_-opt-0" role="option">',
@@ -2552,7 +2552,7 @@ describe('TimePicker — slotProps', () => {
     await typeRejected(false);
     expect(openingTags(...[surface, timePickerClassNames.emptyMessage].flatMap(all))).toBe(
       [
-        '<div class="wave-time-picker__surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8" data-align="start" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
+        '<div class="wave-time-picker__surface wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8 wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1" data-align="start" data-presence="entered" data-side="bottom" data-state="open" style="position: fixed; left: 0px; top: 0px; width: var(--wave-popup-reference-width); max-width: var(--wave-popup-available-width); max-height: var(--wave-popup-available-height); transform: translate(8px, 4px); --wave-popup-available-width: 0px; --wave-popup-available-height: 0px; --wave-popup-reference-width: 0px;">',
         '<div aria-hidden="true" class="wave-time-picker__empty-message wave:px-3 wave:py-1.5 wave:text-body-1 wave:text-muted-foreground">',
       ].join('\n'),
     );
@@ -2930,19 +2930,20 @@ describe('TimePicker — slotProps', () => {
     }
   });
 
-  it('keeps the surface out of the presence phases: it mounts open, and a part sets no data-presence', async () => {
+  it('locks the surface’s presence attributes: a part sets no data-presence, data-state or inert', async () => {
     render(
       <TimePicker
         aria-label="Time"
         defaultOpen
         {...BOUNDS}
-        slotProps={{ surface: { 'data-presence': 'exiting' } }}
+        slotProps={{ surface: { 'data-presence': 'exiting', 'data-state': 'closed', inert: true } }}
       />,
     );
     await act(async () => {});
     const surface = part(timePickerClassNames.surface)!;
     expect(surface).toHaveAttribute('data-state', 'open');
-    expect(surface).not.toHaveAttribute('data-presence');
+    expect(surface).toHaveAttribute('data-presence', 'entered');
+    expect(surface).not.toHaveAttribute('inert');
   });
 
   it('keeps the locked attributes of the error message', async () => {
@@ -3435,5 +3436,448 @@ describe('TimePicker — ref reaches the control', () => {
       warn.mockRestore();
       error.mockRestore();
     }
+  });
+});
+
+describe('TimePicker — seconds, formatting and listed times only (1.1)', () => {
+  const optionLabels = () =>
+    within(screen.getByRole('listbox'))
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+
+  describe('showSeconds (timepicker-2)', () => {
+    it('writes the value, the input and the options with seconds', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          showSeconds
+          format="24h"
+          minTime="09:00"
+          maxTime="10:00"
+          step={30}
+          onValueChange={onValueChange}
+        />,
+      );
+      await user.click(combobox('Time'));
+      expect(optionNames()).toEqual(['09:00:00', '09:30:00', '10:00:00']);
+      await user.click(screen.getByRole('option', { name: '09:30:00' }));
+      expect(combobox('Time')).toHaveValue('09:30:00');
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith('09:30:00');
+    });
+
+    it('shows 12-hour times with seconds', async () => {
+      const user = userEvent.setup();
+      render(
+        <TimePicker aria-label="Time" showSeconds format="12h" minTime="13:00" maxTime="13:30" />,
+      );
+      await user.click(combobox('Time'));
+      expect(optionNames()).toEqual(['1:00:00 PM', '1:30:00 PM']);
+    });
+
+    it('keeps typed seconds, off the list, within the bounds', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TimePicker aria-label="Time" showSeconds format="24h" onValueChange={onValueChange} />,
+      );
+      await user.type(combobox('Time'), '14:05:09{Enter}');
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith('14:05:09');
+      expect(combobox('Time')).toHaveValue('14:05:09');
+      expect(combobox('Time')).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('reaches the last second of the day by default and honours the seconds of a bound', async () => {
+      const user = userEvent.setup();
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          showSeconds
+          format="24h"
+          minTime="09:00:30"
+          onInvalidInput={onInvalidInput}
+        />,
+      );
+      await user.type(combobox('Time'), '23:59:59{Enter}');
+      expect(combobox('Time')).toHaveValue('23:59:59');
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), '09:00:10{Enter}');
+      expect(onInvalidInput).toHaveBeenCalledExactlyOnceWith('09:00:10', 'out-of-range');
+    });
+
+    it('selects the option of a controlled HH:mm value and reports HH:mm:ss afterwards', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          showSeconds
+          format="24h"
+          value="09:30"
+          minTime="09:00"
+          maxTime="10:00"
+          onValueChange={onValueChange}
+        />,
+      );
+      expect(combobox('Time')).toHaveValue('09:30:00');
+      await user.click(combobox('Time'));
+      expect(screen.getByRole('option', { name: '09:30:00' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await user.click(screen.getByRole('option', { name: '10:00:00' }));
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith('10:00:00');
+    });
+
+    it('describes text that is not a time with the seconds pattern', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<TimePicker aria-label="Time" showSeconds format="24h" />);
+      await user.type(combobox('Time'), 'soon{Enter}');
+      expect(screen.getByRole('alert')).toHaveTextContent('Enter a time in the format HH:mm:ss.');
+      rerender(<TimePicker aria-label="Time" showSeconds format="12h" />);
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), 'later{Enter}');
+      expect(screen.getByRole('alert')).toHaveTextContent('Enter a time in the format h:mm:ss AM.');
+    });
+
+    it('submits the value with seconds', () => {
+      const { container } = render(
+        <TimePicker aria-label="Time" showSeconds name="at" defaultValue="08:15:30" />,
+      );
+      expect(container.querySelector('input[name="at"]')).toHaveValue('08:15:30');
+    });
+
+    it('without showSeconds the seconds of a typed time are dropped, as before', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<TimePicker aria-label="Time" format="24h" onValueChange={onValueChange} />);
+      await user.type(combobox('Time'), '14:05:59{Enter}');
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith('14:05');
+    });
+
+    it('fires onValueChange once per change in StrictMode', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <React.StrictMode>
+          <TimePicker aria-label="Time" showSeconds format="24h" onValueChange={onValueChange} />
+        </React.StrictMode>,
+      );
+      await user.type(combobox('Time'), '10:00:01{Enter}');
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('formatTime and parseTime (timepicker-4)', () => {
+    const formatTime = (value: string) => {
+      const [h, m] = value.split(':');
+      return `${h}h${m}`;
+    };
+    const parseTime = (text: string) => {
+      const match = /^(\d{1,2})h(\d{2})$/.exec(text.trim());
+      return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
+    };
+
+    it('writes the options and the input through formatTime', async () => {
+      const user = userEvent.setup();
+      render(
+        <TimePicker
+          aria-label="Time"
+          formatTime={formatTime}
+          parseTime={parseTime}
+          minTime="09:00"
+          maxTime="10:00"
+          defaultValue="09:30"
+        />,
+      );
+      expect(combobox('Time')).toHaveValue('09h30');
+      await user.click(combobox('Time'));
+      expect(optionNames()).toEqual(['09h00', '09h30', '10h00']);
+      expect(screen.getByRole('option', { name: '09h30' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
+
+    it('reads typed text through parseTime: a listed and an off-list time', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          formatTime={formatTime}
+          parseTime={parseTime}
+          onValueChange={onValueChange}
+        />,
+      );
+      await user.type(combobox('Time'), '9h15{Enter}');
+      expect(onValueChange).toHaveBeenLastCalledWith('09:15');
+      expect(combobox('Time')).toHaveValue('09h15');
+    });
+
+    it('activates the listed option of a complete typed time', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          formatTime={formatTime}
+          parseTime={parseTime}
+          onValueChange={onValueChange}
+        />,
+      );
+      await user.type(combobox('Time'), '12h30');
+      const active = combobox('Time').getAttribute('aria-activedescendant');
+      expect(document.getElementById(active ?? '')).toHaveTextContent('12h30');
+    });
+
+    it('rejects text that parseTime refuses and names an example of the format', async () => {
+      const user = userEvent.setup();
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          formatTime={formatTime}
+          parseTime={parseTime}
+          onInvalidInput={onInvalidInput}
+        />,
+      );
+      await user.type(combobox('Time'), '9:15 AM{Enter}');
+      expect(onInvalidInput).toHaveBeenCalledExactlyOnceWith('9:15 AM', 'unparseable');
+      expect(screen.getByRole('alert')).toHaveTextContent('Enter a time in the format 13h45.');
+    });
+
+    it('treats a parseTime answer that is no time as unparseable', async () => {
+      const user = userEvent.setup();
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker aria-label="Time" parseTime={() => 'noon'} onInvalidInput={onInvalidInput} />,
+      );
+      await user.type(combobox('Time'), 'x{Enter}');
+      expect(onInvalidInput).toHaveBeenCalledExactlyOnceWith('x', 'unparseable');
+    });
+
+    it('still checks the bounds of what parseTime returns', async () => {
+      const user = userEvent.setup();
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          parseTime={parseTime}
+          formatTime={formatTime}
+          minTime="09:00"
+          onInvalidInput={onInvalidInput}
+        />,
+      );
+      await user.type(combobox('Time'), '7h00{Enter}');
+      expect(onInvalidInput).toHaveBeenCalledExactlyOnceWith('7h00', 'out-of-range');
+    });
+
+    it('works with an inline formatTime that changes identity on every render', async () => {
+      const user = userEvent.setup();
+      const error = vi.spyOn(console, 'error');
+      function Example() {
+        const [n, setN] = React.useState(0);
+        return (
+          <>
+            <button type="button" onClick={() => setN(n + 1)}>
+              Rerender
+            </button>
+            <TimePicker
+              aria-label="Time"
+              formatTime={(value) => `${value}#${n}`}
+              minTime="09:00"
+              maxTime="09:30"
+            />
+          </>
+        );
+      }
+      render(
+        <React.StrictMode>
+          <Example />
+        </React.StrictMode>,
+      );
+      await user.click(combobox('Time'));
+      expect(optionNames()).toEqual(['09:00#0', '09:30#0']);
+      await user.click(screen.getByRole('button', { name: 'Rerender' }));
+      await user.click(combobox('Time'));
+      expect(optionLabels()).toEqual(['09:00#1', '09:30#1']);
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('formatTime receives the value with seconds under showSeconds', async () => {
+      const user = userEvent.setup();
+      render(
+        <TimePicker
+          aria-label="Time"
+          showSeconds
+          formatTime={(value) => `at ${value}`}
+          minTime="09:00"
+          maxTime="09:00"
+        />,
+      );
+      await user.click(combobox('Time'));
+      expect(optionNames()).toEqual(['at 09:00:00']);
+    });
+
+    it('types the props', () => {
+      expectTypeOf<TimePickerProps['formatTime']>().toEqualTypeOf<
+        ((value: string) => string) | undefined
+      >();
+      expectTypeOf<TimePickerProps['parseTime']>().toEqualTypeOf<
+        ((text: string) => string | null | undefined) | undefined
+      >();
+      expectTypeOf<TimePickerProps['showSeconds']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<TimePickerProps['freeform']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<TimePickerInvalidReason>().toEqualTypeOf<
+        'unparseable' | 'out-of-range' | 'not-listed'
+      >();
+    });
+  });
+
+  describe('freeform={false} (timepicker-5)', () => {
+    it('keeps a complete typed time that is not listed and reports it', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          format="24h"
+          freeform={false}
+          onValueChange={onValueChange}
+          onInvalidInput={onInvalidInput}
+        />,
+      );
+      await user.type(combobox('Time'), '09:15{Enter}');
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(onInvalidInput).toHaveBeenCalledExactlyOnceWith('09:15', 'not-listed');
+      expect(combobox('Time')).toHaveValue('09:15');
+      expect(combobox('Time')).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent('Choose a time from the list.');
+    });
+
+    it('commits a typed time that is listed, and a picked option', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          format="24h"
+          freeform={false}
+          onValueChange={onValueChange}
+        />,
+      );
+      await user.type(combobox('Time'), '09:30{Enter}');
+      expect(onValueChange).toHaveBeenLastCalledWith('09:30');
+      await user.click(combobox('Time'));
+      await user.click(screen.getByRole('option', { name: '10:00' }));
+      expect(onValueChange).toHaveBeenLastCalledWith('10:00');
+    });
+
+    it('rejects an unlisted time on blur, too, and a time past the bounds stays out-of-range', async () => {
+      const user = userEvent.setup();
+      const onInvalidInput = vi.fn();
+      render(
+        <>
+          <TimePicker
+            aria-label="Time"
+            format="24h"
+            freeform={false}
+            minTime="09:00"
+            onInvalidInput={onInvalidInput}
+          />
+          <button type="button">Next</button>
+        </>,
+      );
+      await user.type(combobox('Time'), '09:10');
+      await user.tab();
+      expect(onInvalidInput).toHaveBeenLastCalledWith('09:10', 'not-listed');
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), '08:00{Enter}');
+      expect(onInvalidInput).toHaveBeenLastCalledWith('08:00', 'out-of-range');
+    });
+
+    it('lets erased text clear the value and Enter pick the first match of partial text', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          format="24h"
+          freeform={false}
+          defaultValue="09:00"
+          onValueChange={onValueChange}
+        />,
+      );
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), '{Enter}');
+      expect(onValueChange).toHaveBeenLastCalledWith('');
+      await user.type(combobox('Time'), '14:3{Enter}');
+      expect(onValueChange).toHaveBeenLastCalledWith('14:30');
+    });
+
+    it('is freeform by default, as before', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      render(<TimePicker aria-label="Time" format="24h" onValueChange={onValueChange} />);
+      await user.type(combobox('Time'), '09:15{Enter}');
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith('09:15');
+    });
+
+    it('localizes the message and tells it apart in labels', async () => {
+      const user = userEvent.setup();
+      render(
+        <TimePicker
+          aria-label="Time"
+          format="24h"
+          freeform={false}
+          labels={{ notListed: 'Velg et tidspunkt fra listen.' }}
+        />,
+      );
+      await user.type(combobox('Time'), '09:15{Enter}');
+      expect(screen.getByRole('alert')).toHaveTextContent('Velg et tidspunkt fra listen.');
+      expectTypeOf<TimePickerLabels['notListed']>().toEqualTypeOf<string | undefined>();
+    });
+
+    it('does not repeat the message inside a Field that shows an error', async () => {
+      const user = userEvent.setup();
+      renderWithFieldContext(<TimePicker format="24h" freeform={false} />, {
+        errorId: FIELD_TEST_IDS.errorId,
+        hasErrorMessage: true,
+      });
+      await user.type(combobox(), '09:15{Enter}');
+      expect(screen.queryByText('Choose a time from the list.')).not.toBeInTheDocument();
+    });
+
+    it('works with showSeconds: the listed times carry :00 seconds', async () => {
+      const user = userEvent.setup();
+      const onValueChange = vi.fn();
+      const onInvalidInput = vi.fn();
+      render(
+        <TimePicker
+          aria-label="Time"
+          format="24h"
+          showSeconds
+          freeform={false}
+          onValueChange={onValueChange}
+          onInvalidInput={onInvalidInput}
+        />,
+      );
+      await user.type(combobox('Time'), '09:30:00{Enter}');
+      expect(onValueChange).toHaveBeenLastCalledWith('09:30:00');
+      await user.clear(combobox('Time'));
+      await user.type(combobox('Time'), '09:30:05{Enter}');
+      expect(onInvalidInput).toHaveBeenLastCalledWith('09:30:05', 'not-listed');
+    });
+  });
+
+  it('passes axe with seconds and a custom format', async () => {
+    render(
+      <TimePicker aria-label="Time" showSeconds formatTime={(v) => v} defaultValue="09:00:30" />,
+    );
+    await expectNoA11yViolations();
   });
 });

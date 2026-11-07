@@ -25,6 +25,8 @@ const STATUSES: PresenceStatus[] = [
   'offline',
   'do-not-disturb',
   'out-of-office',
+  'blocked',
+  'unknown',
 ];
 
 describe('PresenceBadge', () => {
@@ -43,6 +45,8 @@ describe('PresenceBadge', () => {
     ['offline', 'Offline'],
     ['do-not-disturb', 'Do not disturb'],
     ['out-of-office', 'Out of office'],
+    ['blocked', 'Blocked'],
+    ['unknown', 'Unknown'],
   ] as Array<[PresenceStatus, string]>)(
     'renders status "%s" as an image named "%s"',
     (status, label) => {
@@ -61,6 +65,8 @@ describe('PresenceBadge', () => {
     ['offline', 'ring-x'],
     ['do-not-disturb', 'bar'],
     ['out-of-office', 'arrow'],
+    ['blocked', 'slash'],
+    ['unknown', 'question'],
   ] as Array<[PresenceStatus, string]>)('status "%s" draws the %s glyph', (status, glyph) => {
     render(<PresenceBadge status={status} />);
     const badge = screen.getByRole('img');
@@ -106,6 +112,8 @@ describe('PresenceBadge', () => {
     ['offline', ['wave:bg-background', 'wave:text-presence-offline']],
     ['do-not-disturb', ['wave:bg-presence-busy', 'wave:text-presence-glyph']],
     ['out-of-office', ['wave:bg-presence-oof', 'wave:text-presence-glyph']],
+    ['blocked', ['wave:bg-presence-busy', 'wave:text-presence-glyph']],
+    ['unknown', ['wave:bg-background', 'wave:text-presence-offline']],
   ] as Array<[PresenceStatus, string[]]>)('status "%s" uses %j', (status, classes) => {
     render(<PresenceBadge status={status} />);
     const badge = screen.getByRole('img');
@@ -283,6 +291,76 @@ describe('PresenceBadge', () => {
       }
     });
 
+    describe('a value that is no status at all', () => {
+      const unknownMessage = (value: string) =>
+        `[WaveUI] PresenceBadge: status '${value}' is not a presence status; the badge draws ` +
+        "'offline'. Use one of available, busy, away, offline, do-not-disturb, out-of-office, blocked, unknown.";
+
+      it.each([['DND'], ['Busy '], ['constructor'], ['null']])(
+        "draws %j as 'offline' instead of throwing, and warns once in development",
+        (value) => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          try {
+            render(
+              <React.StrictMode>
+                <PresenceBadge status={untyped(value)} />
+              </React.StrictMode>,
+            );
+            const badge = screen.getByRole('img', { name: 'Offline' });
+            expect(badge).toHaveAttribute('data-status', 'offline');
+            expect(warn.mock.calls).toEqual([[unknownMessage(value)]]);
+          } finally {
+            warn.mockRestore();
+          }
+        },
+      );
+
+      it('draws null as offline, and the same on the server', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          const asNull = null as unknown as PresenceStatus;
+          const html = renderToString(<PresenceBadge status={asNull} />);
+          expect(html).toBe(renderToString(<PresenceBadge status="offline" />));
+          render(<PresenceBadge status={asNull} />);
+          expect(screen.getByRole('img', { name: 'Offline' })).toHaveAttribute(
+            'data-status',
+            'offline',
+          );
+          expect(warn.mock.calls).toEqual([[unknownMessage('null')]]);
+        } finally {
+          warn.mockRestore();
+        }
+      });
+
+      it('draws offline in production without a warning', () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          render(<PresenceBadge status={untyped('DND')} />);
+          expect(screen.getByRole('img', { name: 'Offline' })).toBeInTheDocument();
+          expect(warn).not.toHaveBeenCalled();
+        } finally {
+          warn.mockRestore();
+          vi.unstubAllEnvs();
+        }
+      });
+
+      it('lets an error thrown by the warning itself surface', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {
+          throw new Error('console is strict');
+        });
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          expect(() => render(<PresenceBadge status={untyped('DND')} />)).toThrow(
+            'console is strict',
+          );
+        } finally {
+          warn.mockRestore();
+          error.mockRestore();
+        }
+      });
+    });
+
     it('keeps the old names out of the type', () => {
       // @ts-expect-error -- `'dnd'` is removed in 1.0: use `'do-not-disturb'`
       void (<PresenceBadge status="dnd" />);
@@ -301,7 +379,14 @@ describe('PresenceBadge', () => {
     it('types the Fluent names and the optional status; no aliases (removed in 1.0)', () => {
       expectTypeOf<PresenceBadgeProps['status']>().toEqualTypeOf<PresenceStatus | undefined>();
       expectTypeOf<PresenceStatus>().toEqualTypeOf<
-        'available' | 'busy' | 'away' | 'offline' | 'do-not-disturb' | 'out-of-office'
+        | 'available'
+        | 'busy'
+        | 'away'
+        | 'offline'
+        | 'do-not-disturb'
+        | 'out-of-office'
+        | 'blocked'
+        | 'unknown'
       >();
       expectTypeOf<'dnd'>().not.toExtend<PresenceStatus>();
       expectTypeOf<'oof'>().not.toExtend<PresenceStatus>();
@@ -425,5 +510,80 @@ describe('PresenceBadge — slotProps', () => {
     // @ts-expect-error -- the badge draws the glyph's content
     const parts: BadgeSlotProps = { icon: { children: 'x' } };
     expect(parts).toBeDefined();
+  });
+});
+
+describe('PresenceBadge — outOfOffice (presence-2)', () => {
+  const OOF_TEXT: Array<[PresenceStatus, string]> = [
+    ['available', 'wave:text-presence-available'],
+    ['busy', 'wave:text-presence-busy'],
+    ['away', 'wave:text-presence-away'],
+    ['offline', 'wave:text-presence-offline'],
+    ['do-not-disturb', 'wave:text-presence-busy'],
+    ['blocked', 'wave:text-presence-busy'],
+    ['unknown', 'wave:text-presence-offline'],
+  ];
+
+  it.each(OOF_TEXT)(
+    'status "%s" with outOfOffice draws the arrow in its own color on the page color',
+    (status, textClass) => {
+      render(<PresenceBadge status={status} outOfOffice />);
+      const badge = screen.getByRole('img');
+      expect(badge).toHaveAttribute('data-glyph', 'arrow');
+      expect(badge).toHaveAttribute('data-status', status);
+      expect(badge).toHaveAttribute('data-out-of-office', '');
+      expect(badge).toHaveClass('wave:bg-background', textClass, 'wave:ring-2');
+      expect(badge.querySelector('svg')).toHaveAttribute('data-wave-icon', 'presence-oof');
+      expect(badge.querySelector('svg')).toHaveClass('wave:wave-rtl:-scale-x-100');
+      expect(badge.querySelectorAll('svg')).toHaveLength(1);
+    },
+  );
+
+  it.each(OOF_TEXT)('status "%s" with outOfOffice keeps its name and adds the state', (status) => {
+    const { unmount } = render(<PresenceBadge status={status} />);
+    const plain = screen.getByRole('img').getAttribute('aria-label');
+    unmount();
+    render(<PresenceBadge status={status} outOfOffice />);
+    expect(screen.getByRole('img')).toHaveAttribute('aria-label', `${plain}, out of office`);
+  });
+
+  it('is the same look and name as the out-of-office status itself', () => {
+    const { unmount } = render(<PresenceBadge status="out-of-office" />);
+    const plain = screen.getByRole('img').outerHTML.replace(' data-out-of-office=""', '');
+    unmount();
+    render(<PresenceBadge status="out-of-office" outOfOffice />);
+    const flagged = screen.getByRole('img');
+    expect(flagged).toHaveAttribute('aria-label', 'Out of office');
+    expect(flagged).toHaveClass('wave:bg-presence-oof');
+    expect(flagged.outerHTML.replace(' data-out-of-office=""', '')).toBe(plain);
+  });
+
+  it('is off by default, with no attribute and the status look', () => {
+    render(<PresenceBadge status="available" />);
+    const badge = screen.getByRole('img');
+    expect(badge).not.toHaveAttribute('data-out-of-office');
+    expect(badge).toHaveAttribute('data-glyph', 'check');
+  });
+
+  it('a consumer aria-label still replaces the name', () => {
+    render(<PresenceBadge status="busy" outOfOffice aria-label="Away from the office until May" />);
+    expect(screen.getByRole('img', { name: 'Away from the office until May' })).toBeInTheDocument();
+  });
+
+  it('does not reach the element as an attribute', () => {
+    render(<PresenceBadge outOfOffice />);
+    expect(screen.getByRole('img')).not.toHaveAttribute('outofoffice');
+    expect(screen.getByRole('img')).not.toHaveAttribute('outOfOffice');
+  });
+
+  it('has no axe violations', async () => {
+    const { container } = render(
+      <>
+        {OOF_TEXT.map(([status]) => (
+          <PresenceBadge key={status} status={status} outOfOffice />
+        ))}
+      </>,
+    );
+    await expectNoA11yViolations(container);
   });
 });

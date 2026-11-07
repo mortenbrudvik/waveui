@@ -317,7 +317,7 @@ describe('Nav', () => {
       const onValueChange = vi.fn();
       render(<SampleNav onValueChange={onValueChange} />);
       await user.click(button('Home'));
-      expect(onValueChange).toHaveBeenCalledWith('home');
+      expect(onValueChange).toHaveBeenCalledWith('home', expect.anything());
       expect(button('Home')).toHaveAttribute('aria-current', 'page');
     });
 
@@ -346,7 +346,7 @@ describe('Nav', () => {
       render(<SampleNav value="settings" onValueChange={onValueChange} />);
       expect(button('Settings')).toHaveAttribute('aria-current', 'page');
       await user.click(button('Home'));
-      expect(onValueChange).toHaveBeenCalledWith('home');
+      expect(onValueChange).toHaveBeenCalledWith('home', expect.anything());
       expect(button('Settings')).toHaveAttribute('aria-current', 'page');
     });
 
@@ -420,7 +420,7 @@ describe('Nav', () => {
         );
         await user.click(button('Home'));
         await user.click(button('Settings'));
-        expect(onValueChange.mock.calls).toEqual([['settings']]);
+        expect(onValueChange.mock.calls.map(([first]) => [first])).toEqual([['settings']]);
         expect(onNavItemSelect).not.toHaveBeenCalled();
         expect(screen.getByRole('navigation')).not.toHaveAttribute('onnavitemselect');
         expect(error.mock.calls).toEqual([
@@ -468,7 +468,7 @@ describe('Nav', () => {
       render(<SampleNav onValueChange={onValueChange} />);
       await user.click(toggle());
       await user.click(button('Introduction'));
-      expect(onValueChange).toHaveBeenCalledWith('intro');
+      expect(onValueChange).toHaveBeenCalledWith('intro', expect.anything());
       expect(button('Introduction')).toHaveAttribute('aria-current', 'page');
     });
 
@@ -561,7 +561,7 @@ describe('Nav', () => {
       );
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
       await user.click(toggle());
-      expect(onOpenCategoriesChange).toHaveBeenCalledWith([]);
+      expect(onOpenCategoriesChange).toHaveBeenCalledWith([], expect.anything());
       expectTypeOf(open).toMatchTypeOf<NonNullable<NavProps['openCategories']>>();
       expectTypeOf(open).toMatchTypeOf<NonNullable<NavProps['defaultOpenCategories']>>();
       expectTypeOf<Parameters<NonNullable<NavProps['onOpenCategoriesChange']>>[0]>().toEqualTypeOf<
@@ -576,14 +576,14 @@ describe('Nav', () => {
         <SampleNav openCategories={[]} onOpenCategoriesChange={onOpenCategoriesChange} />,
       );
       await user.click(toggle());
-      expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs']);
+      expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs'], expect.anything());
       expect(toggle()).toHaveAttribute('aria-expanded', 'false');
       rerender(
         <SampleNav openCategories={['docs']} onOpenCategoriesChange={onOpenCategoriesChange} />,
       );
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
       await user.click(toggle());
-      expect(onOpenCategoriesChange).toHaveBeenLastCalledWith([]);
+      expect(onOpenCategoriesChange).toHaveBeenLastCalledWith([], expect.anything());
     });
 
     it('uncontrolled: onOpenCategoriesChange receives the open list', async () => {
@@ -591,7 +591,7 @@ describe('Nav', () => {
       const onOpenCategoriesChange = vi.fn();
       render(<SampleNav onOpenCategoriesChange={onOpenCategoriesChange} />);
       await user.click(toggle());
-      expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs']);
+      expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs'], expect.anything());
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
     });
   });
@@ -898,7 +898,7 @@ describe('Nav', () => {
       const link = screen.getByRole('link', { name: 'Home' });
       expect(link).toHaveAttribute('href', '#home');
       await user.click(link);
-      expect(onValueChange).toHaveBeenCalledWith('home');
+      expect(onValueChange).toHaveBeenCalledWith('home', expect.anything());
       expect(onHomeClick).toHaveBeenCalledTimes(1);
       expect(link).toHaveAttribute('aria-current', 'page');
     });
@@ -912,7 +912,7 @@ describe('Nav', () => {
       const intro = screen.getByRole('link', { name: 'Introduction' });
       expect(intro).toHaveAttribute('href', '#intro');
       await user.click(intro);
-      expect(onValueChange).toHaveBeenLastCalledWith('intro');
+      expect(onValueChange).toHaveBeenLastCalledWith('intro', expect.anything());
       expect(onIntroClick).toHaveBeenCalledTimes(1);
       expect(intro).toHaveAttribute('aria-current', 'page');
       expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
@@ -925,7 +925,7 @@ describe('Nav', () => {
       render(<LinkNav onValueChange={onValueChange} onHomeClick={onHomeClick} />);
       await user.click(screen.getByRole('link', { name: 'Home' }));
       expect(onHomeClick).toHaveBeenCalledTimes(1);
-      expect(onValueChange).toHaveBeenCalledWith('home');
+      expect(onValueChange).toHaveBeenCalledWith('home', expect.anything());
       expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
     });
 
@@ -1010,7 +1010,7 @@ describe('Nav', () => {
           const onValueChange = vi.fn();
           render(<ReportsNav target={target} onValueChange={onValueChange} />);
           await user.click(link('Reports'));
-          expect(onValueChange).toHaveBeenCalledWith('reports');
+          expect(onValueChange).toHaveBeenCalledWith('reports', expect.anything());
           expect(link('Reports')).toHaveAttribute('aria-current', 'page');
         },
       );
@@ -1042,7 +1042,7 @@ describe('Nav', () => {
           const notPrevented = fireEvent.click(link('Reports'), init);
           expect(notPrevented).toBe(false);
           expect(navigate).toHaveBeenCalledTimes(1);
-          expect(onValueChange.mock.calls).toEqual([['reports']]);
+          expect(onValueChange.mock.calls.map(([first]) => [first])).toEqual([['reports']]);
           expect(link('Reports')).toHaveAttribute('aria-current', 'page');
           expect(link('Home')).not.toHaveAttribute('aria-current');
         },
@@ -1052,7 +1052,7 @@ describe('Nav', () => {
         const onValueChange = vi.fn();
         render(<SampleNav onValueChange={onValueChange} />);
         fireEvent.click(button('Settings'), { ctrlKey: true });
-        expect(onValueChange).toHaveBeenCalledWith('settings');
+        expect(onValueChange).toHaveBeenCalledWith('settings', expect.anything());
         expect(button('Settings')).toHaveAttribute('aria-current', 'page');
       });
     });
@@ -1985,10 +1985,10 @@ describe('useNavRootState', () => {
     );
     await user.click(button('Home'));
     await user.click(button('Home'));
-    expect(onActivate.mock.calls).toEqual([['home'], ['home']]);
-    expect(onValueChange.mock.calls).toEqual([['home']]);
+    expect(onActivate.mock.calls.map(([first]) => [first])).toEqual([['home'], ['home']]);
+    expect(onValueChange.mock.calls.map(([first]) => [first])).toEqual([['home']]);
     await user.click(toggle());
-    expect(onOpenCategoriesChange.mock.calls).toEqual([[['docs']]]);
+    expect(onOpenCategoriesChange.mock.calls.map(([first]) => [first])).toEqual([[['docs']]]);
     expect(button('Home')).toHaveAttribute('aria-current', 'page');
   });
 
@@ -2645,7 +2645,7 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     expect(toggle()).toHaveAttribute('aria-expanded', 'false');
     rerender(<Toggle prevent={false} />);
     await user.click(toggle());
-    expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs']);
+    expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs'], expect.anything());
     expect(toggle()).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -2678,7 +2678,11 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     );
     await user.click(toggle());
     expect(toggle()).toHaveAttribute('aria-expanded', 'true');
-    expect(onOpenCategoriesChange.mock.calls).toEqual([[['docs']], [[]], [['docs']]]);
+    expect(onOpenCategoriesChange.mock.calls.map(([first]) => [first])).toEqual([
+      [['docs']],
+      [[]],
+      [['docs']],
+    ]);
   });
 
   it('keeps the category as it is on a click prevented before the button while the label part or a toggle handler of yours is given', async () => {
@@ -2726,7 +2730,7 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     // A label part that prevents nothing: the click opens the category.
     rerender(<Category slotProps={{ label: { onClick: () => void order.push('mine') } }} />);
     await user.click(screen.getByText('Docs'));
-    expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs']);
+    expect(onOpenCategoriesChange).toHaveBeenCalledWith(['docs'], expect.anything());
   });
 
   it('runs your content handler before the item’s: preventDefault() leaves a button unselected and a link selected but not followed', async () => {
@@ -2773,7 +2777,7 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     expect(button('Home')).not.toHaveAttribute('aria-current');
     await user.click(screen.getByText('Reports'));
     expect(order).toEqual(['content', 'home', 'content', 'reports']);
-    expect(onValueChange).toHaveBeenCalledWith('reports');
+    expect(onValueChange).toHaveBeenCalledWith('reports', expect.anything());
     expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('aria-current', 'page');
     expect(followed).toEqual([false]);
   });
@@ -2855,7 +2859,7 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     order.length = 0;
     await user.click(button('Introduction'));
     expect(order).toEqual(['intro', 'sub-li', 'list', 'nav-list']);
-    expect(onValueChange.mock.calls).toEqual([['home'], ['intro']]);
+    expect(onValueChange.mock.calls.map(([first]) => [first])).toEqual([['home'], ['intro']]);
   });
 
   it('runs a category list part’s keys before an arrow-key body’s: preventDefault() skips them', async () => {
@@ -2993,8 +2997,8 @@ describe('Nav, Nav.Category, Nav.Item and Nav.SubItem — slotProps', () => {
     expect(handlers.navList).toHaveBeenCalledTimes(3);
     const { navList: _navList, ...once } = handlers;
     for (const handler of Object.values(once)) expect(handler).toHaveBeenCalledTimes(1);
-    expect(onValueChange.mock.calls).toEqual([['home'], ['intro']]);
-    expect(onOpenCategoriesChange.mock.calls).toEqual([[['docs']]]);
+    expect(onValueChange.mock.calls.map(([first]) => [first])).toEqual([['home'], ['intro']]);
+    expect(onOpenCategoriesChange.mock.calls.map(([first]) => [first])).toEqual([[['docs']]]);
   });
 
   it('ignores the parts a component does not render', () => {

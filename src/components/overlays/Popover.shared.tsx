@@ -9,6 +9,40 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 // Parts shared by the anchored popups: Popover.Content and TeachingPopover with a `target`, and
 // InfoButton's note (data-display). Internal: not exported from the barrels.
 
+/**
+ * The look of a popover surface (`Popover`, `TeachingPopover`): `neutral` (the page background
+ * with a border), `brand` (the brand fill) or `inverted` (a dark surface in the light theme).
+ * Fluent's `PopoverSurface` `appearance`, whose default is the neutral one.
+ */
+export type PopoverAppearance = 'neutral' | 'brand' | 'inverted';
+
+/**
+ * The padding of a popover surface, as Fluent's `Popover` `size`: `small` (12px), `medium`
+ * (16px) or `large` (20px). The width stays 16rem, or whatever `className` sets.
+ */
+export type PopoverSize = 'small' | 'medium' | 'large';
+
+/** The colors of a popover surface per appearance; the beak inherits them. */
+export const popoverAppearanceClasses: Record<PopoverAppearance, string> = {
+  neutral: 'wave:border-border wave:bg-background wave:text-foreground',
+  brand: 'wave:border-primary wave:bg-primary wave:text-primary-foreground',
+  inverted: 'wave:border-inverted-border wave:bg-inverted wave:text-inverted-foreground',
+};
+
+/** The padding of a popover surface per size. */
+export const popoverSizeClasses: Record<PopoverSize, string> = {
+  small: 'wave:p-3',
+  medium: 'wave:p-4',
+  large: 'wave:p-5',
+};
+
+/** The scroller of a viewport-limited popover: the limit minus the padding and the 1px borders. */
+export const popoverScrollerClasses: Record<PopoverSize, string> = {
+  small: 'wave:overflow-y-auto wave:max-h-[calc(var(--wave-popup-available-height)-1.5rem-2px)]',
+  medium: 'wave:overflow-y-auto wave:max-h-[calc(var(--wave-popup-available-height)-2rem-2px)]',
+  large: 'wave:overflow-y-auto wave:max-h-[calc(var(--wave-popup-available-height)-2.5rem-2px)]',
+};
+
 /** Final physical side of a positioned surface (the `side` result of `usePopupPosition`). */
 export type PopoverPhysicalSide = UsePopupPositionResult['side'];
 

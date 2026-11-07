@@ -1,12 +1,19 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
 import { buttonClassNames, compoundButtonClassNames } from '../../lib/classNames';
-import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
+import {
+  materialiseSlotContent,
+  renderSlot,
+  resolveSlot,
+  slotRendersContent,
+  type SlotObject,
+} from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
-import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
+import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { withPartClass } from './Button.slots';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The CompoundButton's own props (the XOwnProps rule of `PolymorphicProps`: component-specific
@@ -14,10 +21,25 @@ import { withPartClass } from './Button.slots';
  */
 export interface CompoundButtonOwnProps {
   /**
-   * Secondary descriptive text displayed below the main label (part of the accessible name).
-   * Content that renders nothing (`''`, `[]`, `<></>`) renders no second line.
+   * Secondary descriptive text displayed below the main label (part of the accessible name),
+   * Fluent's `secondaryContent` slot: any content (its text is the second line), or a slot object
+   * (`{ children, className, as, ...attributes }`) for the element of that line. Content that
+   * renders nothing (`''`, `[]`, `<></>`) renders no second line; a slot object always renders
+   * one. The slot object's attributes merge over `slotProps.secondaryText` (its classes, handlers
+   * and refs join); the attributes the component locks (`slotProps.secondaryText`) stay locked.
    */
-  secondaryText?: React.ReactNode;
+  secondaryText?: Slot<'span'>;
+  /**
+   * The element around the two lines of text, Fluent's `contentContainer` slot, as a slot object:
+   * `as` renders another element, `className`, `style`, `ref`, handlers and attributes are
+   * merged over `slotProps.contentContainer`, and a render function as `children`
+   * (`(Component, props) => …`) renders the column, with the two lines as `props.children`.
+   * Other `children` of the object are ignored (the lines are its content). The attribute the
+   * component locks (`data-wave-compound-content`) stays locked, and a click handler is not called
+   * while the button is `disabled` or `disabledFocusable`. Without any text (an icon-only
+   * button) the column does not render.
+   */
+  contentContainer?: SlotObject<'span'>;
   /** Visual style variant.
    * @default 'outline'
    */
@@ -26,6 +48,11 @@ export interface CompoundButtonOwnProps {
    * @default 'medium'
    */
   size?: Size;
+  /**
+   * Corner shape, as on {@link Button}.
+   * @default 'rounded'
+   */
+  shape?: Shape;
   /**
    * Disables the button. As with {@link Button}: a native `disabled` attribute for form controls
    * (the default `button`); every other `as` gets `aria-disabled="true"` and `tabIndex={-1}`, its
@@ -144,6 +171,27 @@ type CompoundButtonImplProps = CompoundButtonOwnProps & {
 const BaseButton = Button as React.ElementType;
 
 /**
+ * The element of a part that is also a slot (`secondaryText`, `contentContainer`): what the slot
+ * resolves to (its element, attributes, `className`, `ref` and content), merged over the part's
+ * `slotProps` and the component's own classes, locks and click block, as `mergeSlotProps` merges
+ * several layers (the slot object last). `content` replaces the slot's own content where given.
+ */
+function renderPart(
+  slot: Slot<'span'> | undefined,
+  slotProps: SlotPart<'span'> | undefined,
+  own: Parameters<typeof mergeSlotProps>[1],
+  content?: React.ReactNode,
+): React.ReactElement {
+  const resolved = resolveSlot(slot ?? {}, 'span')!;
+  const props = mergeSlotProps([slotProps, resolved.props as SlotPart<'span'>], own);
+  return React.createElement(
+    resolved.Component,
+    props,
+    content === undefined ? resolved.children : content,
+  );
+}
+
+/**
  * A button with a main label and a secondary line of text below it, and an optional icon beside
  * them. Built on {@link Button}: same appearances, sizes, token colors, `type="button"` default,
  * `disabled`/`disabledFocusable` and polymorphic `as` behaviour (`as="a"` renders a link; a
@@ -152,6 +200,10 @@ const BaseButton = Button as React.ElementType;
  *
  * - The text lines sit in a column wrapper (`span[data-wave-compound-content]`); the icon renders
  *   before or after it (`iconPosition`).
+ * - `secondaryText` and `contentContainer` are slots: content or a slot object (`as`, `className`,
+ *   attributes, a render function) for the second line, a slot object for the column around the
+ *   text, both merged over `slotProps`.
+ * - `shape` rounds the corners as on `Button`.
  * - With only an icon (no label and no `secondaryText`) it is an icon-only `Button`: square, with
  *   the icon-only sizing and name check.
  *
@@ -165,12 +217,16 @@ const BaseButton = Button as React.ElementType;
  * </CompoundButton>
  */
 export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnProps> = (props) => {
+  const appClassName = useAppClassName(buttonClassNames.root, compoundButtonClassNames.root);
+
   const {
     secondaryText,
     appearance = 'outline',
     size = 'medium',
+    shape,
     icon,
     iconPosition = 'before',
+    contentContainer,
     className,
     children,
     slotProps,
@@ -189,9 +245,10 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
         {...rest}
         appearance={appearance}
         size={size}
+        shape={shape}
         icon={withPartClass(icon, compoundButtonClassNames.icon)}
         iconPosition={iconPosition}
-        className={wcn(compoundButtonClassNames.root, className)}
+        className={wcn(compoundButtonClassNames.root, appClassName, className)}
       />
     );
   }
@@ -210,17 +267,8 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
   // A button that does not activate calls no click handler of a part either.
   const blockHandlers =
     rest.disabled || rest.disabledFocusable ? (['onClick'] as const) : undefined;
-  const content = (
-    <span
-      {...mergeSlotProps(slotProps?.contentContainer, {
-        className: wcn(
-          compoundButtonClassNames.contentContainer,
-          'wave:flex wave:min-w-0 wave:flex-col wave:items-start',
-        ),
-        locked: { 'data-wave-compound-content': '' },
-        blockHandlers,
-      })}
-    >
+  const lines = (
+    <>
       <span
         {...mergeSlotProps(slotProps?.primaryText, {
           className: wcn(compoundButtonClassNames.primaryText, 'wave:font-bold'),
@@ -231,24 +279,32 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       >
         {label}
       </span>
-      {hasSecondary && (
-        <span
-          {...mergeSlotProps(slotProps?.secondaryText, {
-            className: wcn(
-              compoundButtonClassNames.secondaryText,
-              'wave:text-caption-1 wave:font-normal',
-              appearance === 'primary'
-                ? 'wave:text-primary-foreground'
-                : 'wave:text-muted-foreground',
-            ),
-            locked: TEXT_PART_LOCKS,
-            blockHandlers,
-          })}
-        >
-          {secondary}
-        </span>
-      )}
-    </span>
+      {hasSecondary &&
+        renderPart(secondaryText, slotProps?.secondaryText, {
+          className: wcn(
+            compoundButtonClassNames.secondaryText,
+            'wave:text-caption-1 wave:font-normal',
+            appearance === 'primary'
+              ? 'wave:text-primary-foreground'
+              : 'wave:text-muted-foreground',
+          ),
+          locked: TEXT_PART_LOCKS,
+          blockHandlers,
+        })}
+    </>
+  );
+  const content = renderPart(
+    contentContainer,
+    slotProps?.contentContainer,
+    {
+      className: wcn(
+        compoundButtonClassNames.contentContainer,
+        'wave:flex wave:min-w-0 wave:flex-col wave:items-start',
+      ),
+      locked: { 'data-wave-compound-content': '' },
+      blockHandlers,
+    },
+    lines,
   );
 
   return (
@@ -256,10 +312,12 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
       {...rest}
       appearance={appearance}
       size={size}
+      shape={shape}
       className={wcn(
         compoundButtonClassNames.root,
         'wave:h-auto wave:items-center wave:justify-start wave:gap-3 wave:text-start',
         paddingClasses[size],
+        appClassName,
         className,
       )}
     >

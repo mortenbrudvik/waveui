@@ -13,6 +13,7 @@ import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { disabledStyles, focusRing, forcedColors } from '../../lib/styles';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** The kinds of Pagination buttons, as passed to `getItemAriaLabel`. */
 export type PaginationItemType = 'first' | 'previous' | 'page' | 'next' | 'last';
@@ -302,6 +303,8 @@ const Pagination = ({
   slotProps,
   ...rest
 }: PaginationProps) => {
+  const appClassName = useAppClassName(paginationClassNames.root);
+
   // `isControlled` is useControllable's sticky mode: a pager that was ever controlled stays
   // controlled, also when `currentPage` later becomes `undefined` (misuse; the hook warns and
   // reports `defaultCurrentPage`, which is then clamped like a controlled value).
@@ -433,7 +436,7 @@ const Pagination = ({
       ref={ref}
       aria-label="Pagination"
       {...rest}
-      className={wcn(paginationClassNames.root, className)}
+      className={wcn(paginationClassNames.root, appClassName, className)}
     >
       <ol
         className={listClassName}

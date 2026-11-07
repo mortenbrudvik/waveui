@@ -8,6 +8,7 @@ import {
   type TriggerChildren,
 } from '../lib/renderTrigger';
 import { warnOnce } from '../lib/dev';
+import { withFragmentRefs } from '../lib/fragmentRefs';
 import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable, isHiddenInput } from '../lib/focus';
 import { useMergedRefs } from './useMergedRefs';
 import { useEventCallback } from './useEventCallback';
@@ -307,7 +308,11 @@ export function useTriggerElement<P>(
     const { ref: _theirRef, ...theirProps } = cloneTarget.props;
     const { ref: _ourRef, ...ourRest } = ourProps;
     const merged = mergeProps(ourRest, theirProps, { oursWin: STATE_ARIA });
-    return React.cloneElement(cloneTarget, { ...merged, ref: mergedRef });
+    // A `<Fragment ref>` around the child keeps its ref: the element goes back inside it.
+    return withFragmentRefs(
+      children as React.ReactNode,
+      React.cloneElement(cloneTarget, { ...merged, ref: mergedRef }),
+    );
   }
 
   if (wrapper) {
@@ -318,7 +323,10 @@ export function useTriggerElement<P>(
     // warn about children it cannot clone; the automatic fallback (a single element, never cloned
     // again) warned above.
     return asChild
-      ? renderTrigger(content, wrapperProps, { componentName, asChild: !autoWrapper })
+      ? withFragmentRefs(
+          children,
+          renderTrigger(content, wrapperProps, { componentName, asChild: !autoWrapper }),
+        )
       : renderTrigger(children, wrapperProps, { componentName, asChild: false });
   }
 

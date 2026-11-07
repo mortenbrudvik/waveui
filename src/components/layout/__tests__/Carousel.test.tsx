@@ -12,6 +12,8 @@ import {
 } from '../../../lib/classNames';
 import type {
   CarouselAutoPlayLabels,
+  CarouselChangeDetails,
+  CarouselChangeReason,
   CarouselItemProps,
   CarouselLabels,
   CarouselProps,
@@ -165,7 +167,7 @@ describe('Carousel', () => {
       await user.click(nextButton());
 
       expect(onValueChange).toHaveBeenCalledTimes(1);
-      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(onValueChange).toHaveBeenCalledWith(1, expect.anything());
       expect(liveRegion()).toHaveTextContent('Slide 2 of 3');
       expect(currentDot()).toHaveAccessibleName('Slide 2 of 3');
       expect(prevButton()).not.toHaveAttribute('aria-disabled');
@@ -183,7 +185,7 @@ describe('Carousel', () => {
         </Carousel>,
       );
       await user.click(prevButton());
-      expect(onValueChange).toHaveBeenCalledWith(0);
+      expect(onValueChange).toHaveBeenCalledWith(0, expect.anything());
       expect(liveRegion()).toHaveTextContent('Slide 1 of 3');
       expect(currentDot()).toHaveAccessibleName('Slide 1 of 3');
       expect(prevButton()).toHaveAttribute('aria-disabled', 'true');
@@ -195,7 +197,7 @@ describe('Carousel', () => {
       const onValueChange = vi.fn();
       render(<Carousel onValueChange={onValueChange}>{threeSlides}</Carousel>);
       await user.click(screen.getByRole('button', { name: 'Slide 3 of 3' }));
-      expect(onValueChange).toHaveBeenCalledWith(2);
+      expect(onValueChange).toHaveBeenCalledWith(2, expect.anything());
       expect(liveRegion()).toHaveTextContent('Slide 3 of 3');
       expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
       expect(exposedSlides()).toEqual([3]);
@@ -211,7 +213,7 @@ describe('Carousel', () => {
       );
       expect(nextButton()).not.toHaveAttribute('aria-disabled');
       await user.click(nextButton());
-      expect(onValueChange).toHaveBeenCalledWith(0);
+      expect(onValueChange).toHaveBeenCalledWith(0, expect.anything());
       expect(liveRegion()).toHaveTextContent('Slide 1 of 3');
     });
 
@@ -225,7 +227,7 @@ describe('Carousel', () => {
       );
       expect(prevButton()).not.toHaveAttribute('aria-disabled');
       await user.click(prevButton());
-      expect(onValueChange).toHaveBeenCalledWith(2);
+      expect(onValueChange).toHaveBeenCalledWith(2, expect.anything());
       expect(liveRegion()).toHaveTextContent('Slide 3 of 3');
       expect(currentDot()).toHaveAccessibleName('Slide 3 of 3');
       expect(exposedSlides()).toEqual([3]);
@@ -271,7 +273,7 @@ describe('Carousel', () => {
         nextButton().focus();
       });
       await user.keyboard('{Enter}');
-      expect(onValueChange).toHaveBeenLastCalledWith(2);
+      expect(onValueChange).toHaveBeenLastCalledWith(2, expect.anything());
       expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
       expect(nextButton()).not.toBeDisabled();
       expect(nextButton()).toHaveFocus();
@@ -350,7 +352,7 @@ describe('Carousel', () => {
       expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
 
       await user.click(prevButton());
-      expect(onValueChange).toHaveBeenCalledWith(0);
+      expect(onValueChange).toHaveBeenCalledWith(0, expect.anything());
       expect(liveRegion()).toHaveTextContent('Slide 1 of 2');
     });
 
@@ -576,12 +578,12 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenLastCalledWith(1);
+      expect(onValueChange).toHaveBeenLastCalledWith(1, expect.anything());
       expect(liveRegion()).toHaveTextContent('Slide 2 of 3');
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenLastCalledWith(2);
+      expect(onValueChange).toHaveBeenLastCalledWith(2, expect.anything());
       expect(onValueChange).toHaveBeenCalledTimes(2);
     });
 
@@ -596,7 +598,10 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(2000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1], [0]]);
+      expect(onValueChange.mock.calls).toEqual([
+        [1, expect.anything()],
+        [0, expect.anything()],
+      ]);
       expect(liveRegion()).toHaveTextContent('Slide 1 of 2');
     });
 
@@ -611,7 +616,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(10_000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1]]);
+      expect(onValueChange.mock.calls).toEqual([[1, expect.anything()]]);
       expect(liveRegion()).toHaveTextContent('Slide 2 of 2');
       expect(vi.getTimerCount()).toBe(0);
     });
@@ -629,7 +634,10 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(2000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1], [2]]);
+      expect(onValueChange.mock.calls).toEqual([
+        [1, expect.anything()],
+        [2, expect.anything()],
+      ]);
 
       // Rotation has ended: the control offers Start, and the live region is polite again.
       const toggle = screen.getByRole('button', { name: 'Start slide rotation' });
@@ -637,14 +645,14 @@ describe('Carousel', () => {
       expect(vi.getTimerCount()).toBe(0);
 
       await user.click(toggle);
-      expect(onValueChange).toHaveBeenLastCalledWith(0);
+      expect(onValueChange).toHaveBeenLastCalledWith(0, expect.anything());
       expect(toggle).toHaveAccessibleName('Pause slide rotation');
       expect(liveRegion()).toHaveTextContent('Slide 1 of 3');
       expect(liveRegion()).toHaveAttribute('aria-live', 'off');
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenLastCalledWith(1);
+      expect(onValueChange).toHaveBeenLastCalledWith(1, expect.anything());
     });
 
     it('stays stopped after moving back from the last slide; only Start resumes (layout#21)', async () => {
@@ -662,12 +670,15 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(2000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1], [2]]);
+      expect(onValueChange.mock.calls).toEqual([
+        [1, expect.anything()],
+        [2, expect.anything()],
+      ]);
       const toggle = screen.getByRole('button', { name: 'Start slide rotation' });
 
       // Previous from the last slide is a manual step, not a Start: rotation stays ended.
       await user.click(prevButton());
-      expect(onValueChange).toHaveBeenLastCalledWith(1);
+      expect(onValueChange).toHaveBeenLastCalledWith(1, expect.anything());
       expect(toggle).toHaveAccessibleName('Start slide rotation');
 
       // Leaving (pointer and focus) does not resume it either.
@@ -690,7 +701,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenLastCalledWith(2);
+      expect(onValueChange).toHaveBeenLastCalledWith(2, expect.anything());
       expect(toggle).toHaveAccessibleName('Start slide rotation');
     });
 
@@ -713,7 +724,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(5000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1]]);
+      expect(onValueChange.mock.calls).toEqual([[1, expect.anything()]]);
     });
 
     it('continues when slides are appended after rotation ended, and ends at the new last slide (layout#21)', () => {
@@ -729,7 +740,7 @@ describe('Carousel', () => {
         vi.advanceTimersByTime(1000);
       });
       const toggle = screen.getByRole('button', { name: 'Start slide rotation' });
-      expect(onValueChange.mock.calls).toEqual([[1]]);
+      expect(onValueChange.mock.calls).toEqual([[1, expect.anything()]]);
 
       // Lazy-loaded slides: slide 2 is no longer the last one, so the end no longer applies.
       rerender(ui(4));
@@ -738,7 +749,11 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(5000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1], [2], [3]]);
+      expect(onValueChange.mock.calls).toEqual([
+        [1, expect.anything()],
+        [2, expect.anything()],
+        [3, expect.anything()],
+      ]);
       expect(liveRegion()).toHaveTextContent('Slide 4 of 4');
       expect(toggle).toHaveAccessibleName('Start slide rotation');
       expect(vi.getTimerCount()).toBe(0);
@@ -763,7 +778,10 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1], [0]]);
+      expect(onValueChange.mock.calls).toEqual([
+        [1, expect.anything()],
+        [0, expect.anything()],
+      ]);
       expect(liveRegion()).toHaveTextContent('Slide 1 of 2');
     });
 
@@ -972,7 +990,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(onValueChange).toHaveBeenCalledWith(1, expect.anything());
     });
 
     it('pauses while hovered and resumes when the pointer leaves', () => {
@@ -995,7 +1013,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(onValueChange).toHaveBeenCalledWith(1, expect.anything());
     });
 
     it('pauses while focus is inside and resumes when focus leaves', () => {
@@ -1032,7 +1050,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(onValueChange).toHaveBeenCalledWith(1, expect.anything());
     });
 
     it('stays paused after a click on Next until focus leaves (a click focuses the button)', async () => {
@@ -1048,7 +1066,7 @@ describe('Carousel', () => {
         </>,
       );
       await user.click(nextButton());
-      expect(onValueChange.mock.calls).toEqual([[1]]);
+      expect(onValueChange.mock.calls).toEqual([[1, expect.anything()]]);
       expect(nextButton()).toHaveFocus();
 
       // The pointer has left, but focus is still on Next: still paused, not stopped.
@@ -1066,7 +1084,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenLastCalledWith(2);
+      expect(onValueChange).toHaveBeenLastCalledWith(2, expect.anything());
     });
 
     it('pauses when keyboard focus reaches the rotation control, like any element inside (APG)', async () => {
@@ -1098,7 +1116,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(onValueChange).toHaveBeenCalledWith(1, expect.anything());
     });
 
     it('Start on the rotation control rotates while focus stays there; moving on pauses again', async () => {
@@ -1123,7 +1141,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(onValueChange).toHaveBeenCalledWith(1, expect.anything());
 
       // Moving on to another control inside pauses again.
       await user.tab();
@@ -1245,7 +1263,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1]]);
+      expect(onValueChange.mock.calls).toEqual([[1, expect.anything()]]);
 
       // The pointer leaves: the consumer onMouseLeave runs and rotation resumes.
       fireEvent.mouseEnter(region());
@@ -1256,7 +1274,10 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange.mock.calls).toEqual([[1], [2]]);
+      expect(onValueChange.mock.calls).toEqual([
+        [1, expect.anything()],
+        [2, expect.anything()],
+      ]);
     });
   });
 
@@ -1319,7 +1340,7 @@ describe('Carousel', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(onValueChange).toHaveBeenCalledWith(1, expect.anything());
     });
   });
 
@@ -1473,7 +1494,7 @@ describe('Carousel', () => {
       expect(region()).toHaveAccessibleName('Promo');
       expect(slideGroups()).toHaveLength(3);
       await user.click(nextButton());
-      expect(onValueChange).toHaveBeenCalledWith(1);
+      expect(onValueChange).toHaveBeenCalledWith(1, expect.anything());
       expect(liveRegion()).toHaveTextContent('Slide 2 of 3');
       expect(exposedSlides()).toEqual([2]);
     });
@@ -1648,9 +1669,9 @@ describe('Carousel groups (0.13)', () => {
     );
     await user.click(nextButton());
     expect(exposedIndexes()).toEqual([3, 4, 5]);
-    expect(onValueChange).toHaveBeenLastCalledWith(3);
+    expect(onValueChange).toHaveBeenLastCalledWith(3, expect.anything());
     await user.click(nextButton());
-    expect(onValueChange).toHaveBeenLastCalledWith(6);
+    expect(onValueChange).toHaveBeenLastCalledWith(6, expect.anything());
     await user.click(prevButton());
     expect(exposedIndexes()).toEqual([3, 4, 5]);
     expect(onValueChange).toHaveBeenCalledTimes(3);
@@ -1665,7 +1686,7 @@ describe('Carousel groups (0.13)', () => {
       </Carousel>,
     );
     await user.click(dots()[2]!);
-    expect(onValueChange).toHaveBeenCalledWith(6);
+    expect(onValueChange).toHaveBeenCalledWith(6, expect.anything());
     expect(currentDot()).toBe(dots()[2]);
   });
 
@@ -2086,7 +2107,7 @@ describe('Carousel dragging (0.13)', () => {
     (type) => {
       const { el, onValueChange } = renderDraggable();
       drag(el, 300, 150, 1000, type);
-      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
       expect(exposedSlides()).toEqual([2]);
     },
   );
@@ -2094,7 +2115,7 @@ describe('Carousel dragging (0.13)', () => {
   it('a drag towards the end shows the previous page', () => {
     const { el, onValueChange } = renderDraggable({ defaultValue: 2 });
     drag(el, 100, 250, 1000);
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
   });
 
   it('a short slow drag snaps back and changes nothing', () => {
@@ -2109,7 +2130,7 @@ describe('Carousel dragging (0.13)', () => {
   it('a fast short flick commits', () => {
     const { el, onValueChange } = renderDraggable();
     drag(el, 300, 260, 40);
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
   });
 
   it('a flick on the first page towards the end does not leave the carousel', () => {
@@ -2140,7 +2161,7 @@ describe('Carousel dragging (0.13)', () => {
     drag(el, 300, 150, 1000);
     expect(onValueChange).not.toHaveBeenCalled();
     drag(el, 100, 250, 1000);
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
   });
 
   it('follows the pointer while dragging and marks it', () => {
@@ -2273,13 +2294,13 @@ describe('Carousel dragging (0.13)', () => {
     act(() => {
       vi.advanceTimersByTime(1100);
     });
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
   });
 
   it('moves by pages with groupSize', async () => {
     const { el, onValueChange } = renderDraggable({ groupSize: 2 });
     drag(el, 300, 100, 1000);
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2, expect.anything());
     // Settle the observers the roving focus group and the sizing set up.
     await act(async () => {});
   });
@@ -2336,7 +2357,7 @@ describe('Carousel dragging (0.13)', () => {
     const el = track();
     mockRect(el.parentElement as Element, { left: 0, top: 0, width: 400, height: 200 });
     drag(el, 300, 100, 1000);
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
   });
 });
 
@@ -2625,7 +2646,7 @@ describe('Carousel thumbnails, layouts and buttons (0.13)', () => {
       await user.click(prevButton());
       expect(onValueChange).not.toHaveBeenCalled();
       await user.click(nextButton());
-      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
       expect(prevButton()).not.toHaveAttribute('aria-disabled');
       await user.click(nextButton());
       expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
@@ -3241,9 +3262,9 @@ describe('Carousel — slotProps', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pause slide rotation' }));
     expect(screen.getByRole('button', { name: 'Start slide rotation' })).toBeInTheDocument();
     fireEvent.click(nextButton());
-    expect(onValueChange).toHaveBeenLastCalledWith(1);
+    expect(onValueChange).toHaveBeenLastCalledWith(1, expect.anything());
     fireEvent.click(dots()[2]);
-    expect(onValueChange).toHaveBeenLastCalledWith(2);
+    expect(onValueChange).toHaveBeenLastCalledWith(2, expect.anything());
     expect(order).toEqual(['rotation', 'next', 'picker', 'rotation', 'next', 'picker']);
   });
 
@@ -3264,13 +3285,13 @@ describe('Carousel — slotProps', () => {
     expect(previous).not.toHaveBeenCalled();
     fireEvent.click(nextButton());
     expect(next).toHaveBeenCalledTimes(1);
-    expect(onValueChange).toHaveBeenLastCalledWith(1);
+    expect(onValueChange).toHaveBeenLastCalledWith(1, expect.anything());
     // At the end: Next is unavailable, Previous is available again.
     fireEvent.click(nextButton());
     expect(next).toHaveBeenCalledTimes(1);
     fireEvent.click(prevButton());
     expect(previous).toHaveBeenCalledTimes(1);
-    expect(onValueChange).toHaveBeenLastCalledWith(0);
+    expect(onValueChange).toHaveBeenLastCalledWith(0, expect.anything());
     expect(onValueChange).toHaveBeenCalledTimes(2);
   });
 
@@ -3481,7 +3502,10 @@ describe('Carousel — slotProps', () => {
     // The picker button received the dot's click too.
     expect(handlers.pickerButton).toHaveBeenCalledTimes(1);
     expect(handlers.slide).toHaveBeenCalledTimes(1);
-    expect(onValueChange.mock.calls).toEqual([[1], [2]]);
+    expect(onValueChange.mock.calls).toEqual([
+      [1, expect.anything()],
+      [2, expect.anything()],
+    ]);
   });
 
   it('keeps the mirrored layout in right-to-left carousels', () => {
@@ -3631,7 +3655,7 @@ describe('Carousel — slotProps of the dragged track', () => {
     expect(el).toHaveStyle({ transform: 'translateX(calc(0% + -150px))' });
     release(el, 150);
     expect(order).toEqual(['down', 'move', 'up']);
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
   });
 
   it.each(['onPointerDown', 'onPointerMove'] as const)(
@@ -3661,7 +3685,7 @@ describe('Carousel — slotProps of the dragged track', () => {
     release(el, 150);
     expect(up).toHaveBeenCalledTimes(1);
     expect(el).not.toHaveAttribute('data-dragging');
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
 
     press(el, 300);
     move(el, 250);
@@ -3683,7 +3707,7 @@ describe('Carousel — slotProps of the dragged track', () => {
     expect(el).toHaveAttribute('data-dragging');
     release(el, 150);
     expect(el).not.toHaveAttribute('data-dragging');
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1, expect.anything());
   });
 
   it('swallows the click that ends a drag whatever your click capture does', () => {
@@ -3699,5 +3723,153 @@ describe('Carousel — slotProps of the dragged track', () => {
     // The next click is delivered.
     fireEvent.click(action, { detail: 1 });
     expect(onSlideClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Carousel - the cause of a change (1.1)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const lastDetails = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.at(-1)?.[1];
+  const focusable = () => slideGroups().filter((slide) => slide.hasAttribute('data-roving-value'));
+
+  it('says previous and next for the built-in buttons, with the click', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Carousel defaultValue={1} onValueChange={onValueChange}>
+        {slides(3)}
+      </Carousel>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Next slide' }));
+    expect(onValueChange).toHaveBeenLastCalledWith(2, {
+      reason: 'next',
+      event: expect.objectContaining({ type: 'click' }),
+    });
+    await user.click(screen.getByRole('button', { name: 'Previous slide' }));
+    expect(onValueChange).toHaveBeenLastCalledWith(1, {
+      reason: 'previous',
+      event: expect.objectContaining({ type: 'click' }),
+    });
+  });
+
+  it('says previous and next for a Carousel.Button, and picker for a picker button', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Carousel onValueChange={onValueChange}>
+        <Carousel.Button direction="next">Go</Carousel.Button>
+        {slides(3)}
+      </Carousel>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Next slide' }));
+    expect(lastDetails(onValueChange)).toMatchObject({ reason: 'next' });
+    await user.click(screen.getByRole('button', { name: /Slide 3/ }));
+    expect(onValueChange).toHaveBeenLastCalledWith(2, {
+      reason: 'picker',
+      event: expect.objectContaining({ type: 'click' }),
+    });
+  });
+
+  it('says keyboard for an arrow past the edge of a page', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    render(
+      <Carousel groupSize={3} onValueChange={onValueChange}>
+        {slides(9)}
+      </Carousel>,
+    );
+    act(() => focusable()[2]!.focus());
+    await user.keyboard('{ArrowRight}');
+    expect(onValueChange).toHaveBeenLastCalledWith(3, {
+      reason: 'keyboard',
+      event: expect.objectContaining({ type: 'keydown' }),
+    });
+    act(() => focusable()[0]!.focus());
+    await user.keyboard('{ArrowLeft}');
+    expect(onValueChange).toHaveBeenLastCalledWith(0, {
+      reason: 'keyboard',
+      event: expect.objectContaining({ type: 'keydown' }),
+    });
+  });
+
+  it('says autoplay for the rotation, with an event of its own', () => {
+    vi.useFakeTimers();
+    const onValueChange = vi.fn();
+    render(
+      <Carousel autoPlay autoPlayInterval={1000} onValueChange={onValueChange}>
+        {slides(3)}
+      </Carousel>,
+    );
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    const details = lastDetails(onValueChange) as { reason: string; event: Event };
+    expect(details.reason).toBe('autoplay');
+    expect(details.event).toBeInstanceOf(Event);
+    expect(details.event.type).toBe('autoplay');
+  });
+
+  it('says restart when the rotation control starts again from the first slide', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const onValueChange = vi.fn();
+    render(
+      <Carousel autoPlay autoPlayInterval={1000} onValueChange={onValueChange}>
+        {slides(2)}
+      </Carousel>,
+    );
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(lastDetails(onValueChange)).toMatchObject({ reason: 'autoplay' });
+    await user.click(screen.getByRole('button', { name: 'Start slide rotation' }));
+    expect(onValueChange).toHaveBeenLastCalledWith(0, {
+      reason: 'restart',
+      event: expect.objectContaining({ type: 'click' }),
+    });
+  });
+
+  it('carries the details of a controlled change, once per click in StrictMode, and none later', async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    function Parent() {
+      const [value, setValue] = React.useState(0);
+      return (
+        <Carousel
+          value={value}
+          onValueChange={(next, details) => {
+            onValueChange(next, details);
+            setValue(next);
+          }}
+        >
+          {slides(3)}
+        </Carousel>
+      );
+    }
+    render(
+      <React.StrictMode>
+        <Parent />
+      </React.StrictMode>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Next slide' }));
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange.mock.calls[0]?.[1]).toMatchObject({ reason: 'next' });
+    await user.click(screen.getByRole('button', { name: 'Next slide' }));
+    expect(onValueChange.mock.calls[1]).toEqual([2, { reason: 'next', event: expect.anything() }]);
+  });
+
+  it('types: details are optional and carry a reason and an event', () => {
+    expectTypeOf<CarouselProps['onValueChange']>().toEqualTypeOf<
+      ((index: number, details?: CarouselChangeDetails) => void) | undefined
+    >();
+    expectTypeOf<CarouselChangeDetails['event']>().toEqualTypeOf<Event>();
+    expectTypeOf<CarouselChangeReason>().toEqualTypeOf<
+      'previous' | 'next' | 'picker' | 'drag' | 'keyboard' | 'autoplay' | 'restart'
+    >();
+    // A handler that takes only the index still fits.
+    const handler: CarouselProps['onValueChange'] = (index: number) => void index;
+    expect(handler).toBeTypeOf('function');
   });
 });

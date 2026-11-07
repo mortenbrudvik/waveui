@@ -5,7 +5,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { flattenChildren, isElementOfType } from '../../lib/children';
 import { getFirstTabbable } from '../../lib/focus';
-import { getLayerTreeElements, type DismissReason } from '../../lib/layers';
+import { getLayerTreeElements, isInsideLayerTree, type DismissReason } from '../../lib/layers';
 import { focusRing } from '../../lib/styles';
 import type { CheckedValues, CheckedValuesChangeHandler } from '../../lib/types';
 import { useCheckedValues, withCheckedValuesListener } from '../../hooks/useCheckedValues';
@@ -29,12 +29,16 @@ import type {
   InitialFocus,
   MenuContextValue,
   MenuListContextValue,
+  MenuOpenChangeDetails,
   MenuSurfaceApi,
   OpenSubmenu,
 } from './Menu.context';
+
+export type { MenuOpenChangeDetails, MenuOpenChangeReason } from './Menu.context';
 import { MENU_ITEM_SELECTOR, menuSurfaceClasses, withTypeaheadText } from './Menu.shared';
 import { MenuPopover, useMenuListPointer } from './Menu.popover';
 import { MenuTrigger } from './Menu.trigger';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Menu component. */
 export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -60,10 +64,40 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   defaultOpen?: boolean;
   /**
-   * Called with the next open state when the popup menu opens or closes (only on change). Passing
-   * it makes Menu a popup menu (see `open`).
+   * Called with the next open state when the popup menu opens or closes (only on change), and with
+   * `details` (`{ reason, event }`: what asked for it, see `MenuOpenChangeReason`, and the DOM
+   * event behind it; an event of the library's own, untrusted, when the change had none, such as a
+   * submenu that closes because its parent was closed from outside). Fluent's `onOpenChange(event,
+   * data)`, with its `data.type` as `reason`. `details` is optional in the type for code written
+   * before it existed; WaveUI always passes it. Passing the callback makes Menu a popup menu (see
+   * `open`).
    */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: (open: boolean, details?: MenuOpenChangeDetails) => void;
+  /**
+   * Close the popup menu when anything outside it and its trigger scrolls, the page included
+   * (`reason: 'scroll'`). A context menu (`openOnContext`) closes only when its anchor moves, as
+   * before, and ignores this; a submenu closes with its parent. Fluent's `closeOnScroll`.
+   * @default false
+   */
+  closeOnScroll?: boolean;
+  /**
+   * Render the popup where the `Menu.Popover` is rendered instead of in a portal at the end of the
+   * `<body>`: the surface is positioned against its trigger with `position: absolute`, stacks
+   * above its siblings (`--wave-z-overlay`) and scrolls with the page. Use it where a portal
+   * breaks the context: inside a transformed or clipped container, a shadow root or an app region
+   * that is `inert`. A submenu inherits its parent's value unless it sets its own. Fluent's
+   * `inline`.
+   * @default false
+   */
+  inline?: boolean;
+  /**
+   * The element the popup is portaled into (the `portalContainer` of `WaveProvider`, else the
+   * `<body>`), for one menu: a container in another document region or a shadow root. Ignored
+   * while `inline`. A submenu inherits its parent's value unless it sets its own. Fluent's
+   * `mountNode` (an element here; Fluent also takes `{ element, className }`).
+   * @default the provider's portal container, else `document.body`
+   */
+  mountNode?: HTMLElement | null;
   /**
    * Checked items of the menu's checkbox, radio and switch items, per group `name` (controlled).
    * A submenu without its own `checkedValues` or `defaultCheckedValues` shares its parent menu's
@@ -111,7 +145,8 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
   closeDelay?: number;
   /**
    * Make `Menu.Trigger` a context-menu region: a right click (a Ctrl+click on macOS, a long press
-   * where the browser reports one) opens the menu at the pointer, and Shift+F10 or the
+   * of a touch or pen pointer: 600 ms without moving, also in browsers that report no
+   * `contextmenu` for it, such as iOS Safari) opens the menu at the pointer, and Shift+F10 or the
    * ContextMenu key opens it at the focused element inside the region, instead of a click; a
    * second gesture while it is open moves it there. Focus returns to the element that had it.
    * The browser's context menu is suppressed there and inside the menu, except in text fields
@@ -119,7 +154,7 @@ export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
    * moves the region or the row of the gesture (the one under the pointer, or the focused one)
    * closes it. The trigger gets no `aria-haspopup`/`aria-expanded` (it is not a menu button; with
    * a render-prop child, do not spread them): name the menu with `aria-label` on `Menu.Popover`,
-   * and consider `aria-keyshortcuts="Shift+F10"` on the region. iOS Safari reports no long press.
+   * and consider `aria-keyshortcuts="Shift+F10"` on the region.
    * Ignored on a submenu; `openOnHover` is ignored with it.
    * @default false
    */
@@ -163,6 +198,9 @@ export const MenuRoot = ({
   open: openProp,
   defaultOpen,
   onOpenChange,
+  closeOnScroll,
+  inline: inlineProp,
+  mountNode: mountNodeProp,
   checkedValues,
   defaultCheckedValues,
   onCheckedValuesChange,
@@ -179,6 +217,8 @@ export const MenuRoot = ({
   ref,
   ...rest
 }: MenuProps) => {
+  const appClassName = useAppClassName(menuClassNames.root);
+
   // A Menu rendered in a menu list with no portal between them is a submenu of that list's menu.
   // A Menu inside a Popover or Dialog opened from an item sits one portal deeper: a root menu.
   const list = useMenuListContext();
@@ -187,10 +227,25 @@ export const MenuRoot = ({
   const parent = parentList?.menu ?? null;
   const isSubmenu = parent !== null;
 
-  const [openState, setOpen, openControlled] = useControllable(
+  // Every request to open or close carries its details, which the controllable state passes on
+  // to `onOpenChange` inside the setter, only on a change; cleared right after, so a change that
+  // no request caused never reports a stale reason.
+  const detailsRef = React.useRef<MenuOpenChangeDetails | undefined>(undefined);
+  const [openState, setOpenState, openControlled] = useControllable(
     openProp,
     defaultOpen ?? false,
-    onOpenChange,
+    (next: boolean) => onOpenChange?.(next, detailsRef.current),
+  );
+  const setOpen = React.useCallback(
+    (next: boolean, details?: MenuOpenChangeDetails) => {
+      detailsRef.current = details;
+      try {
+        setOpenState(next);
+      } finally {
+        detailsRef.current = undefined;
+      }
+    },
+    [setOpenState],
   );
   // The popup menu lives in a portal, which renders only in the browser: until then (the server
   // HTML, hydration) the menu reports itself closed, so the trigger's aria-expanded and
@@ -205,7 +260,7 @@ export const MenuRoot = ({
   // submenu's state is the app's.
   React.useLayoutEffect(() => {
     if (parentOpen || !openState || openControlled) return;
-    setOpen(false);
+    setOpen(false, { reason: 'parent', event: new Event('parent-close') });
   }, [parentOpen, openState, openControlled, setOpen]);
 
   const popup =
@@ -215,7 +270,9 @@ export const MenuRoot = ({
     hasPopupParts(children);
 
   const triggerId = useId('wave-menu-trigger');
-  const menuId = useId('wave-menu');
+  const generatedMenuId = useId('wave-menu');
+  const [givenMenuId, setGivenMenuId] = React.useState<string | undefined>(undefined);
+  const menuId = givenMenuId ?? generatedMenuId;
   const [labelledBy, setLabelledBy] = React.useState(triggerId);
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const [triggerElement, setTriggerElementState] = React.useState<HTMLElement | null>(null);
@@ -252,6 +309,8 @@ export const MenuRoot = ({
   );
   const checked = ownsCheckedState || sharedChecked === null ? ownChecked : sharedChecked;
   const persistOnItemClick = persistOnItemClickProp ?? parent?.persistOnItemClick ?? false;
+  const inline = inlineProp ?? parent?.inline ?? false;
+  const mountNode = mountNodeProp !== undefined ? mountNodeProp : (parent?.mountNode ?? null);
   const openDelay = openDelayProp ?? parent?.openDelay ?? HOVER_DELAY_MS;
   const closeDelay = closeDelayProp ?? parent?.closeDelay ?? HOVER_DELAY_MS;
 
@@ -344,13 +403,17 @@ export const MenuRoot = ({
   // opening, clears the mark. A submenu closed along with it is taken along by the restore itself.
   const hoverCloseRef = React.useRef(false);
   const isHoverClose = React.useCallback(() => hoverCloseRef.current, []);
-  const closeMenu = (byHover: boolean) => {
+  const closeMenu = (byHover: boolean, details: MenuOpenChangeDetails) => {
     hoverCloseRef.current = byHover;
-    openSubmenuRef.current?.close();
-    setOpen(false);
+    openSubmenuRef.current?.close(details);
+    setOpen(false, details);
   };
-  const requestClose = useEventCallback(() => closeMenu(false));
-  const requestHoverClose = useEventCallback(() => closeMenu(true));
+  const requestClose = useEventCallback((details?: MenuOpenChangeDetails) =>
+    closeMenu(false, details ?? { reason: 'item-click', event: new Event('click') }),
+  );
+  const requestHoverClose = useEventCallback((event: Event) =>
+    closeMenu(true, { reason: 'hover', event }),
+  );
 
   // Why the open menu is open: a hover opening stays unpinned (the hover close applies) until the
   // trigger is activated; every other opening (click, keys, context, a controlled `open`) pins it.
@@ -379,10 +442,10 @@ export const MenuRoot = ({
     trigger: triggerElement,
     surface: surfaceElement,
     group: parentList?.hoverGroup,
-    onOpen: () => {
+    onOpen: (event) => {
       hoverOpenPendingRef.current = true;
       initialFocusRef.current = 'none';
-      setOpen(true);
+      setOpen(true, { reason: 'hover', event });
     },
     onClose: requestHoverClose,
     // Pinned, or focus inside the menu (not on its trigger): the hover close waits.
@@ -410,7 +473,7 @@ export const MenuRoot = ({
   );
 
   const openWithFocus = React.useCallback(
-    (target: InitialFocus) => {
+    (target: InitialFocus, details?: MenuOpenChangeDetails) => {
       // Any opening but hover pins the menu; an open, hover-opened menu is pinned and focused.
       openReasonRef.current = 'other';
       hoverOpenPendingRef.current = false;
@@ -422,7 +485,7 @@ export const MenuRoot = ({
         return;
       }
       initialFocusRef.current = target;
-      setOpen(true);
+      setOpen(true, details ?? { reason: 'trigger-click', event: new Event('click') });
     },
     [setOpen, cancelHover],
   );
@@ -446,8 +509,9 @@ export const MenuRoot = ({
     open,
     trigger: triggerElement,
     layerId: surfaceLayerId,
-    onOpen: () => openWithFocus('first'),
-    onClose: requestClose,
+    onOpen: (_origin, event) => openWithFocus('first', { reason: 'context-menu', event }),
+    onClose: (reason, event) =>
+      requestClose({ reason: reason === 'scroll' ? 'scroll' : 'context-menu', event }),
   });
 
   // Focus follows the mouse: a submenu that loses focus to an item the pointer is focusing in an
@@ -485,6 +549,24 @@ export const MenuRoot = ({
     };
   }, [contextMode, open, triggerElement]);
 
+  // `closeOnScroll`: a scroll of anything outside the menu's layer tree and its trigger closes a
+  // root popup menu (its submenus with it). A context menu closes by its own anchor rule.
+  const closesOnScroll = closeOnScroll === true && popup && !isSubmenu && !contextMode;
+  React.useEffect(() => {
+    if (!closesOnScroll || !open) return undefined;
+    const doc = (triggerElement ?? surfaceElement)?.ownerDocument ?? document;
+    const onScroll = (event: Event) => {
+      const target = event.target as Node | null;
+      if (target && typeof target.nodeType === 'number') {
+        if (triggerRef.current?.contains(target)) return;
+        if (surfaceLayerId && isInsideLayerTree(surfaceLayerId, target)) return;
+      }
+      requestClose({ reason: 'scroll', event });
+    };
+    doc.addEventListener('scroll', onScroll, true);
+    return () => doc.removeEventListener('scroll', onScroll, true);
+  }, [closesOnScroll, open, triggerElement, surfaceElement, surfaceLayerId, requestClose]);
+
   const dismiss = useEventCallback((reason: DismissReason, event: Event) => {
     // Focus that such a press moves into a context menu's region does not close the menu: a
     // right-button (or macOS Ctrl+) press focuses the row under the pointer before the contextmenu
@@ -504,7 +586,7 @@ export const MenuRoot = ({
       startHoverClose(event);
       return;
     }
-    requestClose();
+    requestClose({ reason: reason === 'parent-closed' ? 'parent' : reason, event });
   });
 
   const registerOpenSubmenu = React.useCallback((submenu: OpenSubmenu) => {
@@ -532,9 +614,9 @@ export const MenuRoot = ({
   // and the top menu (the root, or a submenu of a static menu) puts focus on its return target
   // first (focus before close: a Dialog an item opens returns focus there), then closes.
   const parentCloseChain = parent?.popup ? parent.closeChain : null;
-  const closeChain = useEventCallback(() => {
+  const closeChain = useEventCallback((details?: MenuOpenChangeDetails) => {
     if (parentCloseChain) {
-      parentCloseChain();
+      parentCloseChain(details);
       return;
     }
     if (!popup) return;
@@ -545,7 +627,7 @@ export const MenuRoot = ({
       const lost = !active || active === doc.body || active === doc.documentElement;
       if (lost || containsFocus()) target.focus({ preventScroll: true });
     }
-    requestClose();
+    requestClose(details);
   });
 
   const contextValue = React.useMemo<MenuContextValue>(
@@ -560,6 +642,7 @@ export const MenuRoot = ({
       labelledBy,
       onTriggerId: setLabelledBy,
       menuId,
+      onMenuId: setGivenMenuId,
       triggerRef,
       triggerElement,
       setTriggerElement,
@@ -571,6 +654,8 @@ export const MenuRoot = ({
       closeChain,
       registerOpenSubmenu,
       listContainsFocus,
+      inline,
+      mountNode,
       openDelay,
       closeDelay,
       dismiss,
@@ -606,6 +691,8 @@ export const MenuRoot = ({
       closeChain,
       registerOpenSubmenu,
       listContainsFocus,
+      inline,
+      mountNode,
       openDelay,
       closeDelay,
       dismiss,
@@ -699,7 +786,13 @@ export const MenuRoot = ({
           )}
           onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
           onPointerMove={composeEventHandlers(onPointerMove, listPointerMove)}
-          className={wcn(menuClassNames.root, menuSurfaceClasses, focusRing, className)}
+          className={wcn(
+            menuClassNames.root,
+            menuSurfaceClasses,
+            focusRing,
+            appClassName,
+            className,
+          )}
         >
           <MenuListElementContext.Provider value={listElement}>
             {children}

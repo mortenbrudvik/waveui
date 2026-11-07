@@ -35,6 +35,7 @@ import type { MotionSlot, VirtualElement } from '../../lib/types';
 import { useAnnounce } from '../../hooks/useAnnounce';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useMotionClasses } from '../../hooks/useMotion';
@@ -46,7 +47,13 @@ import { Button } from '../button/Button';
 import { Portal } from '../portal/Portal';
 import { useTitleRegistry } from './Dialog.shared';
 import { ModalCloseButton } from './Dialog.slots';
-import { getTabbableThrough, PopoverBeak, usePopoverTabOrder } from './Popover.shared';
+import {
+  getTabbableThrough,
+  PopoverBeak,
+  popoverAppearanceClasses,
+  usePopoverTabOrder,
+  type PopoverAppearance,
+} from './Popover.shared';
 import { useCarouselFooterStacked } from './TeachingPopover.stack';
 import {
   TeachingPopoverContext,
@@ -57,6 +64,7 @@ import {
   type TeachingPopoverContextValue,
   type TeachingPopoverTarget,
 } from './TeachingPopover.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The TeachingPopover's parts and the surface they share with the root: `TeachingSurface` holds
@@ -161,6 +169,20 @@ function resolveTarget(target: TeachingPopoverTarget | undefined): HTMLElement |
 /** The locks of a footer button, a Wave Button: also its `disabledFocusable` prop, unset. */
 const STEP_BUTTON_LOCKS = { ...BUTTON_PART_LOCKS, disabledFocusable: undefined } as const;
 
+/**
+ * The surface is a brand or inverted one: its parts take its text color instead of the neutral
+ * theme's, and its buttons and dots are drawn for a colored background.
+ */
+const isToned = (appearance: PopoverAppearance) => appearance !== 'neutral';
+
+/** The Close button on a toned surface: the surface's text color, a hover tint of that color. */
+const TONED_CLOSE_BUTTON =
+  'wave:text-inherit wave:not-disabled:not-aria-disabled:hover:bg-current/15 wave:not-disabled:not-aria-disabled:active:bg-current/25';
+
+/** The Back button on a toned surface: transparent, in the surface's color. */
+const TONED_BACK_BUTTON =
+  'wave:border-current wave:bg-transparent wave:text-inherit wave:not-disabled:not-aria-disabled:hover:bg-current/15 wave:not-disabled:not-aria-disabled:active:bg-current/25';
+
 /** What a decorative indicator locks: hidden from assistive technology, never a tab stop. */
 const INDICATOR_LOCKS = { 'aria-hidden': 'true', tabIndex: undefined } as const;
 
@@ -183,7 +205,7 @@ interface ActionElementProps {
  */
 function renderAction(
   action: TeachingPopoverAction,
-  appearance: 'primary' | 'outline',
+  appearance: 'primary' | 'outline' | 'secondary' | 'transparent',
   className: string,
   onActivate: () => void,
 ): React.ReactElement | null {
@@ -224,6 +246,8 @@ interface TeachingSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
   context: TeachingPopoverContextValue;
   /** The stable classes of the component that renders the surface, first in its classes. */
   rootClassName: string;
+  /** The app-wide classes of `WaveProvider classNames` for the surface's roots, after its own. */
+  appClassName?: string;
   /** The surface's motion slot: TeachingPopover's `motion`, or the Surface's. */
   motion?: MotionSlot | null;
   ref?: React.Ref<HTMLDivElement>;
@@ -241,6 +265,7 @@ interface TeachingSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
 export const TeachingSurface = ({
   context,
   rootClassName,
+  appClassName,
   id,
   className,
   style,
@@ -406,9 +431,14 @@ export const TeachingSurface = ({
     candidates: (opener) => [opener, triggerFocusRef.current, targetRef.current],
   });
 
+  // `trapFocus`: Tab cycles inside the surface while it is shown; the keyboard order of a surface
+  // placed after its target does not apply then.
+  const trapped = context.trapFocus;
+  useFocusTrap(surface, { enabled: visible && trapped, layerId });
+
   // Portaled next to a target: the keyboard order of the popover placed right after the target.
   const onSurfaceKeyDown = usePopoverTabOrder({
-    enabled: visible && hasTarget,
+    enabled: visible && hasTarget && !trapped,
     surface,
     anchorRef: targetRef,
     getPreviousStop: getTabbableThrough,
@@ -453,6 +483,7 @@ export const TeachingSurface = ({
         aria-labelledby={hasContent ? titles.titleId : titleId}
         tabIndex={-1}
         data-layout={content.footerLayout}
+        data-appearance={content.appearance}
         id={ownId ?? (hasTrigger ? surfaceId : undefined)}
         {...rest}
         {...presenceProps}
@@ -472,9 +503,11 @@ export const TeachingSurface = ({
           : { style })}
         className={wcn(
           rootClassName,
-          'wave:relative wave:w-80 wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-5 wave:text-foreground wave:shadow-8',
+          'wave:relative wave:w-80 wave:rounded-md wave:border wave:p-5 wave:shadow-8',
+          popoverAppearanceClasses[content.appearance],
           focusRing,
           motionClassName,
+          appClassName,
           className,
         )}
       >
@@ -592,6 +625,11 @@ TeachingPopoverTrigger.displayName = 'TeachingPopoverTrigger';
  * dotted `TeachingPopover.Surface` (that needs a client file).
  */
 export const TeachingPopoverSurface = ({ id, ref, ...rest }: TeachingPopoverSurfaceProps) => {
+  const appClassName = useAppClassName(
+    teachingPopoverClassNames.root,
+    teachingPopoverSurfaceClassNames.root,
+  );
+
   const context = useTeachingPopoverContext('TeachingPopover.Surface');
   const { registerSurface, setCustomSurfaceId } = context;
   // Registered wherever it is among TeachingPopover's children: the root then drops its own
@@ -609,6 +647,7 @@ export const TeachingPopoverSurface = ({ id, ref, ...rest }: TeachingPopoverSurf
     <TeachingSurface
       context={context}
       rootClassName={wcn(teachingPopoverClassNames.root, teachingPopoverSurfaceClassNames.root)}
+      appClassName={appClassName}
       id={id}
       {...rest}
       ref={ref}
@@ -661,9 +700,12 @@ export const TeachingPopoverHeader = ({
   ref,
   ...rest
 }: TeachingPopoverHeaderProps) => {
-  const { step, closeLabel, dismiss, slotProps } =
+  const appClassName = useAppClassName(teachingPopoverHeaderClassNames.root);
+
+  const { step, closeLabel, dismiss, slotProps, appearance } =
     useTeachingPopoverContext('TeachingPopover.Header');
   if (!step) return null;
+  const toned = isToned(appearance);
 
   const hasIcon = slotRendersContent(icon);
   const hasCaption = slotRendersContent(children);
@@ -676,6 +718,8 @@ export const TeachingPopoverHeader = ({
         teachingPopoverHeaderClassNames.root,
         (hasIcon || hasCaption) &&
           'wave:-mt-2 wave:mb-2 wave:flex wave:min-h-6 wave:items-center wave:gap-1.5 wave:pe-8 wave:text-caption-1 wave:font-semibold wave:text-primary',
+        (hasIcon || hasCaption) && toned && 'wave:text-inherit',
+        appClassName,
         className,
       )}
       {...rest}
@@ -700,6 +744,7 @@ export const TeachingPopoverHeader = ({
         className={wcn(
           teachingPopoverClassNames.closeButton,
           'wave:absolute wave:end-3 wave:top-3',
+          toned && TONED_CLOSE_BUTTON,
         )}
         part={slotProps?.closeButton}
       />
@@ -744,6 +789,8 @@ type TeachingPopoverTitleImplProps = TeachingPopoverTitleOwnProps &
 export const TeachingPopoverTitle: PolymorphicComponent<'h3', TeachingPopoverTitleOwnProps> = (
   props,
 ) => {
+  const appClassName = useAppClassName(teachingPopoverTitleClassNames.root);
+
   const {
     as,
     id: idProp,
@@ -752,7 +799,8 @@ export const TeachingPopoverTitle: PolymorphicComponent<'h3', TeachingPopoverTit
     ref,
     ...rest
   } = props as TeachingPopoverTitleImplProps;
-  const { step, stepPosition, titleId } = useTeachingPopoverContext('TeachingPopover.Title');
+  const { step, stepPosition, titleId, appearance } =
+    useTeachingPopoverContext('TeachingPopover.Title');
   const registry = React.useContext(TeachingPopoverSurfaceContext);
   const id = idProp || titleId;
   // Registered while the element is mounted: the surface is named by the titles it renders.
@@ -772,6 +820,8 @@ export const TeachingPopoverTitle: PolymorphicComponent<'h3', TeachingPopoverTit
         teachingPopoverTitleClassNames.root,
         teachingPopoverClassNames.title,
         'wave:mb-2 wave:pe-8 wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
+        isToned(appearance) && 'wave:text-inherit',
+        appClassName,
         className,
       )}
       {...rest}
@@ -816,7 +866,9 @@ export const TeachingPopoverBody = ({
   ref,
   ...rest
 }: TeachingPopoverBodyProps) => {
-  const { step } = useTeachingPopoverContext('TeachingPopover.Body');
+  const appClassName = useAppClassName(teachingPopoverBodyClassNames.root);
+
+  const { step, appearance } = useTeachingPopoverContext('TeachingPopover.Body');
   if (!step) return null;
 
   return (
@@ -826,6 +878,8 @@ export const TeachingPopoverBody = ({
         teachingPopoverBodyClassNames.root,
         teachingPopoverClassNames.body,
         'wave:mb-4 wave:text-body-1 wave:text-muted-foreground',
+        isToned(appearance) && 'wave:text-inherit',
+        appClassName,
         className,
       )}
       {...rest}
@@ -871,6 +925,8 @@ export const TeachingPopoverFooter = ({
   ref,
   ...rest
 }: TeachingPopoverFooterProps) => {
+  const appClassName = useAppClassName(teachingPopoverFooterClassNames.root);
+
   const context = useTeachingPopoverContext('TeachingPopover.Footer');
   const { step, footerLayout } = context;
   if (!step) return null;
@@ -887,6 +943,7 @@ export const TeachingPopoverFooter = ({
         vertical
           ? 'wave:flex-col wave:items-stretch wave:gap-4'
           : 'wave:items-center wave:justify-between',
+        appClassName,
         className,
       )}
       {...rest}
@@ -916,6 +973,7 @@ function TeachingFooterContent({ context }: { context: TeachingPopoverContextVal
         index={context.index}
         className={vertical && 'wave:justify-center'}
         part={context.slotProps?.dot}
+        toned={isToned(context.appearance)}
       />
 
       <div
@@ -943,11 +1001,14 @@ function TeachingStepDots({
   index,
   className,
   part,
+  toned,
 }: {
   count: number;
   index: number;
   className?: string | false;
   part?: SlotPart<'span'>;
+  /** On a brand or inverted surface the dots take the surface's text color. */
+  toned: boolean;
 }) {
   return (
     <div aria-hidden="true" className={wcn('wave:flex wave:items-center wave:gap-1.5', className)}>
@@ -957,8 +1018,11 @@ function TeachingStepDots({
           teachingPopoverClassNames.dot,
           'wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none',
           current
-            ? wcn('wave:w-4 wave:bg-primary', forcedColors.fill)
-            : 'wave:w-1.5 wave:bg-stroke-accessible wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none',
+            ? wcn('wave:w-4 wave:bg-primary', toned && 'wave:bg-current', forcedColors.fill)
+            : wcn(
+                'wave:w-1.5 wave:bg-stroke-accessible wave:forced-colors:bg-[CanvasText] wave:forced-colors:forced-color-adjust-none',
+                toned && 'wave:bg-current/40',
+              ),
         );
         return (
           <span
@@ -1017,7 +1081,11 @@ function renderStepButtons(
     nextLabel,
     doneLabel,
     slotProps,
+    appearance,
   } = context;
+  // On a brand or inverted surface Next is a neutral button and Back a transparent one in the
+  // surface's color: the primary button would vanish into the brand fill.
+  const toned = isToned(appearance);
 
   // TeachingPopover's `backButton` and `nextButton` parts: the buttons' handlers are locked, so a
   // part's handler runs first and its `preventDefault()` skips them.
@@ -1025,15 +1093,15 @@ function renderStepButtons(
   if (secondaryAction) {
     secondary = renderAction(
       secondaryAction,
-      'outline',
-      teachingPopoverClassNames.secondaryButton,
+      toned ? 'transparent' : 'outline',
+      wcn(teachingPopoverClassNames.secondaryButton, toned && TONED_BACK_BUTTON),
       goBack,
     );
   } else if (isFirst && initialStepText) {
     secondary = (
       <Button
         {...mergeSlotProps(slotProps?.backButton, {
-          className: teachingPopoverClassNames.backButton,
+          className: wcn(teachingPopoverClassNames.backButton, toned && TONED_BACK_BUTTON),
           locked: { ...STEP_BUTTON_LOCKS, onClick: dismiss },
         })}
       >
@@ -1044,7 +1112,7 @@ function renderStepButtons(
     secondary = (
       <Button
         {...mergeSlotProps(slotProps?.backButton, {
-          className: teachingPopoverClassNames.backButton,
+          className: wcn(teachingPopoverClassNames.backButton, toned && TONED_BACK_BUTTON),
           locked: {
             ...STEP_BUTTON_LOCKS,
             ...focusableDisabledProps(isFirst),
@@ -1060,12 +1128,21 @@ function renderStepButtons(
   }
 
   const primary = primaryAction ? (
-    renderAction(primaryAction, 'primary', teachingPopoverClassNames.primaryButton, goNext)
+    renderAction(
+      primaryAction,
+      toned ? 'secondary' : 'primary',
+      teachingPopoverClassNames.primaryButton,
+      goNext,
+    )
   ) : (
     <Button
       {...mergeSlotProps(slotProps?.nextButton, {
         className: teachingPopoverClassNames.nextButton,
-        locked: { ...STEP_BUTTON_LOCKS, appearance: 'primary', onClick: goNext },
+        locked: {
+          ...STEP_BUTTON_LOCKS,
+          appearance: toned ? 'secondary' : 'primary',
+          onClick: goNext,
+        },
       })}
     >
       {isLast ? finalStepText || doneLabel : nextLabel}
@@ -1103,11 +1180,17 @@ export const TeachingPopoverCarousel = ({
   ref,
   ...rest
 }: TeachingPopoverCarouselProps) => {
+  const appClassName = useAppClassName(teachingPopoverCarouselClassNames.root);
+
   const { step } = useTeachingPopoverContext('TeachingPopover.Carousel');
   if (!step) return null;
 
   return (
-    <div ref={ref} className={wcn(teachingPopoverCarouselClassNames.root, className)} {...rest}>
+    <div
+      ref={ref}
+      className={wcn(teachingPopoverCarouselClassNames.root, appClassName, className)}
+      {...rest}
+    >
       {slotRendersContent(children) ? (
         materialiseSlotContent(children)
       ) : (
@@ -1175,10 +1258,12 @@ export const TeachingPopoverCarouselNav = ({
   slotProps,
   ...rest
 }: TeachingPopoverCarouselNavProps) => {
-  const { step, count, index, goToStep, navLabel, navButtonLabel } = useTeachingPopoverContext(
-    'TeachingPopover.CarouselNav',
-  );
+  const appClassName = useAppClassName(teachingPopoverCarouselNavClassNames.root);
+
+  const { step, count, index, goToStep, navLabel, navButtonLabel, appearance } =
+    useTeachingPopoverContext('TeachingPopover.CarouselNav');
   if (!step) return null;
+  const toned = isToned(appearance);
 
   const buttonClassName = wcn(
     teachingPopoverCarouselNavClassNames.button,
@@ -1193,6 +1278,7 @@ export const TeachingPopoverCarouselNav = ({
       className={wcn(
         teachingPopoverCarouselNavClassNames.root,
         'wave:flex wave:items-center',
+        appClassName,
         className,
       )}
       {...rest}
@@ -1204,8 +1290,11 @@ export const TeachingPopoverCarouselNav = ({
           teachingPopoverCarouselNavClassNames.indicator,
           'wave:block wave:h-1.5 wave:rounded-full wave:transition-[width,background-color] wave:motion-reduce:transition-none',
           current
-            ? wcn('wave:w-4 wave:bg-primary', forcedColors.fill)
-            : 'wave:w-1.5 wave:bg-stroke-accessible wave:group-hover:bg-foreground wave:forced-colors:bg-[ButtonText] wave:forced-colors:forced-color-adjust-none',
+            ? wcn('wave:w-4 wave:bg-primary', toned && 'wave:bg-current', forcedColors.fill)
+            : wcn(
+                'wave:w-1.5 wave:bg-stroke-accessible wave:group-hover:bg-foreground wave:forced-colors:bg-[ButtonText] wave:forced-colors:forced-color-adjust-none',
+                toned && 'wave:bg-current/40 wave:group-hover:bg-current',
+              ),
         );
         // A click whose default the indicator part prevented (inside the button) shows no other
         // step; without that part every click shows it, whoever prevented its default.
@@ -1281,7 +1370,11 @@ export const TeachingPopoverCarouselPageCount = ({
   ref,
   ...rest
 }: TeachingPopoverCarouselPageCountProps) => {
-  const { step, count, index } = useTeachingPopoverContext('TeachingPopover.CarouselPageCount');
+  const appClassName = useAppClassName(teachingPopoverCarouselPageCountClassNames.root);
+
+  const { step, count, index, appearance } = useTeachingPopoverContext(
+    'TeachingPopover.CarouselPageCount',
+  );
   if (!step) return null;
 
   const text = children?.(index + 1, count);
@@ -1291,6 +1384,8 @@ export const TeachingPopoverCarouselPageCount = ({
       className={wcn(
         teachingPopoverCarouselPageCountClassNames.root,
         'wave:shrink-0 wave:text-caption-1 wave:text-muted-foreground',
+        isToned(appearance) && 'wave:text-inherit',
+        appClassName,
         className,
       )}
       {...rest}
@@ -1362,6 +1457,8 @@ export const TeachingPopoverCarouselFooter = ({
   ref,
   ...rest
 }: TeachingPopoverCarouselFooterProps) => {
+  const appClassName = useAppClassName(teachingPopoverCarouselFooterClassNames.root);
+
   const context = useTeachingPopoverContext('TeachingPopover.CarouselFooter');
   const centered = layout === 'centered';
   const [footer, setFooter] = React.useState<HTMLDivElement | null>(null);
@@ -1382,7 +1479,12 @@ export const TeachingPopoverCarouselFooter = ({
       {materialiseSlotContent(children)}
     </div>
   ) : (
-    <TeachingStepDots count={context.count} index={context.index} part={context.slotProps?.dot} />
+    <TeachingStepDots
+      count={context.count}
+      index={context.index}
+      part={context.slotProps?.dot}
+      toned={isToned(context.appearance)}
+    />
   );
 
   if (!centered) {
@@ -1396,6 +1498,7 @@ export const TeachingPopoverCarouselFooter = ({
           teachingPopoverCarouselFooterClassNames.root,
           teachingPopoverClassNames.footer,
           'wave:flex wave:flex-wrap wave:items-center wave:justify-between wave:gap-2',
+          appClassName,
           className,
         )}
         {...rest}
@@ -1424,6 +1527,7 @@ export const TeachingPopoverCarouselFooter = ({
         teachingPopoverClassNames.footer,
         'wave:items-center wave:gap-2',
         stacked ? 'wave:flex wave:flex-wrap' : 'wave:grid wave:grid-cols-[1fr_auto_1fr]',
+        appClassName,
         className,
       )}
       {...rest}

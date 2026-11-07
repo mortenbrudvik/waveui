@@ -7,6 +7,7 @@ import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { CheckIcon, DismissIcon } from '../../lib/icons';
 import type { Slot } from '../../lib/slot';
+import { popupMotion } from '../../lib/motion';
 import {
   lockPositionStyle,
   mergeSlotProps,
@@ -24,7 +25,12 @@ import {
   inputPaddingClasses,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
+import type {
+  CoreSize,
+  InputAppearance,
+  MotionSlot,
+  PopupPositioningOptions,
+} from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useDismiss } from '../../hooks/useDismiss';
 import { useEventCallback } from '../../hooks/useEventCallback';
@@ -41,22 +47,27 @@ import {
 } from '../../hooks/useListbox';
 import type { ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
+import { PickerClearButton } from './PickerClearButton';
+import { renderListboxWindow, useShownListScroll } from './Option.data';
 import {
   DEFAULT_TIME_STEP,
   generateTimeOptions,
   localeTimeFormat,
-  minutesToTime,
-  minutesToValue,
   normalizeTimeStep,
-  timeToMinutes,
+  secondsToTime,
+  secondsToValue,
+  timeToSeconds,
   type TimeFormat,
 } from './dateUtils';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
+import { usePickerSurfacePresence } from './pickerPresence';
 import {
   pickerButtonOffset,
   pickerEndPadding,
@@ -64,6 +75,7 @@ import {
   pickerIconButtonClasses,
 } from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Option                                                             */
@@ -135,7 +147,7 @@ TimePickerOption.displayName = 'TimePickerOption';
 /* ------------------------------------------------------------------ */
 
 /** Why typed text was not accepted (see {@link TimePickerProps.onInvalidInput}). */
-export type TimePickerInvalidReason = 'unparseable' | 'out-of-range';
+export type TimePickerInvalidReason = 'unparseable' | 'out-of-range' | 'not-listed';
 
 /**
  * The TimePicker's built-in texts, for localization. Each member is optional and falls back to its
@@ -176,6 +188,11 @@ export interface TimePickerLabels {
    * or after ${min}.`; only `max`: `Enter a time on or before ${max}.`)
    */
   outOfRange?: (min: string | undefined, max: string | undefined) => string;
+  /**
+   * Message for a time that is not one of the listed times, with `freeform={false}`.
+   * @default 'Choose a time from the list.'
+   */
+  notListed?: string;
 }
 
 const defaultInvalidTimeLabel = (format: string) => `Enter a time in the format ${format}.`;
@@ -211,6 +228,45 @@ export interface TimePickerProps extends Omit<
    * @default the hour cycle of the browser's language (`'12h'` on the server and while hydrating)
    */
   format?: '12h' | '24h';
+  /**
+   * Shows and accepts seconds (Fluent UI's `showSeconds`): the value is `HH:mm:ss`, the input and
+   * the options read `1:30:00 PM` or `13:30:00`, and typed seconds are kept (`2:00:15 PM`). The
+   * options stay `step` minutes apart, on whole minutes. A controlled `value` of `HH:mm` still
+   * selects its option and is reported back as `HH:mm:ss` when the user picks another. Without
+   * it a time's seconds are dropped.
+   * @default false
+   */
+  showSeconds?: boolean;
+  /**
+   * Text of a time, for the options and the input (Fluent UI's `formatDateToTimeString`, taking
+   * the time as the picker's `HH:mm` or, with `showSeconds`, `HH:mm:ss` value rather than a
+   * `Date`). It replaces `format`'s text, so the typed text is read by `parseTime` (the default
+   * reader understands `13:30` and `1:30 PM`, which your format may not look like). An inline
+   * function makes the options again on every render: keep its identity (a constant, or
+   * `useCallback`). With it the message for text that is not a time (`labels.invalidTime`) is
+   * given an example of the format, `formatTime('13:45')`, in place of the pattern.
+   * @default the text of `format`
+   */
+  formatTime?: (value: string) => string;
+  /**
+   * Reads typed text into a time (Fluent UI's `validateFreeFormTime`, answering with the value
+   * rather than an error type): return the `HH:mm` (or `HH:mm:ss`, `h:mm AM`) time the text
+   * stands for, or `null` for text that is not a time, which is kept and reported as
+   * `'unparseable'`. The time is still checked against `minTime`/`maxTime` (and the list, with
+   * `freeform={false}`). Typing also filters the list by the options' labels and values. Pass it
+   * with `formatTime` for a format the default reader does not know (`13h30`).
+   * @default the reader of `13:30`, `13:30:15` and `1:30 PM`
+   */
+  parseTime?: (text: string) => string | null | undefined;
+  /**
+   * Whether a complete typed time that is not in the list can be selected (Fluent UI's
+   * `freeform`, which defaults to `false` there). With `false` only the listed times can be: a
+   * complete typed time that is not listed is kept and reported as `'not-listed'` (a time
+   * outside `minTime`/`maxTime` is still `'out-of-range'`); picking an option, Enter on the
+   * option typing made active and erasing the text work as before.
+   * @default true
+   */
+  freeform?: boolean;
   /**
    * Minutes between options. A non-finite or non-positive value falls back to 30 (development
    * warning); fractions are floored.
@@ -252,6 +308,19 @@ export interface TimePickerProps extends Omit<
    */
   positioning?: PopupPositioningOptions;
   /**
+   * The popup surface's motion. By default it fades in and slides 4px away from the field, on the
+   * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
+   * 100 ms with an accelerating curve (the time list stays in the surface while it exits); under
+   * reduced motion it appears and disappears at once. The list does not fade out when its options
+   * changed as it closed (a filter reset by the selection), nor does the status row. `null` turns
+   * the motion off (the surface still renders its `data-presence` phases, which then end at
+   * once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's popup `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
+  /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
@@ -278,6 +347,19 @@ export interface TimePickerProps extends Omit<
    * become the glyph, with a development warning).
    */
   expandIcon?: Slot<'span'>;
+  /**
+   * Renders only the options in view of a long list of times (a step of one minute makes 1,440),
+   * plus an overscan, and spacers (`aria-hidden`, `data-virtual-spacer`) as tall as the options
+   * they stand for: pass the result of `useVirtualWindow({ itemSize })`, or an object of your own
+   * that implements `VirtualWindow`. The open list is the window's scroller (it scrolls within its
+   * own maximum height, 15rem), has no block padding while windowed, and no scroll anchoring of
+   * the browser; every option is exactly `itemSize` tall (the default option with one line of
+   * text is 32 pixels tall). The window counts the listed options: typing
+   * narrows it, as it narrows `aria-setsize`. The keys move over all of them, the active option
+   * stays rendered while it is scrolled away, and opening the list scrolls the active option, else
+   * the selected one, to the middle. A closed list renders no option. The server renders no list.
+   */
+  virtualWindow?: VirtualWindow;
   /**
    * Controlled open state of the list (never shown while `disabled` or `readOnly`). The list
    * renders only in the browser: an open picker is closed in the server HTML and opens once it has
@@ -421,8 +503,8 @@ export interface TimePickerProps extends Omit<
     checkIcon?: SlotPart<'span'>;
     /**
      * The popup `<div>` around the list or the status row, rendered in a portal while the list
-     * is open (stable class `wave-time-picker__surface`). Locked: `data-state`, `data-presence`
-     * (unset: it mounts open), `data-side`, `data-align`, `role`, `id`, `hidden`, `inert` and
+     * is open (stable class `wave-time-picker__surface`). Locked: `data-state`, `data-presence`,
+     * `inert` while it exits, `data-side`, `data-align`, `role`, `id`, `hidden` and
      * `aria-hidden`; your `style` merges, but the position, the size limits and the visibility
      * the positioning sets win.
      */
@@ -439,11 +521,6 @@ export interface TimePickerProps extends Omit<
 /** The browser's language; `undefined` where there is no `navigator` (the runtime default). */
 function browserLanguage(): string | undefined {
   return typeof navigator === 'undefined' ? undefined : navigator.language;
-}
-
-function displayTime(value: string, format: TimeFormat): string {
-  const minutes = timeToMinutes(value);
-  return Number.isNaN(minutes) ? value : minutesToTime(minutes, format);
 }
 
 /** Whether an option matches the (trimmed, lower-case) typed text: by label or `HH:mm` value. */
@@ -488,6 +565,9 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   outside the bounds are still displayed in `format`. Without `format` the times follow the
  *   hour cycle of the browser's language; the server HTML and the hydration render show 12-hour
  *   times, so a server-rendered app passes `format` for the same output on the server.
+ * - `showSeconds` adds seconds (the value becomes `HH:mm:ss`); `formatTime` and `parseTime` replace
+ *   how times are written and read; `freeform={false}` limits the selection to the listed times
+ *   (a complete typed time that is not listed is `'not-listed'`).
  * - **Size and appearance**: `size` resolves from its own prop, then the surrounding `Field`'s
  *   `size`, then `WaveProvider inputDefaults.size`, else `'medium'`; `appearance` from its own
  *   prop, then `WaveProvider inputDefaults.appearance`, else `'outline'`; both render as
@@ -505,22 +585,30 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   the server HTML and opens once the picker has hydrated.
  */
 export const TimePicker = (props: TimePickerProps) => {
+  const appClassName = useAppClassName(timePickerClassNames.root);
+
   const {
     value: valueProp,
     defaultValue,
     onValueChange,
     format: formatProp,
+    showSeconds = false,
+    formatTime,
+    parseTime,
+    freeform = true,
     step = DEFAULT_TIME_STEP,
     minTime = '00:00',
-    maxTime = '23:59',
+    maxTime: maxTimeProp,
     placeholder = 'Select a time',
     disabled = false,
     size: sizeProp,
     positioning,
+    motion,
     appearance: appearanceProp,
     readOnly,
     clearable = false,
     expandIcon,
+    virtualWindow,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -570,6 +658,36 @@ export const TimePicker = (props: TimePickerProps) => {
     [followsLocale],
   );
   const format = formatProp ?? localeFormat;
+  // The latest time of the day: with seconds the default runs to the last second.
+  const maxTime = maxTimeProp ?? (showSeconds ? '23:59:59' : '23:59');
+
+  /* ---- reading and writing times ---------------------------------- */
+
+  // Seconds since midnight of a time in any spelling of the default reader, whole minutes
+  // without `showSeconds`; `NaN` when it is no time.
+  const readTime = React.useCallback(
+    (text: string) => {
+      const seconds = timeToSeconds(text);
+      return showSeconds ? seconds : Math.floor(seconds / 60) * 60;
+    },
+    [showSeconds],
+  );
+  // Typed text: through `parseTime` when given, whose answer is read as any time.
+  const readTyped = React.useCallback(
+    (text: string) => {
+      if (!parseTime) return readTime(text);
+      const read = parseTime(text);
+      return typeof read === 'string' ? readTime(read) : NaN;
+    },
+    [parseTime, readTime],
+  );
+  const toValue = (seconds: number) => secondsToValue(seconds, showSeconds);
+  /** The text of a `HH:mm[:ss]` value; a value that is no time shows as it is. */
+  const displayTime = (value: string): string => {
+    const seconds = readTime(value);
+    if (Number.isNaN(seconds)) return value;
+    return formatTime ? formatTime(toValue(seconds)) : secondsToTime(seconds, format, showSeconds);
+  };
 
   const [selectedValue, setSelectedValue] = useControllable<string>(
     valueProp,
@@ -580,13 +698,13 @@ export const TimePicker = (props: TimePickerProps) => {
   /* ---- options, step and bounds ---------------------------------- */
 
   const stepValid = normalizeTimeStep(step).valid;
-  const minMinutes = timeToMinutes(minTime);
-  const maxMinutes = timeToMinutes(maxTime);
+  const minSeconds = readTime(minTime);
+  const maxSeconds = readTime(maxTime);
   const boundsValid =
-    !Number.isNaN(minMinutes) && !Number.isNaN(maxMinutes) && minMinutes <= maxMinutes;
+    !Number.isNaN(minSeconds) && !Number.isNaN(maxSeconds) && minSeconds <= maxSeconds;
   const allOptions = React.useMemo(
-    () => generateTimeOptions(step, minTime, maxTime, format),
-    [step, minTime, maxTime, format],
+    () => generateTimeOptions(step, minTime, maxTime, format, { showSeconds, formatTime }),
+    [step, minTime, maxTime, format, showSeconds, formatTime],
   );
 
   // Once per invalid value and page (C-DEV), not once per instance and effect run.
@@ -670,13 +788,15 @@ export const TimePicker = (props: TimePickerProps) => {
 
   // A complete time in any spelling the commit accepts (`2:00pm`, `09:00 AM`, `14:00:00`) keeps its
   // own option, so it stays listed and active, as Enter and blur commit it.
+  const typedValue = React.useMemo(() => {
+    const seconds = readTyped(query.trim());
+    return Number.isNaN(seconds) ? null : secondsToValue(seconds, showSeconds);
+  }, [query, readTyped, showSeconds]);
   const filter = React.useMemo(() => {
     const text = query.trim().toLowerCase();
     if (!text) return undefined;
-    const minutes = timeToMinutes(text);
-    const exact = Number.isNaN(minutes) ? null : minutesToValue(minutes);
-    return (item: ListboxItem) => item.value === exact || matchesQuery(item, text);
-  }, [query]);
+    return (item: ListboxItem) => item.value === typedValue || matchesQuery(item, text);
+  }, [query, typedValue]);
 
   /**
    * The option that typing `text` makes active. A complete time (`2:00 PM`, `14:00`) activates its
@@ -688,9 +808,9 @@ export const TimePicker = (props: TimePickerProps) => {
   const getTypedActiveValue = (text: string): string | null => {
     const needle = text.trim().toLowerCase();
     if (!needle) return null;
-    const minutes = timeToMinutes(text);
-    if (!Number.isNaN(minutes)) {
-      const exact = minutesToValue(minutes);
+    const seconds = readTyped(text);
+    if (!Number.isNaN(seconds)) {
+      const exact = toValue(seconds);
       return allOptions.some((item) => item.value === exact) ? exact : null;
     }
     const match =
@@ -702,13 +822,16 @@ export const TimePicker = (props: TimePickerProps) => {
   // Opening without typing activates the selected option only when it is in the list. An empty,
   // off-grid or out-of-range value activates nothing (ArrowDown/ArrowUp start at the first/last
   // option), so Enter on a freshly opened list commits nothing and the surrounding form submits.
+  // With seconds a controlled `HH:mm` selects its `HH:mm:ss` option.
+  const selectedKey = React.useMemo(() => {
+    if (!showSeconds || !selectedValue) return selectedValue;
+    const seconds = timeToSeconds(selectedValue);
+    return Number.isNaN(seconds) ? selectedValue : secondsToValue(seconds, true);
+  }, [selectedValue, showSeconds]);
   const selectedInList =
-    selectedValue !== '' && allOptions.some((item) => item.value === selectedValue);
+    selectedKey !== '' && allOptions.some((item) => item.value === selectedKey);
 
-  const selectedValues = React.useMemo(
-    () => (selectedValue ? [selectedValue] : []),
-    [selectedValue],
-  );
+  const selectedValues = React.useMemo(() => (selectedKey ? [selectedKey] : []), [selectedKey]);
 
   const commitValue = (next: string) => {
     setSelectedValue(next);
@@ -725,10 +848,12 @@ export const TimePicker = (props: TimePickerProps) => {
       commitValue('');
       return null;
     }
-    const minutes = timeToMinutes(text);
-    if (Number.isNaN(minutes)) return 'unparseable';
-    if (!boundsValid || minutes < minMinutes || minutes > maxMinutes) return 'out-of-range';
-    commitValue(minutesToValue(minutes));
+    const seconds = readTyped(text);
+    if (Number.isNaN(seconds)) return 'unparseable';
+    if (!boundsValid || seconds < minSeconds || seconds > maxSeconds) return 'out-of-range';
+    const value = toValue(seconds);
+    if (!freeform && !allOptions.some((item) => item.value === value)) return 'not-listed';
+    commitValue(value);
     return null;
   };
 
@@ -759,6 +884,11 @@ export const TimePicker = (props: TimePickerProps) => {
     onSelect: (next) => commitValue(next),
     items: allOptions,
     filter,
+    // An active option that the window does not render: scrolled to by its index among the shown
+    // options, the window's count.
+    onScrollToItem: virtualWindow
+      ? (index) => virtualWindow.scrollToIndex(index, { align: 'auto' })
+      : undefined,
     // Typing sets the active option itself (getTypedActiveValue in handleInputChange), so an exact
     // typed time wins over an earlier substring match; highlightOnFilter would force the first one.
     autoHighlight: draft === null && selectedInList ? 'selected' : false,
@@ -774,8 +904,35 @@ export const TimePicker = (props: TimePickerProps) => {
         : undefined,
   });
 
+  // The popup surface mounts through the presence core: the list stays in it while it exits.
+  const popup = usePickerSurfacePresence(open ? (hasMatches ? 'list' : 'empty') : null, lb.items);
+  const motionClassName = useMotionClasses(motion, popupMotion);
+  // The window scrolls the shown list only (the closed list in place is another, hidden element).
+  const listScrollRef = useMergedRefs<HTMLUListElement>(
+    expanded ? virtualWindow?.scrollRef : undefined,
+  );
+  useShownListScroll(
+    expanded,
+    virtualWindow,
+    lb.items,
+    lb.activeValue,
+    selectedValue ? [selectedValue] : [],
+  );
+  const selectedSet = React.useMemo(() => new Set(selectedValues), [selectedValues]);
+  const renderWindowOption = React.useCallback(
+    (item: ListboxItem) => (
+      <TimePickerOption
+        value={item.value}
+        label={item.label}
+        part={slotProps?.option}
+        checkIconPart={slotProps?.checkIcon}
+      />
+    ),
+    [slotProps?.option, slotProps?.checkIcon],
+  );
+
   const displayLabel = selectedValue
-    ? (lb.getItem(selectedValue)?.label ?? displayTime(selectedValue, format))
+    ? (lb.getItem(selectedKey)?.label ?? displayTime(selectedValue))
     : '';
   // Read-only pickers offer no clear action (the value cannot change).
   const showClear = clearable && !readOnly && selectedValue !== '';
@@ -815,6 +972,7 @@ export const TimePicker = (props: TimePickerProps) => {
     surfaceRef,
     setFloating,
     slotProps?.surface?.ref,
+    popup.ref,
   );
 
   /* ---- forms and Field ------------------------------------------- */
@@ -943,13 +1101,18 @@ export const TimePicker = (props: TimePickerProps) => {
   /* ---- render ---------------------------------------------------- */
 
   const listboxLabelledBy = joinIds(ariaLabelledBy, field?.labelId);
-  const renderListbox = (hidden: boolean) => (
+  const renderListbox = (hidden: boolean, items: typeof lb.items = lb.items) => (
     <ul
       {...mergeSlotProps(slotProps?.listbox, {
         className: wcn(
           timePickerClassNames.listbox,
-          'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden',
+          // A window counts the options from the top of the list: no block padding, and the
+          // browser's scroll anchoring only fights the window.
+          virtualWindow
+            ? 'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:[overflow-anchor:none] wave:focus:outline-hidden'
+            : 'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden',
         ),
+        ref: virtualWindow ? listScrollRef : undefined,
         locked: {
           inert: undefined,
           'aria-hidden': undefined,
@@ -963,15 +1126,28 @@ export const TimePicker = (props: TimePickerProps) => {
         },
       })}
     >
-      {lb.items.map((item) => (
-        <TimePickerOption
-          key={item.value}
-          value={item.value}
-          label={item.label}
-          part={slotProps?.option}
-          checkIconPart={slotProps?.checkIcon}
-        />
-      ))}
+      {virtualWindow
+        ? // The options of the window while the list shows; the closed list needs none.
+          !hidden &&
+          renderListboxWindow(
+            items,
+            virtualWindow,
+            {
+              selected: selectedSet,
+              activeValue: lb.activeValue,
+              renderOption: renderWindowOption,
+            },
+            timePickerClassNames.spacer,
+          )
+        : items.map((item) => (
+            <TimePickerOption
+              key={item.value}
+              value={item.value}
+              label={item.label}
+              part={slotProps?.option}
+              checkIconPart={slotProps?.checkIcon}
+            />
+          ))}
     </ul>
   );
 
@@ -979,14 +1155,18 @@ export const TimePicker = (props: TimePickerProps) => {
 
   let errorMessage = '';
   if (showOwnError && invalid === 'unparseable') {
-    errorMessage = (labels?.invalidTime ?? defaultInvalidTimeLabel)(
-      format === '24h' ? 'HH:mm' : 'h:mm AM',
-    );
+    // The pattern of the format; a `formatTime` of your own has none, so it gets an example.
+    const pattern = formatTime
+      ? formatTime(showSeconds ? '13:45:30' : '13:45')
+      : `${format === '24h' ? 'HH:mm' : 'h:mm'}${showSeconds ? ':ss' : ''}${format === '24h' ? '' : ' AM'}`;
+    errorMessage = (labels?.invalidTime ?? defaultInvalidTimeLabel)(pattern);
+  } else if (showOwnError && invalid === 'not-listed') {
+    errorMessage = labels?.notListed ?? 'Choose a time from the list.';
   } else if (showOwnError) {
     // Bounds the consumer did not set are `undefined`, not the defaults.
     errorMessage = (labels?.outOfRange ?? defaultOutOfRangeLabel)(
-      props.minTime === undefined ? undefined : displayTime(minTime, format),
-      props.maxTime === undefined ? undefined : displayTime(maxTime, format),
+      props.minTime === undefined ? undefined : displayTime(minTime),
+      maxTimeProp === undefined ? undefined : displayTime(maxTime),
     );
   }
   // aria-controls must name a listbox that is actually mounted. The closed list is inline only
@@ -998,16 +1178,17 @@ export const TimePicker = (props: TimePickerProps) => {
     className: wcn(
       timePickerClassNames.surface,
       'wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:shadow-8',
+      motionClassName,
     ),
     locked: {
       ...placement,
-      'data-state': 'open',
-      // No presence phase: the list mounts open (a part cannot pretend otherwise).
-      'data-presence': undefined,
+      'data-state': popup.exiting ? 'closed' : 'open',
+      // The presence phase, and `inert` while the surface exits (a part cannot pretend otherwise).
+      'data-presence': popup.presenceProps['data-presence'],
+      inert: popup.presenceProps.inert,
       role: undefined,
       id: undefined,
       hidden: undefined,
-      inert: undefined,
       'aria-hidden': undefined,
     },
   });
@@ -1019,6 +1200,7 @@ export const TimePicker = (props: TimePickerProps) => {
     className: wcn(
       timePickerClassNames.root,
       'wave:relative wave:inline-flex wave:flex-col',
+      appClassName,
       className,
     ),
     style,
@@ -1103,7 +1285,8 @@ export const TimePicker = (props: TimePickerProps) => {
             ref={inputRefs}
           />
           {showClear && (
-            <button
+            <PickerClearButton
+              fallbackRef={inputRef}
               // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot
               // change it).
               type="button"
@@ -1133,7 +1316,7 @@ export const TimePicker = (props: TimePickerProps) => {
               })}
             >
               <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-            </button>
+            </PickerClearButton>
           )}
           {showExpand && (
             <PickerExpandButton
@@ -1165,7 +1348,7 @@ export const TimePicker = (props: TimePickerProps) => {
             {errorMessage}
           </p>
         )}
-        {!open && allOptions.length > 0 && renderListbox(true)}
+        {!open && !popup.exiting && allOptions.length > 0 && renderListbox(true)}
         <span role="status" className="wave:sr-only">
           {statusMessage}
         </span>
@@ -1178,10 +1361,12 @@ export const TimePicker = (props: TimePickerProps) => {
           required={validates}
           onInvalid={() => inputRef.current?.focus()}
         />
-        {open && (
+        {popup.mounted && (
           <Portal layerId={layerId}>
             <div {...surfaceProps} style={surfaceStyle} ref={surfaceRefs}>
-              {hasMatches ? (
+              {popup.exiting ? (
+                renderListbox(false, popup.heldItems)
+              ) : hasMatches ? (
                 renderListbox(false)
               ) : (
                 <div

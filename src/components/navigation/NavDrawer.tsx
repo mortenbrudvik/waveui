@@ -36,13 +36,14 @@ import {
   useNavListChildCheck,
   type NavRovingContextValue,
 } from './Nav.context';
-import { useNavRootState, type NavProps } from './Nav.root';
+import { useNavRootState, type NavDensity, type NavProps, type NavSelectDetails } from './Nav.root';
 import {
   NavDrawerContext,
   NavDrawerLayoutContext,
   type NavDrawerContextValue,
   type NavDrawerLayoutContextValue,
 } from './NavDrawer.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * NavDrawer: Nav's state (`useNavRootState`) and a navigation landmark in the drawer panel shell
@@ -67,6 +68,7 @@ export interface NavDrawerProps
       | 'openCategories'
       | 'defaultOpenCategories'
       | 'onOpenCategoriesChange'
+      | 'multiple'
       | 'currentCategory'
     > {
   /**
@@ -104,9 +106,18 @@ export interface NavDrawerProps
    * Called with an item's value every time an item is activated, also when the current page is
    * activated again (a disabled item, a link opened in another tab or window, and a button item
    * whose `onClick` calls `preventDefault()` are not activations). Close an overlay drawer here:
-   * `onValueChange` fires only when the value changes. Fluent's `onNavItemSelect`.
+   * `onValueChange` fires only when the value changes. It gets the same `details` as
+   * `onValueChange`: the click as `event` and the `category` the item sits in. Fluent's
+   * `onNavItemSelect`.
    */
-  onItemSelect?: (value: string) => void;
+  onItemSelect?: (value: string, details?: NavSelectDetails) => void;
+  /**
+   * How tightly the items and category buttons are set (Fluent's `density`, which Fluent's
+   * NavDrawer takes beside its `size`): see `Nav.density`. Rendered as `data-density` on the
+   * `<nav>`.
+   * @default 'medium'
+   */
+  density?: NavDensity;
   /**
    * The edge the panel is attached to: an overlay's screen edge; an inline panel's inner edge is
    * the opposite one. `start`/`end` follow the text direction; `left`/`right` are physical sides;
@@ -368,6 +379,8 @@ const NavDrawerRoot = ({
   openCategories,
   defaultOpenCategories,
   onOpenCategoriesChange,
+  multiple = true,
+  density = 'medium',
   currentCategory,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
@@ -378,6 +391,8 @@ const NavDrawerRoot = ({
   slotProps,
   ...rest
 }: NavDrawerProps) => {
+  const appClassName = useAppClassName(drawerClassNames.root, navDrawerClassNames.root);
+
   const [openState, requestOpen] = useModalOpenState(openProp, defaultOpen, onOpenChange);
   // An overlay reports itself closed until the page has hydrated (its portal renders only in the
   // browser), so a Hamburger's aria-controls never names a panel that is not there.
@@ -391,6 +406,8 @@ const NavDrawerRoot = ({
     openCategories,
     defaultOpenCategories,
     onOpenCategoriesChange,
+    singleOpen: !multiple,
+    density,
     currentCategory,
     children,
   });
@@ -454,6 +471,7 @@ const NavDrawerRoot = ({
       trigger={inertModalTrigger}
       finalFocusRef={finalFocusRef}
       rootClassName={wcn(drawerClassNames.root, navDrawerClassNames.root)}
+      appClassName={appClassName}
       backdropClassName={wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
       collapseClassName={wcn(drawerClassNames.collapse, navDrawerClassNames.collapse)}
       backdrop={backdrop}
@@ -470,7 +488,7 @@ const NavDrawerRoot = ({
             navDrawerClassNames.nav,
             'wave:flex wave:min-h-0 wave:flex-1 wave:flex-col',
           ),
-          locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps },
+          locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps, 'data-density': density },
         })}
         ref={navMergedRef}
       >
@@ -500,6 +518,8 @@ NavDrawerRoot.displayName = 'NavDrawer';
  * body or the footer). Its line underneath shows while the body is scrolled away from its top.
  */
 export const NavDrawerHeader = ({ className, children, ref, ...rest }: NavDrawerHeaderProps) => {
+  const appClassName = useAppClassName(navDrawerHeaderClassNames.root);
+
   const { scrollState } = useNavDrawerLayout('NavDrawer.Header');
   return (
     <div
@@ -510,6 +530,7 @@ export const NavDrawerHeader = ({ className, children, ref, ...rest }: NavDrawer
         navDrawerHeaderClassNames.root,
         'wave:flex wave:shrink-0 wave:items-center wave:gap-2 wave:ps-2.5 wave:pe-2 wave:py-2',
         scrollSeparatorClasses.header,
+        appClassName,
         className,
       )}
     >
@@ -533,6 +554,8 @@ export const NavDrawerBody = ({
   slotProps,
   ...rest
 }: NavDrawerBodyProps) => {
+  const appClassName = useAppClassName(navDrawerBodyClassNames.root);
+
   const { scrollState, registerBody } = useNavDrawerLayout('NavDrawer.Body');
   const nav = React.useContext(NavContext);
   const arrow = focusMode === 'arrow';
@@ -593,6 +616,7 @@ export const NavDrawerBody = ({
       className={wcn(
         navDrawerBodyClassNames.root,
         'wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:py-2',
+        appClassName,
         className,
       )}
     >
@@ -623,6 +647,8 @@ export const NavDrawerFooter = ({
   slotProps,
   ...rest
 }: NavDrawerFooterProps) => {
+  const appClassName = useAppClassName(navDrawerFooterClassNames.root);
+
   const { scrollState } = useNavDrawerLayout('NavDrawer.Footer');
   // Development only: every child of the list is an <li> (`NavDrawer.Footer:list-child`).
   const listRef = React.useRef<HTMLUListElement>(null);
@@ -637,6 +663,7 @@ export const NavDrawerFooter = ({
         navDrawerFooterClassNames.root,
         'wave:shrink-0 wave:py-2',
         scrollSeparatorClasses.footer,
+        appClassName,
         className,
       )}
     >

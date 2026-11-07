@@ -43,9 +43,41 @@ export { createToaster } from './lib/toaster';
 export type { ToasterHandle } from './lib/toaster';
 export { getTokenStyle } from './lib/tokens';
 export type { TokenStyle, WaveTokenName, WaveTokenOverrides, WaveTokens } from './lib/tokens';
-export { waveTokens, chartPalette } from './lib/waveTokens';
+export { waveTokens, chartPalette, chartSeries } from './lib/waveTokens';
 export { createBrandTokens } from './lib/brand';
 export type { BrandRamp, BrandStop, BrandTokens } from './lib/brand';
+export {
+  DismissIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon,
+  CalendarIcon,
+  ClockIcon,
+  CheckIcon,
+  SubtractIcon,
+  SearchIcon,
+  InfoIcon,
+  SuccessIcon,
+  WarningIcon,
+  ErrorIcon,
+  StarIcon,
+  AddIcon,
+  PersonIcon,
+  NavigationIcon,
+  PresenceAvailableIcon,
+  PresenceBusyIcon,
+  PresenceAwayIcon,
+  PresenceOfflineIcon,
+  PresenceDndIcon,
+  PresenceOofIcon,
+  PresenceBlockedIcon,
+  PresenceUnknownIcon,
+} from './lib/icons';
+export type { IconProps, IconComponent } from './lib/icons';
+export { flipIconInRtl } from './lib/flipIcon';
 
 // Hooks
 export { useControllable } from './hooks/useControllable';
@@ -69,7 +101,7 @@ export type {
   UseFieldControlOptions,
 } from './hooks/useFieldControl';
 export { useAnnounce, announce } from './hooks/useAnnounce';
-export type { Politeness } from './hooks/useAnnounce';
+export type { Politeness, AnnounceOptions } from './hooks/useAnnounce';
 export { usePresence } from './hooks/usePresence';
 export type {
   PresencePhase,
@@ -77,6 +109,18 @@ export type {
   UsePresenceOptions,
   UsePresenceResult,
 } from './hooks/usePresence';
+export { useTimeout } from './hooks/useTimeout';
+export { useAnimationFrame } from './hooks/useAnimationFrame';
+export { useScrollbarWidth, useApplyScrollbarWidth } from './hooks/useScrollbarWidth';
+export type {
+  UseScrollbarWidthOptions,
+  UseApplyScrollbarWidthOptions,
+} from './hooks/useScrollbarWidth';
+export { useObservedElement } from './hooks/useObservedElement';
+export type { ObservedElementProps } from './hooks/useObservedElement';
+export { useFocusObserved } from './hooks/useFocusObserved';
+export type { UseFocusObservedOptions } from './hooks/useFocusObserved';
+export type { ObservedElementRequest } from './lib/observedElements';
 export { useSelection } from './hooks/useSelection';
 export type {
   UseSelectionChangeDetails,
@@ -84,7 +128,11 @@ export type {
   UseSelectionResult,
 } from './hooks/useSelection';
 export { useVirtualWindow } from './hooks/useVirtualWindow';
-export type { UseVirtualWindowOptions, VirtualWindow } from './hooks/useVirtualWindow';
+export type {
+  UseVirtualWindowOptions,
+  VirtualItemProps,
+  VirtualWindow,
+} from './hooks/useVirtualWindow';
 export type { VirtualEntry } from './lib/virtual';
 export { useActiveDescendant } from './hooks/useActiveDescendant';
 export type {
@@ -101,6 +149,7 @@ export type {
   ListboxItem,
   ListboxOpenChangeReason,
   ListboxSelectDetails,
+  ListboxRangeDetails,
   UseListboxOptions,
   UseListboxResult,
   ListboxComboboxProps,
@@ -143,6 +192,7 @@ export type {
   UseGridNavigationResult,
   GridNavigationHandlers,
   GridNavigationModel,
+  GridNavigationFocusMode,
 } from './components/table/useGridNavigation';
 export { getTabbableElements, getFirstTabbable, getLastTabbable } from './lib/focus';
 export { focusRing, focusRingInset, inputFocus, inputFocusWithin } from './lib/styles';
@@ -150,6 +200,7 @@ export { hasOpenModal, modalAllowProps } from './lib/layers';
 
 // Provider
 export { WaveProvider, useWaveTheme, getThemeClassName } from './components/provider/WaveProvider';
+export type { WaveClassNames, WaveRootClassName } from './hooks/useAppClassName';
 export type {
   WaveProviderProps,
   WaveTheme,

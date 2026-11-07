@@ -978,3 +978,60 @@ describe('Tree - navigationMode="treegrid" (fix round)', () => {
     expect(item('Work')).toHaveFocus();
   });
 });
+
+describe('Tree.Item - actionsVisible', () => {
+  it('holds the actions shown, as a surface opened from an action does', () => {
+    const { rerender } = render(
+      <Tree aria-label="Files">
+        <Tree.Item value="a" actions={<button type="button">Delete</button>}>
+          Alpha
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(toolbar('Alpha')).not.toHaveAttribute('data-focus-in-popup');
+    rerender(
+      <Tree aria-label="Files">
+        <Tree.Item value="a" actionsVisible actions={<button type="button">Delete</button>}>
+          Alpha
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(toolbar('Alpha')).toHaveAttribute('data-focus-in-popup', '');
+    expect(toolbar('Alpha')).toHaveClass('wave:data-[focus-in-popup]:visible');
+  });
+
+  it('a focus return to an action succeeds while held, and lets go when cleared', () => {
+    function Page({ held }: { held: boolean }) {
+      return (
+        <Tree aria-label="Files">
+          <Tree.Item
+            value="a"
+            actionsVisible={held}
+            actions={<button type="button">Delete</button>}
+          >
+            Alpha
+          </Tree.Item>
+        </Tree>
+      );
+    }
+    const { rerender } = render(<Page held />);
+    expect(toolbar('Alpha')).toHaveAttribute('data-focus-in-popup', '');
+    rerender(<Page held={false} />);
+    expect(toolbar('Alpha')).not.toHaveAttribute('data-focus-in-popup');
+  });
+
+  it('renders no attribute without actions, and has no axe violations', async () => {
+    const view = render(
+      <Tree aria-label="Files">
+        <Tree.Item value="a" actionsVisible>
+          Alpha
+        </Tree.Item>
+        <Tree.Item value="b" actionsVisible actions={<button type="button">Delete</button>}>
+          Beta
+        </Tree.Item>
+      </Tree>,
+    );
+    expect(document.querySelectorAll('[data-focus-in-popup]')).toHaveLength(1);
+    await expectNoA11yViolations(view.container);
+  });
+});

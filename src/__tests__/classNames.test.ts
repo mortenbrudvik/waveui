@@ -7,6 +7,7 @@
  */
 import * as registry from '../lib/classNames';
 import * as entry from '../index';
+import * as glyphs from '../lib/icons';
 import { cn, createWcn, wcn } from '../lib/cn';
 import { getStableClassNames } from '../test-utils';
 
@@ -163,6 +164,7 @@ const NO_ELEMENT: readonly string[] = [
   'Popover', // a context provider: Popover.Content renders the surface
   'PopoverTrigger', // clones its child
   'Presence', // clones its child
+  'SpinnerContextProvider', // a context provider: the Spinners below it render the elements (1.1)
   'TeachingPopoverTrigger', // clones its child (0.14)
   'ToastClose', // clones its child (phase 3)
 ];
@@ -198,11 +200,18 @@ function displayNameOf(value: object): string {
   return '';
 }
 
+/**
+ * The built-in glyphs the entry exports since 1.1 (`DismissIcon`, ...): an `<svg>` each, identified
+ * by its stable `data-wave-icon` attribute, not by a class (adding one would change the markup of
+ * every component that draws a glyph). They are not components in the sense of the registry.
+ */
+const GLYPH_ICONS: ReadonlySet<string> = new Set(Object.keys(glyphs));
+
 /** The entry's public components and their compound members, by flat name (`CardHeader`). */
 function publicComponents(): Map<string, object> {
   const found = new Map<string, object>();
   for (const [name, value] of Object.entries(entry)) {
-    if (!/^[A-Z]/.test(name) || !isComponentLike(value)) continue;
+    if (!/^[A-Z]/.test(name) || !isComponentLike(value) || GLYPH_ICONS.has(name)) continue;
     found.set(name, value);
     for (const key of Object.keys(value)) {
       const member: unknown = Reflect.get(value, key);
@@ -301,5 +310,44 @@ describe('class-name registry: applied in src/components (spec §1.4.3)', () => 
       );
     });
     expect(unknown).toEqual([]);
+  });
+});
+
+describe('class-name registry: app-wide classes (WaveProvider classNames)', () => {
+  const sources = Object.values(
+    import.meta.glob<string>(['../components/**/*.{ts,tsx}', '!**/__tests__/**'], {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }),
+  ).join('\n');
+
+  /**
+   * Root constants whose element takes the app-wide classes without a `useAppClassName(<constant>.root)`
+   * call of their own: WaveProvider merges its own map, and the two swatches pass their root class
+   * to the shared radio, which reads it as `useAppClassName(rootClassName)`.
+   */
+  const READ_ELSEWHERE: readonly string[] = [
+    'waveProviderClassNames',
+    'colorSwatchClassNames',
+    'imageSwatchClassNames',
+  ];
+
+  it('reads the app-wide classes of every root class a component draws', () => {
+    const wired = new Set(
+      [...sources.matchAll(/useAppClassName\(([^)]*)\)/g)].flatMap((call) =>
+        [...call[1].matchAll(/([a-zA-Z]+ClassNames)\.root/g)].map((match) => match[1]),
+      ),
+    );
+    const unwired = constants
+      .filter(([, value]) => 'root' in value)
+      .map(([name]) => name)
+      .filter((name) => !wired.has(name) && !READ_ELSEWHERE.includes(name));
+    expect(unwired).toEqual([]);
+  });
+
+  it('lists in READ_ELSEWHERE only constants that really are', () => {
+    expect(sources).toContain('useAppClassName(rootClassName)');
+    expect(sources).toContain('appClassNames?.[waveProviderClassNames.root]');
   });
 });

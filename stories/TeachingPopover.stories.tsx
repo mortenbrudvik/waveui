@@ -287,3 +287,44 @@ export const PageCountHeaderAndMedia: Story = {
     </div>
   ),
 };
+
+/**
+ * `appearance`: `neutral` (the default), `brand` or `inverted`. The title, body, Close button, step
+ * dots and footer buttons follow the surface: Next turns neutral and Back transparent, so both
+ * stay legible on the fill.
+ */
+export const Appearances: Story = {
+  render: ({ ...args }) => (
+    <div className="flex flex-wrap gap-4" style={{ paddingBottom: 40 }}>
+      {(['neutral', 'brand', 'inverted'] as const).map((appearance) => (
+        <TeachingPopover
+          key={appearance}
+          {...args}
+          appearance={appearance}
+          steps={[
+            { title: `A ${appearance} tip`, body: 'Press Ctrl+K to open the command palette.' },
+            { title: 'Another tip', body: 'Drag a card to reorder it.' },
+          ]}
+          defaultOpen
+        />
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * `trapFocus`: Tab cycles between the Close button, Back and Next and cannot reach the page behind
+ * the popover; Escape and Close still dismiss it. The page is not made inert.
+ */
+export const TrapFocus: Story = {
+  args: { trapFocus: true },
+  render: (args) => (
+    <div style={{ paddingBottom: 360 }}>
+      <TeachingPopover {...args}>
+        <TeachingPopover.Trigger>
+          <Button appearance="primary">Take the tour</Button>
+        </TeachingPopover.Trigger>
+      </TeachingPopover>
+    </div>
+  ),
+};

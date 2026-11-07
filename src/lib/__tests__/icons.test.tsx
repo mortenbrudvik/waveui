@@ -7,6 +7,7 @@ import { build } from 'vite';
 import * as Icons from '../icons';
 import type { IconProps } from '../icons';
 import iconsSource from '../icons.tsx?raw';
+import flipSource from '../flipIcon.ts?raw';
 
 const ICONS: Array<[name: string, dataName: string, defaultSize: number]> = [
   ['DismissIcon', 'dismiss', 16],
@@ -37,6 +38,8 @@ const ICONS: Array<[name: string, dataName: string, defaultSize: number]> = [
   ['PresenceOfflineIcon', 'presence-offline', 16],
   ['PresenceDndIcon', 'presence-dnd', 16],
   ['PresenceOofIcon', 'presence-oof', 16],
+  ['PresenceBlockedIcon', 'presence-blocked', 16],
+  ['PresenceUnknownIcon', 'presence-unknown', 16],
 ];
 
 type IconComponent = (props: IconProps) => React.ReactNode;
@@ -49,6 +52,7 @@ type IconComponent = (props: IconProps) => React.ReactNode;
 async function iconsKeptWhenImportingDismissOnly(source: string): Promise<string[]> {
   const ENTRY = '\0entry.js';
   const ICONS_MODULE = '\0icons.tsx';
+  const FLIP_MODULE = '\0flipIcon.ts';
   const result = await build({
     configFile: false,
     envFile: false,
@@ -60,6 +64,7 @@ async function iconsKeptWhenImportingDismissOnly(source: string): Promise<string
         resolveId(id) {
           if (id === ENTRY) return ENTRY;
           if (id === './icons') return ICONS_MODULE;
+          if (id === './flipIcon') return FLIP_MODULE;
           return null;
         },
         load(id) {
@@ -67,6 +72,7 @@ async function iconsKeptWhenImportingDismissOnly(source: string): Promise<string
             return "import { DismissIcon } from './icons'; export default DismissIcon;";
           }
           if (id === ICONS_MODULE) return { code: source, moduleType: 'tsx' };
+          if (id === FLIP_MODULE) return { code: flipSource, moduleType: 'ts' };
           return null;
         },
       },
@@ -261,6 +267,8 @@ describe('icons (input-datetime#22, button-provider#20)', () => {
       ['PresenceOfflineIcon', 'stroke'],
       ['PresenceDndIcon', 'stroke'],
       ['PresenceOofIcon', 'stroke'],
+      ['PresenceBlockedIcon', 'stroke'],
+      ['PresenceUnknownIcon', 'stroke'],
     ];
 
     it.each(PRESENCE)('%s is drawn in the 16x16 badge box', (name, paint) => {
@@ -309,6 +317,43 @@ describe('icons (input-datetime#22, button-provider#20)', () => {
       });
       expect(new Set(shapes).size).toBe(PRESENCE.length);
     });
+  });
+
+  describe('flipInRtl (foundation-42)', () => {
+    it('adds the mirroring class after your classes, and only when asked', () => {
+      const { container } = render(
+        <>
+          <Icons.ChevronRightIcon className="mine" flipInRtl data-testid="flipped" />
+          <Icons.ChevronRightIcon className="mine" data-testid="plain" />
+          <Icons.ChevronRightIcon flipInRtl={false} data-testid="off" />
+        </>,
+      );
+      expect(container.querySelector('[data-testid=flipped]')).toHaveAttribute(
+        'class',
+        'mine wave:wave-rtl:-scale-x-100',
+      );
+      expect(container.querySelector('[data-testid=plain]')).toHaveAttribute('class', 'mine');
+      expect(container.querySelector('[data-testid=off]')).not.toHaveAttribute('class');
+    });
+
+    it('does not repeat the class when the consumer already passes it', () => {
+      const { container } = render(
+        <Icons.ChevronRightIcon className="wave:wave-rtl:-scale-x-100" flipInRtl />,
+      );
+      expect(container.querySelector('svg')).toHaveAttribute('class', 'wave:wave-rtl:-scale-x-100');
+    });
+  });
+
+  describe('the public entry (foundation-44)', () => {
+    it('exports every icon of the module, the same component', async () => {
+      const entry = (await import('../../index')) as unknown as Record<string, unknown>;
+      // The sort arrows stay module-only: they are the DataGrid and Table sort buttons' internals.
+      const internal = ['SortArrowUpIcon', 'SortArrowDownIcon'];
+      for (const [name] of ICONS) {
+        if (internal.includes(name)) expect(entry[name], name).toBeUndefined();
+        else expect(entry[name], name).toBe(getIcon(name));
+      }
+    }, 60_000);
   });
 
   it('lets consumers override the default a11y attributes', () => {

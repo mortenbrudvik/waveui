@@ -17,7 +17,7 @@ import {
 } from '../../lib/slot';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
-import type { Status, Slot } from '../../lib/types';
+import type { Shape, Status, Slot } from '../../lib/types';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { Button } from '../button/Button';
@@ -46,6 +46,13 @@ import {
   partitionMessageBarChildren,
   useTitlePlacement,
 } from './MessageBar.parts';
+import { useAppClassName } from '../../hooks/useAppClassName';
+
+/** Corners of a {@link MessageBar}: `rounded` or `square`. */
+export type MessageBarShape = Extract<Shape, 'rounded' | 'square'>;
+
+/** How urgently a {@link MessageBar} is announced: `polite` or `assertive`. */
+export type MessageBarPoliteness = 'polite' | 'assertive';
 
 /** Properties for the MessageBar component. */
 export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -55,6 +62,21 @@ export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
    * @default 'info'
    */
   status?: Status;
+  /**
+   * Corners of the bar: `rounded` (the default) or `square`, for a bar that spans the page or the
+   * width of a card. The root carries it as `data-shape`. Fluent's `shape`.
+   * @default 'rounded'
+   */
+  shape?: MessageBarShape;
+  /**
+   * How urgently the bar is announced when it appears or its content changes: `assertive` renders
+   * `role="alert"` (read at once), `polite` renders `role="status"` (read when the reader is
+   * idle). Without it the status decides: `warning` and `error` are assertive, `info` and
+   * `success` polite. A `role` of yours wins over both. Fluent's `politeness`, which it applies
+   * through its announcer region: here the bar is its own live region.
+   * @default by status: assertive for `warning` and `error`, polite otherwise
+   */
+  politeness?: MessageBarPoliteness;
   /**
    * Visually hidden text read before the message so screen-reader users hear the severity
    * (`'Info:'`, `'Success:'`, `'Warning:'`, `'Error:'` by default). Pass a translation for other
@@ -420,6 +442,8 @@ function resolveDismiss(dismiss: MessageBarProps['dismiss']): DismissParts | nul
 // The MessageBar root, documented on the exported `MessageBar` const.
 const MessageBarRoot = ({
   status = 'info',
+  shape = 'rounded',
+  politeness,
   statusLabel,
   onDismiss,
   icon,
@@ -431,6 +455,8 @@ const MessageBarRoot = ({
   ref,
   ...rest
 }: MessageBarProps) => {
+  const appClassName = useAppClassName(messageBarClassNames.root);
+
   const iconClassName = wcn(
     messageBarClassNames.icon,
     'wave:mt-0.5 wave:inline-flex wave:shrink-0',
@@ -558,7 +584,13 @@ const MessageBarRoot = ({
   // Labelling (D16). The role the bar renders: the consumer's when the prop is given (it is spread
   // after the default, as in 0.7), else the status role. A live bar is read once, title included,
   // and gets no name; a bar with a non-live role is named by the severity text and the title.
-  const defaultRole = status === 'error' || status === 'warning' ? 'alert' : 'status';
+  // The politeness of the prop, else of the status; a value outside the union (untyped code) is
+  // the status's.
+  const assertive =
+    politeness === 'assertive' || politeness === 'polite'
+      ? politeness === 'assertive'
+      : status === 'error' || status === 'warning';
+  const defaultRole = assertive ? 'alert' : 'status';
   const role = 'role' in rest ? rest.role : defaultRole;
   // A prop that holds `undefined` (a wrapper forwarding it) is no name of the consumer's.
   const ownName = rest['aria-label'] !== undefined || rest['aria-labelledby'] !== undefined;
@@ -650,13 +682,16 @@ const MessageBarRoot = ({
       ref={rootRef}
       role={defaultRole}
       data-layout={resolvedLayout}
+      data-shape={shape === 'square' ? 'square' : 'rounded'}
       {...rest}
       aria-labelledby={labelledBy}
       className={wcn(
         messageBarClassNames.root,
-        'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border-s-4 wave:px-4 wave:py-3 wave:text-foreground',
+        'wave:flex wave:items-start wave:gap-3 wave:border-s-4 wave:px-4 wave:py-3 wave:text-foreground',
+        shape === 'square' ? 'wave:rounded-none' : 'wave:rounded',
         tintClasses[status],
         STATUS_BORDER[status],
+        appClassName,
         className,
       )}
     >
@@ -695,7 +730,9 @@ MessageBarRoot.displayName = 'MessageBar';
  * an optional dismiss button.
  *
  * - The status sets the tint, the logical start border, the icon and the role (`alert` for
- *   `warning`/`error`, `status` otherwise). Screen readers hear the severity through `statusLabel`.
+ *   `warning`/`error`, `status` otherwise); `politeness` sets the role by urgency instead
+ *   (`assertive` is `alert`, `polite` is `status`). Screen readers hear the severity through
+ *   `statusLabel`. `shape="square"` removes the rounded corners of a bar that spans the page.
  * - Parts, as direct children: `MessageBar.Title` (a semibold lead-in, read first after the
  *   severity) and `MessageBar.Actions` (buttons after the text on one row, or below it with
  *   `layout="multiline"`). The built-in Dismiss button stays the bar's own.

@@ -20,9 +20,12 @@ import { CardPreview } from './Card.preview';
 
 export { CardPreview };
 export type { CardPreviewOwnProps, CardPreviewProps } from './Card.preview';
+import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useFocusableGroup } from '../../hooks/useFocusableGroup';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Elements whose own events a selectable card ignores: a click or key press that starts inside a
@@ -68,6 +71,28 @@ const NESTED_INTERACTIVE_WARNING = 'Card:nested-interactive';
  */
 const CardTitleIdContext = React.createContext<string | null>(null);
 
+/**
+ * How a Card manages focus for the interactive content inside it (Fluent UI's `Card focusMode`):
+ * `'off'` leaves focus alone; `'no-tab'` makes the card one tab stop that Enter or F2 enters, with
+ * Tab trapped inside until Escape; `'tab-exit'` is the same without the trap (Tab past the last
+ * element leaves the card); `'tab-only'` makes the card one more tab stop beside its content,
+ * which stays reachable by Tab, with no key intercepted.
+ */
+export type CardFocusMode = 'off' | 'no-tab' | 'tab-exit' | 'tab-only';
+
+/** The group behaviour each {@link CardFocusMode} maps to (Fluent maps them the same way). */
+const FOCUS_MODE_BEHAVIOR = {
+  'no-tab': 'limited-trap-focus',
+  'tab-exit': 'limited',
+  'tab-only': 'unlimited',
+} as const;
+
+/** What a selection reports as its second argument. */
+export interface CardSelectionDetails {
+  /** The click, key press or checkbox change that asked for the change. */
+  event: React.SyntheticEvent<HTMLElement>;
+}
+
 /** The look of a Card: a filled surface with a shadow, a muted fill, an outline, or no surface. */
 export type CardAppearance = 'filled' | 'filled-alternative' | 'outline' | 'subtle';
 
@@ -108,13 +133,26 @@ const CHECKMARK_PART_LOCKS = {
 } as const;
 
 /** The props of a selected card's check glyph, its `slotProps.checkmark` merged in when given. */
-function checkmarkProps(part: SlotPart<'svg'> | undefined): Record<string, unknown> {
+function checkmarkProps(
+  part: SlotPart<'svg'> | undefined,
+  disabled: boolean,
+): Record<string, unknown> {
   const className = wcn(
     cardClassNames.checkmark,
     'wave:absolute wave:end-2 wave:top-2 wave:text-primary',
   );
-  return part ? mergeSlotProps(part, { className, locked: CHECKMARK_PART_LOCKS }) : { className };
+  return part
+    ? mergeSlotProps(part, {
+        className,
+        locked: CHECKMARK_PART_LOCKS,
+        // A disabled card does not select: no click of the part either.
+        blockHandlers: disabled ? BLOCK_CLICK : undefined,
+      })
+    : { className };
 }
+
+/** The `blockHandlers` of the check glyph of a disabled card. */
+const BLOCK_CLICK = ['onClick'] as const;
 
 /** The padding the parts of a card read (`--wave-card-padding`), per size. */
 const cardSizeClasses: Readonly<Record<CoreSize, string>> = {
@@ -159,14 +197,53 @@ export interface CardOwnProps {
    */
   selected?: boolean;
   /**
+   * Initially selected state for an uncontrolled card (Fluent UI's `defaultSelected`). Giving it
+   * makes the card selectable and lets it keep its own selected state, which `selected` controls
+   * instead when given. Without `selected` and `defaultSelected`, a card with only `onSelect` has
+   * no selected state of its own (it is a button that reports activations).
+   */
+  defaultSelected?: boolean;
+  /**
+   * Called when the selected state changes, with the new state and the click, key press or
+   * checkbox change behind it (Fluent UI's `onSelectionChange(event, { selected })`). Giving it
+   * makes the card selectable; without `selected` or `defaultSelected` the card keeps its own
+   * state, starting unselected. As a controlled card's parent decides the state, this reports the
+   * state the activation asks for.
+   */
+  onSelectionChange?: (selected: boolean, details: CardSelectionDetails) => void;
+  /**
    * Makes the card selectable: called when the card is activated by a click, Enter (on key down)
    * or Space (on key up, like a native button) in the default mode, or when its built-in checkbox
-   * changes (`selectionControl="checkbox"`). Clicks and key presses that start inside a nested
-   * interactive element (a button, link, input or any element with `tabindex`), or in content
-   * portaled out of the card (a menu, popover or dialog opened from it), are ignored, so a footer
-   * action never selects the card.
+   * changes (`selectionControl="checkbox"`), with that event. Clicks and key presses that start
+   * inside a nested interactive element (a button, link, input or any element with `tabindex`), or
+   * in content portaled out of the card (a menu, popover or dialog opened from it), are ignored,
+   * so a footer action never selects the card. It is called on every activation, and
+   * `onSelectionChange` once per change of the state.
    */
-  onSelect?: () => void;
+  onSelect?: (event?: React.SyntheticEvent<HTMLElement>) => void;
+  /**
+   * Disables the card (Fluent UI's `disabled`): a dimmed look with a not-allowed cursor, a boolean
+   * `data-disabled` and no activation. The card's own `onClick`, `onKeyDown` and `onKeyUp` are not
+   * attached and it selects nothing (`onSelect` and `onSelectionChange` are not called). A
+   * selectable card in the default mode reports `aria-disabled="true"` (a `<button>` rendered with
+   * `as` gets `disabled`) and leaves the tab order, as a disabled native button does; the built-in
+   * checkbox of `selectionControl="checkbox"` is `disabled`; `focusMode` is off. The content is
+   * yours to disable: a button inside the card stays enabled unless you disable it.
+   * @default false
+   */
+  disabled?: boolean;
+  /**
+   * Focus management for the interactive content inside the card (Fluent UI's `focusMode`):
+   * `'off'` leaves focus alone; `'no-tab'` makes the card one tab stop that Enter or F2 enters,
+   * with Tab trapped inside until Escape; `'tab-exit'` is that without the trap; `'tab-only'`
+   * makes the card a tab stop beside its content, no key intercepted. A card with a mode other
+   * than `'off'` is `role="group"` (a `role` of yours replaces it) and a tab stop; give it a name
+   * (`aria-label` or `aria-labelledby`). Without effect on a selectable card in the default mode,
+   * which is a button, and on a disabled card: a development warning says so. Rendered as
+   * `data-focus-mode`.
+   * @default 'off'
+   */
+  focusMode?: CardFocusMode;
   /**
    * How a selectable card (`onSelect`) exposes its selection:
    * - `'card'` (default): the card itself is the control — `role="button"`, a tab stop, Enter and
@@ -244,10 +321,16 @@ type CardImplProps = CardOwnProps &
 
 // The Card root, documented on the exported `Card` const.
 const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardClassNames.root);
+
   const {
     as,
-    selected,
+    selected: selectedProp,
+    defaultSelected,
+    onSelectionChange,
     onSelect,
+    disabled = false,
+    focusMode = 'off',
     selectionControl = 'card',
     selectLabel,
     checkbox,
@@ -262,12 +345,31 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
     onKeyDown,
     onKeyUp,
     onBlur,
+    onFocusCapture,
     slotProps,
     ...rest
   } = props as CardImplProps;
 
   const Component: React.ElementType = as ?? 'div';
-  const selectable = onSelect !== undefined;
+  const selectable =
+    onSelect !== undefined || defaultSelected !== undefined || onSelectionChange !== undefined;
+  // The card keeps its own selected state when it is given a default or a change callback and no
+  // `selected`; a card with only `onSelect` has none (`selected` stays undefined: no aria-pressed).
+  const ownsSelection =
+    selectedProp === undefined &&
+    (defaultSelected !== undefined || onSelectionChange !== undefined);
+  // The event behind the change, held for `useControllable`'s change callback (called
+  // synchronously from the event path) and cleared after.
+  const selectionEventRef = React.useRef<React.SyntheticEvent<HTMLElement> | null>(null);
+  const [selectionState, setSelectionState] = useControllable<boolean>(
+    selectedProp,
+    defaultSelected ?? false,
+    (next) => {
+      const event = selectionEventRef.current;
+      if (event) onSelectionChange?.(next, { event });
+    },
+  );
+  const selected = ownsSelection || selectedProp !== undefined ? selectionState : undefined;
   const checkboxMode = selectable && selectionControl === 'checkbox';
   const cardMode = selectable && !checkboxMode;
   const hasFloatingAction = floatingAction !== undefined && slotRendersContent(floatingAction);
@@ -294,6 +396,23 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
   /** A native `<button>` already has the role, tab stop and keyboard activation. */
   const nativeButton = Component === 'button';
 
+  const groupActive = focusMode !== 'off' && !cardMode && !disabled;
+  const { groupProps } = useFocusableGroup({
+    tabBehavior: groupActive ? FOCUS_MODE_BEHAVIOR[focusMode] : 'unlimited',
+  });
+
+  /** Selects the card (or flips its checkbox) for an activation: the one place that does. */
+  const select = useEventCallback((event: React.SyntheticEvent<HTMLElement>) => {
+    if (disabled) return;
+    onSelect?.(event);
+    selectionEventRef.current = event;
+    try {
+      setSelectionState(!(selected ?? false));
+    } finally {
+      selectionEventRef.current = null;
+    }
+  });
+
   const titleId = useId('card-title');
   const rootRef = React.useRef<HTMLElement | null>(null);
   const mergedRef = useMergedRefs<HTMLElement>(ref, rootRef);
@@ -311,6 +430,12 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
       warnOnce(
         NESTED_INTERACTIVE_WARNING,
         'Card: a selectable card (`onSelect`) is a button and must not contain focusable elements (buttons, links, inputs). Use `selectionControl="checkbox"` for cards with interactive content.',
+      );
+    }
+    if (focusMode !== 'off' && cardMode && !disabled) {
+      warnOnce(
+        'Card:focus-mode-button',
+        'Card: `focusMode` has no effect on a selectable card in the default mode, which is a button and must not hold focusable content. Use `selectionControl="checkbox"` for a card with interactive content.',
       );
     }
     if (builtInCheckbox && !selectLabel && !root.ownerDocument.getElementById(titleId)) {
@@ -339,15 +464,19 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
     return armed;
   });
 
-  const handleClick = composeEventHandlers<React.MouseEvent<HTMLElement>>(onClick, (event) => {
-    if (!selectable || isForeignEvent(event, event.currentTarget)) return;
-    onSelect();
-  });
+  // A disabled card attaches none of its own handlers: no selection, and no `onClick`, `onKeyDown`
+  // or `onKeyUp` of the consumer either.
+  const handleClick = disabled
+    ? undefined
+    : composeEventHandlers<React.MouseEvent<HTMLElement>>(onClick, (event) => {
+        if (!selectable || isForeignEvent(event, event.currentTarget)) return;
+        select(event);
+      });
 
   /** Keyboard activation applies to a `role="button"` card (a native `<button>` has its own). */
-  const keyboardActivation = cardMode && !nativeButton;
+  const keyboardActivation = cardMode && !nativeButton && !disabled;
 
-  const handleKeyDown = composeEventHandlers<React.KeyboardEvent<HTMLElement>>(
+  const handleSelectKeyDown = composeEventHandlers<React.KeyboardEvent<HTMLElement>>(
     onKeyDown,
     (event) => {
       if (!keyboardActivation) return;
@@ -357,22 +486,35 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
       // held Enter does not toggle repeatedly.
       event.preventDefault();
       if (event.key === ' ') setSpaceArmed(true);
-      else if (!event.repeat) onSelect?.();
+      else if (!event.repeat) select(event);
     },
   );
+  // The focus group's keys (Enter, F2, Tab, Escape) come after the consumer's and the card's own.
+  const handleKeyDown = disabled
+    ? undefined
+    : groupActive
+      ? composeEventHandlers(handleSelectKeyDown, groupProps.onKeyDown)
+      : handleSelectKeyDown;
 
-  const handleKeyUp = composeEventHandlers<React.KeyboardEvent<HTMLElement>>(
-    onKeyUp,
-    (event) => {
-      if (!keyboardActivation || event.key !== ' ') return;
-      // Always consume the arm, also when the consumer prevented this keyup.
-      const armed = takeSpaceArmed();
-      if (!armed || event.defaultPrevented || isForeignEvent(event, event.currentTarget)) return;
-      event.preventDefault();
-      onSelect?.();
-    },
-    { checkDefaultPrevented: false },
-  );
+  const handleKeyUp = disabled
+    ? undefined
+    : composeEventHandlers<React.KeyboardEvent<HTMLElement>>(
+        onKeyUp,
+        (event) => {
+          if (!keyboardActivation || event.key !== ' ') return;
+          // Always consume the arm, also when the consumer prevented this keyup.
+          const armed = takeSpaceArmed();
+          if (!armed || event.defaultPrevented || isForeignEvent(event, event.currentTarget))
+            return;
+          event.preventDefault();
+          select(event);
+        },
+        { checkDefaultPrevented: false },
+      );
+
+  const handleFocusCapture = groupActive
+    ? composeEventHandlers(onFocusCapture, groupProps.onFocusCapture)
+    : onFocusCapture;
 
   // Moving focus away between Space keydown and keyup cancels the activation (native behavior).
   const handleBlur = composeEventHandlers<React.FocusEvent<HTMLElement>>(
@@ -388,11 +530,17 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
   if (cardMode) {
     if (nativeButton) {
       defaults.type = 'button';
+      if (disabled) defaults.disabled = true;
     } else {
       defaults.role = 'button';
-      defaults.tabIndex = 0;
+      // A disabled card leaves the tab order and reports aria-disabled, as a disabled button.
+      if (disabled) defaults['aria-disabled'] = true;
+      else defaults.tabIndex = 0;
     }
     if (selected !== undefined) defaults['aria-pressed'] = selected;
+  } else if (groupActive) {
+    defaults.role = 'group';
+    defaults.tabIndex = 0;
   }
 
   return (
@@ -404,6 +552,9 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
             {...rest}
             ref={mergedRef}
             data-selected={selected ? '' : undefined}
+            data-disabled={disabled ? '' : undefined}
+            data-focus-mode={focusMode}
+            data-focusable-group={groupActive ? '' : undefined}
             data-appearance={appearance}
             data-size={size}
             data-orientation={orientation}
@@ -420,22 +571,26 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
                   'wave:border-primary wave:bg-selected wave:text-selected-foreground wave:ring-1 wave:ring-inset wave:ring-primary',
                   forcedColors.selectedContainer,
                 ),
-              selectable && 'wave:cursor-pointer',
+              disabled && 'wave:cursor-not-allowed wave:opacity-50',
+              selectable && !disabled && 'wave:cursor-pointer',
               selectable && !selected && cardAppearanceClasses[appearance].interactive,
               cardMode && focusRing,
+              appClassName,
               className,
             )}
             onClick={handleClick}
             onKeyDown={handleKeyDown}
             onKeyUp={handleKeyUp}
             onBlur={handleBlur}
+            onFocusCapture={handleFocusCapture}
           >
             {builtInCheckbox && (
               <input
                 {...checkboxProps}
                 type="checkbox"
                 checked={selected ?? false}
-                onChange={composeEventHandlers(checkboxProps?.onChange, () => onSelect())}
+                disabled={disabled ? true : checkboxProps?.disabled}
+                onChange={composeEventHandlers(checkboxProps?.onChange, (event) => select(event))}
                 aria-label={checkboxProps?.['aria-label'] ?? selectLabel}
                 aria-labelledby={
                   (checkboxProps?.['aria-label'] ?? selectLabel)
@@ -462,7 +617,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
                 ),
               )}
             {selected && !checkboxMode && (
-              <CheckIcon size={12} {...checkmarkProps(slotProps?.checkmark)} />
+              <CheckIcon size={12} {...checkmarkProps(slotProps?.checkmark, disabled)} />
             )}
             {children}
           </Component>
@@ -571,6 +726,8 @@ type CardHeaderImplProps = CardHeaderOwnProps &
  * Flat export for React Server Components (`Card.Header` in client files).
  */
 export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardHeaderClassNames.root);
+
   const { as, title, subtitle, image, action, className, children, ref, slotProps, ...rest } =
     props as CardHeaderImplProps;
   const Component: React.ElementType = as ?? 'div';
@@ -628,6 +785,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
                 ? 'wave:grid-cols-[auto_1fr]'
                 : 'wave:grid-cols-[1fr_auto]',
           ),
+        appClassName,
         className,
       )}
       {...rest}
@@ -673,6 +831,8 @@ type CardSectionImplProps = React.HTMLAttributes<HTMLElement> & {
  * client files).
  */
 export const CardBody: PolymorphicComponent<'div', CardBodyOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardBodyClassNames.root);
+
   const { as, className, ref, ...rest } = props as CardSectionImplProps;
   const Component: React.ElementType = as ?? 'div';
   return (
@@ -681,6 +841,7 @@ export const CardBody: PolymorphicComponent<'div', CardBodyOwnProps> = (props) =
       className={wcn(
         cardBodyClassNames.root,
         'wave:p-[var(--wave-card-padding,1rem)] wave:pt-0',
+        appClassName,
         className,
       )}
       {...rest}
@@ -704,6 +865,8 @@ export type CardFooterProps<C extends React.ElementType = 'div'> = PolymorphicPr
  * files).
  */
 export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardFooterClassNames.root);
+
   const { as, className, ref, ...rest } = props as CardSectionImplProps;
   const Component: React.ElementType = as ?? 'div';
   return (
@@ -712,6 +875,7 @@ export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (prop
       className={wcn(
         cardFooterClassNames.root,
         'wave:flex wave:justify-end wave:gap-2 wave:p-[var(--wave-card-padding,1rem)] wave:pt-0',
+        appClassName,
         className,
       )}
       {...rest}

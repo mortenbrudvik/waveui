@@ -13,6 +13,7 @@ import type {
 } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useAppClassName } from '../../hooks/useAppClassName';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTargetConflictWarning } from '../../hooks/useResolvedTarget';
@@ -25,6 +26,7 @@ import {
   type TeachingPopoverLabels,
   type TeachingPopoverStep,
 } from './TeachingPopover.context';
+import type { PopoverAppearance } from './Popover.shared';
 import {
   TeachingPopoverSurface,
   TeachingPopoverTrigger,
@@ -96,6 +98,29 @@ export interface TeachingPopoverProps extends React.HTMLAttributes<HTMLDivElemen
    * @default 'horizontal'
    */
   footerLayout?: 'horizontal' | 'vertical';
+  /**
+   * The look of the surface: `neutral` (the page background with a border), `brand` (the brand
+   * fill) or `inverted` (a dark surface in the light theme). The text, the Close button, the step
+   * dots and the footer buttons follow it: Next (Done) turns into a neutral `secondary` button and
+   * Back into a transparent one in the surface's color, so both stay legible; a `primaryAction`
+   * or `secondaryAction` you give keeps the look you give it. Rendered as `data-appearance` on the
+   * surface. Fluent's `TeachingPopover` `appearance` (it has `brand` and `inverted`, and its
+   * popover looks like `brand` by default; WaveUI keeps its neutral surface by default).
+   * @default 'neutral'
+   */
+  appearance?: PopoverAppearance;
+  /**
+   * Traps focus in the popover while it is shown: Tab and Shift+Tab cycle between the Close
+   * button, the step buttons and anything else in the surface, toasts and popups opened from it
+   * included, and cannot reach the page behind it. Focus still moves to the surface when it
+   * shows, and Escape and the Close button still dismiss it; the page is not made `inert` and a
+   * press on it does not dismiss the popover. A popover that renders in place, without a target
+   * or Trigger, traps too. Without it the popover is non-modal and takes its place in the page's
+   * Tab order next to its target. Fluent's `trapFocus`, which is on by default there (WaveUI's
+   * default is off so a tour does not lock the page).
+   * @default false
+   */
+  trapFocus?: boolean;
   /** Controlled visibility of the teaching popover. */
   open?: boolean;
   /**
@@ -314,6 +339,8 @@ export const TeachingPopoverRoot = ({
   primaryAction: primaryActionProp,
   secondaryAction: secondaryActionProp,
   footerLayout = 'horizontal',
+  appearance = 'neutral',
+  trapFocus = false,
   open: openProp,
   defaultOpen,
   onOpenChange,
@@ -333,6 +360,7 @@ export const TeachingPopoverRoot = ({
   slotProps,
   ...rest
 }: TeachingPopoverProps) => {
+  const appClassName = useAppClassName(teachingPopoverClassNames.root);
   useTargetConflictWarning('TeachingPopover', targetProp, positioning?.target);
   const explicitTarget = (
     targetProp !== undefined ? targetProp : positioning?.target
@@ -511,6 +539,8 @@ export const TeachingPopoverRoot = ({
       primaryAction,
       secondaryAction,
       footerLayout,
+      appearance,
+      trapFocus,
       backLabel,
       nextLabel,
       doneLabel,
@@ -548,6 +578,8 @@ export const TeachingPopoverRoot = ({
       primaryAction,
       secondaryAction,
       footerLayout,
+      appearance,
+      trapFocus,
       backLabel,
       nextLabel,
       doneLabel,
@@ -574,6 +606,7 @@ export const TeachingPopoverRoot = ({
         <TeachingSurface
           context={context}
           rootClassName={teachingPopoverClassNames.root}
+          appClassName={appClassName}
           id={id}
           className={className}
           style={style}

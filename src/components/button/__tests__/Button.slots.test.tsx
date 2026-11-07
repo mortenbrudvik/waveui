@@ -24,6 +24,7 @@ describe('Button.slots', () => {
         'disabledFocusable',
         'icon',
         'iconPosition',
+        'shape',
         'size',
       ]);
       expect(BUTTON_OWN_PROP_KEYS.has('disabled')).toBe(false);

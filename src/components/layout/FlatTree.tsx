@@ -16,6 +16,7 @@ import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { FlatTreeContext, type FlatTreeContextValue, type FlatTreeRow } from './FlatTree.context';
 import { FlatTreeItem } from './FlatTree.item';
 import type { FlatTreeModel } from './useFlatTree';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { FlatTreeItemProps } from './FlatTree.item';
 
@@ -29,7 +30,8 @@ export interface FlatTreeProps extends Omit<
   /**
    * Renders only the items in view (and a few beyond), from `useVirtualWindow({ itemSize })`. The
    * tree is then the scrolling element: give it a bounded height (a class or a style). Every item
-   * is exactly `itemSize` pixels tall, so its content must fit in one row. Without it every visible
+   * is exactly `itemSize` pixels tall, so its content must fit in one row (the rows are not measured:
+   * a window that measures its rows lays the tree out from its estimate). Without it every visible
    * item is rendered.
    *
    * The tree element is then no tab stop of its own while an item is (`tabIndex` -1, as Firefox
@@ -251,6 +253,8 @@ const FlatTreeRoot = ({
   slotProps,
   ...rest
 }: FlatTreeProps) => {
+  const appClassName = useAppClassName(flatTreeClassNames.root);
+
   const modelMode = model.getTreeProps().selectionMode;
   const selectionMode = selectionModeProp ?? modelMode;
   const rows = model.visibleItems;
@@ -652,6 +656,7 @@ const FlatTreeRoot = ({
           'wave:text-body-1',
           // The window lays the rows out: the browser's scroll anchoring only fights it.
           windowed && 'wave:overflow-y-auto wave:[overflow-anchor:none]',
+          appClassName,
           className,
         )}
         {...rest}

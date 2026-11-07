@@ -6,10 +6,12 @@ import {
   Field,
   Tag,
   TagPicker,
+  useVirtualWindow,
   type ListboxItem,
   type TagPickerOption,
   type TagPickerProps,
 } from '../src';
+import { motionCases } from './_motion';
 
 const fruitOptions = [
   { value: 'apple', label: 'Apple' },
@@ -522,4 +524,93 @@ export const LocalizedLabels: Story = {
       <TagPicker {...args} />
     </div>
   ),
+};
+
+/** The Motion story's popup: it zooms in from 95% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `TagPicker motion`. By default the list fades in and slides 4px away from the field, on the side it opened on, over 200ms, and fades out and slides back over 100ms (the list stays in the popup while it exits, so its option ids stay valid; a list whose options changed as it closed leaves at once). `null` turns it off; a class string replaces it (here a zoom).
+ * The popup stays in place, `inert`, while it exits; focus is already back where it was. Under
+ * reduced motion every popup appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionPopups(args) {
+    return (
+      <div className="flex flex-wrap gap-4">
+        {motionCases(fadeAndZoom).map(({ label, motion }) => (
+          <TagPicker
+            key={label}
+            {...args}
+            aria-label={label}
+            motion={motion}
+            options={fruitOptions}
+            placeholder={label}
+          />
+        ))}
+      </div>
+    );
+  },
+};
+
+/**
+ * `noPopover`: a text field that adds tags of its own, with no list. Enter adds the typed text:
+ * the option whose label it equals, else, with `allowCreate`, a new tag (`onOptionCreate`).
+ */
+export const NoPopover: Story = {
+  args: {
+    'aria-label': 'Topics',
+    placeholder: 'Type a topic and press Enter',
+    noPopover: true,
+    allowCreate: true,
+    onOptionCreate: fn(),
+  },
+};
+
+/** `secondaryAction`: an action after the input, before the end buttons. */
+export const SecondaryAction: Story = {
+  render: (args) => <SecondaryActionExample {...args} />,
+};
+
+function SecondaryActionExample(args: TagPickerProps) {
+  const [value, setValue] = React.useState<string[]>(['apple']);
+  return (
+    <TagPicker
+      {...args}
+      value={value}
+      onValueChange={setValue}
+      secondaryAction={
+        <button
+          type="button"
+          className="rounded px-2 text-wave-caption-1 text-wave-primary"
+          onClick={() => setValue([])}
+        >
+          Clear all
+        </button>
+      }
+    />
+  );
+}
+
+/** An option entry with `disabled: true` stays in the list, dimmed, and cannot be added. */
+export const DisabledOptions: Story = {
+  args: {
+    options: fruitOptions.map((option) => ({ ...option, disabled: option.value === 'cherry' })),
+  },
+};
+
+const MANY_OPTIONS = Array.from({ length: 10_000 }, (_, i) => ({
+  value: `item-${i}`,
+  label: `Item ${i}`,
+}));
+
+function WindowedExample(args: TagPickerProps) {
+  const virtualWindow = useVirtualWindow({ itemSize: 32 });
+  return <TagPicker {...args} options={MANY_OPTIONS} virtualWindow={virtualWindow} />;
+}
+
+/** `virtualWindow`: 10,000 options, of which only the ones in view are mounted. */
+export const Windowed: Story = {
+  render: (args) => <WindowedExample {...args} />,
 };

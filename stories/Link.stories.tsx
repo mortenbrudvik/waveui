@@ -115,3 +115,39 @@ export const Appearances: Story = {
     </div>
   ),
 };
+
+/**
+ * `background` recolors the link for the surface it sits on: `brand` (`bg-wave-primary`) and
+ * `inverted` (`bg-wave-inverted`) give the text and the focus ring the colors of those surfaces.
+ */
+export const OnBrandAndInvertedBackgrounds: Story = {
+  argTypes: {
+    background: { control: false },
+  },
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      <p className="bg-wave-primary text-wave-primary-foreground p-4">
+        Brand surface:{' '}
+        <Link {...args} background="brand">
+          read the documentation
+        </Link>{' '}
+        or{' '}
+        <Link {...args} background="brand" appearance="standalone">
+          see pricing
+        </Link>
+        .
+      </p>
+      <p className="bg-wave-inverted text-wave-inverted-foreground p-4">
+        Inverted surface:{' '}
+        <Link {...args} background="inverted">
+          read the documentation
+        </Link>{' '}
+        or{' '}
+        <Link {...args} background="inverted" appearance="subtle">
+          see pricing
+        </Link>
+        .
+      </p>
+    </div>
+  ),
+};

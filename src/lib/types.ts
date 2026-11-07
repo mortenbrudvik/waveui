@@ -4,8 +4,14 @@ export type Size = 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large';
 /** Visual style variant controlling fill, border, and background treatment. */
 export type Appearance = 'primary' | 'outline' | 'subtle' | 'transparent';
 
-/** Visual style variant for Badge components. */
-export type BadgeAppearance = 'filled' | 'tint' | 'outline';
+/**
+ * Visual style variant for Badge components: a solid fill, a light tint, an outline, or `ghost`,
+ * the color as text alone, with no fill and no border.
+ */
+export type BadgeAppearance = 'filled' | 'tint' | 'outline' | 'ghost';
+
+/** Size of a Badge: Fluent's scale, where `tiny` is a 6px dot with no content. */
+export type BadgeSize = 'tiny' | Size;
 
 /** Semantic colors of Badge and CounterBadge. */
 export type BadgeColor =
@@ -16,7 +22,14 @@ export type Status = 'success' | 'warning' | 'error' | 'info';
 
 /** User presence status for Avatar and Persona components (Fluent's names). */
 export type PresenceStatus =
-  'available' | 'busy' | 'away' | 'offline' | 'do-not-disturb' | 'out-of-office';
+  | 'available'
+  | 'busy'
+  | 'away'
+  | 'offline'
+  | 'do-not-disturb'
+  | 'out-of-office'
+  | 'blocked'
+  | 'unknown';
 
 /** Typography scale variant mapping to Fluent UI type ramp tokens. */
 export type TypographyVariant =
@@ -125,10 +138,18 @@ export interface OpenChangeDetails<R extends string = string> {
 /**
  * Why a Dialog or Drawer asks to open or close: `trigger` (its Trigger part), `close` (a
  * `.Close` part), `close-button` (the built-in Close button), `escape`, `outside-press` (the
- * backdrop). The last two are `DismissReason` values of the dismiss-layer stack.
+ * backdrop, or a press on the page with `lightDismiss`), `focus-outside` (focus leaving a
+ * non-modal surface with `lightDismiss`) and `parent-closed` (the Dialog or Drawer it was opened
+ * from closed). The last four are `DismissReason` values of the dismiss-layer stack.
  */
 export type ModalOpenChangeReason =
-  'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press';
+  | 'trigger'
+  | 'close'
+  | 'close-button'
+  | 'escape'
+  | 'outside-press'
+  | 'focus-outside'
+  | 'parent-closed';
 
 /**
  * How a Dialog or Drawer relates to the page (Fluent's `modalType`). `modal`: a backdrop dims the

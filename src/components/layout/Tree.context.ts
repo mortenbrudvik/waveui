@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { reportMissingContext } from '../../lib/dev';
-import type { MotionSlot, SelectionMode } from '../../lib/types';
+import type { CoreSize, MotionSlot, SelectionMode } from '../../lib/types';
 import type { TreeNode } from './Tree.selection';
 
 /** What a top-level item hands to the root for the tree order of a toggle. */
@@ -17,10 +17,48 @@ export interface TreeSelectionEntry {
  */
 export const TreeCheckForcedContext = React.createContext(false);
 
+/** Size of a Tree's rows: `small` rows are 24px high, `medium` (the default) 28px. */
+export type TreeSize = Extract<CoreSize, 'small' | 'medium'>;
+
+/**
+ * The look of a Tree's rows: `subtle` fills a hovered or selected row with the subtle colors,
+ * `subtle-alpha` with translucent ones (for a tree over an image or a tint), `transparent` draws
+ * no fill (a selected row keeps its bold text and, in forced colors, its outline).
+ */
+export type TreeAppearance = 'subtle' | 'subtle-alpha' | 'transparent';
+
+/** The second argument of an open-change callback: the item, its new state and the event. */
+export interface TreeOpenChangeDetails {
+  /**
+   * The item that was expanded or collapsed. For the `*` key, which expands every collapsed
+   * sibling of the focused item, the focused item.
+   */
+  value: string;
+  /** Whether that item is open after the change (`true` for the `*` key). */
+  open: boolean;
+  /** The click or key press that asked for the change. */
+  event: Event;
+}
+
+/**
+ * What an item with an `open` or `onOpenChange` of its own tells the tree, so a key that expands
+ * several items at once (`*`) reaches it too.
+ */
+export interface TreeItemOpenControl {
+  /** The item's `open` is set: the tree's expanded list does not decide it. */
+  owns: boolean;
+  /** Asks the item to open (calls its `onOpenChange`). */
+  open: (event: Event) => void;
+}
+
 export interface TreeContextValue {
   expanded: ReadonlySet<string>;
-  toggle: (value: string) => void;
-  expand: (values: readonly string[]) => void;
+  /** Flips an item in the tree's expanded list; `event` becomes `details.event`. */
+  toggle: (value: string, event: Event) => void;
+  /** Expands items with one change; `origin` is the item of the key (`details.value`). */
+  expand: (values: readonly string[], event: Event, origin: string) => void;
+  /** Registers an item that has its own `open` or `onOpenChange`; returns the unregistration. */
+  registerOpenControl: (value: string, control: TreeItemOpenControl) => () => void;
   activate: (value: string) => void;
   selected: string | null | undefined;
   current: string | null | undefined;
@@ -49,6 +87,21 @@ export interface TreeContextValue {
   registerTopLevel: (entry: React.RefObject<TreeSelectionEntry | null>) => () => void;
   /** The Tree's `motion`: the collapse of every child group (`undefined` the default). */
   motion: MotionSlot | null | undefined;
+  /** Checks do not cascade (`independentChecks`). */
+  independentChecks: boolean;
+  /**
+   * Checks the focused item and the visible items between it and the anchor (the item checked
+   * last), as Shift+Space does; the anchor is the item itself without one.
+   */
+  checkRange: (value: string, event: Event) => void;
+  /** Checks every item (Ctrl+A). */
+  checkAll: (value: string, event: Event) => void;
+  /** The treeitems that are visible now, in tree order. */
+  getVisibleItems: () => HTMLElement[];
+  /** The rows' size. */
+  size: TreeSize;
+  /** The rows' look. */
+  appearance: TreeAppearance;
 }
 
 export const TreeContext = React.createContext<TreeContextValue | null>(null);
@@ -115,6 +168,7 @@ const INERT_CONTEXT: TreeContextValue = {
   expanded: new Set(),
   toggle: () => {},
   expand: () => {},
+  registerOpenControl: () => () => {},
   activate: () => {},
   selected: undefined,
   current: undefined,
@@ -129,6 +183,12 @@ const INERT_CONTEXT: TreeContextValue = {
   toggleChecked: () => {},
   registerTopLevel: () => () => {},
   motion: undefined,
+  independentChecks: false,
+  checkRange: () => {},
+  checkAll: () => {},
+  getVisibleItems: () => [],
+  size: 'medium',
+  appearance: 'subtle',
 };
 
 /** C-CONTEXT: throws in development, logs once and returns an inert value in production. */

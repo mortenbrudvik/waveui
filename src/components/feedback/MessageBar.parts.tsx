@@ -4,6 +4,7 @@ import { messageBarActionsClassNames, messageBarTitleClassNames } from '../../li
 import { wcn } from '../../lib/cn';
 import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the MessageBarTitle sub-component. */
 export interface MessageBarTitleProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -67,6 +68,8 @@ export const MessageBarTitle = ({
   ref,
   ...rest
 }: MessageBarTitleProps) => {
+  const appClassName = useAppClassName(messageBarTitleClassNames.root);
+
   const part = useMessageBarPart('MessageBar.Title');
   const placed = part.placement === 'title';
   const problem: 'unscanned' | 'multiple' | null = placed
@@ -93,7 +96,7 @@ export const MessageBarTitle = ({
       {...rest}
       ref={ref}
       id={(placed ? part.titleId : id) || undefined}
-      className={wcn(messageBarTitleClassNames.root, 'wave:font-semibold', className)}
+      className={wcn(messageBarTitleClassNames.root, 'wave:font-semibold', appClassName, className)}
     >
       <MessageBarPartContext.Provider value={CONTENT_PLACEMENT}>
         {materialiseSlotContent(children)}
@@ -118,6 +121,8 @@ export const MessageBarActions = ({
   ref,
   ...rest
 }: MessageBarActionsProps) => {
+  const appClassName = useAppClassName(messageBarActionsClassNames.root);
+
   const part = useMessageBarPart('MessageBar.Actions');
   const placed = part.placement === 'actions';
   React.useEffect(() => {
@@ -136,6 +141,7 @@ export const MessageBarActions = ({
       className={wcn(
         messageBarActionsClassNames.root,
         'wave:flex wave:shrink-0 wave:flex-wrap wave:items-center wave:gap-2',
+        appClassName,
         className,
       )}
     >

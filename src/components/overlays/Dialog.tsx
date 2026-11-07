@@ -49,11 +49,14 @@ import {
 } from './Dialog.shared';
 import { ModalBackdrop, ModalCloseButton } from './Dialog.slots';
 import { getTabbableThrough, usePopoverTabOrder } from './Popover.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Why a {@link Dialog} asks to open or close: `trigger` (`Dialog.Trigger`), `close`
  * (`Dialog.Close`), `close-button` (the built-in Close button), `escape`, `outside-press` (the
- * backdrop). The shared `ModalOpenChangeReason`.
+ * backdrop, or a press on the page with `lightDismiss`), `focus-outside` (focus leaving a
+ * non-modal dialog with `lightDismiss`) and `parent-closed` (the Dialog or Drawer it was opened
+ * from closed). The shared `ModalOpenChangeReason`.
  */
 export type DialogOpenChangeReason = ModalOpenChangeReason;
 
@@ -72,6 +75,12 @@ export type DialogModalType = ModalType;
  */
 export type DialogSize = SurfaceSize;
 
+/**
+ * The element of a dialog title (`Dialog.Title`'s `as`, `Dialog.Content`'s `titleAs`): a heading
+ * of any level, or a `div` or `span` for a title that is no heading. Fluent's `DialogTitle` `as`.
+ */
+export type DialogTitleElement = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'div' | 'span';
+
 /** Properties for the Dialog component. */
 export interface DialogProps {
   /**
@@ -87,10 +96,12 @@ export interface DialogProps {
   defaultOpen?: boolean;
   /**
    * Called with the new open state when it changes. `details.reason` tells how — `trigger`,
-   * `close` (a `.Close` part), `close-button` (the built-in Close button), `escape` or
-   * `outside-press` (the backdrop) — so a controlled dialog can refuse only some ways of closing
-   * (for example keep a form with unsaved changes open on `outside-press`); `details.event` is the
-   * DOM event behind the request. WaveUI always passes `details`.
+   * `close` (a `.Close` part), `close-button` (the built-in Close button), `escape`,
+   * `outside-press` (the backdrop, or the page with `lightDismiss`), `focus-outside` (focus
+   * leaving a non-modal dialog with `lightDismiss`) or `parent-closed` (the Dialog or Drawer it
+   * was opened from closed) — so a controlled dialog can refuse only some ways of closing (for
+   * example keep a form with unsaved changes open on `outside-press`); `details.event` is the DOM
+   * event behind the request. WaveUI always passes `details`.
    *
    * Fires only when the value changes; a controlled dialog stays as it is until the parent updates
    * `open`.
@@ -112,6 +123,16 @@ export interface DialogProps {
    * @default 'modal'
    */
   modalType?: DialogModalType;
+  /**
+   * Light dismiss of a `non-modal` dialog: a press on the page and focus moving out of the dialog
+   * (Tab leaves it for the page, a click elsewhere) close it, as they close a popover, with the
+   * reasons `outside-press` and `focus-outside` in `onOpenChange`. The element that opened it
+   * counts as inside, so its trigger still toggles it. Without it a non-modal dialog closes only on
+   * Escape from inside, the Close button and `Dialog.Close`. Ignored with `modal` and `alert`,
+   * which keep their own rules. A WaveUI addition.
+   * @default false
+   */
+  lightDismiss?: boolean;
   /**
    * Where focus goes when the dialog closes, if it can take focus. Otherwise focus returns to the
    * element that had focus when the dialog opened, then to the trigger, then to an element next to
@@ -142,6 +163,25 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
    * (`''`, `[]`, `true`) counts as none.
    */
   title?: React.ReactNode;
+  /**
+   * The element of the `title` prop's heading: `h1` to `h6`, or a `div` or `span` for a title that
+   * is no heading (it still names the dialog). Use it so the heading level fits the page's outline
+   * (`Dialog.Title` has `as` for the title part). Fluent's `DialogTitle` `as`, for the `title`
+   * prop form.
+   * @default 'h2'
+   */
+  titleAs?: DialogTitleElement;
+  /**
+   * Where the surface (and its backdrop) is rendered instead of the `WaveProvider`'s portal
+   * container or `document.body`: an element that is in the document when the dialog opens (hold
+   * it in state through a callback ref). The surface still covers the
+   * viewport (`position: fixed`) and takes the provider's theme, direction and tokens; the rest of
+   * the page, the node's siblings included, is made `inert` as usual. Without a node (`null`,
+   * `undefined`) the default applies. Fluent's `DialogSurface` `mountNode`. A nested
+   * `WaveProvider` with its own `portalContainer` does the same for everything inside it.
+   * @default the portal container, else `document.body`
+   */
+  mountNode?: HTMLElement | null;
   /**
    * Width cap: 400px (`small`), 600px (`medium`) or 940px (`large`), never wider than the viewport
    * (a 1rem margin). `full` covers the viewport: no margin, radius or border, the viewport's
@@ -180,7 +220,8 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
    * (see `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
    * default off. The surface's motion decides when the dialog unmounts or hides: a replacement
    * longer than the surface's exit is cut off there. Ignored with `modalType="non-modal"` (a
-   * development warning says so). Fluent's `DialogSurface` `backdropMotion`.
+   * development warning says so, except for `null`, which asks for no motion anyway). Fluent's
+   * `DialogSurface` `backdropMotion`.
    * @default the fade above
    */
   backdropMotion?: MotionSlot | null;
@@ -251,6 +292,35 @@ export interface DialogContentProps extends Omit<React.HTMLAttributes<HTMLDivEle
 export interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Footer content, typically action buttons (wrap closing buttons in `Dialog.Close`). */
   children: React.ReactNode;
+  /**
+   * Which edge the actions sit at: the inline `end` (a primary action last) or the inline
+   * `start`. Rendered as `data-position`. Fluent's `DialogActions` `position`.
+   * @default 'end'
+   */
+  position?: 'start' | 'end';
+  /**
+   * A group of actions at the inline start of the footer (a destructive or secondary action,
+   * "Reset", "Learn more") while `children` stay at the end: content, or a slot object (its props
+   * go to the group's `<div>`, stable class `wave-dialog-footer__start-actions`). It sits before
+   * the children in the DOM and Tab order. Renders nothing when empty. Fluent has the same layout
+   * with two `DialogActions` of `position="start"` and `"end"`.
+   */
+  startActions?: Slot<'div'>;
+  /**
+   * Makes every action (each direct child of the footer, and the `startActions` group) share the
+   * footer's width equally instead of keeping its natural width. Rendered as `data-fluid` while
+   * set. Fluent's `DialogActions` `fluid`.
+   * @default false
+   */
+  fluid?: boolean;
+  /**
+   * Stacks the actions in a column, each as wide as the footer, on a viewport at most 480px wide
+   * (a phone), as Fluent's `DialogActions` does by default; wider viewports keep the row.
+   * Rendered as `data-stack-on-narrow` while set. WaveUI leaves it off by default, so existing
+   * footers keep their layout.
+   * @default false
+   */
+  stackOnNarrow?: boolean;
   /** Ref to the footer element. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -259,6 +329,13 @@ export interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> 
 export interface DialogTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
   /** The title; any content. */
   children: React.ReactNode;
+  /**
+   * The element of the title: `h1` to `h6`, or a `div` or `span` for a title that is no heading
+   * (it still names the dialog). Pick the level that fits the page's outline. Fluent's
+   * `DialogTitle` `as`.
+   * @default 'h2'
+   */
+  as?: DialogTitleElement;
   /**
    * Header buttons for this title, placed before the built-in Close button in the dialog's top end
    * corner (after `Dialog.Content`'s `titleAction`), not inside the heading, so they never become
@@ -329,6 +406,8 @@ interface DialogContextValue {
   requestOpen: ModalRequestOpen;
   /** The resolved `modalType`. */
   modalType: DialogModalType;
+  /** Whether a non-modal dialog closes on a press or on focus outside it. */
+  lightDismiss: boolean;
   /** The trigger element (`attach`) and the focus-restore target resolved from it (`focusRef`). */
   trigger: ModalTrigger;
   finalFocusRef: React.RefObject<HTMLElement | null> | undefined;
@@ -347,6 +426,7 @@ const inertDialogContext: DialogContextValue = {
   open: false,
   requestOpen: () => {},
   modalType: 'modal',
+  lightDismiss: false,
   trigger: inertModalTrigger,
   finalFocusRef: undefined,
   unmountOnClose: true,
@@ -366,6 +446,7 @@ const DialogRoot = ({
   defaultOpen,
   onOpenChange,
   modalType = 'modal',
+  lightDismiss = false,
   finalFocusRef,
   unmountOnClose = true,
   children,
@@ -391,6 +472,7 @@ const DialogRoot = ({
       open: isOpen,
       requestOpen,
       modalType,
+      lightDismiss,
       trigger,
       finalFocusRef,
       unmountOnClose,
@@ -401,6 +483,7 @@ const DialogRoot = ({
       isOpen,
       requestOpen,
       modalType,
+      lightDismiss,
       trigger,
       finalFocusRef,
       unmountOnClose,
@@ -533,6 +616,8 @@ function useTitleActionsWidth(area: HTMLElement | null): number | null {
  */
 export const DialogContent = ({
   title,
+  titleAs: TitleElement = 'h2',
+  mountNode,
   size = 'medium',
   backdrop,
   motion,
@@ -549,10 +634,14 @@ export const DialogContent = ({
   slotProps,
   ...rest
 }: DialogContentProps) => {
+  const appDialogContent = useAppClassName(dialogContentClassNames.root);
+  const appDialogTitle = useAppClassName(dialogTitleClassNames.root);
+
   const {
     open,
     requestOpen,
     modalType,
+    lightDismiss,
     trigger,
     finalFocusRef,
     unmountOnClose,
@@ -596,22 +685,31 @@ export const DialogContent = ({
 
   // An alert dialog needs an answer: a backdrop press does not close it (Escape still does;
   // useModalLayer registers its layer without outside presses).
+  const nonModal = modalType === 'non-modal';
+  const lightDismissing = nonModal && lightDismiss;
   const backdropPress = useBackdropPress(surfaceRef, modalType !== 'alert');
-  const onDismiss = useModalDismiss(requestOpen, 'Dialog', backdropPress.afterOutsidePress);
+  const onDismiss = useModalDismiss(
+    requestOpen,
+    'Dialog',
+    backdropPress.afterOutsidePress,
+    lightDismissing,
+  );
+  // A non-modal dialog keeps its place in the page's keyboard order right after its opener. The
+  // opener is captured whenever the dialog opens, so a modal dialog that turns non-modal while open
+  // (focus inside it by then) still knows it.
+  const opener = useModalOpener(open, trigger, surface);
   const layer = useModalLayer({
     open,
     modalType,
     onDismiss,
-    refs: [surfaceRef],
+    // With light dismiss the opener is part of the layer: a press on it is no outside press, so
+    // its trigger toggles the dialog instead of closing it and reopening it.
+    refs: lightDismissing ? [surfaceRef, opener] : [surfaceRef],
     container: surface,
     triggerRef: trigger.focusRef,
     finalFocusRef,
+    lightDismiss: lightDismissing,
   });
-  // A non-modal dialog keeps its place in the page's keyboard order right after its opener. The
-  // opener is captured whenever the dialog opens, so a modal dialog that turns non-modal while open
-  // (focus inside it by then) still knows it.
-  const nonModal = modalType === 'non-modal';
-  const opener = useModalOpener(open, trigger, surface);
   const onTabOrderKeyDown = usePopoverTabOrder({
     enabled: open && nonModal,
     surface,
@@ -626,7 +724,7 @@ export const DialogContent = ({
   const backdropIgnored =
     nonModal &&
     ((backdrop !== undefined && backdrop !== null && typeof backdrop !== 'boolean') ||
-      backdropMotion !== undefined);
+      (backdropMotion !== undefined && backdropMotion !== null));
   React.useEffect(() => {
     if (backdropIgnored) warnOnce(BACKDROP_IGNORED_WARNING_KEY, BACKDROP_IGNORED_WARNING);
   }, [backdropIgnored]);
@@ -674,7 +772,7 @@ export const DialogContent = ({
       : ({ '--wave-dialog-title-end-padding': titleEndPadding, ...style } as React.CSSProperties);
 
   return (
-    <Portal ref={portalRef} layerId={layer.layerId}>
+    <Portal ref={portalRef} layerId={layer.layerId} container={mountNode}>
       {/* Each top-level element carries the presence attributes (D7, D103): hidden and inert while
           kept closed, so a closed dialog leaves no backdrop over the page. */}
       {!nonModal && (
@@ -720,20 +818,22 @@ export const DialogContent = ({
             'wave:pointer-events-auto wave:relative wave:m-4 wave:flex wave:min-w-0 wave:max-h-[calc(100dvh-2rem)] wave:w-full wave:flex-col wave:rounded-lg wave:border wave:border-border wave:bg-background wave:p-6 wave:text-foreground wave:shadow-64',
             sizeClasses[size],
             surfaceMotion,
+            appDialogContent,
             className,
           )}
         >
           <ModalSurfaceContext.Provider value={surfaceContext}>
             {hasTitle && (
-              <h2
+              <TitleElement
                 id={propTitleId}
                 className={wcn(
                   dialogTitleClassNames.root,
                   'wave:pe-[var(--wave-dialog-title-end-padding,2rem)] wave:text-subtitle-1 wave:font-semibold',
+                  appDialogTitle,
                 )}
               >
                 {title}
-              </h2>
+              </TitleElement>
             )}
             <div
               {...mergeSlotProps(slotProps?.titleActions, {
@@ -801,28 +901,32 @@ DialogContent.displayName = 'DialogContent';
  */
 export const DialogTitle = ({
   id,
+  as: Element = 'h2',
   action,
   className,
   children,
   ref,
   ...rest
 }: DialogTitleProps) => {
+  const appClassName = useAppClassName(dialogTitleClassNames.root);
+
   const { id: titleId, ref: titleRef } = useModalTitle('Dialog.Title', 'Dialog.Content', id, ref);
   // `undefined` outside Dialog.Content (a Drawer), `null` until the content's outlet is attached.
   const outlet = React.useContext(ModalSurfaceContext)?.titleActionsOutlet;
   const heading = (
-    <h2
+    <Element
       {...rest}
       id={titleId}
       ref={titleRef}
       className={wcn(
         dialogTitleClassNames.root,
         'wave:pe-[var(--wave-dialog-title-end-padding,2rem)] wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
+        appClassName,
         className,
       )}
     >
       {children}
-    </h2>
+    </Element>
   );
   if (!slotRendersContent(action)) return heading;
   const actionElement = renderSlot(
@@ -863,8 +967,24 @@ const footerRowClasses = 'wave:mt-6 wave:flex wave:justify-end wave:gap-2';
  * it does not stick: it is an action row at the end of the content. Render one `Dialog.Footer` per
  * `Dialog.Content`: with two at once, the body reserves the height of the one measured last, and
  * unmounting either clears it until the other resizes (swapping one footer for another is fine).
+ *
+ * The actions sit at the inline end; `position="start"` moves them to the start, `startActions`
+ * adds a group at the start next to the children at the end, `fluid` makes every action share the
+ * width and `stackOnNarrow` stacks them in a column on a viewport at most 480px wide. It renders
+ * `data-position` and, while they are set, `data-fluid` and `data-stack-on-narrow`.
  */
-export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooterProps) => {
+export const DialogFooter = ({
+  children,
+  position = 'end',
+  startActions,
+  fluid = false,
+  stackOnNarrow = false,
+  className,
+  ref,
+  ...rest
+}: DialogFooterProps) => {
+  const appClassName = useAppClassName(dialogFooterClassNames.root);
+
   const surfaceContext = React.useContext(ModalSurfaceContext);
   const outsideContent = surfaceContext === null;
   const setFooterHeight = surfaceContext?.setFooterHeight;
@@ -899,14 +1019,29 @@ export const DialogFooter = ({ children, className, ref, ...rest }: DialogFooter
   return (
     <div
       ref={mergedRef}
+      data-position={position}
+      data-fluid={fluid ? '' : undefined}
+      data-stack-on-narrow={stackOnNarrow ? '' : undefined}
       {...rest}
       // Sticky only where the surface reserves the footer's height (Dialog.Content).
       className={wcn(
         dialogFooterClassNames.root,
         setFooterHeight ? stickyFooterClasses : footerRowClasses,
+        position === 'start' && 'wave:justify-start',
+        fluid && 'wave:*:flex-1',
+        stackOnNarrow && 'wave:max-[480px]:flex-col wave:max-[480px]:*:w-full',
+        appClassName,
         className,
       )}
     >
+      {slotRendersContent(startActions)
+        ? renderSlot(
+            startActions,
+            'div',
+            // The auto end margin keeps the group at the start while the actions stay at the end.
+            wcn(dialogFooterClassNames.startActions, 'wave:flex wave:gap-2 wave:me-auto'),
+          )
+        : null}
       {children}
     </div>
   );

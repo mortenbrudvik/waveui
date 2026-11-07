@@ -158,12 +158,12 @@ export const SLOT_PROPS_KEYS = {
   navDrawerBodyClassNames: ['list'],
   navDrawerFooterClassNames: ['list'],
   popoverContentClassNames: ['beak', 'title'],
-  menuItemClassNames: ['content', 'shortcut', 'submenuIndicator'],
-  menuItemCheckboxClassNames: ['content', 'shortcut'],
-  menuItemRadioClassNames: ['content', 'shortcut'],
-  menuItemSwitchClassNames: ['content', 'shortcut', 'track', 'thumb'],
-  menuItemLinkClassNames: ['content', 'shortcut'],
-  tooltipClassNames: ['content'],
+  menuItemClassNames: ['content', 'shortcut', 'subText', 'submenuIndicator'],
+  menuItemCheckboxClassNames: ['content', 'shortcut', 'subText'],
+  menuItemRadioClassNames: ['content', 'shortcut', 'subText'],
+  menuItemSwitchClassNames: ['content', 'shortcut', 'subText', 'track', 'thumb'],
+  menuItemLinkClassNames: ['content', 'shortcut', 'subText'],
+  tooltipClassNames: ['content', 'beak'],
   teachingPopoverClassNames: ['beak', 'closeButton', 'dot', 'backButton', 'nextButton'],
   teachingPopoverCarouselNavClassNames: ['button', 'indicator'],
   infoButtonClassNames: ['info', 'beak'],
@@ -265,6 +265,7 @@ export const SLOT_PROPS_ROOT_OWNERS = [
 /** The parts that a named slot prop already fills (R2); see the module's JSDoc for the rule. */
 export const NAMED_SLOT_PARTS: SlotPartLists = {
   buttonClassNames: ['icon'],
+  badgeClassNames: ['icon'],
   compoundButtonClassNames: ['icon'],
   toggleButtonClassNames: ['icon'],
   // `primaryActionButtonProps` fills `primaryActionButton`; `menuButtonProps` fills `menuButton`.
@@ -293,8 +294,8 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   inputClassNames: ['contentBefore', 'contentAfter', 'errorMessage'],
   // `errorMessageProps` fills `errorMessage`.
   textareaClassNames: ['errorMessage'],
-  // `errorMessageProps` fills `errorMessage`.
-  selectClassNames: ['errorMessage'],
+  // `errorMessageProps` fills `errorMessage`; `icon` fills `icon`.
+  selectClassNames: ['errorMessage', 'icon'],
   fieldClassNames: ['validationMessageIcon'],
   // `dismiss` fills `dismissIcon`.
   searchBoxClassNames: ['contentBefore', 'contentAfter', 'dismissIcon'],
@@ -303,7 +304,8 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   listboxSurfaceClassNames: ['list'],
   comboboxClassNames: ['expandIcon'],
   dropdownClassNames: ['expandIcon'],
-  tagPickerClassNames: ['expandIcon'],
+  // `secondaryAction` (the root's and TagPicker.Control's) fills `secondaryAction`.
+  tagPickerClassNames: ['expandIcon', 'secondaryAction'],
   tagPickerOptionClassNames: ['media', 'secondaryContent'],
   timePickerClassNames: ['expandIcon'],
   colorSwatchClassNames: ['icon'],
@@ -318,6 +320,8 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   cardHeaderClassNames: ['image', 'action'],
   cardPreviewClassNames: ['logo'],
   tabListTabClassNames: ['icon'],
+  // `expandIcon` is also a named slot of the Trigger; `slotProps.expandIcon` stays (semver).
+  accordionTriggerClassNames: ['icon'],
   treeItemClassNames: ['expandIcon', 'icon', 'iconAfter'],
   carouselItemClassNames: ['thumbnail'],
   breadcrumbClassNames: ['divider'],
@@ -336,6 +340,7 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   stepperStepClassNames: ['icon'],
   dialogContentClassNames: ['backdrop', 'titleAction', 'closeButton'],
   dialogTitleClassNames: ['action'],
+  dialogFooterClassNames: ['startActions'],
   drawerClassNames: ['backdrop', 'titleAction', 'closeButton'],
   drawerHeaderTitleClassNames: ['action'],
   // `primaryAction` fills `primaryButton`; `secondaryAction` fills `secondaryButton`.
@@ -353,6 +358,12 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
 
 /** The parts that get no `slotProps` key, each with its reason (R3, R4). */
 export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
+  {
+    component: 'selectClassNames',
+    key: 'wrapper',
+    reason:
+      "the `<span>` that Select draws around the select and its `icon` only while there is an icon: layout for the icon's position, while the `<select>` keeps `ref`, `className` and the props",
+  },
   {
     component: 'avatarGroupClassNames',
     key: 'overflowButton',
@@ -378,6 +389,12 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
       "a motion element: the one item of a toast's container, clipped while the toast moves; the toast inside takes its own props",
   },
   {
+    component: 'toasterClassNames',
+    key: 'stack',
+    reason:
+      "a layout element: stacks the toasts of one position other than the Toaster's inside its region; each toast in it takes the `toast` part",
+  },
+  {
     component: 'listboxClassNames',
     key: 'spacer',
     reason:
@@ -391,6 +408,18 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
   },
   {
     component: 'dropdownClassNames',
+    key: 'spacer',
+    reason:
+      'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
+  },
+  {
+    component: 'timePickerClassNames',
+    key: 'spacer',
+    reason:
+      'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
+  },
+  {
+    component: 'tagPickerClassNames',
     key: 'spacer',
     reason:
       'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
@@ -492,6 +521,12 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
     key: 'footer',
     reason:
       'the root of TeachingPopover.Footer or TeachingPopover.CarouselFooter, which take their props directly in the children form (R3)',
+  },
+  {
+    component: 'tableClassNames',
+    key: 'spacer',
+    reason:
+      'a virtual spacer row: stands in for the body rows a windowed Table does not render, sized by the window',
   },
   {
     component: 'dataGridClassNames',

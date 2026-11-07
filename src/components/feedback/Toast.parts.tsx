@@ -13,7 +13,8 @@ import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTriggerElement } from '../../hooks/useTriggerElement';
-import { ToastUnscannedContext, useToastContext } from './Toast.context';
+import { ToastAppearanceContext, ToastUnscannedContext, useToastContext } from './Toast.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Development warning (once, from an effect) for a part that renders inside the body a Toast made
@@ -80,6 +81,8 @@ export const ToastTitle = ({
   ref,
   ...rest
 }: ToastTitleProps) => {
+  const appClassName = useAppClassName(toastTitleClassNames.root);
+
   const { titleId, registerPart } = useToastContext('Toast.Title');
   useUnscannedWarning('Title');
   const rowRef = React.useRef<HTMLDivElement>(null);
@@ -87,9 +90,11 @@ export const ToastTitle = ({
   const mergedRef = useMergedRefs(ref, rowRef);
   // The Toaster reads the label through this ref: a part's ref goes beside it.
   const labelRefs = useMergedRefs(labelRef, slotProps?.label?.ref);
+  const inverted = React.useContext(ToastAppearanceContext) === 'inverted';
   const labelClassName = wcn(
     toastTitleClassNames.label,
-    'wave:min-w-0 wave:flex-1 wave:text-body-2 wave:font-semibold wave:text-foreground',
+    'wave:min-w-0 wave:flex-1 wave:text-body-2 wave:font-semibold',
+    inverted ? 'wave:text-inverted-foreground' : 'wave:text-foreground',
   );
   React.useLayoutEffect(() => {
     if (titleId === undefined) return undefined;
@@ -104,7 +109,12 @@ export const ToastTitle = ({
     <div
       ref={mergedRef}
       {...rest}
-      className={wcn(toastTitleClassNames.root, 'wave:flex wave:items-start wave:gap-2', className)}
+      className={wcn(
+        toastTitleClassNames.root,
+        'wave:flex wave:items-start wave:gap-2',
+        appClassName,
+        className,
+      )}
     >
       <span
         id={titleId}
@@ -167,8 +177,11 @@ export const ToastBody = ({
   ref,
   ...rest
 }: ToastBodyProps) => {
+  const appClassName = useAppClassName(toastBodyClassNames.root);
+
   const { registerPart } = useToastContext('Toast.Body');
   useUnscannedWarning('Body');
+  const inverted = React.useContext(ToastAppearanceContext) === 'inverted';
   const generatedId = useId('wave-toast-body');
   const id = idProp ?? generatedId;
   const bodyRef = React.useRef<HTMLDivElement>(null);
@@ -181,7 +194,8 @@ export const ToastBody = ({
   if (slotRendersContent(subtitle)) {
     const subtitleClassName = wcn(
       toastBodyClassNames.subtitle,
-      'wave:mt-1 wave:text-caption-1 wave:text-muted-foreground',
+      'wave:mt-1 wave:text-caption-1',
+      inverted ? 'wave:text-inverted-foreground/80' : 'wave:text-muted-foreground',
     );
     subtitleLine = (
       <div
@@ -203,7 +217,9 @@ export const ToastBody = ({
       id={id}
       className={wcn(
         toastBodyClassNames.root,
-        'wave:mt-0.5 wave:text-body-1 wave:text-muted-foreground',
+        'wave:mt-0.5 wave:text-body-1',
+        inverted ? 'wave:text-inverted-foreground/80' : 'wave:text-muted-foreground',
+        appClassName,
         className,
       )}
     >
@@ -226,6 +242,8 @@ export interface ToastFooterProps extends React.HTMLAttributes<HTMLDivElement> {
  * Also exported as `ToastFooter` (import the flat name from React Server Components).
  */
 export const ToastFooter = ({ className, ref, ...rest }: ToastFooterProps) => {
+  const appClassName = useAppClassName(toastFooterClassNames.root);
+
   const { registerPart } = useToastContext('Toast.Footer');
   useUnscannedWarning('Footer');
   const footerRef = React.useRef<HTMLDivElement>(null);
@@ -241,6 +259,7 @@ export const ToastFooter = ({ className, ref, ...rest }: ToastFooterProps) => {
       className={wcn(
         toastFooterClassNames.root,
         'wave:mt-2 wave:flex wave:flex-wrap wave:gap-2',
+        appClassName,
         className,
       )}
     />

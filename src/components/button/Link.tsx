@@ -4,6 +4,7 @@ import { linkClassNames } from '../../lib/classNames';
 import { focusRing } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import { useButtonSemantics } from './Button.semantics';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Color treatment of a {@link Link}.
@@ -18,6 +19,15 @@ import { useButtonSemantics } from './Button.semantics';
 export type LinkAppearance = 'inline' | 'standalone' | 'subtle';
 
 /**
+ * The surface a {@link Link} sits on, which picks its text and focus ring colors.
+ *
+ * - `default`: the page or a card (the link colors of its appearance).
+ * - `brand`: a brand-filled surface (`bg-wave-primary`): on-brand text.
+ * - `inverted`: an inverted surface (`bg-wave-inverted`, the Tooltip's fill): inverted text.
+ */
+export type LinkBackground = 'default' | 'brand' | 'inverted';
+
+/**
  * The Link's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
  * Every other prop comes from the rendered element (`as`, default `'a'`).
  */
@@ -26,6 +36,14 @@ export interface LinkOwnProps {
    * @default 'inline'
    */
   appearance?: LinkAppearance;
+  /**
+   * The surface the link sits on (Fluent's link colors on brand and inverted backgrounds): `brand`
+   * gives it the on-brand text color and focus ring, `inverted` the inverted-surface ones, so it
+   * stays readable on `bg-wave-primary` and `bg-wave-inverted` (the underline of `inline` still
+   * marks it as a link). Renders `data-background` while it is not `default`.
+   * @default 'default'
+   */
+  background?: LinkBackground;
   /**
    * Makes the link unavailable. An `<a>` drops its `href` (no navigation by middle-click, the
    * context menu or drag), keeps `role="link"` (`role="button"` when it had no `href`), and gets
@@ -78,6 +96,15 @@ const appearanceClasses: Record<LinkAppearance, string> = {
 };
 
 /**
+ * The text and focus ring colors per surface other than the default, which replace the
+ * appearance's color (`wcn()` keeps the appearance's other classes).
+ */
+const backgroundClasses: Record<Exclude<LinkBackground, 'default'>, string> = {
+  brand: 'wave:text-primary-foreground wave:focus-visible:outline-primary-foreground',
+  inverted: 'wave:text-inverted-foreground wave:focus-visible:outline-inverted-foreground',
+};
+
+/**
  * A hyperlink with Fluent link styling. Renders an `<a>` by default; `as` renders a router link
  * (`<Link as={RouterLink} to="/">`) or a `<button>` styled as a link (`type="button"` by default).
  *
@@ -86,15 +113,20 @@ const appearanceClasses: Record<LinkAppearance, string> = {
  *   `role` and `tabIndex` win). A non-interactive `as` (`span`, `div`) is treated the same way;
  *   any `href` string, `''` included, keeps the link semantics.
  *
+ * - `background` (`brand`, `inverted`) recolors the link for a brand or inverted surface.
+ *
  * @example
  * <p>Read the <Link href="/docs">documentation</Link> first.</p>
  * <Link appearance="standalone" href="/pricing">See pricing</Link>
  * <Link onClick={showMore}>Show more</Link>
  */
 export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
+  const appClassName = useAppClassName(linkClassNames.root);
+
   const {
     as,
     appearance: appearanceProp,
+    background = 'default',
     disabled = false,
     disabledFocusable = false,
     className,
@@ -129,6 +161,7 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
 
   return (
     <Component
+      data-background={background === 'default' ? undefined : background}
       {...elementProps}
       {...handlers}
       ref={ref}
@@ -137,10 +170,12 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
         'wave:cursor-pointer wave:transition-colors wave:motion-reduce:transition-none',
         focusRing,
         appearanceClasses[appearance],
+        background !== 'default' && backgroundClasses[background],
         // Full opacity while a focusable disabled link shows its focus ring, which `opacity`
         // would dim below 3:1 (as for buttons).
         (disabled || disabledFocusable) &&
           'wave:cursor-not-allowed wave:opacity-50 wave:aria-disabled:focus-visible:opacity-100',
+        appClassName,
         className,
       )}
       {...enforced}

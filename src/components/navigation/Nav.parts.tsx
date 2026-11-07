@@ -17,6 +17,7 @@ import {
   useNavContext,
   type NoAnchorOnlyAttributes,
 } from './Nav.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The parts of a Nav that carry no value: Nav.SectionHeader, Nav.Divider, Nav.AppItem and
@@ -72,6 +73,8 @@ export const NavSectionHeader = ({
   slotProps,
   ...rest
 }: NavSectionHeaderProps) => {
+  const appClassName = useAppClassName(navSectionHeaderClassNames.root);
+
   useNavContext('Nav.SectionHeader');
   // An empty heading fails axe's empty-heading rule: no content, no list item and no heading.
   if (!slotRendersContent(children)) return null;
@@ -91,6 +94,7 @@ export const NavSectionHeader = ({
         className={wcn(
           navSectionHeaderClassNames.root,
           'wave:m-0 wave:px-4 wave:pt-3 wave:pb-1 wave:text-caption-1 wave:font-semibold wave:text-muted-foreground wave:text-start',
+          appClassName,
           className,
         )}
       >
@@ -122,6 +126,8 @@ export interface NavDividerProps extends Omit<
  * Also exported as `NavDivider` (import the flat name from React Server Components).
  */
 export const NavDivider = ({ className, ref, ...rest }: NavDividerProps) => {
+  const appClassName = useAppClassName(navDividerClassNames.root);
+
   useNavContext('Nav.Divider');
   return (
     <li
@@ -132,6 +138,7 @@ export const NavDivider = ({ className, ref, ...rest }: NavDividerProps) => {
       className={wcn(
         navDividerClassNames.root,
         'wave:my-1 wave:h-0 wave:border-t wave:border-border wave:forced-colors:border-[CanvasText]',
+        appClassName,
         className,
       )}
     />
@@ -301,6 +308,8 @@ export function NavAppItem(props: NavAppItemButtonProps): React.ReactElement;
 export function NavAppItem(props: NavAppItemAnchorProps): React.ReactElement;
 export function NavAppItem(props: NavAppItemDynamicProps): React.ReactElement;
 export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): React.ReactElement {
+  const appClassName = useAppClassName(navAppItemClassNames.root);
+
   useNavContext('Nav.AppItem');
   const { icon, href, className, children, ref, slotProps, ...rest } =
     props as NavAppItemRuntimeProps;
@@ -342,7 +351,7 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
           {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
           ref={ref as React.Ref<HTMLAnchorElement>}
           href={href}
-          className={wcn(navAppItemClassNames.root, appItemClasses, className)}
+          className={wcn(navAppItemClassNames.root, appItemClasses, appClassName, className)}
         >
           {content}
         </a>
@@ -358,7 +367,7 @@ export function NavAppItem(props: NavAppItemProps | NavAppItemDynamicProps): Rea
         type="button"
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
         ref={ref as React.Ref<HTMLButtonElement>}
-        className={wcn(navAppItemClassNames.root, appItemClasses, className)}
+        className={wcn(navAppItemClassNames.root, appItemClasses, appClassName, className)}
       >
         {content}
       </button>
@@ -381,6 +390,8 @@ export const NavAppItemStatic = ({
   slotProps,
   ...rest
 }: NavAppItemStaticProps) => {
+  const appClassName = useAppClassName(navAppItemStaticClassNames.root);
+
   useNavContext('Nav.AppItemStatic');
   const contentClassName = wcn(navAppItemStaticClassNames.content, 'wave:flex-1 wave:text-start');
   return (
@@ -399,6 +410,7 @@ export const NavAppItemStatic = ({
           navAppItemStaticClassNames.root,
           appItemLayoutClasses,
           'wave:cursor-default',
+          appClassName,
           className,
         )}
       >

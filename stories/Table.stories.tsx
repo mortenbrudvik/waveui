@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
-import { Avatar, Button, Table } from '../src';
+import { Avatar, Button, Table, useVirtualWindow } from '../src';
 import type { SortDirection } from '../src';
 
 const members = [
@@ -402,4 +402,141 @@ export const CellActions: Story = {
       </Table.Body>
     </Table>
   ),
+};
+
+/**
+ * `size` sets the density: medium (the default), small and extra-small. It tightens the padding of
+ * the cells, the header cells, the sort buttons and the selection cells, and sizes the media of a
+ * `Table.CellLayout`.
+ */
+export const Sizes: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-6">
+      {(['medium', 'small', 'extra-small'] as const).map((size) => (
+        <Table key={size} {...args} size={size} aria-label={`Team members, ${size}`}>
+          <caption className="px-4 py-2 text-start text-wave-body-1 font-semibold">{size}</caption>
+          <Table.Header>
+            <tr>
+              <Table.SelectionCell aria-label={`Select all, ${size}`} />
+              <Table.HeaderCell sortable sortDirection="ascending">
+                Name
+              </Table.HeaderCell>
+              <Table.HeaderCell>Role</Table.HeaderCell>
+            </tr>
+          </Table.Header>
+          <Table.Body>
+            {members.slice(0, 3).map((member) => (
+              <Table.Row key={member.id}>
+                <Table.SelectionCell aria-label={`Select ${member.name}, ${size}`} />
+                <Table.Cell>
+                  <Table.CellLayout media={<Avatar name={member.name} />}>
+                    {member.name}
+                  </Table.CellLayout>
+                </Table.Cell>
+                <Table.Cell>{member.role}</Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
+      ))}
+    </div>
+  ),
+};
+
+/** Rows that fill themselves while selected: the table keeps no selection, the story does. */
+function SelectableRows(args: React.ComponentProps<typeof Table>) {
+  const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set(['002']));
+  return (
+    <Table {...args}>
+      {header(['Name', 'Role', 'Location'])}
+      <Table.Body>
+        {members.map((member) => (
+          <Table.Row
+            key={member.id}
+            appearance={selected.has(member.id) ? 'brand' : 'none'}
+            onClick={() =>
+              setSelected((previous) => {
+                const next = new Set(previous);
+                if (!next.delete(member.id)) next.add(member.id);
+                return next;
+              })
+            }
+          >
+            <Table.Cell>{member.name}</Table.Cell>
+            <Table.Cell>{member.role}</Table.Cell>
+            <Table.Cell>{member.location}</Table.Cell>
+          </Table.Row>
+        ))}
+        <Table.Row appearance="neutral">
+          <Table.Cell>A neutral row</Table.Cell>
+          <Table.Cell>Fixed</Table.Cell>
+          <Table.Cell>Anywhere</Table.Cell>
+        </Table.Row>
+      </Table.Body>
+    </Table>
+  );
+}
+
+/**
+ * `Table.Row` `appearance` fills a row: `brand` with the selected token and `neutral` with the
+ * subtle selected token, the two fills a DataGrid gives a selected row. The table keeps no
+ * selection, so the story sets it from its own state.
+ */
+export const RowAppearance: Story = {
+  args: { 'aria-label': 'Team members, selectable rows' },
+  render: (args) => <SelectableRows {...args} />,
+};
+
+const THOUSAND_ROWS = Array.from({ length: 1_000 }, (_, index) => ({
+  id: index + 1,
+  name: `File ${String(index + 1).padStart(4, '0')}`,
+  owner: members[index % members.length].name,
+}));
+
+/** A static table of 1,000 rows in a 400-pixel scroller, windowed by `useVirtualWindow`. */
+function VirtualTable(args: React.ComponentProps<typeof Table>) {
+  const virtualWindow = useVirtualWindow({ itemSize: 44, scrollPaddingStart: 44 });
+  return (
+    <Table
+      {...args}
+      virtualWindow={virtualWindow}
+      containerProps={{ className: 'h-100' }}
+      className="min-w-[30rem]"
+    >
+      <caption className="sr-only">A thousand files</caption>
+      <Table.Header>
+        <tr>
+          <Table.HeaderCell className="w-24">Number</Table.HeaderCell>
+          <Table.HeaderCell>Name</Table.HeaderCell>
+          <Table.HeaderCell>Owner</Table.HeaderCell>
+        </tr>
+      </Table.Header>
+      <Table.Body count={THOUSAND_ROWS.length}>
+        {(index) => (
+          <Table.Row key={THOUSAND_ROWS[index].id}>
+            <Table.Cell>{THOUSAND_ROWS[index].id}</Table.Cell>
+            <Table.Cell>{THOUSAND_ROWS[index].name}</Table.Cell>
+            <Table.Cell>{THOUSAND_ROWS[index].owner}</Table.Cell>
+          </Table.Row>
+        )}
+      </Table.Body>
+      <tfoot>
+        <tr>
+          <td className="px-4 py-3 text-wave-body-1" colSpan={3}>
+            1,000 files
+          </td>
+        </tr>
+      </tfoot>
+    </Table>
+  );
+}
+
+/**
+ * `virtualWindow` with a `count` and a function child on `Table.Body`: only the rows in view are
+ * rendered, with spacer rows for the others. The header sticks to the top of the scroller, `striped`
+ * follows each row's index, and `aria-rowcount` and `aria-rowindex` cover every row.
+ */
+export const VirtualWindow: Story = {
+  args: { striped: true, 'aria-label': 'A thousand files' },
+  render: (args) => <VirtualTable {...args} />,
 };

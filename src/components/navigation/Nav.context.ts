@@ -15,6 +15,33 @@ import { hasWarned, isDev, reportMissingContext, warnOnce } from '../../lib/dev'
 // Context
 // ---------------------------------------------------------------------------
 
+/**
+ * How tightly a Nav sets its rows (Fluent's `density`): `medium` (the default) is the 36px row of
+ * a Nav.Item (28px for a Nav.SubItem), `small` a row 8px shorter.
+ */
+export type NavDensity = 'small' | 'medium';
+
+/** Second argument of the callbacks that report a selected item (`onValueChange`, `onItemSelect`). */
+export interface NavSelectDetails {
+  /** The click behind the selection. */
+  event: Event;
+  /**
+   * The value of the `Nav.Category` the selected item sits in (Fluent's `categoryValue`);
+   * `undefined` for an item outside any category (a `Nav.Item` at the top of the list).
+   */
+  category: string | undefined;
+}
+
+/** Second argument of `onOpenCategoriesChange`: which category was toggled, and how. */
+export interface NavCategoryToggleDetails {
+  /** The click behind the toggle. */
+  event: Event;
+  /** The value of the category that was toggled (Fluent's `categoryValue`). */
+  category: string;
+  /** Whether the category is open after the toggle. */
+  open: boolean;
+}
+
 /** The two value namespaces of a Nav: items (Nav.Item and Nav.SubItem) and categories. */
 export type NavValueKind = 'item' | 'category';
 
@@ -72,13 +99,18 @@ export interface NavContextValue {
   value: string;
   /**
    * Activation of an item: sets the value, then calls the root's `onActivate` (every activation,
-   * re-selection included; NavDrawer's `onItemSelect`).
+   * re-selection included; NavDrawer's `onItemSelect`). `details` go to both callbacks.
    */
-  select: (value: string) => void;
+  select: (value: string, details?: NavSelectDetails) => void;
   /** The values of the open categories. */
   openCategories: readonly string[];
-  /** Opens a closed category, closes an open one. */
-  toggleCategory: (value: string) => void;
+  /**
+   * Opens a closed category, closes an open one (with `multiple` off, an opened category closes
+   * the others); `event` is the click behind it, for `onOpenCategoriesChange`'s details.
+   */
+  toggleCategory: (value: string, event?: Event) => void;
+  /** How tightly the items and categories are set. */
+  density: NavDensity;
   /** Registers a mounted item or category value (duplicate warning); returns the cleanup. */
   registerValue: (kind: NavValueKind, value: string) => () => void;
   /** The `currentCategory` hint of the root. */
@@ -97,6 +129,7 @@ const INERT_NAV_CONTEXT: NavContextValue = {
   select: noop,
   openCategories: [],
   toggleCategory: noop,
+  density: 'medium',
   registerValue: () => noop,
   currentCategory: undefined,
   categoryStore: { record: noop, forget: noop, get: () => undefined, subscribe: () => noop },

@@ -24,6 +24,7 @@ import { useId } from '../../hooks/useId';
 import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useInputLook } from './inputLook';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Props of the error message element that {@link Input}, `Select` and `Textarea` render after the
@@ -207,7 +208,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
      * shapes this part sets no `role`, `tabIndex` and the roving markers (`data-roving-container`,
      * `data-roving-disabled`, `data-roving-value`, `aria-disabled`): in a toolbar or another roving
      * container the root is never a control of its own and never hides the input from the arrow
-     * order.
+     * order. Where the root is the `<input>` itself, give such an attribute through `input`.
      */
     root?: SlotPartWithRef<'span', HTMLElement>;
     /**
@@ -269,6 +270,8 @@ export const Input = ({
   required,
   ...props
 }: InputProps) => {
+  const appClassName = useAppClassName(inputClassNames.root);
+
   const { invalid, messageId, message } = useControlErrorMessage(
     error,
     errorMessageProps,
@@ -352,6 +355,7 @@ export const Input = ({
         // content; the disabled input never takes focus): opacity would dim the ring below 3:1.
         props.disabled &&
           'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
+        appClassName,
         className,
       ),
       style,
@@ -417,6 +421,7 @@ export const Input = ({
             inputFocus,
             'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
             invalidLook && inputInvalid,
+            appClassName,
             className,
           ),
           style,
