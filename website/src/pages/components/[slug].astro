@@ -11,6 +11,7 @@
  */
 import AppLayout from '../../layouts/AppLayout.astro';
 import Description from '../../docs/Description.astro';
+import OnThisPage from '../../docs/OnThisPage.astro';
 import PropsTable from '../../docs/PropsTable.astro';
 import StoryCode from '../../docs/StoryCode.astro';
 import Example from '../../islands/Example.astro';
@@ -76,28 +77,7 @@ const CELL = 'border-b border-wave-border px-2 py-2 align-top';
       }
     </header>
 
-    <nav
-      aria-label="On this page"
-      class="text-wave-body-1 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start"
-    >
-      <p class="m-0 mb-1 text-wave-caption-1 font-semibold text-wave-muted-foreground">
-        On this page
-      </p>
-      <ul class="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 lg:flex-col">
-        {
-          sections.map((section) => (
-            <li>
-              <a
-                href={`#${section.id}`}
-                class="rounded-sm text-wave-primary underline underline-offset-2 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-wave-ring"
-              >
-                {section.title}
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-    </nav>
+    <OnThisPage sections={sections} />
 
     <div class="min-w-0 lg:col-start-1">
       <Description text={docs.description} main class="max-w-prose text-wave-body-1" />

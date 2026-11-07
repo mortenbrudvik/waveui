@@ -1,21 +1,23 @@
 ---
 /**
- * The start page of the docs app, `/waveui/docs`, in the app shell: a pointer to the components
- * index until the guide pages (getting started, theming) arrive.
+ * The start page of the docs app, `/waveui/docs`, in the app shell: pointers to Getting started
+ * and the components index.
  */
 import AppLayout from '../layouts/AppLayout.astro';
 import { getLibraryVersion } from '../docs/sizes';
 import { DOCS_BASE } from '../shell/urls';
+
+const LINK =
+  'rounded-sm text-wave-primary underline underline-offset-2 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-wave-ring';
 ---
 
 <AppLayout title="Welcome" status={{ version: getLibraryVersion() }}>
   <div class="flex flex-col gap-3 p-6">
     <h1 class="m-0 text-wave-title-2">WaveUI docs</h1>
     <p class="m-0 max-w-prose text-wave-body-1">
-      The documentation of WaveUI's 80 components. Choose a component in the navigation, or browse
-      <a
-        href={`${DOCS_BASE}/components`}
-        class="rounded-sm text-wave-primary underline underline-offset-2 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-wave-ring"
+      The documentation of WaveUI's 80 components. New to WaveUI? Start with
+      <a href={`${DOCS_BASE}/getting-started`} class={LINK}>Getting started</a>. Choose a component
+      in the navigation, or browse <a href={`${DOCS_BASE}/components`} class={LINK}
         >all components by category</a
       >.
     </p>

@@ -10,7 +10,12 @@
  *   shows the pane as a drawer), focus moves to the current link, and Escape, a click on the
  *   backdrop or focus moving elsewhere closes it;
  * - Copy code, which copies `copyText`, with a polite announcement;
- * - Search, which dispatches `SEARCH_EVENT` (the command palette listens).
+ * - Search, which dispatches `SEARCH_EVENT`;
+ * - the search palette: Ctrl+K or Cmd+K anywhere in the page (a text field included; the key is
+ *   taken from the browser only when it opens the palette), and `SEARCH_EVENT`, open it. Its
+ *   module (`SearchPalette.tsx`) is imported on that first opening, through
+ *   {@link searchPaletteChunk}, never before, and stays mounted for the next; focus returns to
+ *   the element that had it when the palette was asked for.
  *
  * Its first render equals the server's (light, left to right, controls disabled), so hydration
  * matches; an effect then reads what the inline scripts applied before paint.
@@ -28,11 +33,29 @@ import {
   type SiteChoice,
   type SiteTheme,
 } from '../theme/themeChoice';
+import type { SearchPaletteProps } from './SearchPalette';
 
 export interface ShellControlsProps {
   /** The text Copy code copies (the page's first story's source); without it, no Copy code. */
   copyText?: string | undefined;
 }
+
+/**
+ * Loads the search palette's chunk. An object, so a test can spy on the dynamic import; the island
+ * calls it on the first request to open the palette.
+ */
+export const searchPaletteChunk = {
+  load: (): Promise<{ default: React.ComponentType<SearchPaletteProps> }> =>
+    import('./SearchPalette'),
+};
+
+/** Ctrl+K or Cmd+K, without Shift or Alt (Ctrl+Alt is AltGr on Windows). */
+const isSearchShortcut = (event: KeyboardEvent) =>
+  (event.ctrlKey || event.metaKey) &&
+  !event.altKey &&
+  !event.shiftKey &&
+  !event.isComposing &&
+  event.key.toLowerCase() === 'k';
 
 const THEMES: readonly SiteTheme[] = ['light', 'dark', 'high-contrast'];
 const COPY_STATUS_MS = 3000;
@@ -64,6 +87,58 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
   const [copyStatus, setCopyStatus] = React.useState<CopyStatus>('idle');
   const [maximizeSlot, setMaximizeSlot] = React.useState<HTMLElement | null>(null);
   const hamburgerRef = React.useRef<HTMLButtonElement>(null);
+  const [Palette, setPalette] = React.useState<React.ComponentType<SearchPaletteProps> | null>(
+    null,
+  );
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const searchOpenRef = React.useRef(false);
+  const paletteRequested = React.useRef(false);
+  const returnFocusRef = React.useRef<HTMLElement | null>(null);
+
+  /** Opens the palette, loading it the first time; false when it is already open. */
+  const openSearch = React.useCallback((): boolean => {
+    if (searchOpenRef.current) return false;
+    const focused = document.activeElement;
+    returnFocusRef.current =
+      focused instanceof HTMLElement && focused !== document.body ? focused : null;
+    searchOpenRef.current = true;
+    setSearchOpen(true);
+    if (!paletteRequested.current) {
+      paletteRequested.current = true;
+      searchPaletteChunk.load().then(
+        (chunk) => setPalette(() => chunk.default),
+        () => {
+          // A failed chunk (offline) is tried again on the next request.
+          paletteRequested.current = false;
+          searchOpenRef.current = false;
+          setSearchOpen(false);
+        },
+      );
+    }
+    return true;
+  }, []);
+
+  const closeSearch = React.useCallback(() => {
+    searchOpenRef.current = false;
+    setSearchOpen(false);
+  }, []);
+
+  // The shortcut is read in the capture phase, so no widget of the page that stops the key's
+  // propagation keeps it from the palette.
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isSearchShortcut(event) && openSearch()) event.preventDefault();
+    };
+    const onSearch = () => {
+      openSearch();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener(SEARCH_EVENT, onSearch);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener(SEARCH_EVENT, onSearch);
+    };
+  }, [openSearch]);
 
   React.useEffect(() => {
     setChoice(readDocumentChoice());
@@ -85,8 +160,13 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
     }
     byId(SHELL_IDS.window)?.setAttribute('data-nav-open', '');
     setNavOpen(true);
+    // The current page's link, else the first link (a selector list would take whichever comes
+    // first in the document: the Guides group's).
     const nav = byId(SHELL_IDS.nav);
-    nav?.querySelector<HTMLElement>('[aria-current="page"], a[href]')?.focus();
+    (
+      nav?.querySelector<HTMLElement>('[aria-current="page"]') ??
+      nav?.querySelector<HTMLElement>('a[href]')
+    )?.focus();
   };
 
   // While the drawer is open: Escape closes it (focus back to the hamburger), and so does focus
@@ -169,6 +249,14 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
             maximizeSlot,
           )
         : null}
+      {Palette ? (
+        <Palette
+          open={searchOpen}
+          onClose={closeSearch}
+          choice={choice}
+          returnFocusRef={returnFocusRef}
+        />
+      ) : null}
     </>
   );
 }

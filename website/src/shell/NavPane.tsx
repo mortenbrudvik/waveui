@@ -1,8 +1,9 @@
 /**
- * The navigation pane: WaveUI's `Nav`, rendered on the server with no script, holding every
- * component of the catalog as a real link (`/waveui/docs/components/<slug>`), grouped by category
- * in the catalog's order. Each category is a list item holding its heading and the list the
- * heading labels; the current page's link carries `aria-current="page"` (Nav's `value`).
+ * The navigation pane: WaveUI's `Nav`, rendered on the server with no script. First the Guides
+ * group (Getting started, Theming, Changelog, All components), then every component of the catalog
+ * as a real link (`/waveui/docs/components/<slug>`), grouped by category in the catalog's order.
+ * Each group is a list item holding its heading and the list the heading labels; the current
+ * page's link carries `aria-current="page"` (Nav's `value`).
  *
  * Wide screens show it as the window's left pane (the right one in right to left). Below 48rem
  * (768px) it is a drawer while scripts run: hidden until the island's hamburger sets
@@ -11,7 +12,7 @@
  */
 import { Nav } from '../../../src';
 import { SHELL_IDS } from './ids';
-import { componentHref } from './urls';
+import { componentHref, GUIDE_LINKS } from './urls';
 
 /** The part of a catalog entry the pane shows. */
 export interface NavEntry {
@@ -39,6 +40,12 @@ export function groupByCategory(entries: readonly NavEntry[]): NavGroup[] {
 const headingId = (category: string) =>
   `nav-category-${category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
+/** The first group's heading: the guide pages and the components index. */
+const GUIDES = 'Guides';
+
+const HEADING_CLASSES =
+  'px-4 pt-3 pb-1 text-wave-caption-1 font-semibold text-wave-muted-foreground';
+
 export function NavPane({
   entries,
   current,
@@ -54,12 +61,21 @@ export function NavPane({
       density="small"
       className="shell-nav w-full shrink-0 border-e-0 border-b border-wave-border pb-4 md:w-60 md:overflow-y-auto md:border-e md:border-b-0"
     >
+      <li>
+        <h2 id={headingId(GUIDES)} className={HEADING_CLASSES}>
+          {GUIDES}
+        </h2>
+        <ul aria-labelledby={headingId(GUIDES)}>
+          {GUIDE_LINKS.map((link) => (
+            <Nav.Item key={link.id} value={`guide:${link.id}`} href={link.href}>
+              {link.title}
+            </Nav.Item>
+          ))}
+        </ul>
+      </li>
       {groupByCategory(entries).map(({ category, entries: items }) => (
         <li key={category}>
-          <h2
-            id={headingId(category)}
-            className="px-4 pt-3 pb-1 text-wave-caption-1 font-semibold text-wave-muted-foreground"
-          >
+          <h2 id={headingId(category)} className={HEADING_CLASSES}>
             {category}
           </h2>
           <ul aria-labelledby={headingId(category)}>

@@ -1,0 +1,32 @@
+---
+/**
+ * The "On this page" pane of the component and guide pages: a link to each h2 of the page. From
+ * `lg` it is the sticky right column of the page's grid; below `lg` it sits above the content.
+ */
+export interface Props {
+  sections: readonly { id: string; title: string }[];
+}
+
+const { sections } = Astro.props;
+---
+
+<nav
+  aria-label="On this page"
+  class="text-wave-body-1 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start"
+>
+  <p class="m-0 mb-1 text-wave-caption-1 font-semibold text-wave-muted-foreground">On this page</p>
+  <ul class="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 lg:flex-col">
+    {
+      sections.map((section) => (
+        <li>
+          <a
+            href={`#${section.id}`}
+            class="rounded-sm text-wave-primary underline underline-offset-2 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-wave-ring"
+          >
+            {section.title}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</nav>

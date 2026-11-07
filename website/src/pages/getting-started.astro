@@ -1,0 +1,21 @@
+---
+/**
+ * `/waveui/docs/getting-started`: the README's Requirements, Installation and Quick start sections
+ * (`src/docs/guides.ts`), rendered at build time.
+ */
+import AppLayout from '../layouts/AppLayout.astro';
+import GuideArticle from '../docs/GuideArticle.astro';
+import { renderGuide } from '../docs/guides';
+import { getLibraryVersion } from '../docs/sizes';
+
+const { html, headings } = renderGuide('getting-started');
+const sections = headings
+  .filter((heading) => heading.depth === 2)
+  .map(({ id, text }) => ({ id, title: text }));
+---
+
+<AppLayout title="Getting started" status={{ version: getLibraryVersion() }}>
+  <GuideArticle title="Getting started" sections={sections}>
+    <Fragment set:html={html} />
+  </GuideArticle>
+</AppLayout>

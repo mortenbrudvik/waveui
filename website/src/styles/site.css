@@ -116,3 +116,77 @@
     color: var(--wave-muted-foreground);
   }
 }
+
+/*
+ * The guide pages' content (src/docs/GuideArticle.astro): the plain elements the Markdown renders
+ * to (src/docs/markdown.ts), styled as the component pages style theirs. Code blocks wrap rather
+ * than scroll, as the stories' code does, so they add no scroll region and never widen the page.
+ */
+.guide-prose :where(h2) {
+  @apply m-0 mt-10 mb-3 text-wave-title-3 font-semibold;
+}
+
+.guide-prose :where(h3) {
+  @apply m-0 mt-8 mb-2 text-wave-subtitle-1 font-semibold;
+}
+
+.guide-prose :where(h4, h5, h6) {
+  @apply m-0 mt-6 mb-2 text-wave-subtitle-2 font-semibold;
+}
+
+.guide-prose :where(p, ul, ol, pre, table, blockquote) {
+  @apply m-0 mb-4 max-w-prose;
+}
+
+.guide-prose :where(pre, table) {
+  @apply max-w-none;
+}
+
+.guide-prose :where(ul) {
+  @apply list-disc ps-6;
+}
+
+.guide-prose :where(ol) {
+  @apply list-decimal ps-6;
+}
+
+.guide-prose :where(li + li, li > ul, li > ol) {
+  @apply mt-1;
+}
+
+.guide-prose :where(li > p) {
+  @apply mb-2;
+}
+
+.guide-prose :where(a) {
+  @apply rounded-sm text-wave-primary underline underline-offset-2 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-wave-ring;
+}
+
+.guide-prose :where(:not(pre) > code) {
+  @apply rounded-sm bg-wave-muted px-1 font-wave-mono text-[0.9em];
+}
+
+.guide-prose :where(pre) {
+  @apply rounded border border-wave-border bg-wave-muted p-3 font-wave-mono text-wave-caption-1 whitespace-pre-wrap [overflow-wrap:anywhere];
+}
+
+.guide-prose :where(table) {
+  @apply w-full border-collapse;
+}
+
+/* `anywhere` lowers a cell's min-content width, so a table of long tokens fits a phone's width. */
+.guide-prose :where(th, td) {
+  @apply border-b border-wave-border px-2 py-2 text-start align-top [overflow-wrap:anywhere];
+}
+
+.guide-prose :where(th) {
+  @apply text-wave-caption-1 font-semibold text-wave-muted-foreground;
+}
+
+.guide-prose :where(blockquote) {
+  @apply border-s-4 border-wave-border ps-4 text-wave-muted-foreground;
+}
+
+.guide-prose :where(hr) {
+  @apply my-6 border-0 border-t border-wave-border;
+}

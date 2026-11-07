@@ -13,7 +13,11 @@ import { AVATAR_IMAGE } from '../plugins/localImages.mjs';
 import { measurePage } from '../scripts/measure-page.mjs';
 import { getCatalog, type ComponentEntry } from '../src/catalog/catalog';
 import { extractDocs, type ComponentDocs } from '../src/docs/props';
+import { CHANGELOG_URL, parseChangelog } from '../src/docs/changelog';
+import { README_SECTIONS } from '../src/docs/guides';
+import { GUIDE_CONTENT_TAGS, isAllowedExternalLink } from '../src/docs/markdown';
 import { formatDescription, isHookEntry } from '../src/docs/page';
+import { readSearchIndex, serialiseSearchIndex } from '../src/search/searchIndex';
 import { getImportSizes, getLibraryVersion } from '../src/docs/sizes';
 import { formatKB } from '../src/shell/StatusBar';
 import { componentHref, DOCS_BASE, INTRO_URL } from '../src/shell/urls';
@@ -97,6 +101,56 @@ const own = (root: ParentNode, selector: string) =>
  * image in their place (`plugins/localImages.mjs`), so no page requests anything from it.
  */
 const STORY_IMAGE_HOST = 'i.pravatar.cc';
+
+/**
+ * The one exception to "nothing outside /waveui/docs/" besides the Close link: a link (an `<a>`'s
+ * `href`, never a script, stylesheet or image) inside a guide page's rendered content
+ * (`[data-guide-content]`, src/docs/GuideArticle.astro) to GitHub or npm over https.
+ */
+function isAllowedGuideLink(element: Element, attribute: string, value: string): boolean {
+  return (
+    attribute === 'href' &&
+    element.tagName === 'A' &&
+    element.closest('[data-guide-content]') !== null &&
+    isAllowedExternalLink(value)
+  );
+}
+
+/** The guide pages, by file. */
+const GUIDE_FILES = {
+  'getting-started': join(SITE_DIST, 'getting-started.html'),
+  theming: join(SITE_DIST, 'theming.html'),
+  changelog: join(SITE_DIST, 'changelog.html'),
+} as const;
+
+describe('the link-scan rule', () => {
+  it('allows https links to GitHub and npm only as anchors inside rendered guide content', () => {
+    const { document } = new JSDOM(`<body>
+      <div data-guide-content>
+        <a id="github" href="https://github.com/mortenbrudvik/waveui/blob/main/CHANGELOG.md">x</a>
+        <a id="npm" href="https://www.npmjs.com/package/@mortenbrudvik/waveui">x</a>
+        <a id="other-host" href="https://example.com/">x</a>
+        <a id="http" href="http://github.com/mortenbrudvik/waveui">x</a>
+        <img id="image" src="https://github.com/a.png" alt="">
+        <script id="script" src="https://github.com/a.js"></script>
+        <link id="sheet" rel="stylesheet" href="https://github.com/a.css">
+      </div>
+      <a id="outside" href="https://github.com/mortenbrudvik/waveui">x</a>
+    </body>`).window;
+    const allowed = (id: string, attribute: string) => {
+      const element = document.getElementById(id)!;
+      return isAllowedGuideLink(element, attribute, element.getAttribute(attribute)!);
+    };
+    expect(allowed('github', 'href')).toBe(true);
+    expect(allowed('npm', 'href')).toBe(true);
+    expect(allowed('other-host', 'href')).toBe(false);
+    expect(allowed('http', 'href')).toBe(false);
+    expect(allowed('image', 'src')).toBe(false);
+    expect(allowed('script', 'src')).toBe(false);
+    expect(allowed('sheet', 'href')).toBe(false);
+    expect(allowed('outside', 'href')).toBe(false);
+  });
+});
 
 describe.skipIf(!state.ready)(title, () => {
   it('80 component pages plus the index exist', () => {
@@ -253,8 +307,10 @@ describe.skipIf(!state.ready)(title, () => {
     const CSS_URL = /url\(\s*(['"]?)([^'")]*)\1\s*\)|@import\s+(['"])([^'"]+)\3/g;
 
     const pages = allPages();
-    expect(pages.length).toBeGreaterThanOrEqual(82);
+    expect(pages.length).toBeGreaterThanOrEqual(85);
     const sheets = new Set<string>();
+    // The guides' links to GitHub and npm: the changelog's link to the whole file at least.
+    let guideLinks = 0;
 
     /** An address in the app: under the prefix once, and not a directory (`…/`). */
     const expectInternal = (value: string, where: string) => {
@@ -306,6 +362,10 @@ describe.skipIf(!state.ready)(title, () => {
             closeLinks++;
             continue;
           }
+          if (isAllowedGuideLink(element, attribute, value)) {
+            guideLinks++;
+            continue;
+          }
           expectInternal(value, `${name}: ${attribute}`);
         }
         const style = element.getAttribute('style');
@@ -337,6 +397,7 @@ describe.skipIf(!state.ready)(title, () => {
         }
       }
     }
+    expect(guideLinks).toBeGreaterThan(0);
     // The linked stylesheets: their url() and @import addresses.
     expect(sheets.size).toBeGreaterThan(0);
     for (const sheet of sheets) {
@@ -485,12 +546,161 @@ describe.skipIf(!state.ready)(title, () => {
   });
 
   it('the components index loads at most its recorded first-load JavaScript plus 2 KB', () => {
-    // website/BUDGET.md records 96,790 B gzipped (scripts/measure-page.mjs). The full budget
-    // check of every page is a later task; this guards the shell-only page, which every page pays.
+    // website/BUDGET.md records 97,599 B gzipped (scripts/measure-page.mjs): 96,790 B before the
+    // search palette's shortcut listener and the preload list of its lazy chunk (+809 B). The full
+    // budget check of every page is a later task; this guards the shell-only page, which every
+    // page pays.
     const { totals, reactCoreChunks, reactDomClientChunks } = measurePage(INDEX_FILE);
-    expect(totals.firstLoadGzip).toBeLessThanOrEqual(96_790 + 2_048);
+    expect(totals.firstLoadGzip).toBeLessThanOrEqual(97_599 + 2_048);
     expect(reactCoreChunks).toHaveLength(1);
     expect(reactDomClientChunks).toHaveLength(1);
+  });
+
+  it("the palette chunk is not part of any page's first-load JavaScript", () => {
+    const chunks = readdirSync(join(SITE_DIST, '_assets')).filter((file) =>
+      /^SearchPalette\..*\.js$/.test(file),
+    );
+    expect(chunks).toHaveLength(1);
+    const palette = `_assets/${chunks[0]}`;
+    // A text only the palette's code holds.
+    const marker = 'Search the docs';
+    expect(readFileSync(join(SITE_DIST, palette), 'utf8')).toContain(marker);
+    for (const file of allPages()) {
+      const name = relative(SITE_DIST, file).replace(/\\/g, '/');
+      const { firstLoad, later } = measurePage(file);
+      const firstFiles = firstLoad.map((row) => row.file);
+      expect(firstFiles, name).not.toContain(palette);
+      // The page can load it later, when the palette is opened.
+      expect(
+        later.map((row) => row.file),
+        name,
+      ).toContain(palette);
+      for (const chunk of firstFiles) {
+        expect(readFileSync(join(SITE_DIST, chunk), 'utf8'), `${name}: ${chunk}`).not.toContain(
+          marker,
+        );
+      }
+      // No page asks the browser for it, nor for the index, up front.
+      const html = readFileSync(file, 'utf8');
+      expect(html, name).not.toContain('SearchPalette');
+      expect(html, name).not.toContain('search-index.json');
+    }
+  });
+
+  it('the search index is built: every component, prop and guide page, as the site reads them', () => {
+    const file = join(SITE_DIST, '_assets', 'search-index.json');
+    const text = readFileSync(file, 'utf8');
+    expect(text).toBe(serialiseSearchIndex(readSearchIndex()));
+    const entries = JSON.parse(text) as { kind: string; href: string }[];
+    expect(entries.filter((entry) => entry.kind === 'component')).toHaveLength(80);
+    // Every address it holds is a built page (with an anchor the page has).
+    for (const entry of entries) {
+      const [path, anchor] = entry.href.split('#');
+      const page = join(SITE_DIST, `${path!.slice(DOCS_BASE.length + 1)}.html`);
+      expect(existsSync(page), entry.href).toBe(true);
+      if (anchor) expect(load(page).getElementById(anchor), entry.href).not.toBeNull();
+    }
+  });
+
+  describe('the guide pages', () => {
+    const guide = (key: keyof typeof GUIDE_FILES) => load(GUIDE_FILES[key]);
+    const guideContent = (document: Document) =>
+      document.querySelector('main article [data-guide-content]')!;
+
+    it('each guide page has one h1, its "On this page" pane and no current navigation link', () => {
+      const titles = {
+        'getting-started': 'Getting started',
+        theming: 'Theming',
+        changelog: 'Changelog',
+      };
+      for (const [key, heading] of Object.entries(titles)) {
+        const document = guide(key as keyof typeof GUIDE_FILES);
+        const h1 = document.querySelectorAll('h1');
+        expect(h1, key).toHaveLength(1);
+        expect(normalise(h1[0]!.textContent), key).toBe(heading);
+        expect(normalise(document.title), key).toBe(`${heading} · WaveUI docs`);
+        const pane = document.querySelector('nav[aria-label="On this page"]')!;
+        const links = [...pane.querySelectorAll('a')];
+        const h2s = [...content(document).querySelectorAll('h2')];
+        expect(h2s.length, key).toBeGreaterThan(0);
+        expect(
+          links.map((link) => [link.getAttribute('href'), normalise(link.textContent)]),
+          key,
+        ).toEqual(h2s.map((h2) => [`#${h2.id}`, normalise(h2.textContent)]));
+        expect(document.querySelector('nav [aria-current]'), key).toBeNull();
+        // The navigation's Guides group links to every guide page.
+        for (const path of ['getting-started', 'theming', 'changelog', 'components']) {
+          expect(
+            document.querySelector(`nav[aria-label="Components"] a[href="${DOCS_BASE}/${path}"]`),
+            `${key} -> ${path}`,
+          ).not.toBeNull();
+        }
+      }
+      const readmeH2s = (key: 'getting-started' | 'theming') =>
+        [...content(guide(key)).querySelectorAll('h2')].map((h2) => normalise(h2.textContent));
+      expect(readmeH2s('getting-started')).toEqual(README_SECTIONS['getting-started']);
+      expect(readmeH2s('theming')).toEqual(README_SECTIONS.theming);
+    });
+
+    it('getting-started shows the install line and a minimal WaveProvider example taken from the README', () => {
+      const readme = readFileSync(join(REPO_ROOT, 'README.md'), 'utf8');
+      const fenced = [...readme.matchAll(/^```[a-z]*\n([\s\S]*?)^```$/gm)].map((m) => m[1]!);
+      const codes = [...guideContent(guide('getting-started')).querySelectorAll('pre code')].map(
+        (code) => code.textContent,
+      );
+      expect(codes).toContain('npm install @mortenbrudvik/waveui\n');
+      const example = codes.find((code) => code?.includes('<WaveProvider theme="light">'));
+      expect(example).toBeDefined();
+      expect(fenced).toContain(example);
+    });
+
+    it('markdown raw HTML is escaped on the guide pages', () => {
+      const allowed = new Set([...GUIDE_CONTENT_TAGS, 'section', 'time']);
+      for (const key of Object.keys(GUIDE_FILES) as (keyof typeof GUIDE_FILES)[]) {
+        const body = guideContent(guide(key));
+        expect(body, key).not.toBeNull();
+        for (const element of body.querySelectorAll('*')) {
+          expect(allowed.has(element.tagName.toLowerCase()), `${key}: <${element.tagName}>`).toBe(
+            true,
+          );
+          for (const attribute of element.getAttributeNames()) {
+            expect(attribute, `${key}: ${element.tagName}`).not.toMatch(/^on/i);
+          }
+        }
+      }
+      // The changelog's "<status>, out of office" is text, not an element.
+      const changelog = guideContent(guide('changelog'));
+      expect(changelog.textContent).toContain('"<status>, out of office"');
+      expect(changelog.querySelector('status')).toBeNull();
+    });
+
+    it('the changelog shows the 1.x releases, no 0.x one, and links to the whole file on GitHub', () => {
+      const document = guide('changelog');
+      const versions = [...content(document).querySelectorAll('h2')].map((h2) =>
+        normalise(h2.textContent),
+      );
+      const expected = parseChangelog(readFileSync(join(REPO_ROOT, 'CHANGELOG.md'), 'utf8')).map(
+        (section) => section.version,
+      );
+      expect(versions).toEqual(expected);
+      expect(versions.slice(0, 2)).toEqual(['1.1.0', '1.0.0']);
+      expect(versions.some((version) => version.startsWith('0.'))).toBe(false);
+      // No 0.x section's heading, nor its first line (1.x text may name a 0.x version).
+      expect(content(document).textContent).not.toMatch(/\[?0\.\d+\.\d+\]? - \d{4}/);
+      expect(content(document).textContent).not.toContain('the 0.18.0 gate exceeded twelve');
+      const link = guideContent(document).querySelector(`a[href="${CHANGELOG_URL}"]`);
+      expect(normalise(link?.textContent)).toBe('whole changelog on GitHub');
+    });
+
+    it("the guides' links to other hosts go only to GitHub and npm, over https", () => {
+      for (const key of Object.keys(GUIDE_FILES) as (keyof typeof GUIDE_FILES)[]) {
+        for (const link of guideContent(guide(key)).querySelectorAll('a[href]')) {
+          const href = link.getAttribute('href')!;
+          if (href.startsWith('#') || href.startsWith(`${DOCS_BASE}/`)) continue;
+          expect(isAllowedExternalLink(href), `${key}: ${href}`).toBe(true);
+        }
+      }
+    });
   });
 
   describe('accessibility of a sample of pages (axe, without color contrast)', () => {
@@ -503,6 +713,9 @@ describe.skipIf(!state.ready)(title, () => {
       'components/button.html',
       'components/data-grid.html',
       'components/dialog.html',
+      'getting-started.html',
+      'theming.html',
+      'changelog.html',
     ])('%s', async (page) => {
       const { window } = new JSDOM(readFileSync(join(SITE_DIST, page), 'utf8'), {
         runScripts: 'outside-only',

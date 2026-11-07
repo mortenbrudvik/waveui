@@ -1,0 +1,47 @@
+---
+/**
+ * `/waveui/docs/changelog`: the 1.x sections of the repository's CHANGELOG.md (`parseChangelog`),
+ * newest first, each under an h2 with its version, and a link to the whole file on GitHub.
+ */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import AppLayout from '../layouts/AppLayout.astro';
+import GuideArticle from '../docs/GuideArticle.astro';
+import { CHANGELOG_URL, changelogVersionId, parseChangelog } from '../docs/changelog';
+import { getLibraryVersion } from '../docs/sizes';
+import { REPO_ROOT } from '../repoRoot';
+
+const releases = parseChangelog(readFileSync(join(REPO_ROOT, 'CHANGELOG.md'), 'utf8')).map(
+  (release) => ({ ...release, id: changelogVersionId(release.version) }),
+);
+const sections = releases.map(({ id, version }) => ({ id, title: version }));
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+---
+
+<AppLayout title="Changelog" status={{ version: getLibraryVersion() }}>
+  <GuideArticle title="Changelog" sections={sections}>
+    <p>
+      The changes of every 1.x release, newest first. The releases before 1.0 are in the
+      <a href={CHANGELOG_URL}>whole changelog on GitHub</a>.
+    </p>
+    {
+      releases.map((release) => (
+        <section aria-labelledby={release.id}>
+          <h2 id={release.id}>{release.version}</h2>
+          {release.date !== '' && (
+            <p data-release-date>
+              {ISO_DATE.test(release.date) ? (
+                <>
+                  Released <time datetime={release.date}>{release.date}</time>
+                </>
+              ) : (
+                release.date
+              )}
+            </p>
+          )}
+          <Fragment set:html={release.html} />
+        </section>
+      ))
+    }
+  </GuideArticle>
+</AppLayout>

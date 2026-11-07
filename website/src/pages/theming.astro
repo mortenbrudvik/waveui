@@ -1,0 +1,27 @@
+---
+/**
+ * `/waveui/docs/theming`: the README's theming sections (themes and direction, brand colors and
+ * `WaveProvider tokens`, customizing tokens; `src/docs/guides.ts`), rendered at build time, and a
+ * link to its table of color tokens on GitHub.
+ */
+import AppLayout from '../layouts/AppLayout.astro';
+import GuideArticle from '../docs/GuideArticle.astro';
+import { renderGuide } from '../docs/guides';
+import { REPO_BLOB } from '../docs/markdown';
+import { getLibraryVersion } from '../docs/sizes';
+
+const { html, headings } = renderGuide('theming');
+const sections = headings
+  .filter((heading) => heading.depth === 2)
+  .map(({ id, text }) => ({ id, title: text }));
+---
+
+<AppLayout title="Theming" status={{ version: getLibraryVersion() }}>
+  <GuideArticle title="Theming" sections={sections}>
+    <Fragment set:html={html} />
+    <p>
+      Every color token's value in each theme is listed in the README's
+      <a href={`${REPO_BLOB}README.md#color-tokens`}>Color tokens</a> section on GitHub.
+    </p>
+  </GuideArticle>
+</AppLayout>

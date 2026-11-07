@@ -115,7 +115,13 @@ export function CommandBar({
           Copy code
         </Button>
       ) : null}
-      <Button appearance="subtle" icon={<SearchGlyph />} disabled={disabled} onClick={onSearch}>
+      <Button
+        appearance="subtle"
+        icon={<SearchGlyph />}
+        aria-keyshortcuts="Control+K Meta+K"
+        disabled={disabled}
+        onClick={onSearch}
+      >
         Search
       </Button>
       <span className="ms-auto flex flex-wrap items-center gap-2">

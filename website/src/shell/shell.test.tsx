@@ -24,7 +24,7 @@ import { STORAGE_KEY, saveChoice } from '../theme/themeChoice';
 import { CHOICE_EVENT, SEARCH_EVENT } from './events';
 import { SHELL_IDS } from './ids';
 import { formatKB } from './StatusBar';
-import { DOCS_BASE, componentHref } from './urls';
+import { DOCS_BASE, GUIDE_LINKS, componentHref } from './urls';
 import { MAXIMIZED_KEY, WINDOW_INIT_SCRIPT } from './windowState';
 
 vi.mock('../theme/themeChoice', async (importOriginal) => {
@@ -169,30 +169,45 @@ describe('AppLayout (server-rendered HTML)', () => {
     expect(doc.documentElement.outerHTML).not.toMatch(/fonts\.googleapis|@font-face|\.woff2?/);
   });
 
-  it('nav lists every category and all 80 links, current marked aria-current="page"', async () => {
+  it('nav lists the guides first, then every category and all 80 component links, current marked aria-current="page"', async () => {
     const doc = parse(await renderLayout({ title: 'Data grid', current: 'data-grid' }));
     const nav = doc.querySelector('nav')!;
     const categories = [...new Set(catalog.map((entry) => entry.category))];
-    // One labelled group per category, in the catalog's order: a heading and the list it names.
+    // One labelled group per category, in the catalog's order, after the Guides group: a heading
+    // and the list it names.
     const groups = [...nav.querySelectorAll('ul[aria-labelledby]')];
     expect(
       groups.map((list) => doc.getElementById(list.getAttribute('aria-labelledby')!)?.textContent),
-    ).toEqual(categories);
+    ).toEqual(['Guides', ...categories]);
     for (const list of groups) {
       expect(doc.getElementById(list.getAttribute('aria-labelledby')!)?.tagName).toBe('H2');
     }
-    const links = [...nav.querySelectorAll('a')];
+    // Guides: the three guide pages and the components index, exactly four links.
+    const [guides, ...categoryGroups] = groups;
+    const guideLinks = [...guides!.querySelectorAll('a')];
+    expect(guideLinks.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['Getting started', '/waveui/docs/getting-started'],
+      ['Theming', '/waveui/docs/theming'],
+      ['Changelog', '/waveui/docs/changelog'],
+      ['All components', '/waveui/docs/components'],
+    ]);
+    expect(GUIDE_LINKS.map((link) => link.href)).toEqual(
+      guideLinks.map((a) => a.getAttribute('href')),
+    );
+    // Components: the 80, exactly, under the categories.
+    const links = categoryGroups.flatMap((list) => [...list.querySelectorAll('a')]);
     expect(links).toHaveLength(80);
+    expect(nav.querySelectorAll('a')).toHaveLength(80 + 4);
     expect(links.map((a) => a.getAttribute('href'))).toEqual(
       catalog.map((entry) => `/waveui/docs/components/${entry.slug}`),
     );
     expect(links.map((a) => a.textContent)).toEqual(catalog.map((entry) => entry.name));
-    const current = links.filter((a) => a.hasAttribute('aria-current'));
+    const current = [...nav.querySelectorAll('a')].filter((a) => a.hasAttribute('aria-current'));
     expect(current).toHaveLength(1);
     expect(current[0]!.getAttribute('aria-current')).toBe('page');
     expect(current[0]!.getAttribute('href')).toBe('/waveui/docs/components/data-grid');
     // Each category's links sit in its own group.
-    for (const [index, list] of groups.entries()) {
+    for (const [index, list] of categoryGroups.entries()) {
       expect([...list.querySelectorAll('a')].map((a) => a.textContent)).toEqual(
         catalog.filter((entry) => entry.category === categories[index]).map((e) => e.name),
       );
@@ -242,8 +257,10 @@ describe('AppLayout (server-rendered HTML)', () => {
   it('with scripts off the nav and content are present', async () => {
     const html = await renderLayout({ title: 'Button', current: 'button', copyText: STORY_SOURCE });
     const doc = parse(html);
-    // Before hydration: the 80 links, the content and the skip link are in the HTML.
-    expect(doc.querySelectorAll(`nav#${SHELL_IDS.nav} a[href]`)).toHaveLength(80);
+    // Before hydration: the 80 component links and the 4 guide links, the content and the skip
+    // link are in the HTML.
+    expect(doc.querySelectorAll(`nav#${SHELL_IDS.nav} a[href*="/components/"]`)).toHaveLength(80);
+    expect(doc.querySelectorAll(`nav#${SHELL_IDS.nav} a[href]`)).toHaveLength(80 + 4);
     expect(doc.querySelector('main')!.textContent).toContain('Buttons start an action.');
     expect(doc.querySelector('a[href="#main"]')?.textContent).toBe('Skip to content');
     // The island's controls are rendered but unavailable until it hydrates; the maximize button
@@ -364,9 +381,13 @@ describe('AppLayout (server-rendered HTML)', () => {
     expect(order[0]!.getAttribute('href')).toBe('#main');
     expect(order[1]!.getAttribute('aria-label')).toBe('Maximize');
     expect(order[2]!.getAttribute('aria-label')).toBe('Close');
-    const navStops = order.slice(3, 83);
+    // The 4 guide links, then the 80 component links.
+    const navStops = order.slice(3, 3 + 4 + 80);
     expect(navStops.every((el) => nav.contains(el))).toBe(true);
-    const rest = order.slice(83);
+    expect(navStops.slice(0, 4).map((el) => el.getAttribute('href'))).toEqual(
+      GUIDE_LINKS.map((link) => link.href),
+    );
+    const rest = order.slice(3 + 4 + 80);
     expect(rest.length).toBeGreaterThan(0);
     expect(rest.every((el) => main.contains(el))).toBe(true);
     expect(rest.at(-1)!.textContent).toBe('Top');

@@ -1,0 +1,30 @@
+---
+/**
+ * A guide page's content (Getting started, Theming, Changelog): its h1, the "On this page" pane
+ * listing its h2s, and the content in the slot, laid out like a component page. The content
+ * element carries `data-guide-content` and the `guide-prose` styles (site.css) for the Markdown's
+ * HTML: the only place of the app whose links may leave it (to GitHub and npm, see
+ * `src/docs/markdown.ts`).
+ */
+import OnThisPage from './OnThisPage.astro';
+
+export interface Props {
+  title: string;
+  /** The page's h2s, in order. */
+  sections: readonly { id: string; title: string }[];
+}
+
+const { title, sections } = Astro.props;
+---
+
+<article
+  class="flex flex-col gap-6 p-4 break-words md:p-6 lg:grid lg:grid-cols-[minmax(0,1fr)_12rem] lg:grid-rows-[auto_1fr] lg:gap-x-8"
+>
+  <header class="flex min-w-0 flex-col gap-1 lg:col-start-1">
+    <h1 class="m-0 text-wave-title-1 font-semibold">{title}</h1>
+  </header>
+  <OnThisPage sections={sections} />
+  <div data-guide-content class="guide-prose min-w-0 text-wave-body-1 lg:col-start-1">
+    <slot />
+  </div>
+</article>

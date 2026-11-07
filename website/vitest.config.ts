@@ -19,6 +19,7 @@ const SHELL_TESTS = [
   'src/shell/**/*.test.{ts,tsx}',
   'src/islands/example.test.tsx',
   'src/islands/example.sweep.test.tsx',
+  'src/islands/search.test.tsx',
 ];
 
 export default getViteConfig({
