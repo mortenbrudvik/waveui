@@ -176,3 +176,45 @@ export const Motion: Story = {
     </div>
   ),
 };
+
+/**
+ * `relationship="inaccessible"` is a purely visual hint, for text assistive technology already
+ * has: the button gets no `aria-describedby` and no hidden description is rendered. `withArrow`
+ * draws a beak that points at the button.
+ */
+export const InaccessibleAndArrow: Story = {
+  render: ({ children: _children, ...args }) => (
+    <div className="flex items-center gap-4">
+      <Tooltip {...args} relationship="inaccessible" content="Also named by its text">
+        <Button>Save</Button>
+      </Tooltip>
+      <Tooltip {...args} withArrow content="With a beak">
+        <Button>Arrow</Button>
+      </Tooltip>
+    </div>
+  ),
+};
+
+/**
+ * `asChild` renders no wrapper `<span>`: the handlers and `ref` merge onto the button, so it keeps
+ * its place in a flex or grid layout. `positioning.target` places the tooltip at another element
+ * (here the box on the right) while the button stays the trigger.
+ */
+export const NoWrapperAndTarget: Story = {
+  render: function NoWrapperTooltips({ children: _children, ...args }) {
+    const [target, setTarget] = React.useState<HTMLElement | null>(null);
+    return (
+      <div className="flex items-center gap-4">
+        <Tooltip {...args} asChild content="No wrapper element">
+          <Button>No wrapper</Button>
+        </Tooltip>
+        <Tooltip {...args} positioning={{ target }} content="Placed at the box" side="bottom">
+          <Button>Points at the box</Button>
+        </Tooltip>
+        <div ref={setTarget} className="rounded-md border border-wave-border px-3 py-2">
+          The box
+        </div>
+      </div>
+    );
+  },
+};

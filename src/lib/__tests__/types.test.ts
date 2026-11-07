@@ -114,7 +114,13 @@ describe('open-change vocabulary', () => {
 
   it('ModalOpenChangeReason lists the Dialog and Drawer reasons', () => {
     expectTypeOf<ModalOpenChangeReason>().toEqualTypeOf<
-      'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press' | 'focus-outside' | 'parent-closed'
+      | 'trigger'
+      | 'close'
+      | 'close-button'
+      | 'escape'
+      | 'outside-press'
+      | 'focus-outside'
+      | 'parent-closed'
     >();
   });
 

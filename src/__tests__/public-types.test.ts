@@ -868,7 +868,13 @@ describe('0.6 props and unions from the package entry', () => {
     expectTypeOf<DialogProps['modalType']>().toEqualTypeOf<DialogModalType | undefined>();
     expectTypeOf<DialogOpenChangeReason>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<ModalOpenChangeReason>().toEqualTypeOf<
-      'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press' | 'focus-outside' | 'parent-closed'
+      | 'trigger'
+      | 'close'
+      | 'close-button'
+      | 'escape'
+      | 'outside-press'
+      | 'focus-outside'
+      | 'parent-closed'
     >();
     expectTypeOf<DialogOpenChangeDetails['reason']>().toEqualTypeOf<ModalOpenChangeReason>();
     expectTypeOf<DialogOpenChangeDetails>().toEqualTypeOf<
