@@ -10,6 +10,7 @@ import { reportMissingContext, warnOnce } from '../../lib/dev';
 import { FOCUSABLE_SELECTOR, getFirstTabbable, isFocusable } from '../../lib/focus';
 import { mergeProps } from '../../lib/mergeProps';
 import { isCloneableElement, unwrapFragment } from '../../lib/renderTrigger';
+import { withFragmentRefs } from '../../lib/fragmentRefs';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -21,6 +22,7 @@ import type {
   OverflowDirection,
   OverflowGroupVisibility,
 } from './Overflow.store';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { OverflowDirection, OverflowGroupVisibility };
 
@@ -583,6 +585,8 @@ const OverflowRoot = ({
   slotProps,
   ...rest
 }: OverflowProps) => {
+  const appClassName = useAppClassName(overflowClassNames.root);
+
   const [store] = React.useState(() => new OverflowStore());
   const hiddenIds = React.useSyncExternalStore(
     store.subscribe,
@@ -748,6 +752,7 @@ const OverflowRoot = ({
           overflowClassNames.root,
           'wave:flex wave:overflow-hidden wave:p-1',
           ROOT_ORIENTATION_CLASSES[orientation],
+          appClassName,
           className,
         )}
         data-orientation={orientation}
@@ -789,6 +794,8 @@ export const OverflowItem = ({
   inert,
   ...rest
 }: OverflowItemProps) => {
+  const appClassName = useAppClassName(overflowItemClassNames.root);
+
   const { store, hiddenSet } = useOverflowContext('OverflowItem');
   const isHidden = hiddenSet.has(itemId);
   React.useEffect(() => store.registerItemId(itemId), [store, itemId]);
@@ -827,7 +834,7 @@ export const OverflowItem = ({
     if (elementRef.current) store.setItemMeta(elementRef.current, priority, pinned, groupId);
   });
 
-  const itemClassName = wcn(overflowItemClassNames.root, 'wave:shrink-0', className);
+  const itemClassName = wcn(overflowItemClassNames.root, 'wave:shrink-0', appClassName, className);
 
   if (childElement) {
     // Only a hidden item sets these (and a consumer's own values), so a shown item keeps the
@@ -844,11 +851,15 @@ export const OverflowItem = ({
     );
     // The hidden display wins over the child's own style, as it does over the consumer's.
     const mergedStyle = merged.style as React.CSSProperties | undefined;
-    return React.cloneElement(childElement, {
-      ...merged,
-      ref: mergedRef,
-      style: isHidden ? { ...mergedStyle, display: 'none' } : mergedStyle,
-    } as Record<string, unknown>);
+    // A `<Fragment ref>` around the element keeps its ref: the element goes back inside it.
+    return withFragmentRefs(
+      children,
+      React.cloneElement(childElement, {
+        ...merged,
+        ref: mergedRef,
+        style: isHidden ? { ...mergedStyle, display: 'none' } : mergedStyle,
+      } as Record<string, unknown>),
+    );
   }
 
   return (
@@ -887,6 +898,8 @@ export const OverflowDivider = ({
   inert,
   ...rest
 }: OverflowDividerProps) => {
+  const appClassName = useAppClassName(overflowDividerClassNames.root);
+
   const { store, groupVisibility, orientation } = useOverflowContext('OverflowDivider');
   const isHidden = groupVisibility[groupId] === 'hidden';
   const registerRef = React.useCallback(
@@ -901,6 +914,7 @@ export const OverflowDivider = ({
       className={wcn(
         overflowDividerClassNames.root,
         DIVIDER_ORIENTATION_CLASSES[orientation],
+        appClassName,
         className,
       )}
       {...rest}

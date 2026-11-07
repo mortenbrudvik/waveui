@@ -16,6 +16,7 @@ import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { FlatTreeContext, type FlatTreeContextValue, type FlatTreeRow } from './FlatTree.context';
 import { FlatTreeItem } from './FlatTree.item';
 import type { FlatTreeModel } from './useFlatTree';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { FlatTreeItemProps } from './FlatTree.item';
 
@@ -252,6 +253,8 @@ const FlatTreeRoot = ({
   slotProps,
   ...rest
 }: FlatTreeProps) => {
+  const appClassName = useAppClassName(flatTreeClassNames.root);
+
   const modelMode = model.getTreeProps().selectionMode;
   const selectionMode = selectionModeProp ?? modelMode;
   const rows = model.visibleItems;
@@ -653,6 +656,7 @@ const FlatTreeRoot = ({
           'wave:text-body-1',
           // The window lays the rows out: the browser's scroll anchoring only fights it.
           windowed && 'wave:overflow-y-auto wave:[overflow-anchor:none]',
+          appClassName,
           className,
         )}
         {...rest}

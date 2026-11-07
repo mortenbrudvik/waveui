@@ -2,6 +2,7 @@ import * as React from 'react';
 import { skeletonClassNames, skeletonGroupClassNames } from '../../lib/classNames';
 import { wcn } from '../../lib/cn';
 import type { Shape } from '../../lib/types';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Forced colors replace the author fill with the page color, so the placeholder would vanish: it
@@ -153,6 +154,8 @@ const SkeletonRoot = ({
   ref,
   ...rest
 }: SkeletonProps) => {
+  const appClassName = useAppClassName(skeletonClassNames.root);
+
   const group = React.useContext(SkeletonGroupContext);
   // A value outside the unions (from untyped code) renders as the default instead of throwing.
   const pick = <T extends string>(
@@ -200,6 +203,7 @@ const SkeletonRoot = ({
         forcedColorsFill,
         shapeClasses[shape],
         sizeClass,
+        appClassName,
         className,
       )}
       style={{ width, height, ...style }}
@@ -250,6 +254,8 @@ export const SkeletonGroup = ({
   ref,
   ...rest
 }: SkeletonGroupProps) => {
+  const appClassName = useAppClassName(skeletonGroupClassNames.root);
+
   const loading = busy !== false && busy !== 'false';
   const defaults = React.useMemo<SkeletonGroupDefaults>(
     () => ({ size, shape, animation, appearance }),
@@ -260,7 +266,7 @@ export const SkeletonGroup = ({
       {...rest}
       aria-busy={busy}
       ref={ref}
-      className={wcn(skeletonGroupClassNames.root, className)}
+      className={wcn(skeletonGroupClassNames.root, appClassName, className)}
     >
       {loading && <span className="wave:sr-only">{label}</span>}
       <SkeletonGroupContext.Provider value={defaults}>{children}</SkeletonGroupContext.Provider>

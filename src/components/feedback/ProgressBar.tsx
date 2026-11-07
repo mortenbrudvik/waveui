@@ -9,6 +9,7 @@ import type { MotionSlot, Shape, ValidationState } from '../../lib/types';
 import { useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
 import { useId } from '../../hooks/useId';
 import { useMotionClasses } from '../../hooks/useMotion';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Color of a {@link ProgressBar}'s fill. */
 export type ProgressBarColor = 'brand' | 'success' | 'warning' | 'error';
@@ -210,6 +211,8 @@ export const ProgressBar = ({
   ref,
   ...rest
 }: ProgressBarProps) => {
+  const appClassName = useAppClassName(progressBarClassNames.root);
+
   const labelId = useId('progress-label');
   const ownId = useId('progress');
   const field = useFieldContext();
@@ -355,6 +358,7 @@ export const ProgressBar = ({
         shapeClasses[shape].track,
         'wave:forced-colors:border',
         forcedColors.border,
+        appClassName,
         className,
       )}
     >

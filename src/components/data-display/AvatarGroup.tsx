@@ -17,6 +17,7 @@ import {
   type AvatarGroupOpenChangeDetails,
   type AvatarGroupPopoverProps,
 } from './AvatarGroup.parts';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export { AvatarGroupItem, AvatarGroupPopover };
 export type { AvatarGroupItemProps, AvatarGroupOpenChangeDetails, AvatarGroupPopoverProps };
@@ -166,6 +167,8 @@ const AvatarGroupRoot = ({
   slotProps,
   ...props
 }: AvatarGroupProps) => {
+  const appClassName = useAppClassName(avatarGroupClassNames.root);
+
   // Fragments are flattened, so each member counts, overlaps and is listed on its own (C-COMPOUND).
   // A consumer-written AvatarGroup.Popover is the overflow part, not a member.
   const parts = flattenChildren(children);
@@ -221,6 +224,7 @@ const AvatarGroupRoot = ({
         avatarGroupClassNames.root,
         'wave:inline-flex wave:items-center',
         layout !== 'stack' && 'wave:gap-1',
+        appClassName,
         className,
       )}
     >

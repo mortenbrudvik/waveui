@@ -13,6 +13,7 @@ import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Stepper component. */
 export interface StepperProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -385,6 +386,8 @@ const StepperStep = ({
   slotProps,
   ...rest
 }: StepProps) => {
+  const appClassName = useAppClassName(stepperStepClassNames.root);
+
   const {
     activeStep,
     select,
@@ -576,6 +579,7 @@ const StepperStep = ({
           horizontal
             ? 'wave:flex wave:flex-1 wave:items-center'
             : 'wave:flex wave:flex-1 wave:flex-col',
+          appClassName,
           className,
         )}
       >
@@ -670,6 +674,8 @@ const StepperRoot = ({
   slotProps,
   ...rest
 }: StepperProps) => {
+  const appClassName = useAppClassName(stepperClassNames.root);
+
   // Resolved to strings, so an inline `statusLabels` object does not change the context each render.
   const completedLabel = statusLabels?.completed ?? DEFAULT_COMPLETED_LABEL;
   const errorLabel = statusLabels?.error ?? DEFAULT_ERROR_LABEL;
@@ -749,6 +755,7 @@ const StepperRoot = ({
           stepperClassNames.root,
           'wave:flex',
           horizontal ? 'wave:flex-row wave:items-start' : 'wave:flex-col',
+          appClassName,
           className,
         )}
       >

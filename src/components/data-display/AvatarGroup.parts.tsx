@@ -28,6 +28,7 @@ import { Avatar } from './Avatar';
 import type { AvatarProps } from './Avatar';
 import { avatarSizeClassesFor, type AvatarSize } from './Avatar.sizes';
 import { AvatarGroupContext } from './AvatarGroup.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Why the popup of an AvatarGroup opens or closes: its trigger, or a dismissal. */
 export type AvatarGroupOpenChangeDetails = OpenChangeDetails<DismissReason | 'trigger'>;
@@ -89,9 +90,13 @@ export interface AvatarGroupItemProps extends Omit<AvatarProps, 'slotProps'> {
 }
 
 const AvatarGroupItemImpl = ({ className, slotProps, ...props }: AvatarGroupItemProps) => {
+  const appClassName = useAppClassName(avatarGroupItemClassNames.root);
+
   const overflow = React.useContext(OverflowContext);
   if (!overflow) {
-    return <Avatar {...props} className={wcn(avatarGroupItemClassNames.root, className)} />;
+    return (
+      <Avatar {...props} className={wcn(avatarGroupItemClassNames.root, appClassName, className)} />
+    );
   }
   const { name, 'aria-label': ariaLabel, size, ref, ...avatarProps } = props;
   const text = [ariaLabel, name].find(nonBlank)?.trim() ?? overflow.unnamedMemberLabel;
@@ -101,6 +106,7 @@ const AvatarGroupItemImpl = ({ className, slotProps, ...props }: AvatarGroupItem
       className={wcn(
         avatarGroupItemClassNames.root,
         'wave:inline-flex wave:items-center wave:gap-2',
+        appClassName,
         className,
       )}
     >
@@ -256,6 +262,7 @@ const AvatarGroupPopoverImpl = ({
   className,
   ref,
 }: AvatarGroupPopoverProps) => {
+  const appClassName = useAppClassName(avatarGroupPopoverClassNames.root);
   const group = React.useContext(AvatarGroupContext);
   const items = flattenChildren(children);
   const overflow = count ?? items.length;
@@ -443,6 +450,7 @@ const AvatarGroupPopoverImpl = ({
           focusRing,
           group?.layout === 'stack' && group.hasInlineItems && 'wave:-ms-2',
           avatarSizeClassesFor(size),
+          appClassName,
           className,
         )}
         onClick={(event) => requestOpen(!isOpen, 'trigger', event.nativeEvent)}

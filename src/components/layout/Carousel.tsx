@@ -31,6 +31,7 @@ import type { CarouselContextValue, CarouselControlsLayout } from './Carousel.co
 import { useCarouselDrag } from './Carousel.drag';
 import { clampToPage, lastPageStart, pageCount } from './Carousel.groups';
 import { CAROUSEL_CONTROL_BASE, CAROUSEL_CONTROL_LAYOUT } from './Carousel.styles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { CarouselControlsLayout };
 
@@ -498,6 +499,8 @@ const CarouselRoot = ({
   ref,
   ...rest
 }: CarouselProps) => {
+  const appClassName = useAppClassName(carouselClassNames.root);
+
   // The change in flight, held for `useControllable`'s change callback (called synchronously from
   // the event path) and cleared after it.
   const changeRef = React.useRef<CarouselChangeDetails | null>(null);
@@ -796,7 +799,7 @@ const CarouselRoot = ({
         data-controls-layout={controlsLayout}
         data-appearance={appearance}
         data-motion={resolvedMotion}
-        className={wcn(carouselClassNames.root, 'wave:relative', className)}
+        className={wcn(carouselClassNames.root, 'wave:relative', appClassName, className)}
         {...rootHandlers}
         {...rest}
       />
@@ -1082,6 +1085,7 @@ const CarouselRoot = ({
           carouselClassNames.root,
           'wave:relative wave:isolate wave:overflow-hidden',
           appearance === 'elevated' && 'wave:rounded-md wave:shadow-4',
+          appClassName,
           className,
         )}
         {...rootHandlers}
@@ -1214,8 +1218,14 @@ export const CarouselItem = ({
   ref,
   ...rest
 }: CarouselItemProps) => {
+  const appClassName = useAppClassName(carouselItemClassNames.root);
+
   return (
-    <div ref={ref} className={wcn(carouselItemClassNames.root, 'wave:p-4', className)} {...rest}>
+    <div
+      ref={ref}
+      className={wcn(carouselItemClassNames.root, 'wave:p-4', appClassName, className)}
+      {...rest}
+    >
       {children}
     </div>
   );

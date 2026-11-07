@@ -64,6 +64,7 @@ import {
   type TeachingPopoverContextValue,
   type TeachingPopoverTarget,
 } from './TeachingPopover.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The TeachingPopover's parts and the surface they share with the root: `TeachingSurface` holds
@@ -245,6 +246,8 @@ interface TeachingSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
   context: TeachingPopoverContextValue;
   /** The stable classes of the component that renders the surface, first in its classes. */
   rootClassName: string;
+  /** The app-wide classes of `WaveProvider classNames` for the surface's roots, after its own. */
+  appClassName?: string;
   /** The surface's motion slot: TeachingPopover's `motion`, or the Surface's. */
   motion?: MotionSlot | null;
   ref?: React.Ref<HTMLDivElement>;
@@ -262,6 +265,7 @@ interface TeachingSurfaceProps extends React.HTMLAttributes<HTMLDivElement> {
 export const TeachingSurface = ({
   context,
   rootClassName,
+  appClassName,
   id,
   className,
   style,
@@ -503,6 +507,7 @@ export const TeachingSurface = ({
           popoverAppearanceClasses[content.appearance],
           focusRing,
           motionClassName,
+          appClassName,
           className,
         )}
       >
@@ -620,6 +625,11 @@ TeachingPopoverTrigger.displayName = 'TeachingPopoverTrigger';
  * dotted `TeachingPopover.Surface` (that needs a client file).
  */
 export const TeachingPopoverSurface = ({ id, ref, ...rest }: TeachingPopoverSurfaceProps) => {
+  const appClassName = useAppClassName(
+    teachingPopoverClassNames.root,
+    teachingPopoverSurfaceClassNames.root,
+  );
+
   const context = useTeachingPopoverContext('TeachingPopover.Surface');
   const { registerSurface, setCustomSurfaceId } = context;
   // Registered wherever it is among TeachingPopover's children: the root then drops its own
@@ -637,6 +647,7 @@ export const TeachingPopoverSurface = ({ id, ref, ...rest }: TeachingPopoverSurf
     <TeachingSurface
       context={context}
       rootClassName={wcn(teachingPopoverClassNames.root, teachingPopoverSurfaceClassNames.root)}
+      appClassName={appClassName}
       id={id}
       {...rest}
       ref={ref}
@@ -689,6 +700,8 @@ export const TeachingPopoverHeader = ({
   ref,
   ...rest
 }: TeachingPopoverHeaderProps) => {
+  const appClassName = useAppClassName(teachingPopoverHeaderClassNames.root);
+
   const { step, closeLabel, dismiss, slotProps, appearance } =
     useTeachingPopoverContext('TeachingPopover.Header');
   if (!step) return null;
@@ -706,6 +719,7 @@ export const TeachingPopoverHeader = ({
         (hasIcon || hasCaption) &&
           'wave:-mt-2 wave:mb-2 wave:flex wave:min-h-6 wave:items-center wave:gap-1.5 wave:pe-8 wave:text-caption-1 wave:font-semibold wave:text-primary',
         (hasIcon || hasCaption) && toned && 'wave:text-inherit',
+        appClassName,
         className,
       )}
       {...rest}
@@ -775,6 +789,8 @@ type TeachingPopoverTitleImplProps = TeachingPopoverTitleOwnProps &
 export const TeachingPopoverTitle: PolymorphicComponent<'h3', TeachingPopoverTitleOwnProps> = (
   props,
 ) => {
+  const appClassName = useAppClassName(teachingPopoverTitleClassNames.root);
+
   const {
     as,
     id: idProp,
@@ -805,6 +821,7 @@ export const TeachingPopoverTitle: PolymorphicComponent<'h3', TeachingPopoverTit
         teachingPopoverClassNames.title,
         'wave:mb-2 wave:pe-8 wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
         isToned(appearance) && 'wave:text-inherit',
+        appClassName,
         className,
       )}
       {...rest}
@@ -849,6 +866,8 @@ export const TeachingPopoverBody = ({
   ref,
   ...rest
 }: TeachingPopoverBodyProps) => {
+  const appClassName = useAppClassName(teachingPopoverBodyClassNames.root);
+
   const { step, appearance } = useTeachingPopoverContext('TeachingPopover.Body');
   if (!step) return null;
 
@@ -860,6 +879,7 @@ export const TeachingPopoverBody = ({
         teachingPopoverClassNames.body,
         'wave:mb-4 wave:text-body-1 wave:text-muted-foreground',
         isToned(appearance) && 'wave:text-inherit',
+        appClassName,
         className,
       )}
       {...rest}
@@ -905,6 +925,8 @@ export const TeachingPopoverFooter = ({
   ref,
   ...rest
 }: TeachingPopoverFooterProps) => {
+  const appClassName = useAppClassName(teachingPopoverFooterClassNames.root);
+
   const context = useTeachingPopoverContext('TeachingPopover.Footer');
   const { step, footerLayout } = context;
   if (!step) return null;
@@ -921,6 +943,7 @@ export const TeachingPopoverFooter = ({
         vertical
           ? 'wave:flex-col wave:items-stretch wave:gap-4'
           : 'wave:items-center wave:justify-between',
+        appClassName,
         className,
       )}
       {...rest}
@@ -1157,11 +1180,17 @@ export const TeachingPopoverCarousel = ({
   ref,
   ...rest
 }: TeachingPopoverCarouselProps) => {
+  const appClassName = useAppClassName(teachingPopoverCarouselClassNames.root);
+
   const { step } = useTeachingPopoverContext('TeachingPopover.Carousel');
   if (!step) return null;
 
   return (
-    <div ref={ref} className={wcn(teachingPopoverCarouselClassNames.root, className)} {...rest}>
+    <div
+      ref={ref}
+      className={wcn(teachingPopoverCarouselClassNames.root, appClassName, className)}
+      {...rest}
+    >
       {slotRendersContent(children) ? (
         materialiseSlotContent(children)
       ) : (
@@ -1229,6 +1258,8 @@ export const TeachingPopoverCarouselNav = ({
   slotProps,
   ...rest
 }: TeachingPopoverCarouselNavProps) => {
+  const appClassName = useAppClassName(teachingPopoverCarouselNavClassNames.root);
+
   const { step, count, index, goToStep, navLabel, navButtonLabel, appearance } =
     useTeachingPopoverContext('TeachingPopover.CarouselNav');
   if (!step) return null;
@@ -1247,6 +1278,7 @@ export const TeachingPopoverCarouselNav = ({
       className={wcn(
         teachingPopoverCarouselNavClassNames.root,
         'wave:flex wave:items-center',
+        appClassName,
         className,
       )}
       {...rest}
@@ -1338,6 +1370,8 @@ export const TeachingPopoverCarouselPageCount = ({
   ref,
   ...rest
 }: TeachingPopoverCarouselPageCountProps) => {
+  const appClassName = useAppClassName(teachingPopoverCarouselPageCountClassNames.root);
+
   const { step, count, index, appearance } = useTeachingPopoverContext(
     'TeachingPopover.CarouselPageCount',
   );
@@ -1351,6 +1385,7 @@ export const TeachingPopoverCarouselPageCount = ({
         teachingPopoverCarouselPageCountClassNames.root,
         'wave:shrink-0 wave:text-caption-1 wave:text-muted-foreground',
         isToned(appearance) && 'wave:text-inherit',
+        appClassName,
         className,
       )}
       {...rest}
@@ -1422,6 +1457,8 @@ export const TeachingPopoverCarouselFooter = ({
   ref,
   ...rest
 }: TeachingPopoverCarouselFooterProps) => {
+  const appClassName = useAppClassName(teachingPopoverCarouselFooterClassNames.root);
+
   const context = useTeachingPopoverContext('TeachingPopover.CarouselFooter');
   const centered = layout === 'centered';
   const [footer, setFooter] = React.useState<HTMLDivElement | null>(null);
@@ -1461,6 +1498,7 @@ export const TeachingPopoverCarouselFooter = ({
           teachingPopoverCarouselFooterClassNames.root,
           teachingPopoverClassNames.footer,
           'wave:flex wave:flex-wrap wave:items-center wave:justify-between wave:gap-2',
+          appClassName,
           className,
         )}
         {...rest}
@@ -1489,6 +1527,7 @@ export const TeachingPopoverCarouselFooter = ({
         teachingPopoverClassNames.footer,
         'wave:items-center wave:gap-2',
         stacked ? 'wave:flex wave:flex-wrap' : 'wave:grid wave:grid-cols-[1fr_auto_1fr]',
+        appClassName,
         className,
       )}
       {...rest}

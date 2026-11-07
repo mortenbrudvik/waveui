@@ -3,6 +3,7 @@ import { wcn } from '../../lib/cn';
 import { badgeClassNames, counterBadgeClassNames } from '../../lib/classNames';
 import type { BadgeColor, Shape, Size } from '../../lib/types';
 import { badgeColorClasses, badgeDotClasses, badgeShapeClasses } from './Badge.colors';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the CounterBadge component. */
 export interface CounterBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -104,6 +105,8 @@ export const CounterBadge = ({
   ref,
   ...props
 }: CounterBadgeProps) => {
+  const appClassName = useAppClassName(badgeClassNames.root, counterBadgeClassNames.root);
+
   if (!dot && (count < 0 || (count === 0 && !showZero))) return null;
 
   // Before 0.6 `color` was the span's HTML attribute (any string): a value outside the palette
@@ -147,6 +150,7 @@ export const CounterBadge = ({
         // In forced colors the dot's background would become Canvas and hide it: see the classes.
         dot ? badgeDotClasses : wcn('wave:font-semibold', sizeClasses[size]),
         appearanceClasses,
+        appClassName,
         className,
       )}
       {...props}

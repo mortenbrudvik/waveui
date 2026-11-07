@@ -31,7 +31,10 @@ export function isCloneableElement(node: unknown): node is React.ReactElement<Un
 /**
  * The element of a single-element Fragment (`<><Button /></>`, children of a conditional
  * expression), unwrapped at any depth; other children as given. Internal (shared by
- * `useTriggerElement` and Tooltip).
+ * `useTriggerElement`, Tooltip, Overflow.Item and Breadcrumb.Item). A Fragment that carries a
+ * `ref` is unwrapped too, which drops the ref: a caller that renders the element it found gives
+ * the ref back with `withFragmentRefs` (`lib/fragmentRefs`; `useTriggerElement`, Tooltip and
+ * Overflow.Item do, Breadcrumb.Item does not).
  */
 export function unwrapFragment(children: React.ReactNode): React.ReactNode {
   if (!React.isValidElement(children) || children.type !== React.Fragment) return children;

@@ -46,6 +46,7 @@ import {
   partitionMessageBarChildren,
   useTitlePlacement,
 } from './MessageBar.parts';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Corners of a {@link MessageBar}: `rounded` or `square`. */
 export type MessageBarShape = Extract<Shape, 'rounded' | 'square'>;
@@ -454,6 +455,8 @@ const MessageBarRoot = ({
   ref,
   ...rest
 }: MessageBarProps) => {
+  const appClassName = useAppClassName(messageBarClassNames.root);
+
   const iconClassName = wcn(
     messageBarClassNames.icon,
     'wave:mt-0.5 wave:inline-flex wave:shrink-0',
@@ -688,6 +691,7 @@ const MessageBarRoot = ({
         shape === 'square' ? 'wave:rounded-none' : 'wave:rounded',
         tintClasses[status],
         STATUS_BORDER[status],
+        appClassName,
         className,
       )}
     >

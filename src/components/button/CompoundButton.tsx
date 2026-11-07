@@ -13,6 +13,7 @@ import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorph
 import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { withPartClass } from './Button.slots';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The CompoundButton's own props (the XOwnProps rule of `PolymorphicProps`: component-specific
@@ -216,6 +217,8 @@ function renderPart(
  * </CompoundButton>
  */
 export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnProps> = (props) => {
+  const appClassName = useAppClassName(buttonClassNames.root, compoundButtonClassNames.root);
+
   const {
     secondaryText,
     appearance = 'outline',
@@ -245,7 +248,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
         shape={shape}
         icon={withPartClass(icon, compoundButtonClassNames.icon)}
         iconPosition={iconPosition}
-        className={wcn(compoundButtonClassNames.root, className)}
+        className={wcn(compoundButtonClassNames.root, appClassName, className)}
       />
     );
   }
@@ -314,6 +317,7 @@ export const CompoundButton: PolymorphicComponent<'button', CompoundButtonOwnPro
         compoundButtonClassNames.root,
         'wave:h-auto wave:items-center wave:justify-start wave:gap-3 wave:text-start',
         paddingClasses[size],
+        appClassName,
         className,
       )}
     >

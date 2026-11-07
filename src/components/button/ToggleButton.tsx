@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
-import { toggleButtonClassNames } from '../../lib/classNames';
+import { toggleButtonClassNames, buttonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { useControllable } from '../../hooks/useControllable';
@@ -9,6 +9,7 @@ import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/type
 import { Button } from './Button';
 import { withPartClass } from './Button.slots';
 import { buttonClassName } from './buttonStyles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The ToggleButton's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props
@@ -168,6 +169,8 @@ function stateAttributeFor(role: string | undefined): 'pressed' | 'checked' | 'n
  * <ToggleButton role="checkbox" isAccessible icon={<GridIcon />} aria-label="Grid" />
  */
 export const ToggleButton: PolymorphicComponent<'button', ToggleButtonOwnProps> = (props) => {
+  const appClassName = useAppClassName(buttonClassNames.root, toggleButtonClassNames.root);
+
   const {
     as,
     pressed,
@@ -226,6 +229,7 @@ export const ToggleButton: PolymorphicComponent<'button', ToggleButtonOwnProps> 
       className={wcn(
         toggleButtonClassNames.root,
         isPressed && getPressedLayer(appearance, disabledLook, isAccessible),
+        appClassName,
         className,
       )}
     />

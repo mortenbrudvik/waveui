@@ -21,6 +21,7 @@ import { useMotionClasses } from '../../hooks/useMotion';
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { getPartId } from './disclosureIds';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
@@ -414,6 +415,8 @@ const TabListRoot = ({
   ref,
   ...rest
 }: TabListProps) => {
+  const appClassName = useAppClassName(tabListClassNames.root);
+
   const orientation = orientationProp ?? 'horizontal';
 
   // The sticky mode: a controlled value that becomes `undefined` clears the selection (`''`).
@@ -637,6 +640,7 @@ const TabListRoot = ({
                 ? 'wave:border-e wave:border-border'
                 : 'wave:border-b wave:border-border'
               : 'wave:gap-1',
+            appClassName,
             className,
           )}
           {...rest}
@@ -774,6 +778,8 @@ const Tab = ({
   ref,
   ...rest
 }: TabProps) => {
+  const appClassName = useAppClassName(tabListTabClassNames.root);
+
   const ctx = useTabListContext('TabList.Tab');
   const selected = ctx.isSelected(value);
   const isVertical = ctx.orientation === 'vertical';
@@ -834,6 +840,7 @@ const Tab = ({
         disabledStyles,
         focusRingInset,
         lineMotion,
+        appClassName,
         className,
       )}
       style={tabStyle}
@@ -876,6 +883,8 @@ export interface TabPanelProps extends React.HTMLAttributes<HTMLDivElement> {
  * `aria-controls` follows it).
  */
 const TabPanel = ({ value, id: idProp, children, className, ref, ...rest }: TabPanelProps) => {
+  const appClassName = useAppClassName(tabListPanelClassNames.root);
+
   const ctx = useTabListContext('TabList.Panel');
   const insideTablist = React.useContext(TabListAreaContext) === 'tabs';
   React.useEffect(() => {
@@ -898,7 +907,7 @@ const TabPanel = ({ value, id: idProp, children, className, ref, ...rest }: TabP
     <div
       role="tabpanel"
       tabIndex={0}
-      className={wcn(tabListPanelClassNames.root, 'wave:p-4', focusRing, className)}
+      className={wcn(tabListPanelClassNames.root, 'wave:p-4', focusRing, appClassName, className)}
       {...rest}
       id={id}
       aria-labelledby={tabId}
@@ -926,15 +935,23 @@ export interface TabPanelsProps extends React.HTMLAttributes<HTMLDivElement> {
  * a Fragment or in a wrapper that holds no Tab, but a component that renders a Panel itself
  * renders inside the tablist unless it is placed in `TabList.Panels`.
  */
-const TabPanels = ({ className, children, ref, ...rest }: TabPanelsProps) => (
-  <div
-    ref={ref}
-    className={wcn(tabListPanelsClassNames.root, 'wave:min-w-0 wave:flex-1', className)}
-    {...rest}
-  >
-    {children}
-  </div>
-);
+const TabPanels = ({ className, children, ref, ...rest }: TabPanelsProps) => {
+  const appClassName = useAppClassName(tabListPanelsClassNames.root);
+  return (
+    <div
+      ref={ref}
+      className={wcn(
+        tabListPanelsClassNames.root,
+        'wave:min-w-0 wave:flex-1',
+        appClassName,
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+};
 TabPanels.displayName = 'TabPanels';
 
 /* ------------------------------------------------------------------ */

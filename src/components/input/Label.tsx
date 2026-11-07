@@ -5,6 +5,7 @@ import { markFieldLabel } from './fieldLabel';
 import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { CoreSize, TextWeight } from '../../lib/types';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Label component. */
 export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
@@ -78,6 +79,8 @@ export const Label = ({
   slotProps,
   ...rest
 }: LabelProps) => {
+  const appClassName = useAppClassName(labelClassNames.root);
+
   const requiredProps = mergeSlotProps(slotProps?.required, {
     className: wcn(labelClassNames.required, 'wave:ms-1 wave:text-error'),
     locked: { 'aria-hidden': 'true', tabIndex: undefined },
@@ -90,6 +93,7 @@ export const Label = ({
         disabled ? 'wave:text-muted-foreground' : 'wave:text-foreground',
         sizeMap[size],
         weightMap[weight],
+        appClassName,
         className,
       )}
       {...rest}

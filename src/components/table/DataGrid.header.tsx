@@ -41,6 +41,7 @@ import type {
   DataGridHeaderProps,
   DataGridSelectionCellProps,
 } from './DataGrid';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export const cellBase = 'wave:px-4 wave:py-3 wave:border-b wave:border-border';
 
@@ -284,6 +285,8 @@ export const DataGridHeader = ({
   ref,
   ...rest
 }: DataGridHeaderProps) => {
+  const appClassName = useAppClassName(dataGridHeaderClassNames.root);
+
   const { selectionMode } = useDataGridContext('DataGrid.Header');
   const windowed = React.useContext(DataGridWindowContext) !== null;
   const [thead, setThead] = React.useState<HTMLTableSectionElement | null>(null);
@@ -339,6 +342,7 @@ export const DataGridHeader = ({
               // A windowed grid scrolls in its wrapper: the header stays at its top, over the
               // rows (on the section: a header cell is positioned for its resize handle).
               windowed && 'wave:sticky wave:top-0 wave:z-1',
+              appClassName,
               className,
             )}
             {...rest}
@@ -378,6 +382,8 @@ export const DataGridHeaderCell = ({
   ref,
   ...rest
 }: DataGridHeaderCellProps) => {
+  const appClassName = useAppClassName(dataGridHeaderCellClassNames.root);
+
   const { sort, requestSort } = useDataGridSortContext('DataGrid.HeaderCell');
   const resize = React.useContext(DataGridResizeContext);
   const size = useTableSize();
@@ -443,6 +449,7 @@ export const DataGridHeaderCell = ({
         fixedLayout && 'wave:overflow-hidden',
         // The box the resize handle is drawn in, along the end edge.
         resizeColumnId !== undefined && 'wave:relative',
+        appClassName,
         className,
       )}
       {...rest}

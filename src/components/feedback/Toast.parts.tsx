@@ -14,6 +14,7 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTriggerElement } from '../../hooks/useTriggerElement';
 import { ToastAppearanceContext, ToastUnscannedContext, useToastContext } from './Toast.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Development warning (once, from an effect) for a part that renders inside the body a Toast made
@@ -80,6 +81,8 @@ export const ToastTitle = ({
   ref,
   ...rest
 }: ToastTitleProps) => {
+  const appClassName = useAppClassName(toastTitleClassNames.root);
+
   const { titleId, registerPart } = useToastContext('Toast.Title');
   useUnscannedWarning('Title');
   const rowRef = React.useRef<HTMLDivElement>(null);
@@ -106,7 +109,12 @@ export const ToastTitle = ({
     <div
       ref={mergedRef}
       {...rest}
-      className={wcn(toastTitleClassNames.root, 'wave:flex wave:items-start wave:gap-2', className)}
+      className={wcn(
+        toastTitleClassNames.root,
+        'wave:flex wave:items-start wave:gap-2',
+        appClassName,
+        className,
+      )}
     >
       <span
         id={titleId}
@@ -169,6 +177,8 @@ export const ToastBody = ({
   ref,
   ...rest
 }: ToastBodyProps) => {
+  const appClassName = useAppClassName(toastBodyClassNames.root);
+
   const { registerPart } = useToastContext('Toast.Body');
   useUnscannedWarning('Body');
   const inverted = React.useContext(ToastAppearanceContext) === 'inverted';
@@ -209,6 +219,7 @@ export const ToastBody = ({
         toastBodyClassNames.root,
         'wave:mt-0.5 wave:text-body-1',
         inverted ? 'wave:text-inverted-foreground/80' : 'wave:text-muted-foreground',
+        appClassName,
         className,
       )}
     >
@@ -231,6 +242,8 @@ export interface ToastFooterProps extends React.HTMLAttributes<HTMLDivElement> {
  * Also exported as `ToastFooter` (import the flat name from React Server Components).
  */
 export const ToastFooter = ({ className, ref, ...rest }: ToastFooterProps) => {
+  const appClassName = useAppClassName(toastFooterClassNames.root);
+
   const { registerPart } = useToastContext('Toast.Footer');
   useUnscannedWarning('Footer');
   const footerRef = React.useRef<HTMLDivElement>(null);
@@ -246,6 +259,7 @@ export const ToastFooter = ({ className, ref, ...rest }: ToastFooterProps) => {
       className={wcn(
         toastFooterClassNames.root,
         'wave:mt-2 wave:flex wave:flex-wrap wave:gap-2',
+        appClassName,
         className,
       )}
     />

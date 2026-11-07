@@ -5,6 +5,7 @@ import { materialiseSlotContent, slotRendersContent } from '../../lib/slot';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useId } from '../../hooks/useId';
 import { TREE_PART_LOCKS, useTreeItemContext } from './Tree.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the TreeItemPersonaLayout sub-component (Fluent's `TreeItemPersonaLayout`). */
 export interface TreeItemPersonaLayoutProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -70,6 +71,8 @@ export const TreeItemPersonaLayout = ({
   slotProps,
   ...rest
 }: TreeItemPersonaLayoutProps) => {
+  const appClassName = useAppClassName(treeItemPersonaLayoutClassNames.root);
+
   const { registerLayout } = useTreeItemContext('Tree.ItemPersonaLayout');
   const nameId = useId('tree-persona-name');
   const descriptionId = useId('tree-persona-description');
@@ -99,6 +102,7 @@ export const TreeItemPersonaLayout = ({
       className={wcn(
         treeItemPersonaLayoutClassNames.root,
         'wave:flex wave:min-w-0 wave:items-center wave:gap-2',
+        appClassName,
         className,
       )}
       {...rest}

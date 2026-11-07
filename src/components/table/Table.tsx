@@ -41,6 +41,7 @@ import { TableResizeHandle } from './Table.resize';
 import type { TableResizeHandleProps } from './Table.resize';
 import { SELECTION_CELL_CLASSES, TableSelectionControl, TableSortButton } from './Table.shared';
 import type { SortDirection } from './Table.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { TableSize };
 
@@ -446,6 +447,8 @@ const TableRoot = ({
   ref,
   ...props
 }: TableProps) => {
+  const appClassName = useAppClassName(tableClassNames.root);
+
   const {
     className: containerClassName,
     ref: containerRef,
@@ -623,6 +626,7 @@ const TableRoot = ({
           // `:where()` keeps the stripe at specificity 0, so any row class wins (C-CLASS). In a
           // window the rows draw it from their index (the spacer rows would shift the parity).
           striped && !windowActive && 'wave:[:where(&>tbody>tr:nth-child(odd))]:bg-card',
+          appClassName,
           className,
         )}
         {...props}
@@ -644,6 +648,8 @@ TableRoot.displayName = 'Table';
  * while the rows scroll under it, and each header row carries its `aria-rowindex`.
  */
 const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) => {
+  const appClassName = useAppClassName(tableHeaderClassNames.root);
+
   const windowContext = React.useContext(TableWindowContext);
   return (
     <thead
@@ -654,6 +660,7 @@ const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) =>
         'wave:bg-card',
         // A header cell is positioned for its resize handle: the section is the sticky one.
         windowContext && 'wave:sticky wave:top-0 wave:z-1',
+        appClassName,
         className,
       )}
     >
@@ -676,6 +683,8 @@ const TableHeaderCell = ({
   ref,
   ...props
 }: TableHeaderCellProps) => {
+  const appClassName = useAppClassName(tableHeaderCellClassNames.root);
+
   const size = useTableSize();
   const hasAside = slotRendersContent(aside);
   const asideNode = hasAside
@@ -727,6 +736,7 @@ const TableHeaderCell = ({
         'wave:px-4 wave:py-3 wave:text-start wave:font-semibold wave:text-caption-1 wave:uppercase wave:tracking-wider wave:border-b wave:border-border',
         TABLE_SIZE_CLASSES.header[size],
         sortable && 'wave:p-0 wave:hover:bg-subtle-hover',
+        appClassName,
         className,
       )}
       {...props}
@@ -751,6 +761,8 @@ const TableBody = ({
   ref,
   ...rest
 }: TableBodyProps) => {
+  const appClassName = useAppClassName(tableBodyClassNames.root);
+
   const windowContext = React.useContext(TableWindowContext);
   // The body row that holds focus stays rendered while it is scrolled out of the window.
   const [keptIndex, setKeptIndex] = React.useState<number | null>(null);
@@ -815,7 +827,7 @@ const TableBody = ({
     <tbody
       ref={ref}
       {...rest}
-      className={wcn(tableBodyClassNames.root, className)}
+      className={wcn(tableBodyClassNames.root, appClassName, className)}
       onFocus={
         trackFocus
           ? composeEventHandlers(
@@ -876,6 +888,8 @@ const TableRow = ({
   ref,
   ...props
 }: TableRowProps) => {
+  const appClassName = useAppClassName(tableRowClassNames.root);
+
   // In a table with a `virtualWindow`: the row's place and, for a body row, its fixed height.
   const windowRow = React.useContext(TableWindowRowContext);
   return (
@@ -890,6 +904,7 @@ const TableRow = ({
         windowRow?.striped && 'wave:[:where(&)]:bg-card',
         ROW_APPEARANCE_CLASSES[appearance],
         appearance !== 'none' && forcedColors.selectedContainer,
+        appClassName,
         className,
       )}
       {...props}
@@ -908,6 +923,8 @@ TableRow.displayName = 'TableRow';
 
 /** A data cell (`<td>`), the positioning box of a `Table.CellActions` inside it. */
 const TableCell = ({ children, className, ref, ...props }: TableCellProps) => {
+  const appClassName = useAppClassName(tableCellClassNames.root);
+
   const size = useTableSize();
   // A body row of a windowed table has the window's height: no block padding, one line of text.
   const windowedRow = React.useContext(TableWindowRowContext)?.index !== undefined;
@@ -920,6 +937,7 @@ const TableCell = ({ children, className, ref, ...props }: TableCellProps) => {
         TABLE_SIZE_CLASSES.cell[size],
         windowedRow &&
           'wave:py-0 wave:align-middle wave:overflow-hidden wave:text-ellipsis wave:whitespace-nowrap',
+        appClassName,
         className,
       )}
       {...props}
@@ -974,6 +992,8 @@ const TableSelectionCell = ({
   ref,
   ...rest
 }: TableSelectionCellProps) => {
+  const appClassName = useAppClassName(tableSelectionCellClassNames.root);
+
   // The details of the change being made, set around the setter.
   const detailsRef = React.useRef<TableSelectionCellCheckedChangeDetails | undefined>(undefined);
   const [checked, setChecked, isControlled] = useControllable<boolean | 'mixed'>(
@@ -1043,6 +1063,7 @@ const TableSelectionCell = ({
         SELECTION_CELL_CLASSES,
         TABLE_SIZE_CLASSES.selectionCell[size],
         windowedRow && 'wave:py-0 wave:align-middle',
+        appClassName,
         className,
       )}
     >
@@ -1136,6 +1157,8 @@ const TableCellLayout = ({
   ref,
   ...rest
 }: TableCellLayoutProps) => {
+  const appClassName = useAppClassName(tableCellLayoutClassNames.root);
+
   const size = useTableSize();
   const hasMedia = slotRendersContent(media);
   const hasMain = slotRendersContent(children);
@@ -1161,6 +1184,7 @@ const TableCellLayout = ({
         tableCellLayoutClassNames.root,
         'wave:flex wave:items-center wave:gap-2',
         truncate && 'wave:overflow-x-hidden',
+        appClassName,
         className,
       )}
     >
@@ -1243,19 +1267,23 @@ const CELL_ACTIONS_REVEAL_CLASSES =
  * DataGrid's selected row); a row with a background of its own needs the same class on its
  * actions. The element carries `data-visible` while `visible` is set.
  */
-const TableCellActions = ({ visible = false, className, ref, ...rest }: TableCellActionsProps) => (
-  <div
-    ref={ref}
-    data-visible={visible ? '' : undefined}
-    {...rest}
-    className={wcn(
-      tableCellActionsClassNames.root,
-      CELL_ACTIONS_CLASSES,
-      visible ? undefined : CELL_ACTIONS_REVEAL_CLASSES,
-      className,
-    )}
-  />
-);
+const TableCellActions = ({ visible = false, className, ref, ...rest }: TableCellActionsProps) => {
+  const appClassName = useAppClassName(tableCellActionsClassNames.root);
+  return (
+    <div
+      ref={ref}
+      data-visible={visible ? '' : undefined}
+      {...rest}
+      className={wcn(
+        tableCellActionsClassNames.root,
+        CELL_ACTIONS_CLASSES,
+        visible ? undefined : CELL_ACTIONS_REVEAL_CLASSES,
+        appClassName,
+        className,
+      )}
+    />
+  );
+};
 TableCellActions.displayName = 'TableCellActions';
 
 export {

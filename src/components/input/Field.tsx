@@ -16,6 +16,7 @@ import {
 } from '../../hooks/useFieldControl';
 import { useWaveTheme } from '../provider/WaveProvider';
 import { isFieldLabelElement, type FieldLabelElementProps } from './fieldLabel';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Props Field reads from and merges into its first element child. */
 interface InjectedFieldProps {
@@ -664,6 +665,8 @@ export const Field = ({
   slotProps,
   ...rest
 }: FieldProps) => {
+  const appClassName = useAppClassName(fieldClassNames.root);
+
   const fieldId = useId('field');
   // Hands the control id to one library control when Field leaves its first child alone.
   const [controlIdClaim] = React.useState(createFieldControlIdClaim);
@@ -844,6 +847,7 @@ export const Field = ({
         fieldClassNames.root,
         'wave:flex',
         horizontal ? 'wave:flex-row wave:items-start wave:gap-x-3' : 'wave:flex-col',
+        appClassName,
         className,
       )}
       {...rest}

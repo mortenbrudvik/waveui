@@ -20,6 +20,7 @@ import {
   TagGroupHostContext,
 } from './TagGroup.context';
 import type { TagGroupContextValue, TagGroupMode } from './TagGroup.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Props of {@link TagGroup}: the element that holds the tags (a `<div>`). */
 export interface TagGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'defaultValue'> {
@@ -295,6 +296,8 @@ export const TagGroup = ({
   children,
   ...rest
 }: TagGroupProps) => {
+  const appClassName = useAppClassName(tagGroupClassNames.root);
+
   const role = roleProp ?? 'toolbar';
   const mode: TagGroupMode = role === 'list' ? 'list' : 'toolbar';
   const isToolbar = mode === 'toolbar';
@@ -507,6 +510,7 @@ export const TagGroup = ({
             'wave:relative wave:inline-flex wave:flex-wrap wave:items-center',
             tagGroupGapClasses[size],
             orientation === 'vertical' && 'wave:flex-col wave:items-start',
+            appClassName,
             className,
           )}
         >

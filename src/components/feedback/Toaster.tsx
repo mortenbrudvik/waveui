@@ -33,6 +33,7 @@ import { StatusText, getStatusLabel } from './MessageBar.status';
 import { ToastContext, ToasterContext } from './Toast.context';
 import type { ToastContextValue, ToastPartRegistration, ToastRegistration } from './Toast.context';
 import { ToastRoot } from './Toast.root';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -1476,6 +1477,8 @@ export const Toaster = ({
   ref,
   ...rest
 }: ToasterProps) => {
+  const appClassName = useAppClassName(toasterClassNames.root);
+
   // A position outside the union (untyped code) is the default.
   const position: ToastPosition = Object.hasOwn(positionClasses, positionProp)
     ? positionProp
@@ -2147,6 +2150,7 @@ export const Toaster = ({
             toasterClassNames.root,
             'wave:fixed wave:flex wave:w-80 wave:max-w-[calc(100vw-2rem)] wave:flex-col wave:gap-2',
             positionClasses[position],
+            appClassName,
             className,
           )}
         >

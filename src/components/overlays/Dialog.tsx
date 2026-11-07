@@ -49,6 +49,7 @@ import {
 } from './Dialog.shared';
 import { ModalBackdrop, ModalCloseButton } from './Dialog.slots';
 import { getTabbableThrough, usePopoverTabOrder } from './Popover.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Why a {@link Dialog} asks to open or close: `trigger` (`Dialog.Trigger`), `close`
@@ -633,6 +634,9 @@ export const DialogContent = ({
   slotProps,
   ...rest
 }: DialogContentProps) => {
+  const appDialogContent = useAppClassName(dialogContentClassNames.root);
+  const appDialogTitle = useAppClassName(dialogTitleClassNames.root);
+
   const {
     open,
     requestOpen,
@@ -814,6 +818,7 @@ export const DialogContent = ({
             'wave:pointer-events-auto wave:relative wave:m-4 wave:flex wave:min-w-0 wave:max-h-[calc(100dvh-2rem)] wave:w-full wave:flex-col wave:rounded-lg wave:border wave:border-border wave:bg-background wave:p-6 wave:text-foreground wave:shadow-64',
             sizeClasses[size],
             surfaceMotion,
+            appDialogContent,
             className,
           )}
         >
@@ -824,6 +829,7 @@ export const DialogContent = ({
                 className={wcn(
                   dialogTitleClassNames.root,
                   'wave:pe-[var(--wave-dialog-title-end-padding,2rem)] wave:text-subtitle-1 wave:font-semibold',
+                  appDialogTitle,
                 )}
               >
                 {title}
@@ -902,6 +908,8 @@ export const DialogTitle = ({
   ref,
   ...rest
 }: DialogTitleProps) => {
+  const appClassName = useAppClassName(dialogTitleClassNames.root);
+
   const { id: titleId, ref: titleRef } = useModalTitle('Dialog.Title', 'Dialog.Content', id, ref);
   // `undefined` outside Dialog.Content (a Drawer), `null` until the content's outlet is attached.
   const outlet = React.useContext(ModalSurfaceContext)?.titleActionsOutlet;
@@ -913,6 +921,7 @@ export const DialogTitle = ({
       className={wcn(
         dialogTitleClassNames.root,
         'wave:pe-[var(--wave-dialog-title-end-padding,2rem)] wave:text-subtitle-1 wave:font-semibold wave:text-foreground',
+        appClassName,
         className,
       )}
     >
@@ -974,6 +983,8 @@ export const DialogFooter = ({
   ref,
   ...rest
 }: DialogFooterProps) => {
+  const appClassName = useAppClassName(dialogFooterClassNames.root);
+
   const surfaceContext = React.useContext(ModalSurfaceContext);
   const outsideContent = surfaceContext === null;
   const setFooterHeight = surfaceContext?.setFooterHeight;
@@ -1019,6 +1030,7 @@ export const DialogFooter = ({
         position === 'start' && 'wave:justify-start',
         fluid && 'wave:*:flex-1',
         stackOnNarrow && 'wave:max-[480px]:flex-col wave:max-[480px]:*:w-full',
+        appClassName,
         className,
       )}
     >

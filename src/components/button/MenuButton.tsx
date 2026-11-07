@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
-import { menuButtonClassNames } from '../../lib/classNames';
+import { menuButtonClassNames, buttonClassNames } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { ChevronDownIcon } from '../../lib/icons';
 import { materialiseSlotContent, renderSlot, slotRendersContent } from '../../lib/slot';
@@ -8,6 +8,7 @@ import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorph
 import type { Size, Appearance, Shape, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { unwrapButtonGlyph, withPartClass } from './Button.slots';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The MenuButton's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props
@@ -121,6 +122,8 @@ const unlabelledSizeClasses: Record<Size, string> = {
  * </Menu>
  */
 export const MenuButton: PolymorphicComponent<'button', MenuButtonOwnProps> = (props) => {
+  const appClassName = useAppClassName(buttonClassNames.root, menuButtonClassNames.root);
+
   const {
     appearance = 'outline',
     size = 'medium',
@@ -197,6 +200,7 @@ export const MenuButton: PolymorphicComponent<'button', MenuButtonOwnProps> = (p
         menuButtonClassNames.root,
         'wave:gap-1.5',
         unlabelled && unlabelledSizeClasses[size],
+        appClassName,
         className,
       )}
     >

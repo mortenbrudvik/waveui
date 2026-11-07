@@ -23,6 +23,7 @@ import { ToastAppearanceContext, ToastContext, ToastUnscannedContext } from './T
 import type { ToastContextValue } from './Toast.context';
 import { ToastBody, ToastFooter, ToastTitle } from './Toast.parts';
 import type { ToastAppearance } from './Toaster';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Toast component. */
 export interface ToastProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -172,6 +173,8 @@ export const ToastRoot = ({
   ref,
   ...rest
 }: ToastProps) => {
+  const appClassName = useAppClassName(toastClassNames.root);
+
   // Inside the Toaster's container, whose context has `registerToast`, the Toast registers its
   // severity, `onDismiss` and Dismiss button there and its parts use that context (the container's
   // ids); everywhere else it provides its own context and is a live region (D9, D10).
@@ -292,6 +295,7 @@ export const ToastRoot = ({
           ? 'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border wave:border-s-4 wave:border-inverted-border wave:bg-inverted wave:p-3 wave:text-inverted-foreground wave:shadow-4'
           : 'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border wave:border-s-4 wave:border-border wave:bg-background wave:p-3 wave:text-foreground wave:shadow-4',
         STATUS_BORDER[status],
+        appClassName,
         className,
       )}
     >

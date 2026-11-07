@@ -25,6 +25,7 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFocusableGroup } from '../../hooks/useFocusableGroup';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Elements whose own events a selectable card ignores: a click or key press that starts inside a
@@ -320,6 +321,8 @@ type CardImplProps = CardOwnProps &
 
 // The Card root, documented on the exported `Card` const.
 const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardClassNames.root);
+
   const {
     as,
     selected: selectedProp,
@@ -572,6 +575,7 @@ const CardRoot: PolymorphicComponent<'div', CardOwnProps> = (props) => {
               selectable && !disabled && 'wave:cursor-pointer',
               selectable && !selected && cardAppearanceClasses[appearance].interactive,
               cardMode && focusRing,
+              appClassName,
               className,
             )}
             onClick={handleClick}
@@ -722,6 +726,8 @@ type CardHeaderImplProps = CardHeaderOwnProps &
  * Flat export for React Server Components (`Card.Header` in client files).
  */
 export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardHeaderClassNames.root);
+
   const { as, title, subtitle, image, action, className, children, ref, slotProps, ...rest } =
     props as CardHeaderImplProps;
   const Component: React.ElementType = as ?? 'div';
@@ -779,6 +785,7 @@ export const CardHeader: PolymorphicComponent<'div', CardHeaderOwnProps> = (prop
                 ? 'wave:grid-cols-[auto_1fr]'
                 : 'wave:grid-cols-[1fr_auto]',
           ),
+        appClassName,
         className,
       )}
       {...rest}
@@ -824,6 +831,8 @@ type CardSectionImplProps = React.HTMLAttributes<HTMLElement> & {
  * client files).
  */
 export const CardBody: PolymorphicComponent<'div', CardBodyOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardBodyClassNames.root);
+
   const { as, className, ref, ...rest } = props as CardSectionImplProps;
   const Component: React.ElementType = as ?? 'div';
   return (
@@ -832,6 +841,7 @@ export const CardBody: PolymorphicComponent<'div', CardBodyOwnProps> = (props) =
       className={wcn(
         cardBodyClassNames.root,
         'wave:p-[var(--wave-card-padding,1rem)] wave:pt-0',
+        appClassName,
         className,
       )}
       {...rest}
@@ -855,6 +865,8 @@ export type CardFooterProps<C extends React.ElementType = 'div'> = PolymorphicPr
  * files).
  */
 export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardFooterClassNames.root);
+
   const { as, className, ref, ...rest } = props as CardSectionImplProps;
   const Component: React.ElementType = as ?? 'div';
   return (
@@ -863,6 +875,7 @@ export const CardFooter: PolymorphicComponent<'div', CardFooterOwnProps> = (prop
       className={wcn(
         cardFooterClassNames.root,
         'wave:flex wave:justify-end wave:gap-2 wave:p-[var(--wave-card-padding,1rem)] wave:pt-0',
+        appClassName,
         className,
       )}
       {...rest}

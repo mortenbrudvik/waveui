@@ -38,6 +38,7 @@ export type { MenuOpenChangeDetails, MenuOpenChangeReason } from './Menu.context
 import { MENU_ITEM_SELECTOR, menuSurfaceClasses, withTypeaheadText } from './Menu.shared';
 import { MenuPopover, useMenuListPointer } from './Menu.popover';
 import { MenuTrigger } from './Menu.trigger';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Menu component. */
 export interface MenuProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -216,6 +217,8 @@ export const MenuRoot = ({
   ref,
   ...rest
 }: MenuProps) => {
+  const appClassName = useAppClassName(menuClassNames.root);
+
   // A Menu rendered in a menu list with no portal between them is a submenu of that list's menu.
   // A Menu inside a Popover or Dialog opened from an item sits one portal deeper: a root menu.
   const list = useMenuListContext();
@@ -783,7 +786,13 @@ export const MenuRoot = ({
           )}
           onFocus={composeEventHandlers(onFocus, rovingFocus, { checkDefaultPrevented: false })}
           onPointerMove={composeEventHandlers(onPointerMove, listPointerMove)}
-          className={wcn(menuClassNames.root, menuSurfaceClasses, focusRing, className)}
+          className={wcn(
+            menuClassNames.root,
+            menuSurfaceClasses,
+            focusRing,
+            appClassName,
+            className,
+          )}
         >
           <MenuListElementContext.Provider value={listElement}>
             {children}

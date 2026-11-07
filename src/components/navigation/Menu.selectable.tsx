@@ -21,6 +21,7 @@ import {
   useMenuItemPlacementWarning,
 } from './Menu.items';
 import type { MenuItemProps, MenuItemRowPartClassNames } from './Menu.items';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** The `checkedValues` group a checkable menu item belongs to (Fluent's `MenuItemSelectableProps`). */
 export interface MenuItemSelectableProps {
@@ -397,21 +398,24 @@ SelectableMenuItem.displayName = 'SelectableMenuItem';
  *
  * Also exported as `MenuItemCheckbox` (import the flat name from React Server Components).
  */
-export const MenuItemCheckbox = (props: MenuItemCheckboxProps) => (
-  <SelectableMenuItem
-    {...props}
-    kind="checkbox"
-    componentName="Menu.ItemCheckbox"
-    rootClassName={wcn(menuItemClassNames.root, menuItemCheckboxClassNames.root)}
-    partClassNames={{
-      checkmark: wcn(menuItemClassNames.checkmark, menuItemCheckboxClassNames.checkmark),
-      icon: wcn(menuItemClassNames.icon, menuItemCheckboxClassNames.icon),
-      content: wcn(menuItemClassNames.content, menuItemCheckboxClassNames.content),
-      shortcut: wcn(menuItemClassNames.shortcut, menuItemCheckboxClassNames.shortcut),
-      subText: wcn(menuItemClassNames.subText, menuItemCheckboxClassNames.subText),
-    }}
-  />
-);
+export const MenuItemCheckbox = (props: MenuItemCheckboxProps) => {
+  const appClassName = useAppClassName(menuItemClassNames.root, menuItemCheckboxClassNames.root);
+  return (
+    <SelectableMenuItem
+      {...props}
+      kind="checkbox"
+      componentName="Menu.ItemCheckbox"
+      rootClassName={wcn(menuItemClassNames.root, menuItemCheckboxClassNames.root, appClassName)}
+      partClassNames={{
+        checkmark: wcn(menuItemClassNames.checkmark, menuItemCheckboxClassNames.checkmark),
+        icon: wcn(menuItemClassNames.icon, menuItemCheckboxClassNames.icon),
+        content: wcn(menuItemClassNames.content, menuItemCheckboxClassNames.content),
+        shortcut: wcn(menuItemClassNames.shortcut, menuItemCheckboxClassNames.shortcut),
+        subText: wcn(menuItemClassNames.subText, menuItemCheckboxClassNames.subText),
+      }}
+    />
+  );
+};
 MenuItemCheckbox.displayName = 'MenuItemCheckbox';
 
 /**
@@ -428,21 +432,24 @@ MenuItemCheckbox.displayName = 'MenuItemCheckbox';
  *
  * Also exported as `MenuItemRadio` (import the flat name from React Server Components).
  */
-export const MenuItemRadio = (props: MenuItemRadioProps) => (
-  <SelectableMenuItem
-    {...props}
-    kind="radio"
-    componentName="Menu.ItemRadio"
-    rootClassName={wcn(menuItemClassNames.root, menuItemRadioClassNames.root)}
-    partClassNames={{
-      checkmark: wcn(menuItemClassNames.checkmark, menuItemRadioClassNames.checkmark),
-      icon: wcn(menuItemClassNames.icon, menuItemRadioClassNames.icon),
-      content: wcn(menuItemClassNames.content, menuItemRadioClassNames.content),
-      shortcut: wcn(menuItemClassNames.shortcut, menuItemRadioClassNames.shortcut),
-      subText: wcn(menuItemClassNames.subText, menuItemRadioClassNames.subText),
-    }}
-  />
-);
+export const MenuItemRadio = (props: MenuItemRadioProps) => {
+  const appClassName = useAppClassName(menuItemClassNames.root, menuItemRadioClassNames.root);
+  return (
+    <SelectableMenuItem
+      {...props}
+      kind="radio"
+      componentName="Menu.ItemRadio"
+      rootClassName={wcn(menuItemClassNames.root, menuItemRadioClassNames.root, appClassName)}
+      partClassNames={{
+        checkmark: wcn(menuItemClassNames.checkmark, menuItemRadioClassNames.checkmark),
+        icon: wcn(menuItemClassNames.icon, menuItemRadioClassNames.icon),
+        content: wcn(menuItemClassNames.content, menuItemRadioClassNames.content),
+        shortcut: wcn(menuItemClassNames.shortcut, menuItemRadioClassNames.shortcut),
+        subText: wcn(menuItemClassNames.subText, menuItemRadioClassNames.subText),
+      }}
+    />
+  );
+};
 MenuItemRadio.displayName = 'MenuItemRadio';
 
 /**
@@ -454,18 +461,21 @@ MenuItemRadio.displayName = 'MenuItemRadio';
  *
  * Also exported as `MenuItemSwitch` (import the flat name from React Server Components).
  */
-export const MenuItemSwitch = (props: MenuItemSwitchProps) => (
-  <SelectableMenuItem
-    {...props}
-    kind="switch"
-    componentName="Menu.ItemSwitch"
-    rootClassName={wcn(menuItemClassNames.root, menuItemSwitchClassNames.root)}
-    partClassNames={{
-      icon: wcn(menuItemClassNames.icon, menuItemSwitchClassNames.icon),
-      content: wcn(menuItemClassNames.content, menuItemSwitchClassNames.content),
-      shortcut: wcn(menuItemClassNames.shortcut, menuItemSwitchClassNames.shortcut),
-      subText: wcn(menuItemClassNames.subText, menuItemSwitchClassNames.subText),
-    }}
-  />
-);
+export const MenuItemSwitch = (props: MenuItemSwitchProps) => {
+  const appClassName = useAppClassName(menuItemClassNames.root, menuItemSwitchClassNames.root);
+  return (
+    <SelectableMenuItem
+      {...props}
+      kind="switch"
+      componentName="Menu.ItemSwitch"
+      rootClassName={wcn(menuItemClassNames.root, menuItemSwitchClassNames.root, appClassName)}
+      partClassNames={{
+        icon: wcn(menuItemClassNames.icon, menuItemSwitchClassNames.icon),
+        content: wcn(menuItemClassNames.content, menuItemSwitchClassNames.content),
+        shortcut: wcn(menuItemClassNames.shortcut, menuItemSwitchClassNames.shortcut),
+        subText: wcn(menuItemClassNames.subText, menuItemSwitchClassNames.subText),
+      }}
+    />
+  );
+};
 MenuItemSwitch.displayName = 'MenuItemSwitch';

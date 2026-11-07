@@ -7,6 +7,7 @@ import { useId } from '../../hooks/useId';
 import { markFieldLabel } from '../input/fieldLabel';
 import { Label, type LabelProps } from '../input/Label';
 import { InfoButton, InfoNoteClassContext } from './InfoButton';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the InfoLabel component. */
 export interface InfoLabelProps
@@ -117,6 +118,8 @@ export const InfoLabel = ({
   slotProps,
   ...rest
 }: InfoLabelProps) => {
+  const appClassName = useAppClassName(infoLabelClassNames.root);
+
   const generatedLabelId = useId('info-label');
   // An empty `id` counts as unset, so the button's name never points at an empty id.
   const labelId = id || generatedLabelId;
@@ -132,6 +135,7 @@ export const InfoLabel = ({
       className={wcn(
         infoLabelClassNames.root,
         'wave:inline-flex wave:items-center wave:gap-0',
+        appClassName,
         className,
       )}
       {...rest}

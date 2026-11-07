@@ -46,6 +46,7 @@ import type { ExactMatchCandidate } from './TagPicker.create';
 import type { TagPickerOption } from './TagPicker.option';
 import { useFocusWithin, useTagOverflow } from './TagPicker.overflow';
 import { TagPickerControl, TagPickerList, tagListControls } from './TagPicker.parts';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The TagPicker's built-in names, descriptions and announcements, for localization. Each member is
@@ -513,6 +514,8 @@ function findList(
 }
 
 export const TagPickerRoot = (props: TagPickerProps) => {
+  const appClassName = useAppClassName(tagPickerClassNames.root);
+
   const {
     options = EMPTY_OPTIONS,
     children,
@@ -1198,7 +1201,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
 
   const rootPart = slotProps?.root;
   const rootProps = mergeSlotProps(rootPart, {
-    className: wcn(tagPickerClassNames.root, 'wave:relative', className),
+    className: wcn(tagPickerClassNames.root, 'wave:relative', appClassName, className),
     style,
     locked: {
       'data-size': size,

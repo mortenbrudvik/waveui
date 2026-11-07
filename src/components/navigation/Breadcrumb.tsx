@@ -17,6 +17,7 @@ import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { useTriggerElement } from '../../hooks/useTriggerElement';
 import { Overflow, OverflowItem } from '../layout/Overflow';
 import { Menu } from './Menu';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Breadcrumb component. */
 export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
@@ -671,6 +672,8 @@ const BreadcrumbRoot = ({
   slotProps,
   ...rest
 }: BreadcrumbProps) => {
+  const appClassName = useAppClassName(breadcrumbClassNames.root);
+
   // Fragments are opened (`{isAdmin && <>…</>}`), so every crumb gets its own list item and separator.
   const entries = flattenChildren(children);
   const auto = overflow === 'auto';
@@ -840,7 +843,7 @@ const BreadcrumbRoot = ({
           ? composeEventHandlers(onFocus, containerProps.onFocus, { checkDefaultPrevented: false })
           : onFocus
       }
-      className={wcn(breadcrumbClassNames.root, className)}
+      className={wcn(breadcrumbClassNames.root, appClassName, className)}
     >
       {list}
     </nav>
@@ -906,6 +909,8 @@ function BreadcrumbItem(props: BreadcrumbItemDynamicProps): React.ReactElement;
 function BreadcrumbItem(
   props: BreadcrumbItemProps | BreadcrumbItemDynamicProps,
 ): React.ReactElement {
+  const appClassName = useAppClassName(breadcrumbItemClassNames.root);
+
   const {
     href,
     current = false,
@@ -986,6 +991,7 @@ function BreadcrumbItem(
         className={wcn(
           breadcrumbItemClassNames.root,
           current ? currentChildClasses : linkClasses,
+          appClassName,
           className,
         )}
         icon={renderedIcon}
@@ -1001,7 +1007,7 @@ function BreadcrumbItem(
         ref={ref as React.Ref<HTMLSpanElement>}
         aria-current="page"
         onClick={onClick}
-        className={wcn(breadcrumbItemClassNames.root, currentClasses, className)}
+        className={wcn(breadcrumbItemClassNames.root, currentClasses, appClassName, className)}
       >
         {renderedIcon}
         {children}
@@ -1020,7 +1026,7 @@ function BreadcrumbItem(
         aria-disabled={linkDisabled ? true : ariaDisabled}
         tabIndex={linkDisabled ? -1 : anchorRest.tabIndex}
         onClick={preventIfDisabled(linkDisabled, onClick)}
-        className={wcn(breadcrumbItemClassNames.root, linkClasses, className)}
+        className={wcn(breadcrumbItemClassNames.root, linkClasses, appClassName, className)}
       >
         {renderedIcon}
         {children}
@@ -1037,7 +1043,7 @@ function BreadcrumbItem(
         {...(buttonRest as React.ButtonHTMLAttributes<HTMLButtonElement>)}
         ref={ref as React.Ref<HTMLButtonElement>}
         onClick={onClick}
-        className={wcn(breadcrumbItemClassNames.root, linkClasses, className)}
+        className={wcn(breadcrumbItemClassNames.root, linkClasses, appClassName, className)}
       >
         {renderedIcon}
         {children}
@@ -1049,7 +1055,7 @@ function BreadcrumbItem(
     <span
       {...spanAttributes(rest)}
       ref={ref as React.Ref<HTMLSpanElement>}
-      className={wcn(breadcrumbItemClassNames.root, textClasses, className)}
+      className={wcn(breadcrumbItemClassNames.root, textClasses, appClassName, className)}
     >
       {renderedIcon}
       {children}

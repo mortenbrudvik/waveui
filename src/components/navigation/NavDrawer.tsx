@@ -43,6 +43,7 @@ import {
   type NavDrawerContextValue,
   type NavDrawerLayoutContextValue,
 } from './NavDrawer.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * NavDrawer: Nav's state (`useNavRootState`) and a navigation landmark in the drawer panel shell
@@ -390,6 +391,8 @@ const NavDrawerRoot = ({
   slotProps,
   ...rest
 }: NavDrawerProps) => {
+  const appClassName = useAppClassName(drawerClassNames.root, navDrawerClassNames.root);
+
   const [openState, requestOpen] = useModalOpenState(openProp, defaultOpen, onOpenChange);
   // An overlay reports itself closed until the page has hydrated (its portal renders only in the
   // browser), so a Hamburger's aria-controls never names a panel that is not there.
@@ -468,6 +471,7 @@ const NavDrawerRoot = ({
       trigger={inertModalTrigger}
       finalFocusRef={finalFocusRef}
       rootClassName={wcn(drawerClassNames.root, navDrawerClassNames.root)}
+      appClassName={appClassName}
       backdropClassName={wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)}
       collapseClassName={wcn(drawerClassNames.collapse, navDrawerClassNames.collapse)}
       backdrop={backdrop}
@@ -514,6 +518,8 @@ NavDrawerRoot.displayName = 'NavDrawer';
  * body or the footer). Its line underneath shows while the body is scrolled away from its top.
  */
 export const NavDrawerHeader = ({ className, children, ref, ...rest }: NavDrawerHeaderProps) => {
+  const appClassName = useAppClassName(navDrawerHeaderClassNames.root);
+
   const { scrollState } = useNavDrawerLayout('NavDrawer.Header');
   return (
     <div
@@ -524,6 +530,7 @@ export const NavDrawerHeader = ({ className, children, ref, ...rest }: NavDrawer
         navDrawerHeaderClassNames.root,
         'wave:flex wave:shrink-0 wave:items-center wave:gap-2 wave:ps-2.5 wave:pe-2 wave:py-2',
         scrollSeparatorClasses.header,
+        appClassName,
         className,
       )}
     >
@@ -547,6 +554,8 @@ export const NavDrawerBody = ({
   slotProps,
   ...rest
 }: NavDrawerBodyProps) => {
+  const appClassName = useAppClassName(navDrawerBodyClassNames.root);
+
   const { scrollState, registerBody } = useNavDrawerLayout('NavDrawer.Body');
   const nav = React.useContext(NavContext);
   const arrow = focusMode === 'arrow';
@@ -607,6 +616,7 @@ export const NavDrawerBody = ({
       className={wcn(
         navDrawerBodyClassNames.root,
         'wave:min-h-0 wave:flex-1 wave:overflow-y-auto wave:py-2',
+        appClassName,
         className,
       )}
     >
@@ -637,6 +647,8 @@ export const NavDrawerFooter = ({
   slotProps,
   ...rest
 }: NavDrawerFooterProps) => {
+  const appClassName = useAppClassName(navDrawerFooterClassNames.root);
+
   const { scrollState } = useNavDrawerLayout('NavDrawer.Footer');
   // Development only: every child of the list is an <li> (`NavDrawer.Footer:list-child`).
   const listRef = React.useRef<HTMLUListElement>(null);
@@ -651,6 +663,7 @@ export const NavDrawerFooter = ({
         navDrawerFooterClassNames.root,
         'wave:shrink-0 wave:py-2',
         scrollSeparatorClasses.footer,
+        appClassName,
         className,
       )}
     >

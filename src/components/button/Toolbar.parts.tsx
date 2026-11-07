@@ -7,6 +7,8 @@ import {
   toolbarRadioButtonClassNames,
   toolbarRadioGroupClassNames,
   toolbarToggleButtonClassNames,
+  buttonClassNames,
+  toggleButtonClassNames,
 } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -20,6 +22,7 @@ import { ToggleButton } from './ToggleButton';
 import type { ToggleButtonProps } from './ToggleButton';
 import { withPartClass } from './Button.slots';
 import { useToolbarContext } from './Toolbar.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The parts of a Toolbar: `Toolbar.Button`, `Toolbar.ToggleButton`, `Toolbar.RadioGroup`,
@@ -73,6 +76,8 @@ const verticalIconBoxClasses: Record<Size, string> = {
  * <Toolbar.Button vertical icon={<PasteIcon />}>Paste</Toolbar.Button>
  */
 export const ToolbarButton: PolymorphicComponent<'button', ToolbarButtonOwnProps> = (props) => {
+  const appClassName = useAppClassName(buttonClassNames.root, toolbarButtonClassNames.root);
+
   const {
     vertical = false,
     appearance = 'subtle',
@@ -93,7 +98,12 @@ export const ToolbarButton: PolymorphicComponent<'button', ToolbarButtonOwnProps
         toolbarButtonClassNames.icon,
       )}
       data-vertical={vertical ? '' : undefined}
-      className={wcn(toolbarButtonClassNames.root, vertical && verticalButtonClasses, className)}
+      className={wcn(
+        toolbarButtonClassNames.root,
+        vertical && verticalButtonClasses,
+        appClassName,
+        className,
+      )}
     />
   );
 };
@@ -158,6 +168,12 @@ export const ToolbarToggleButton = ({
   onClick,
   ...rest
 }: ToolbarToggleButtonProps) => {
+  const appClassName = useAppClassName(
+    buttonClassNames.root,
+    toggleButtonClassNames.root,
+    toolbarToggleButtonClassNames.root,
+  );
+
   const toolbar = useToolbarContext('Toolbar.ToggleButton');
   const { checked } = toolbar;
   useRegisterCheckable(toolbar.registerCheckable, name, value);
@@ -165,7 +181,7 @@ export const ToolbarToggleButton = ({
     <ToggleButton
       {...rest}
       icon={withPartClass(icon, toolbarToggleButtonClassNames.icon)}
-      className={wcn(toolbarToggleButtonClassNames.root, className)}
+      className={wcn(toolbarToggleButtonClassNames.root, appClassName, className)}
       appearance={appearance}
       size={size ?? toolbar.size}
       pressed={checked.isChecked(name, value)}
@@ -202,6 +218,12 @@ export const ToolbarRadioButton = ({
   onClick,
   ...rest
 }: ToolbarRadioButtonProps) => {
+  const appClassName = useAppClassName(
+    buttonClassNames.root,
+    toggleButtonClassNames.root,
+    toolbarRadioButtonClassNames.root,
+  );
+
   const toolbar = useToolbarContext('Toolbar.RadioButton');
   const { checked } = toolbar;
   useRegisterCheckable(toolbar.registerCheckable, name, value);
@@ -209,7 +231,7 @@ export const ToolbarRadioButton = ({
     <ToggleButton
       {...rest}
       icon={withPartClass(icon, toolbarRadioButtonClassNames.icon)}
-      className={wcn(toolbarRadioButtonClassNames.root, className)}
+      className={wcn(toolbarRadioButtonClassNames.root, appClassName, className)}
       role="radio"
       appearance={appearance}
       size={size ?? toolbar.size}
@@ -258,6 +280,8 @@ export const ToolbarRadioGroup = ({
   ref,
   ...rest
 }: ToolbarRadioGroupProps) => {
+  const appClassName = useAppClassName(toolbarRadioGroupClassNames.root);
+
   const { orientation } = useToolbarContext('Toolbar.RadioGroup');
   const ariaLabel = rest['aria-label'];
   const ariaLabelledBy = rest['aria-labelledby'];
@@ -307,6 +331,7 @@ export const ToolbarRadioGroup = ({
         toolbarRadioGroupClassNames.root,
         'wave:flex wave:gap-1',
         orientation === 'vertical' && 'wave:flex-col',
+        appClassName,
         className,
       )}
     />
@@ -337,6 +362,8 @@ export interface ToolbarGroupProps extends React.HTMLAttributes<HTMLDivElement> 
  * </Toolbar.Group>
  */
 export const ToolbarGroup = ({ role, className, ref, ...rest }: ToolbarGroupProps) => {
+  const appClassName = useAppClassName(toolbarGroupClassNames.root);
+
   const { orientation } = useToolbarContext('Toolbar.Group');
   const named = Boolean(rest['aria-label'] || rest['aria-labelledby']);
   return (
@@ -349,6 +376,7 @@ export const ToolbarGroup = ({ role, className, ref, ...rest }: ToolbarGroupProp
         toolbarGroupClassNames.root,
         'wave:flex wave:gap-1',
         orientation === 'vertical' && 'wave:flex-col',
+        appClassName,
         className,
       )}
     />
@@ -372,6 +400,8 @@ export interface ToolbarDividerProps extends Omit<
  * (`Toolbar.Divider` in client files).
  */
 export const ToolbarDivider = ({ className, ref, ...rest }: ToolbarDividerProps) => {
+  const appClassName = useAppClassName(toolbarDividerClassNames.root);
+
   const { orientation } = useToolbarContext('Toolbar.Divider');
   const vertical = orientation === 'vertical';
   return (
@@ -386,6 +416,7 @@ export const ToolbarDivider = ({ className, ref, ...rest }: ToolbarDividerProps)
           ? 'wave:my-1 wave:h-0 wave:shrink-0 wave:self-stretch wave:border-t wave:border-border'
           : 'wave:mx-1 wave:w-0 wave:shrink-0 wave:self-stretch wave:border-s wave:border-border',
         forcedColors.border,
+        appClassName,
         className,
       )}
     />

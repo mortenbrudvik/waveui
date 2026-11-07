@@ -13,6 +13,7 @@ import type {
 } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useAppClassName } from '../../hooks/useAppClassName';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTargetConflictWarning } from '../../hooks/useResolvedTarget';
@@ -359,6 +360,7 @@ export const TeachingPopoverRoot = ({
   slotProps,
   ...rest
 }: TeachingPopoverProps) => {
+  const appClassName = useAppClassName(teachingPopoverClassNames.root);
   useTargetConflictWarning('TeachingPopover', targetProp, positioning?.target);
   const explicitTarget = (
     targetProp !== undefined ? targetProp : positioning?.target
@@ -604,6 +606,7 @@ export const TeachingPopoverRoot = ({
         <TeachingSurface
           context={context}
           rootClassName={teachingPopoverClassNames.root}
+          appClassName={appClassName}
           id={id}
           className={className}
           style={style}

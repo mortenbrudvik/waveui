@@ -11,8 +11,8 @@ import {
   Tooltip as ChartTooltip,
 } from 'chart.js';
 import type { ChartOptions } from 'chart.js';
-import { Switch, chartSeries, cn, useId, waveTokens } from '../src';
-import type { WaveTokenName } from '../src';
+import { Switch, chartSeries, cn, useId, useWaveTheme, waveTokens } from '../src';
+import type { WaveDir, WaveTokenName } from '../src';
 
 // Chart.js is tree-shakable: a bar chart registers its controller, element, scales and plugins.
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, Legend, ChartTooltip);
@@ -307,6 +307,9 @@ function RechartsExample() {
     (name) => waveTokens[name],
     (color) => color,
   );
+  // Right-to-left: the categories run from the right (a reversed axis) and the value axis sits on
+  // the right, the start side. The legend is HTML and follows the direction on its own.
+  const rtl = useWaveTheme().dir === 'rtl';
   useRechartsMeasurementCleanup();
   return (
     <ChartFigure>
@@ -319,16 +322,20 @@ function RechartsExample() {
         responsive
         style={{ width: '100%', height: 320 }}
         barGap={2}
-        margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+        margin={
+          rtl ? { top: 8, right: 0, bottom: 0, left: 8 } : { top: 8, right: 8, bottom: 0, left: 0 }
+        }
       >
         <CartesianGrid vertical={false} stroke={colors.grid} />
         <XAxis
           dataKey="quarter"
+          reversed={rtl}
           stroke={colors.grid}
           tick={{ fill: colors.mutedText }}
           tickLine={false}
         />
         <YAxis
+          orientation={rtl ? 'right' : 'left'}
           stroke={colors.grid}
           tick={{ fill: colors.mutedText }}
           tickLine={false}
@@ -430,11 +437,19 @@ function canvasFill(
   return fill ?? colors.fill;
 }
 
+/**
+ * The options of the bar chart. A canvas draws its own legend, tooltip and axes, so none of them
+ * follows the page's `dir`: right-to-left layouts reverse the category axis, put the value axis on
+ * the right and set `rtl` and `textDirection` on the legend and the tooltip.
+ */
 function chartJsOptions(
   { colors, font }: ReturnType<typeof resolveCanvasTheme>,
   animate: boolean,
+  dir: WaveDir,
 ): ChartOptions<'bar'> {
   const ticks = { color: colors.mutedText, font: { family: font } };
+  const rtl = dir === 'rtl';
+  const textDirection = dir;
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -442,6 +457,8 @@ function chartJsOptions(
     plugins: {
       legend: {
         position: 'bottom',
+        rtl,
+        textDirection,
         labels: { color: colors.text, font: { family: font }, boxWidth: 16, boxHeight: 16 },
       },
       tooltip: {
@@ -450,13 +467,21 @@ function chartJsOptions(
         bodyColor: colors.tooltip.text,
         borderColor: colors.tooltip.border,
         borderWidth: 1,
+        rtl,
+        textDirection,
         titleFont: { family: font },
         bodyFont: { family: font },
       },
     },
     scales: {
-      x: { ticks, grid: { display: false }, border: { color: colors.grid } },
-      y: { beginAtZero: true, ticks, grid: { color: colors.grid }, border: { display: false } },
+      x: { reverse: rtl, ticks, grid: { display: false }, border: { color: colors.grid } },
+      y: {
+        position: rtl ? 'right' : 'left',
+        beginAtZero: true,
+        ticks,
+        grid: { color: colors.grid },
+        border: { display: false },
+      },
     },
   };
 }
@@ -464,6 +489,7 @@ function chartJsOptions(
 function ChartJsExample() {
   const [canvas, setCanvas] = React.useState<HTMLCanvasElement | null>(null);
   const forcedColors = useForcedColors();
+  const { dir } = useWaveTheme();
 
   React.useEffect(() => {
     const context = canvas && canDrawOnCanvas() ? canvas.getContext('2d') : null;
@@ -484,7 +510,7 @@ function ChartJsExample() {
           maxBarThickness: 24,
         })),
       },
-      options: chartJsOptions(theme, !reducedMotion),
+      options: chartJsOptions(theme, !reducedMotion, dir),
     });
 
     // A canvas cannot read `var()`: when the theme toolbar (or a provider's `tokens`) changes the
@@ -501,7 +527,7 @@ function ChartJsExample() {
           ratio,
         );
       });
-      chart.options = chartJsOptions(next, false);
+      chart.options = chartJsOptions(next, false, dir);
       chart.update();
     };
     const observer = new MutationObserver(repaint);
@@ -516,7 +542,7 @@ function ChartJsExample() {
       observer.disconnect();
       chart.destroy();
     };
-  }, [canvas, forcedColors]);
+  }, [canvas, forcedColors, dir]);
 
   return (
     <ChartFigure>
@@ -537,7 +563,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'WaveUI ships no chart component: these two recipes draw charts from third-party libraries with the WaveUI tokens, so they follow the theme toolbar. Both use the first six colours of `chartSeries`, a fill pattern per series as a second encoding (colour is never the only one, and in high contrast every series is white), text in the `foreground` colours, and an image name, a description and a data table. Recharts and Chart.js are development dependencies of these stories only; neither is part of the package.',
+          'WaveUI ships no chart component: these two recipes draw charts from third-party libraries with the WaveUI tokens, so they follow the theme toolbar. Both use the first six colours of `chartSeries`, a fill pattern per series as a second encoding (colour is never the only one, and in high contrast every series is white), text in the `foreground` colours, an image name, a description and a data table, and, in right-to-left layouts (the direction toolbar), a reversed category axis, the value axis on the right and a right-to-left legend and tooltip. Recharts and Chart.js are development dependencies of these stories only; neither is part of the package.',
       },
     },
   },
@@ -550,7 +576,8 @@ type Story = StoryObj<typeof meta>;
  * An SVG chart: each series takes `waveTokens[chartSeries[index]]` (`var(--wave-chart-1)`, …)
  * as its colour, so the bars, the patterns and the legend follow the theme with no code. The
  * patterns are SVG `<pattern>`s inked in the `background` token, which reads on every series colour
- * in every theme. In forced-colors mode the chart draws with system colours.
+ * in every theme. In forced-colors mode the chart draws with system colours. In a right-to-left layout
+ * the category axis is reversed and the value axis sits on the right.
  */
 export const Recharts: Story = {
   render: () => <RechartsExample />,
@@ -560,7 +587,9 @@ export const Recharts: Story = {
  * A canvas chart. A canvas cannot read a CSS variable, so the story resolves each token with
  * `getComputedStyle(canvas).getPropertyValue('--wave-chart-1')` and draws the patterns on
  * canvas tiles. A `MutationObserver` on the closest `[data-wave-theme]` element (the provider
- * root) resolves them again and redraws when its theme class or its `tokens` style changes.
+ * root) resolves them again and redraws when its theme class or its `tokens` style changes. A canvas
+ * ignores the page's direction, so a right-to-left layout reverses the category axis, moves the
+ * value axis to the right and sets `rtl` on the legend and the tooltip.
  */
 export const ChartJs: Story = {
   name: 'Chart.js',

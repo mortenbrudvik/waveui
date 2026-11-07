@@ -13,6 +13,7 @@ import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/type
 import { markButton } from './Button.mark';
 import { useButtonSemantics } from './Button.semantics';
 import { buttonClassName } from './buttonStyles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The Button's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
@@ -130,6 +131,8 @@ type ButtonImplProps = ButtonOwnProps &
  * <Button icon={<CloseIcon />} aria-label="Close" appearance="subtle" />
  */
 export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) => {
+  const appClassName = useAppClassName(buttonClassNames.root);
+
   const {
     as,
     appearance = 'outline',
@@ -228,6 +231,7 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
         buttonClassNames.root,
         buttonClassName({ appearance, size, shape, disabled: showDisabledLook, iconOnly }),
         hasIcon && hasLabel && 'wave:gap-1.5',
+        appClassName,
         className,
       )}
       {...enforced}

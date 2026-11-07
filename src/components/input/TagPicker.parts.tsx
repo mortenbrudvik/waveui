@@ -8,6 +8,7 @@ import {
   tagPickerGroupClassNames,
   tagPickerInputClassNames,
   tagPickerListClassNames,
+  tagGroupClassNames,
 } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
@@ -53,6 +54,7 @@ import {
 import type { TagPickerContextValue, TagPickerControlContextValue } from './TagPicker.context';
 import { TagPickerOption } from './TagPicker.option';
 import type { TagPickerSize } from './TagPicker.root';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Shared                                                             */
@@ -251,6 +253,8 @@ function TagPickerControlImpl({
   ref,
   ...rest
 }: ControlImplProps) {
+  const appClassName = useAppClassName(tagPickerControlClassNames.root);
+
   const { registerTrigger, setReference, controlElementRef } = ctx;
   const controlContext = React.useMemo<TagPickerControlContextValue>(
     () => ({ registerTrigger }),
@@ -302,6 +306,7 @@ function TagPickerControlImpl({
           ctx.disabled &&
             'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
           ctx.collapsed && 'wave:flex-nowrap',
+          appClassName,
           className,
         )}
         onMouseDown={composeEventHandlers(onMouseDown, handlePress)}
@@ -443,6 +448,8 @@ function TagPickerGroupImpl({
   ref,
   ...rest
 }: GroupImplProps) {
+  const appClassName = useAppClassName(tagGroupClassNames.root, tagPickerGroupClassNames.root);
+
   const { groupRef, chipRef, hiddenValues, disabled, focusTrigger } = ctx;
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, groupRef);
   const chipPart = ctx.slotProps?.overflowCount;
@@ -539,6 +546,7 @@ function TagPickerGroupImpl({
             'wave:flex wave:flex-wrap wave:items-center wave:gap-1',
             ctx.collapsed &&
               'wave:min-w-0 wave:flex-nowrap wave:overflow-hidden wave:whitespace-nowrap wave:*:shrink-0',
+            appClassName,
             className,
           )}
           onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
@@ -670,6 +678,8 @@ function TagPickerInputImpl({
   ref,
   ...rest
 }: InputImplProps) {
+  const appClassName = useAppClassName(tagPickerInputClassNames.root);
+
   const { registerTrigger } = control;
   React.useLayoutEffect(() => registerTrigger('input'), [registerTrigger]);
   const { triggerProps, inputProps, listbox } = ctx;
@@ -773,6 +783,7 @@ function TagPickerInputImpl({
         tagPickerClassNames.input,
         'wave:min-w-15 wave:flex-1 wave:bg-transparent wave:text-foreground wave:placeholder:text-muted-foreground wave:focus:outline-hidden',
         TAG_PICKER_SIZE[ctx.size].trigger,
+        appClassName,
         className,
       )}
     />
@@ -831,6 +842,8 @@ function TagPickerButtonImpl({
   ref,
   ...rest
 }: ButtonImplProps) {
+  const appClassName = useAppClassName(tagPickerButtonClassNames.root);
+
   const { registerTrigger } = control;
   React.useLayoutEffect(() => registerTrigger('button'), [registerTrigger]);
   const { triggerProps, listbox } = ctx;
@@ -885,6 +898,7 @@ function TagPickerButtonImpl({
         // Padding and background set here (C-NATIVE); the control's focus look shows its focus.
         'wave:min-w-15 wave:flex-1 wave:border-0 wave:bg-transparent wave:px-0 wave:text-start wave:text-foreground wave:focus:outline-hidden wave:disabled:cursor-not-allowed',
         TAG_PICKER_SIZE[ctx.size].trigger,
+        appClassName,
         className,
       )}
     >
@@ -962,6 +976,8 @@ function TagPickerListImpl({
   ref,
   ...rest
 }: ListImplProps) {
+  const appClassName = useAppClassName(tagPickerListClassNames.root);
+
   const { registerList, listbox, slotProps, virtualWindow } = ctx;
   React.useLayoutEffect(() => registerList(), [registerList]);
   // The list element's ref, with the window's: the shown list is its scroller.
@@ -1091,6 +1107,7 @@ function TagPickerListImpl({
         tagPickerClassNames.listbox,
         // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
         virtualWindow && 'wave:[overflow-anchor:none]',
+        appClassName,
         className,
       )}
       surfaceClassName={tagPickerClassNames.surface}

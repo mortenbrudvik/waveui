@@ -8,6 +8,7 @@ import {
   colorPickerHexFieldClassNames,
   colorPickerPreviewClassNames,
   colorPickerSwatchesClassNames,
+  swatchPickerClassNames,
 } from '../../lib/classNames';
 import { wcn } from '../../lib/cn';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
@@ -25,6 +26,7 @@ import {
   sameColor,
   type HexColor,
 } from './colorUtils';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The picker's labels and context, and how the standalone color parts bind to it (spec P3-05,
@@ -392,6 +394,8 @@ export const ColorPickerHexField = ({
   slotProps,
   ...rest
 }: ColorPickerHexFieldProps) => {
+  const appClassName = useAppClassName(colorPickerHexFieldClassNames.root);
+
   const picker = usePickerPartContext('ColorPicker.HexField');
   const { color, parsed, field, groupInvalid, errorMessageId, labels } = picker;
   const alpha = parsed?.alpha ?? 255;
@@ -476,6 +480,7 @@ export const ColorPickerHexField = ({
     className: wcn(
       colorPickerHexFieldClassNames.root,
       'wave:flex wave:min-w-0 wave:flex-col wave:gap-1',
+      appClassName,
       className,
     ),
     style,
@@ -596,6 +601,11 @@ export const ColorPickerSwatches = ({
   shape = 'rounded',
   ...rest
 }: ColorPickerSwatchesProps) => {
+  const appClassName = useAppClassName(
+    swatchPickerClassNames.root,
+    colorPickerSwatchesClassNames.root,
+  );
+
   const picker = usePickerPartContext('ColorPicker.Swatches');
   if (picker.presetItems.length === 0) return null;
   return (
@@ -606,7 +616,7 @@ export const ColorPickerSwatches = ({
       size={size}
       shape={shape}
       {...rest}
-      className={wcn(colorPickerSwatchesClassNames.root, className)}
+      className={wcn(colorPickerSwatchesClassNames.root, appClassName, className)}
       items={picker.presetItems}
       value={picker.parsed ? picker.parsed.rgb : ''}
       onValueChange={picker.pickPreset}
@@ -627,6 +637,8 @@ export interface ColorPickerPreviewProps extends React.HTMLAttributes<HTMLDivEle
  * `ColorPickerPreview`.
  */
 export const ColorPickerPreview = ({ className, style, ref, ...rest }: ColorPickerPreviewProps) => {
+  const appClassName = useAppClassName(colorPickerPreviewClassNames.root);
+
   const picker = usePickerPartContext('ColorPicker.Preview');
   const shown = picker.parsed
     ? formatHexColor(picker.parsed.rgb, picker.parsed.alpha)
@@ -641,6 +653,7 @@ export const ColorPickerPreview = ({ className, style, ref, ...rest }: ColorPick
         colorPickerPreviewClassNames.root,
         'wave:h-10 wave:w-10 wave:shrink-0 wave:rounded wave:border wave:border-border wave:forced-colors:forced-color-adjust-none',
         picker.shape === 'square' && 'wave:rounded-none',
+        appClassName,
         className,
       )}
       style={{ ...style, backgroundColor: shown }}

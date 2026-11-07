@@ -98,6 +98,11 @@ export function isElementOfType<P = unknown>(
  * (a Fragment's key prefixes its children's keys: `.$group/.$a`). Use it wherever a component
  * counts, slices or classifies its direct children.
  *
+ * A Fragment is opened whatever it carries, so a `ref` on it (React 19.3's `FragmentInstance`) is
+ * not attached: the compounds that walk their children find a part written inside the Fragment,
+ * which a Fragment kept as one child would hide. Put the `ref` on an element of your own inside
+ * the compound's part instead.
+ *
  * @param children The children to flatten.
  * @param prefix   Prepended to every key (used for the recursion).
  */

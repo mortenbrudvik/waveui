@@ -23,6 +23,7 @@ import {
 } from './Option.data';
 import { announceRange, announceToggle, PickerAnnouncer } from './pickerLabels';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Listbox                                                           */
@@ -207,6 +208,8 @@ const UNNAMED_WARNING =
 const DISABLED_ATTRIBUTES = { 'aria-disabled': true, 'data-disabled': '' } as const;
 
 const ListboxRoot = (props: ListboxProps<boolean>) => {
+  const appClassName = useAppClassName(listboxClassNames.root);
+
   const {
     multiselect = false,
     value: valueProp,
@@ -464,6 +467,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
         // Windowed: the options start at the top of the scroller, where the window counts them,
         // and the window lays them out (the browser's scroll anchoring only fights it).
         activeWindow && 'wave:py-0 wave:[overflow-anchor:none]',
+        appClassName,
         className,
       )}
     >

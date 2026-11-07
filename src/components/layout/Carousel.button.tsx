@@ -6,6 +6,7 @@ import { focusableDisabledProps, preventIfDisabled } from '../../lib/aria';
 import { ChevronLeftIcon, ChevronRightIcon } from '../../lib/icons';
 import { useCarouselContext } from './Carousel.context';
 import { CAROUSEL_CONTROL_BASE, CAROUSEL_CONTROL_LAYOUT } from './Carousel.styles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the CarouselButton sub-component. */
 export interface CarouselButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -30,6 +31,8 @@ export const CarouselButton = ({
   ref,
   ...rest
 }: CarouselButtonProps) => {
+  const appClassName = useAppClassName(carouselButtonClassNames.root);
+
   const carousel = useCarouselContext('Carousel.Button');
   const previous = direction === 'previous';
   const disabled = previous ? carousel.previousDisabled : carousel.nextDisabled;
@@ -54,6 +57,7 @@ export const CarouselButton = ({
         carouselButtonClassNames.root,
         CAROUSEL_CONTROL_BASE,
         CAROUSEL_CONTROL_LAYOUT[carousel.controlsLayout][direction],
+        appClassName,
         className,
       )}
     >

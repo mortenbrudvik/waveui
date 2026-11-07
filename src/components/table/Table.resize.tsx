@@ -7,6 +7,7 @@ import { composeAfterPart, mergeSlotProps } from '../../lib/slotProps';
 import type { SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** How far an arrow key moves the edge, in pixels, and how far with Shift held. */
 const KEY_STEP = 20;
@@ -142,6 +143,8 @@ const TableResizeHandle = ({
   ref,
   ...rest
 }: TableResizeHandleProps) => {
+  const appClassName = useAppClassName(tableResizeHandleClassNames.root);
+
   const dragRef = React.useRef<DragState | null>(null);
   const [dragging, setDragging] = React.useState(false);
   /** The Enter or Space pressed on the handle whose release leaves it; `null` otherwise. */
@@ -327,6 +330,7 @@ const TableResizeHandle = ({
     // The line is a border, so forced colors paint it only where it shows.
     'wave:forced-colors:forced-color-adjust-none wave:forced-colors:hover:border-[ButtonText] wave:forced-colors:focus-visible:border-[Highlight] wave:forced-colors:data-[dragging]:border-[Highlight]',
     focusRing,
+    appClassName,
     className,
   );
   // The handle's attributes, in their order, and the handlers that act on an event: with a part,

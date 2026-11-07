@@ -6,6 +6,7 @@ import type { PresenceStatus, Size, Slot } from '../../lib/types';
 import { renderSlot, slotRendersContent } from '../../lib/slot';
 import { Avatar } from './Avatar';
 import { PresenceBadge } from './PresenceBadge';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** The size of a Persona: the Avatar sizes, and `huge` (a 72px avatar). */
 export type PersonaSize = Size | 'huge';
@@ -130,6 +131,8 @@ export const Persona = ({
   ref,
   ...props
 }: PersonaProps) => {
+  const appClassName = useAppClassName(personaClassNames.root);
+
   const resolvedAlignment = textAlignment ?? (textPosition === 'below' ? 'center' : 'start');
   const hasPrimary = primaryText !== undefined ? slotRendersContent(primaryText) : !!name;
   React.useEffect(() => {
@@ -184,7 +187,12 @@ export const Persona = ({
       data-text-position={textPosition}
       data-text-alignment={resolvedAlignment}
       data-presence-only={presenceOnly ? '' : undefined}
-      className={wcn(personaClassNames.root, positionClasses[textPosition], className)}
+      className={wcn(
+        personaClassNames.root,
+        positionClasses[textPosition],
+        appClassName,
+        className,
+      )}
       {...props}
     >
       {presenceOnly ? (

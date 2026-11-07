@@ -9,6 +9,7 @@ import { slotRendersContent } from '../../lib/slot';
 import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { unwrapButtonGlyph, withPartClass } from './Button.slots';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Props for one half of a SplitButton (`menuButtonProps`, `primaryActionButtonProps`): native
@@ -185,6 +186,8 @@ export const SplitButton = ({
   ref,
   ...props
 }: SplitButtonProps) => {
+  const appClassName = useAppClassName(splitButtonClassNames.root);
+
   const generatedPrimaryId = useId('split-button-primary');
   const primary = mergeProps(
     { 'aria-describedby': ariaDescribedBy, onClick } as SplitButtonMenuButtonProps,
@@ -243,7 +246,12 @@ export const SplitButton = ({
       data-shape={shape}
       {...props}
       role={role ?? 'group'}
-      className={wcn(splitButtonClassNames.root, 'wave:inline-flex wave:items-stretch', className)}
+      className={wcn(
+        splitButtonClassNames.root,
+        'wave:inline-flex wave:items-stretch',
+        appClassName,
+        className,
+      )}
     >
       <Button
         {...primary}

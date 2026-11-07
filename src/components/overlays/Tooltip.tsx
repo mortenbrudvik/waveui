@@ -14,6 +14,7 @@ import {
   STATE_ARIA,
   unwrapFragment,
 } from '../../lib/renderTrigger';
+import { withFragmentRefs } from '../../lib/fragmentRefs';
 import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import type { MotionSlot, PopupAlign, PopupPositioning, PopupSide } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
@@ -28,6 +29,7 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { usePopupTarget } from '../../hooks/useResolvedTarget';
 import { Portal } from '../portal/Portal';
 import { PopoverBeak } from './Popover.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Color treatment of a tooltip (`TooltipProps.appearance`). */
 export type TooltipAppearance = 'inverted' | 'normal';
@@ -434,6 +436,8 @@ export const Tooltip = ({
   slotProps,
   ...rest
 }: TooltipProps) => {
+  const appClassName = useAppClassName(tooltipClassNames.root);
+
   const appearance = appearanceProp ?? 'inverted';
   const openDelay = openDelayProp ?? 200;
   const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
@@ -660,7 +664,11 @@ export const Tooltip = ({
       ref: childRef,
     } as UnknownProps);
   } else {
-    child = renderTrigger(target, triggerProps, { componentName: 'Tooltip' });
+    // A `<Fragment ref>` around the target keeps its ref: the element goes back inside it.
+    child = withFragmentRefs(
+      children,
+      renderTrigger(target, triggerProps, { componentName: 'Tooltip' }),
+    );
   }
   useRelationshipTarget(
     anchorRef,
@@ -743,7 +751,7 @@ export const Tooltip = ({
     <span
       ref={anchorCallback}
       {...wrapperProps}
-      className={wcn(tooltipClassNames.root, 'wave:inline-block', className)}
+      className={wcn(tooltipClassNames.root, 'wave:inline-block', appClassName, className)}
       {...handlers}
     >
       {child}

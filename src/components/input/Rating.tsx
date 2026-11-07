@@ -28,6 +28,7 @@ import {
   type RatingColor,
   type RatingContextValue,
 } from './Rating.item';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The Rating's built-in star names, for localization. Each member is optional and falls back to
@@ -283,6 +284,8 @@ const RatingRoot = ({
   ref,
   ...rest
 }: RatingProps) => {
+  const appClassName = useAppClassName(ratingClassNames.root);
+
   const initialValue = defaultValue ?? 0;
   const [value, setValue] = useControllable(valueProp, initialValue, onValueChange);
   // The items draw whole or half stars only, so the keys move by one of the two (untyped code
@@ -429,6 +432,7 @@ const RatingRoot = ({
         ratingClassNames.root,
         'wave:relative wave:inline-flex wave:items-center wave:gap-0.5',
         disabled && 'wave:pointer-events-none wave:opacity-50',
+        appClassName,
         className,
       )}
       {...rest}
@@ -500,6 +504,8 @@ const RatingDisplayRoot = ({
   slotProps,
   ...rest
 }: RatingDisplayProps) => {
+  const appClassName = useAppClassName(ratingDisplayClassNames.root);
+
   const formatLocale = supportedLocale(locale);
   const invalidLocale = locale !== undefined && formatLocale === undefined;
   React.useEffect(() => {
@@ -559,6 +565,7 @@ const RatingDisplayRoot = ({
       className={wcn(
         ratingDisplayClassNames.root,
         'wave:inline-flex wave:items-center wave:gap-0.5',
+        appClassName,
         className,
       )}
       {...rest}

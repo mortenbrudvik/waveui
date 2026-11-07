@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { withFlipClass } from './flipIcon';
 
 /**
  * Props of the shared internal icons. Every other SVG attribute is forwarded to the `<svg>`.
@@ -15,6 +16,16 @@ export interface IconProps extends React.SVGProps<SVGSVGElement> {
   size?: number | string;
   /** Accessible name; makes the icon a named image instead of a decorative one. */
   title?: string;
+  /**
+   * Mirrors the glyph horizontally when the icon's own direction is right-to-left (Wave's
+   * `wave-rtl` flip, added after your `className`), for a glyph that points along
+   * the reading direction (a chevron, an arrow). Fluent's `flipInRtl` icon option is the
+   * counterpart, here a prop instead of a property of the icon. The icon's own direction is the
+   * `dir` of the closest element that sets one, so a `WaveProvider dir="rtl"` subtree flips it.
+   * For an icon of your own use `flipIconInRtl`.
+   * @default false
+   */
+  flipInRtl?: boolean;
 }
 
 /** An internal icon component. */
@@ -60,7 +71,14 @@ function createIcon({
           strokeLinejoin: 'round',
         };
 
-  const Icon = ({ size = defaultSize, title, children, ...rest }: IconProps) => {
+  const Icon = ({
+    size = defaultSize,
+    title,
+    flipInRtl,
+    className,
+    children,
+    ...rest
+  }: IconProps) => {
     const a11yProps: React.SVGProps<SVGSVGElement> = title
       ? { role: 'img' }
       : { 'aria-hidden': true, focusable: 'false' };
@@ -74,6 +92,7 @@ function createIcon({
         {...paintProps}
         {...a11yProps}
         {...rest}
+        className={flipInRtl ? withFlipClass(className) : className}
       >
         {title ? <title>{title}</title> : null}
         {content}

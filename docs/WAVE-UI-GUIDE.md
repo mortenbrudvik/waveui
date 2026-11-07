@@ -219,6 +219,37 @@ The class is your Tailwind build's, and `./utilities`' (Wave's components write 
 
 Whether `medium` looks different depends on the faces the font ships: where a family has no face at weight 500, the browser draws a neighbouring face instead, and the engines do not pick the same one. On Windows 11, none of Segoe UI, Bahnschrift and Consolas has a 500 face: measured in the 0.17 exit browser pass, Firefox draws a `medium` Segoe UI or Bahnschrift line with the regular face, Chromium and WebKit with the semibold face, and all three draw Consolas with its regular face. So `medium` is distinct from both `regular` and `semibold` only where the font has a 500 face; with the default stacks on Windows it looks like one of them, depending on the browser, and `semibold` is the weight to use where the emphasis must show.
 
+**A real `medium`.** To make `medium` a face of its own, load a family that has a 500 face and put it first in the stack. WaveUI changes no stack for this (the stacks are Fluent's, and a family you load is a design decision), so the recipe is yours: declare the faces with `@font-face` in your stylesheet, then point the family token at them, on `:root` or through `WaveProvider tokens`.
+
+```css
+/* One variable font file covers every weight Text and Label ask for, 400 to 700 included. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --wave-font-family:
+    'Inter', 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto,
+    'Helvetica Neue', sans-serif;
+}
+```
+
+```tsx
+<WaveProvider
+  tokens={{
+    fontFamily: "'Inter', 'Segoe UI', 'Segoe UI Web (West European)', sans-serif",
+  }}
+>
+  <Text weight="medium">Distinct from regular and semibold</Text>
+</WaveProvider>
+```
+
+Notes: the `@font-face` rule belongs in a stylesheet, since an inline `style` (what `tokens` writes) cannot declare one, and `tokens` only names the family; with static font files, declare one rule per weight (400, 500, 600 and 700) under the same `font-family` name. Keep the Segoe UI entries after your family so a visitor whose font has not loaded yet, or is blocked, still gets the default look. The same works for the monospace and numeric families (`--wave-font-family-monospace`, `--wave-font-family-numeric`), whose default faces have no 500 weight either. Under a Content Security Policy, allow the font file's origin in `font-src`.
+
 ### Typography Best Practices
 
 - **body-1 (14px)** is the default for all UI text (`WaveProvider` sets it)
@@ -680,12 +711,39 @@ Registered in the `@theme inline` block of `src/styles/tokens.css` for your clas
 
 ### Fluent System Icons (External Dependency)
 
-> Icons are **not bundled** for your use: Wave's own glyphs are internal. The recommended icon package is `@fluentui/react-icons` (from Microsoft's Fluent UI ecosystem), installed separately.
+> Wave bundles only the glyphs its own components draw (listed below). For a library of icons, the recommended package is `@fluentui/react-icons` (from Microsoft's Fluent UI ecosystem), installed separately.
 
 - **Package**: `@fluentui/react-icons` (optional, install separately)
 - **Catalog**: 4000+ icons
 - **Two styles**: Regular (outlined) and Filled (solid)
 - **Sizes**: 16px, 20px, 24px (default), 28px, 48px
+
+### Wave's Own Glyphs
+
+The glyphs Wave's components draw are exported, so an app can draw the same ones (a custom picker's calendar button, a status line that matches MessageBar). Each is an `<svg>` function component that paints with `currentColor`, takes every SVG attribute plus `size` (a number of pixels or a CSS length) and `title`, is hidden from assistive technology unless you pass a `title` (then it is a named `role="img"`), and carries a stable `data-wave-icon` attribute. A bundler keeps only the glyphs you import.
+
+| Group | Exports (`data-wave-icon`) |
+|---|---|
+| Actions | `DismissIcon` (`dismiss`), `AddIcon` (`add`), `SubtractIcon` (`subtract`), `CheckIcon` (`check`), `SearchIcon` (`search`), `NavigationIcon` (`navigation`, 20px) |
+| Chevrons | `ChevronDownIcon`, `ChevronUpIcon`, `ChevronLeftIcon`, `ChevronRightIcon`, `ChevronDoubleLeftIcon`, `ChevronDoubleRightIcon` (12px; `chevron-down`, …) |
+| Objects | `CalendarIcon`, `ClockIcon`, `StarIcon`, `PersonIcon` |
+| Status | `InfoIcon`, `SuccessIcon`, `WarningIcon`, `ErrorIcon` |
+| Presence | `PresenceAvailableIcon`, `PresenceBusyIcon`, `PresenceAwayIcon`, `PresenceOfflineIcon`, `PresenceDndIcon`, `PresenceOofIcon`, `PresenceBlockedIcon`, `PresenceUnknownIcon` (a 16px box that a badge's circle fills; pass `className="size-full"`) |
+
+The export names and the `data-wave-icon` values are part of the public API: a 1.x minor adds glyphs and never removes or renames one. `IconProps` and `IconComponent` are the types. The two sort arrows of the table sort buttons stay internal.
+
+**Mirroring in right-to-left layouts.** The chevrons, the double chevrons and `PresenceOofIcon` point along a physical direction, so mirror them where they mean "forward" or "back": `<ChevronRightIcon flipInRtl />` adds Wave's `wave-rtl` flip (the one the components use), which follows the element's own `dir`. Fluent's icon package marks directional icons when it creates them (`flipInRtl`); an icon of another library cannot be known to be directional, so say so: `flipIconInRtl(icon)` returns the element with the same flip class added to its `className`, for any element that takes one:
+
+```tsx
+import { Button, flipIconInRtl } from '@mortenbrudvik/waveui';
+import { ArrowRight20Regular } from '@fluentui/react-icons';
+
+<Button icon={flipIconInRtl(<ArrowRight20Regular />)} iconPosition="after">
+  Next
+</Button>;
+```
+
+The flip class comes with `./styles` and `./tailwind`; with `./utilities` alone, mirror with your own rule. Leave a glyph that has no direction (a check mark, a magnifier, a clock) as it is.
 
 ### Icon Usage Guidelines
 
@@ -1077,6 +1135,10 @@ Chip.displayName = 'Chip';
 - **Enforcement.** The conventions gate's `class-names` rule fails a module that sets a registered component's `displayName` without applying its constant's `root`; `testSystemProps` asserts the root classes where `className` lands; `src/__tests__/classNames.test.ts` checks that every public component has a constant (or is on its no-element list), that every constant follows the formula, that every key is applied somewhere in `src/components`, and that the entry exports every constant; `verify-dist` checks that the entry exports them with the same values, that a Server Component can read them, and that an import of only Button keeps `'wave-button'` and drops other components' classes.
 - **Stability.** The names are public API under semantic versioning since 1.0: a class is removed or renamed only in a major release, and moving one to another element is a CHANGELOG "Changed" DOM entry. The `wave:` utility classes are not: which utilities a component draws may change in any release.
 - **Words.** The registry is under `src/lib`, which the CSS build scans: its JSDoc names elements by role ("the grid element"), never with a class name, prefixed or not ([Pattern 5](#pattern-5-cn-and-wcn)).
+
+#### App-wide classes
+
+`WaveProvider classNames` (`Partial<Record<root class, string>>`, Fluent's `customStyleHooks_unstable`) gives every component with that root class extra classes. How it fits the literal-access rule and the bundle budgets: the stable class stays a literal member access at every site, and a component reads the map from a context that holds nothing but that map (`AppClassNamesContext` in `hooks/useAppClassName`, a module that imports React and types only; the provider is not imported by components). Each component calls `useAppClassName(<constant>.root)` once (a variant passes the roots of the components it is built on first) and composes the result into the `wcn()` of its root element, after its own classes and before `className`: `wcn(buttonClassNames.root, base, appClassName, className)`. A shell that several components render (`DrawerPanel`, `TeachingSurface`, the menu item and Rating star elements) takes it as an `appClassName` prop and puts it after the classes it adds itself. `scripts/app-classnames-codemod.mjs` wires a new component (idempotent); `src/__tests__/classNames.test.ts` fails for a root constant that no component reads. Without a provider the context is `null`, the hook returns `undefined` and the class list is what it was.
 
 ### Pattern 11: The Input Recipe (sizes and appearances)
 
@@ -2042,7 +2104,7 @@ export const Shell = ({ children }: { children: React.ReactNode }) => (
 );
 ```
 
-**What `null` clears.** `tokens={null}` drops the inherited overrides from the provider's root and from its overlays. On the root, the tokens a theme declares (the semantic colors, the palette, the shadows) return to the theme's values, since its theme class re-declares them there. The theme-independent tokens (the brand and grey ramps, the font families, the stacking layers, the motion durations and curves) are declared on `:root` only, so an enclosing provider's inline values for them still reach the subtree's own elements through the cascade, and the theme colors built on the brand ramp follow them there; its overlays, which with the default portal container render outside the enclosing root, do not get them (a `portalContainer` inside the enclosing root passes them on through the cascade). So inside a branded app, a `tokens={null}` panel keeps the brand in its own content and, with the default portal container, loses it in its dialogs. To put a subtree back on the default ramp everywhere, pass the default ramp instead: `tokens={createBrandTokens('#0f6cbd')}` (the default seed returns the default ramp exactly).
+**What `null` resets.** `tokens={null}` resets the subtree to the stylesheet's tokens. On the root, the tokens a theme declares (the semantic colors, the palette, the shadows) return to the theme's values, since its theme class re-declares them there. The theme-independent tokens (the brand and grey ramps, the font families, the stacking layers, the motion durations and curves) are declared on `:root` only, so an enclosing provider's inline values for them would reach the subtree through the cascade: the root therefore writes the library's own value of each of them that an enclosing provider overrode (`--wave-brand-80: #0f6cbd` for an enclosing `brand80`, and so on; nothing for a token nobody overrode, so a re-brand of `:root` in your stylesheet stays), and its overlays, which with the default portal container render outside the enclosing root, carry the same values unless `applyStylesToPortals` is `false`. So inside a branded app a `tokens={null}` panel, its dialogs and its menus are back on the default look, brand included. The values written are the library's (the table is the `:root` block of `tokens.css`), not a re-brand that your stylesheet made on `:root` and an enclosing provider overrode; to put the subtree on a ramp of your own, pass `tokens={createBrandTokens('#0f6cbd')}`.
 
 ### Overlays: `applyStylesToPortals`
 
@@ -2939,7 +3001,7 @@ export function watchTheme(canvas: HTMLCanvasElement, redraw: () => void): () =>
 - **Hide the chart's own markup inside the frame.** ARIA makes the children of an `img` presentational, but Chromium's accessibility tree keeps an SVG chart's surface (its tick labels are text) and an HTML legend list, so a screen reader may read them after the image's name and description. Put `aria-hidden="true"` on an element around the chart and its legend inside the frame, as the stories do (a canvas chart has nothing to hide). The data table, outside the frame, carries the values.
 - **A data table.** Give the data as a native `<table>` with a caption and row and column headers, in the accessibility tree at all times: visually hidden (`sr-only`) behind a "Show the data table" Switch, as in the stories, or always shown. It is the keyboard and screen-reader route to the values, which is why the library's own keyboard layer stays off. The stories use a plain `<table>`: a horizontally scrolling WaveUI `Table` makes its wrapper a focusable region, an invisible Tab stop inside a visually hidden box.
 - **Never color alone.** Every series has its second encoding (above), in the legend too.
-- **Direction.** The stories do not mirror their charts for right-to-left pages; in a right-to-left layout reverse the category axis and the legend through the library's own options.
+- **Direction.** A chart library draws its own axes and legend, and a canvas ignores the page's `dir`, so mirror them through the library's options when `WaveProvider dir="rtl"` (read it with `useWaveTheme().dir`): reverse the category axis and put the value axis on the right. The stories do (use the direction toolbar): Recharts `<XAxis reversed />` and `<YAxis orientation="right" />` (its legend and tooltip are HTML and follow `dir`), Chart.js `scales.x.reverse`, `scales.y.position: 'right'` and `rtl` plus `textDirection` on `plugins.legend` and `plugins.tooltip`.
 
 ### Fluent's Chart Packages
 
@@ -3269,7 +3331,7 @@ Each part key of the registry is a `slotProps` key, a named slot, the root of a 
 | Menu.Item's check column | Menu.Item keeps only an unclassed placeholder there (shown while its list holds a checkable item); the checkable kinds' `checkmark` slot fills theirs |
 | The roots of `Rating.Item`, the swatches, `TagPicker.Control`, `Group`, `Input` and `List`, `TeachingPopover.Title`, `Body` and `Footer`, `Drawer.Body`, `DataGrid.SelectionCell` and `AvatarGroup.Popover` | Components you write yourself (or that a shorthand generates): they take their props directly |
 
-Neither are hidden form inputs, live regions and visually hidden text. App-wide class hooks per component (Fluent's `customStyleHooks_unstable`, a `WaveProvider classNames`) are left for after 1.0.
+Neither are hidden form inputs, live regions and visually hidden text. App-wide classes per component are `WaveProvider classNames` (Pattern 10, "App-wide classes"), not parts.
 
 ### Recipes
 

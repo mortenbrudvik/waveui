@@ -7,6 +7,7 @@ import { forcedColors } from '../../lib/styles';
 import type { LabelPosition } from '../../lib/types';
 import { SpinnerContext } from './Spinner.context';
 import type { SpinnerContextValue, SpinnerSize } from './Spinner.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { SpinnerContextValue, SpinnerSize } from './Spinner.context';
 
@@ -191,6 +192,8 @@ export const Spinner = ({
   ref,
   ...rest
 }: SpinnerProps) => {
+  const appClassName = useAppClassName(spinnerClassNames.root);
+
   const contextSize = React.useContext(SpinnerContext)?.size;
   const requestedSize = sizeProp ?? contextSize ?? 'medium';
   // A size or position outside the unions (from untyped code) renders as the default instead of
@@ -265,6 +268,7 @@ export const Spinner = ({
         spinnerClassNames.root,
         'wave:inline-flex wave:items-center wave:gap-2',
         labelPositionClasses[resolvedPosition],
+        appClassName,
         className,
       )}
     >

@@ -6,6 +6,7 @@ import {
 } from '../../hooks/usePresence';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { warnOnce } from '../../lib/dev';
+import { withFragmentRefs } from '../../lib/fragmentRefs';
 
 /** Properties for the Presence component. */
 export interface PresenceProps extends UsePresenceOptions {
@@ -89,11 +90,15 @@ export const Presence = ({
   if (isRenderFunction) return children({ isMounted, phase, ref, presenceProps });
   if (!element) return children as React.ReactNode;
   // Merged by hand (no mergeProps: the presence core stays free of the class merger).
-  return React.cloneElement(element, {
-    'data-presence': presenceProps['data-presence'],
-    inert: presenceProps.inert ?? element.props.inert,
-    hidden: presenceProps.hidden ?? element.props.hidden,
-    ref: mergedRef,
-  } as ChildProps);
+  // A `<Fragment ref>` around the child keeps its ref: the element goes back inside it.
+  return withFragmentRefs(
+    children as React.ReactNode,
+    React.cloneElement(element, {
+      'data-presence': presenceProps['data-presence'],
+      inert: presenceProps.inert ?? element.props.inert,
+      hidden: presenceProps.hidden ?? element.props.hidden,
+      ref: mergedRef,
+    } as ChildProps),
+  );
 };
 Presence.displayName = 'Presence';

@@ -51,6 +51,7 @@ import {
   type PopoverPhysicalSide,
   type PopoverSize,
 } from './Popover.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { PopoverAppearance, PopoverSize } from './Popover.shared';
 
@@ -1121,6 +1122,8 @@ export const PopoverContent = ({
   slotProps,
   ...rest
 }: PopoverContentProps) => {
+  const appClassName = useAppClassName(popoverContentClassNames.root);
+
   const {
     open,
     contentId,
@@ -1297,6 +1300,7 @@ export const PopoverContent = ({
           popoverAppearanceClasses[appearance],
           popoverSizeClasses[size],
           motionClassName,
+          appClassName,
           className,
         )}
       >

@@ -4,6 +4,7 @@ import { badgeClassNames } from '../../lib/classNames';
 import { renderSlot, slotRendersContent, type Slot } from '../../lib/slot';
 import type { BadgeAppearance, BadgeColor, BadgeSize, IconPosition, Shape } from '../../lib/types';
 import { badgeColorClasses, badgeDotClasses, badgeShapeClasses } from './Badge.colors';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Badge component. */
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -103,6 +104,8 @@ export const Badge = ({
   ref,
   ...props
 }: BadgeProps) => {
+  const appClassName = useAppClassName(badgeClassNames.root);
+
   const c = badgeColorClasses[color];
   const tiny = size === 'tiny';
 
@@ -154,6 +157,7 @@ export const Badge = ({
         tiny ? badgeDotClasses : sizeClasses[size],
         iconElement !== null && 'wave:gap-1',
         tiny ? dotClasses : appearanceClasses,
+        appClassName,
         className,
       )}
       {...props}

@@ -3,6 +3,7 @@ import { wcn } from '../../lib/cn';
 import { textClassNames } from '../../lib/classNames';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { TextWeight, TypographyVariant } from '../../lib/types';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The Text's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
@@ -120,6 +121,8 @@ const fontClasses: Record<Exclude<NonNullable<TextOwnProps['font']>, 'base'>, st
  * <Text variant="caption-1" className="text-muted-foreground">Last saved 2 minutes ago</Text>
  */
 export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
+  const appClassName = useAppClassName(textClassNames.root);
+
   const {
     as,
     variant = 'body-1',
@@ -156,6 +159,7 @@ export const Text: PolymorphicComponent<'span', TextOwnProps> = (props) => {
         underline && !strikethrough && 'wave:underline',
         strikethrough && !underline && 'wave:line-through',
         align !== undefined && Object.hasOwn(alignClasses, align) && alignClasses[align],
+        appClassName,
         className,
       )}
     />

@@ -8,6 +8,7 @@ import { getArrowIntent, getDirection } from '../../lib/direction';
 import { MenuItem } from './Menu.items';
 import { MenuRoot } from './Menu.root';
 import { MENU_ITEM_SELECTOR } from './Menu.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the MenuSplitGroup sub-component. */
 export interface MenuSplitGroupProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -67,6 +68,8 @@ export const MenuSplitGroup = ({
   ref,
   ...rest
 }: MenuSplitGroupProps) => {
+  const appClassName = useAppClassName(menuSplitGroupClassNames.root);
+
   // C-DEV: the row needs its action and its submenu to work as one.
   const complete = hasActionAndSubmenu(children);
   React.useEffect(() => {
@@ -110,6 +113,7 @@ export const MenuSplitGroup = ({
       className={wcn(
         menuSplitGroupClassNames.root,
         'wave:flex wave:items-stretch wave:[&>:first-child]:flex-1 wave:[&>:last-child]:border-s wave:[&>:last-child]:border-border',
+        appClassName,
         className,
       )}
     >
