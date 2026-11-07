@@ -1621,6 +1621,7 @@ export const Toaster = ({
     // A panel whose layer has closed but that still slides out (a Drawer's exit): the toasts keep
     // clear of it until it is gone, instead of moving back over it as the exit starts.
     let exiting = new Set<HTMLElement>();
+    let exitFrame = 0;
     const observePanels = () => {
       const panels = getPanelElements();
       exiting = new Set(
@@ -1636,6 +1637,10 @@ export const Toaster = ({
       const changed =
         next.size !== observedPanels.size || [...next].some((el) => !observedPanels.has(el));
       observedPanels = next;
+      // An exit that ends without an animation event (none ran, or reduced motion) is found by
+      // looking again on the next frame while any panel still exits.
+      cancelAnimationFrame(exitFrame);
+      if (exiting.size > 0) exitFrame = requestAnimationFrame(() => update());
       if (!changed || !mutationObserver) return;
       mutationObserver.disconnect();
       for (const el of next) {
@@ -1670,6 +1675,7 @@ export const Toaster = ({
     document.addEventListener('transitionend', update, true);
     document.addEventListener('animationend', update, true);
     return () => {
+      cancelAnimationFrame(exitFrame);
       unsubscribe();
       observer?.disconnect();
       mutationObserver?.disconnect();

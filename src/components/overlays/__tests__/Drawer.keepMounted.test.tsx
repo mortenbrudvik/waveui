@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, expectTypeOf, vi } from 'vitest';
 import * as React from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Drawer, type DrawerProps } from '../Drawer';
 import { Dialog } from '../Dialog';
@@ -481,7 +481,8 @@ describe('Drawer unmountOnClose', () => {
       await user.click(button('Open filters'));
       expect(offset()).toBe('320px');
       await user.keyboard('{Escape}');
-      expect(offset()).toBe('');
+      // The toasts stay clear of the panel while it exits, and return once its exit has ended.
+      await waitFor(() => expect(offset()).toBe(''));
     });
   });
 

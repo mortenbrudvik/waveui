@@ -12,7 +12,7 @@ import {
   createToaster,
   useToastController,
 } from '../src';
-import type { ToastProps } from '../src';
+import type { ToastOptions, ToastProps } from '../src';
 import { motionCases } from './_motion';
 
 const meta = {
@@ -28,6 +28,7 @@ const meta = {
       control: 'select',
       options: ['success', 'warning', 'error', 'info'],
     },
+    appearance: { control: 'inline-radio', options: ['default', 'inverted'] },
   },
 } satisfies Meta<typeof Toast>;
 
@@ -602,6 +603,205 @@ export const FromOutsideReact: Story = {
       <Button appearance="primary" onClick={() => notifyExportReady(args)}>
         Export
       </Button>
+    </Toaster>
+  ),
+};
+
+/** `appearance="inverted"` draws the toast on the inverted surface, as a Tooltip is. */
+export const Inverted: Story = {
+  args: {
+    title: 'Link copied',
+    status: 'success',
+    appearance: 'inverted',
+    children: 'Share it anywhere.',
+  },
+  render: (args) => <DismissibleToast {...args} />,
+};
+
+/** One button that dispatches the given toast options. */
+function OptionsDemo({ label, options }: { label: string; options: ToastOptions }) {
+  const { dispatchToast } = useToastController();
+  return (
+    <Button appearance="primary" onClick={() => dispatchToast(options)}>
+      {label}
+    </Button>
+  );
+}
+
+/**
+ * `position` takes the centered `top` and `bottom` as well as the corners; `offset` sets the
+ * distance from the window edges in pixels (a number, or `{ horizontal, vertical }`).
+ */
+export const CenteredAndOffset: Story = {
+  render: () => (
+    <Toaster position="top" offset={{ vertical: 48 }}>
+      <OptionsDemo
+        label="Show a centered toast"
+        options={{ title: 'Centered', body: '48px from the top.' }}
+      />
+    </Toaster>
+  ),
+};
+
+function PerToastPositionDemo() {
+  const { dispatchToast } = useToastController();
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button onClick={() => dispatchToast({ title: 'Saved', status: 'success' })}>
+        Bottom end
+      </Button>
+      <Button
+        onClick={() =>
+          dispatchToast({
+            title: 'Offline',
+            body: 'Changes sync later.',
+            status: 'warning',
+            position: 'top',
+          })
+        }
+      >
+        Top, centered
+      </Button>
+    </div>
+  );
+}
+
+/** A toast dispatched with its own `position` stacks there; the others use the Toaster's. */
+export const PerToastPosition: Story = {
+  render: () => (
+    <Toaster>
+      <PerToastPositionDemo />
+    </Toaster>
+  ),
+};
+
+/** `politeness` overrides the status default, here an error that is announced politely. */
+export const Politeness: Story = {
+  render: () => (
+    <Toaster>
+      <OptionsDemo
+        label="Show a calm error"
+        options={{
+          title: 'Sync failed',
+          status: 'error',
+          politeness: 'polite',
+          body: 'It will retry.',
+        }}
+      />
+    </Toaster>
+  ),
+};
+
+function PriorityDemo() {
+  const { dispatchToast } = useToastController();
+  return (
+    <Button
+      appearance="primary"
+      onClick={() => {
+        dispatchToast({ title: 'First', timeout: 6000 });
+        dispatchToast({ title: 'Later (priority 0)' });
+        dispatchToast({ title: 'Urgent (priority 5)', priority: 5 });
+      }}
+    >
+      Show three toasts, limit one
+    </Button>
+  );
+}
+
+/** `priority` orders the toasts that wait beyond `limit`: the urgent one appears first. */
+export const Priority: Story = {
+  render: () => (
+    <Toaster limit={1}>
+      <PriorityDemo />
+    </Toaster>
+  ),
+};
+
+function LifecycleDemo() {
+  const { dispatchToast, updateToast, pauseToast, playToast } = useToastController();
+  const [log, setLog] = React.useState<string[]>([]);
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          appearance="primary"
+          onClick={() =>
+            dispatchToast({
+              toastId: 'job',
+              title: 'Exporting',
+              body: '0%',
+              onStatusChange: (status, details) =>
+                setLog((entries) => [
+                  ...entries,
+                  `${status}${details.reason ? ` (${details.reason})` : ''}`,
+                ]),
+            })
+          }
+        >
+          Start
+        </Button>
+        <Button onClick={() => updateToast({ toastId: 'job', body: '60%', timeout: 8000 })}>
+          Update to 60%
+        </Button>
+        <Button onClick={() => pauseToast('job')}>Pause</Button>
+        <Button onClick={() => playToast('job')}>Play</Button>
+      </div>
+      <p className="text-wave-body-1">Lifecycle: {log.join(', ') || 'none yet'}</p>
+    </div>
+  );
+}
+
+/**
+ * `updateToast` merges new options into a toast, `pauseToast` and `playToast` hold its countdown,
+ * and `onStatusChange` reports `queued`, `visible`, `dismissed` (with a reason) and `unmounted`.
+ */
+export const Lifecycle: Story = {
+  render: () => (
+    <Toaster>
+      <LifecycleDemo />
+    </Toaster>
+  ),
+};
+
+/** `showDismissButton: false` leaves out the Dismiss button of a toast that reports a task. */
+export const WithoutDismissButton: Story = {
+  render: () => (
+    <Toaster>
+      <OptionsDemo
+        label="Show a toast without a button"
+        options={{
+          title: 'Syncing',
+          body: 'Keep this window open.',
+          showDismissButton: false,
+          pauseOnHover: false,
+        }}
+      />
+    </Toaster>
+  ),
+};
+
+function CustomAnnouncerDemo() {
+  const [last, setLast] = React.useState('nothing yet');
+  return (
+    <Toaster announce={({ message, politeness }) => setLast(`${politeness}: ${message}`)}>
+      <div className="flex flex-col gap-3">
+        <OptionsDemo label="Show a toast" options={{ title: 'Saved', status: 'success' }} />
+        <p className="text-wave-body-1">Announced: {last}</p>
+      </div>
+    </Toaster>
+  );
+}
+
+/** `announce` sends the messages to your own announcer instead of the Toaster's live regions. */
+export const CustomAnnouncer: Story = {
+  render: () => <CustomAnnouncerDemo />,
+};
+
+/** `inline` renders the toast region in the tree instead of a portal on `document.body`. */
+export const Inline: Story = {
+  render: () => (
+    <Toaster inline>
+      <OptionsDemo label="Show an inline toast" options={{ title: 'Inline', body: 'No portal.' }} />
     </Toaster>
   ),
 };
