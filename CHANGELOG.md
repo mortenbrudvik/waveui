@@ -30,6 +30,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Nav** and **NavDrawer** take `density="small"` (`data-density`), `multiple={false}` (one open category) and `details` on `onValueChange`, `onItemSelect` and `onOpenCategoriesChange` (types `NavDensity`, `NavSelectDetails`, `NavCategoryToggleDetails`) (closes `nav-1`, `nav-2`, `nav-4`). `useNavDrawerToggle` wires a Hamburger outside a NavDrawer.
 - **`chartSeries`** and the tokens `--wave-chart-1` to `--wave-chart-10` (`chart1` to `chart10`, `bg-wave-chart-N`): ten categorical colors made for charts, 3:1 on `background` and `card` and at least 7 apart (OKLab dE x100) for full color vision and under simulated protanopia, deuteranopia and tritanopia, tested as a set in light and dark; white in high contrast. `chartPalette` is unchanged.
 - **`motion`** on the listbox popups of Combobox, Dropdown, TagPicker and TimePicker (and `ListboxSurface`), on the DatePicker calendar, and on AvatarGroup and `AvatarGroup.Popover`: these popups fade and slide like Popover (`popupMotion`), and the listbox stays in its popup while it exits.
+- **`useVirtualWindow`** takes `measureItems`: rows of different heights, with `itemSize` as the estimate; rows are measured, and the scroll position is corrected when a measured size differs. `VirtualWindow.itemProps?(index)` and the type `VirtualItemProps` are new. List, Listbox, Combobox and Dropdown lay out from it; DataGrid and FlatTree keep fixed rows.
+- **`virtualWindow`** on TimePicker and TagPicker (array form), with the classes `wave-time-picker__spacer` and `wave-tag-picker__spacer`. **List** takes `getItemLabel(index)`, typeahead over every item of a windowed list.
+- **Listbox** (multi-select) takes range keys: Shift+Arrow, Shift+Space, Ctrl+Shift+Home/End and Ctrl/Cmd+A, with `useListbox` `onSelectRange`, the type `ListboxRangeDetails` and `labels.rangeAdded` and `labels.rangeRemoved`.
+- **Tag** and **InteractionTag** take `disabledFocusable`, `InteractionTag.Primary` is polymorphic (type `InteractionTagPrimaryOwnProps`), and **TagGroup** takes `selectionMode="single"` and wires into a Field (label, hint, message, required).
+- **TagPicker** takes `noPopover`, `secondaryAction` (root and `TagPicker.Control`, class `wave-tag-picker__secondary-action`), `disabled` on `options` entries, and `onOptionCreate(text, details?)` (type `TagPickerCreateDetails`).
+- **Spinner** takes `labelPosition`, the sizes `extra-tiny`, `tiny` and `huge` (type `SpinnerSize`) and a ReactNode `label`; `SpinnerContextProvider` gives a default `size`. **ProgressBar** takes `thickness` and `shape`. **Skeleton** takes `size` presets, `animation="wave"` and `appearance="translucent"`, and `Skeleton.Group` carries the same defaults (closes `spinner-3` to `spinner-5`, `progress-3`, `progress-4`, `skeleton-1` to `skeleton-3`, `skeletonitem-1`).
+- **MessageBar** takes `shape` and `politeness`. **Toast** takes `appearance="inverted"` and `showDismissButton`. **Toaster** takes `offset`, the centered positions `top` and `bottom`, `inline` and `announce`; dispatch options take `position`, `politeness`, `priority`, `pauseOnHover`, `pauseOnWindowBlur`, `appearance`, `showDismissButton` and `onStatusChange`; the controller gains `updateToast`, `pauseToast` and `playToast`, also on `createToaster` handles (closes `messagebar-4`, `messagebar-5`, `toast-4`, `toaster-3`, `toaster-4`, `toaster-6` to `toaster-9`, `toastctl-2` to `toastctl-4`).
+- **`announce()`** and `useAnnounce` take an options object with `batchId`, `priority`, `deferWhileTyping` and `ariaNotify` (closes `announce-1`, `foundation-30`, `foundation-31`, `foundation-32`).
+- **`WaveProvider classNames`**: app-wide classes by root class (`'wave-button': 'rounded-full'`), composed after a component's own classes and before its `className`. They merge key by key through nested providers (`''` removes one, `null` clears all) and reach portaled overlays. Closes the deferred half of `foundation-38` (the Phase 13 ruling R17).
+- The built-in glyphs are exported (28 `*Icon` components, `IconProps`, `IconComponent`), each with `flipInRtl`, and `flipIconInRtl(icon)` mirrors an icon of your own in right-to-left layouts (closes `foundation-42`, `foundation-44`; the `Guides/Icons` story lists them).
+- Hooks `useTimeout`, `useAnimationFrame`, `useScrollbarWidth`, `useApplyScrollbarWidth`, `useObservedElement` and `useFocusObserved` (closes `foundation-29`, `foundation-41`).
+- **Accordion** takes `collapsible={false}`, number item values (`Accordion<V>`), `AccordionToggleDetails` as the optional second argument of its change callbacks, `size`, `expandIconPosition`, and a Trigger `expandIcon` slot, `icon` slot (`wave-accordion-trigger__icon`) and `inline` (closes `acc-1` to `acc-5`).
+- **Card** takes `disabled`, `defaultSelected`, `onSelectionChange(selected, { event })`, an optional `event` on `onSelect`, and `focusMode` (closes `card-4` to `card-6`). **TabList** takes `disabled` (closes `tab-4`). **Carousel** `onValueChange(index, details?)` reports `CarouselChangeDetails` (`reason`, `event`; closes `car-5`). **Drawer** takes `mountNode` (closes `drw-5`).
+- **Tree** takes `size`, `appearance`, `independentChecks`, range selection in a checkbox tree (Ctrl+A, Shift+Space, Shift+Arrow), `Tree.Item` `open`, `onOpenChange` and `actionsVisible`, and `onExpandedItemsChange` reports `TreeOpenChangeDetails` (closes `tree-3`, `tree-5`, `tree-6`).
 
 ### Changed
 
@@ -42,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A surface opened from inside a hover-closing surface, with no trigger and no focused opener, closes along with it without moving focus.
 - The pickers' popup surfaces, the DatePicker calendar and the AvatarGroup popup render `data-presence` and `data-state`, and are `inert` while they exit.
 - The Guides/Charts stories use `chartSeries`, ink their patterns in `background` and hide the chart's own markup (`aria-hidden`) inside the `role="img"` frame; the guide documents both. The declaration roll-up is built with `unplugin-dts` instead of `vite-plugin-dts` (build tooling only).
+- An editable combobox (Combobox, TagPicker, TimePicker) clears the highlight and `aria-activedescendant` on ArrowLeft, ArrowRight, Home and End, as Fluent does.
+- A `Skeleton` with no `height` is 16px tall (it drew no box before); pass `height` or `size` to change it.
+- Toasts stay beside an overlay drawer while it slides out, and a toast's shadow stays visible while it fades out.
+- `ToastController` has three more members (`updateToast`, `pauseToast`, `playToast`): code that implements the type itself must add them.
+- `WaveProvider tokens={null}` also resets the theme-independent tokens (the ramps, font families, stacking layers, motion) that an enclosing provider overrode.
 
 ### Fixed
 
@@ -51,6 +70,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A column resize drag whose end never reaches the handle (WebKit, right to left, a table wider than its wrapper) now ends at a `pointerup` or `pointercancel` on the document, or at the next press of the same pointer, instead of leaving `data-resizing` and `data-dragging` set.
 - A Tooltip keeps the content it showed while it fades out, and `backdropMotion={null}` on a non-modal Dialog, Drawer or inline drawer no longer logs the `backdrop-ignored` warning.
 - `createBrandTokens`' ramp check and `WaveProvider`'s `tokens` warnings are no longer skipped when there is no `process` global (an unbundled import in a browser); production bundles still drop them.
+- A Dropdown opened with a mouse click is focused on pointerdown, so its keys work in WebKit. Combobox, Dropdown, DatePicker, TimePicker and SearchBox move focus to the control when the clear button disappears while focused.
+- A `<Fragment ref>` around a trigger child, a Tooltip target, a Presence child or an `asChild` Overflow.Item receives its ref.
+- A selection changed while the TabList line still slides starts the next slide from the line's visible box. A percentage `max-height` on an Accordion region, a Tree group or a Nav list no longer resolves against the collapsing track. The check cascade of Tree and FlatTree no longer overflows the stack on very deep trees.
 
 ### Documentation
 
