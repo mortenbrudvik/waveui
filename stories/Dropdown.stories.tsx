@@ -13,7 +13,7 @@ import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
 import { motionCases } from './_motion';
 import { MountedOptions } from './_mountedOptions';
-import { PEOPLE, TEN_THOUSAND_PEOPLE, teamOf } from './_people';
+import { GROUPED_PEOPLE, PEOPLE, TEN_THOUSAND_PEOPLE, teamOf } from './_people';
 
 const meta = {
   title: 'Components/Input/Dropdown',
@@ -329,6 +329,53 @@ export const TenThousandOptions: StoryObj<TenThousandOptionsArgs> = {
     itemSize: { control: 'select', options: [32, 40, 48] },
   },
   render: (args) => <TenThousandDropdown {...args} />,
+};
+
+/** A Dropdown of the 10,000 grouped people, windowed, with the mounted-option count. */
+function TenThousandGroupedDropdown({ itemSize, ...args }: TenThousandOptionsArgs) {
+  const virtualWindow = useVirtualWindow({ itemSize });
+  const [combobox, setCombobox] = React.useState<HTMLButtonElement | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <Dropdown
+        {...args}
+        ref={setCombobox}
+        items={GROUPED_PEOPLE}
+        virtualWindow={virtualWindow}
+        renderGroup={(letter, { size }) => (
+          <>
+            {letter}
+            <span className="ms-2 font-normal">({size})</span>
+          </>
+        )}
+      />
+      <MountedOptions scope={combobox} total={GROUPED_PEOPLE.length} />
+    </div>
+  );
+}
+
+/**
+ * Option groups in a window: the 10,000 people carry a `group` (the first letter of their first
+ * name), and `renderGroup` draws each header with its size. The headers are rows of the window,
+ * out of the accessibility tree; each group is a `role="group"` named by its letter. End, Home,
+ * PageDown and typeahead reach any person and cross the headers without stopping on them.
+ */
+export const TenThousandGroupedOptions: StoryObj<TenThousandOptionsArgs> = {
+  args: {
+    'aria-label': 'Person',
+    placeholder: 'Select a person',
+    defaultValue: 'person-5000',
+    itemSize: 32,
+    style: { width: 320 },
+  },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    renderGroup: { control: false },
+    virtualWindow: { control: false },
+    itemSize: { control: 'select', options: [32, 40, 48] },
+  },
+  render: (args) => <TenThousandGroupedDropdown {...args} />,
 };
 
 export const SizesAndAppearances: Story = {
