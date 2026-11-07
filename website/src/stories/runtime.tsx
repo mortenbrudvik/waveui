@@ -72,6 +72,8 @@ interface StoryAnnotations extends Annotations {
 
 /** A story ready to render, with its merged args and argTypes. */
 export interface ComposedStory {
+  /** `<storyFile>#<ExportName>`, as a {@link StoryError} names the story. */
+  id: string;
   /** The story inside its decorators; its props override the story's args. */
   Component: React.ComponentType<Record<string, unknown>>;
   args: Record<string, unknown>;
@@ -275,7 +277,7 @@ function composeSiteStory(
   }
   Component.displayName = `Story(${id})`;
 
-  return { Component, args, argTypes, parameters, name };
+  return { id, Component, args, argTypes, parameters, name };
 }
 
 /**

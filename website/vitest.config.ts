@@ -12,7 +12,11 @@
  */
 import { getViteConfig } from 'astro/config';
 
-const SHELL_TESTS = ['src/shell/**/*.test.{ts,tsx}', 'src/islands/example.test.tsx'];
+const SHELL_TESTS = [
+  'src/shell/**/*.test.{ts,tsx}',
+  'src/islands/example.test.tsx',
+  'src/islands/example.sweep.test.tsx',
+];
 
 export default getViteConfig({
   test: {

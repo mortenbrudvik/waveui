@@ -24,17 +24,59 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 /**
- * Whether a story opens a modal as it renders, from its server markup and its parameters:
+ * Stories whose surface is portaled and opens as the story mounts, taking focus or locking the
+ * page, without the `docs.story.inline: false` hint: the server markup cannot show them (the
+ * library's `Portal` renders nothing on the server), so the build is told by name. Keyed by
+ * `<storyFile>#<ExportName>`, each with the reason.
+ *
+ * The rule for the next story: a story that opens a portaled dialog, drawer, popover or tour on
+ * mount and moves focus or locks the page belongs here (or gets `docs.story.inline: false` in its
+ * story file). `src/islands/example.sweep.test.tsx` enforces it: it mounts every story the build
+ * calls inline in jsdom and fails, naming the story, when one moves focus, makes the page inert,
+ * locks scroll or opens a dialog outside its container.
+ */
+export const OPENS_ON_MOUNT: ReadonlyMap<string, string> = new Map([
+  [
+    'stories/TeachingPopover.stories.tsx#AnchoredToTarget',
+    'no Trigger, so open by default; the surface is portaled next to its target and focuses itself as it shows',
+  ],
+  [
+    'stories/TeachingPopover.stories.tsx#MultiTargetTour',
+    'no Trigger, so open by default; each step is portaled next to its target and focuses itself as it shows',
+  ],
+  [
+    'stories/TeachingPopover.stories.tsx#TourFromParts',
+    '`defaultOpen` with a Trigger: the portaled surface opens on mount and focuses itself',
+  ],
+  [
+    'stories/TeachingPopover.stories.tsx#PageCountHeaderAndMedia',
+    '`defaultOpen` with a Trigger: the portaled surface opens on mount and focuses itself',
+  ],
+]);
+
+/**
+ * Whether a story opens a modal (or another surface that takes focus or locks the page) as it
+ * renders, from its server markup, its parameters and its id. Any of:
  *
  * - the markup holds an element with `role="dialog"` or `role="alertdialog"`, or
- *   `aria-modal="true"` (a dialog or drawer rendered in place);
- * - or `parameters.docs.story.inline === false`: Storybook's docs show the story in an iframe of
- *   its own, which the library's stories do exactly for those that open a dialog, a drawer or a
- *   modal layer as they mount. A portaled dialog renders only in the browser (the library's
- *   `Portal` renders nothing on the server), so its server markup cannot show it; this hint does.
+ *   `aria-modal="true"` (a dialog, drawer or tour rendered in place);
+ * - `parameters.docs.story.inline === false`: Storybook's docs show the story in an iframe of its
+ *   own, which the library's stories do for those that open a dialog, a drawer or a modal layer as
+ *   they mount. A portaled surface renders only in the browser, so its server markup cannot show it;
+ *   this hint does;
+ * - the story is in {@link OPENS_ON_MOUNT}, the portaled stories without that hint.
+ *
+ * A new story that opens a portaled surface on mount needs the hint or an entry in
+ * {@link OPENS_ON_MOUNT}; the client-mount sweep (`src/islands/example.sweep.test.tsx`) fails
+ * until it has one.
  */
-export function opensModal(html: string, parameters: Record<string, unknown>): boolean {
+export function opensModal(
+  html: string,
+  parameters: Record<string, unknown>,
+  id?: string,
+): boolean {
   if (/\brole="(?:alert)?dialog"/.test(html) || /\baria-modal="true"/.test(html)) return true;
+  if (id !== undefined && OPENS_ON_MOUNT.has(id)) return true;
   const docs = parameters.docs;
   const story = isRecord(docs) ? docs.story : undefined;
   return isRecord(story) && story.inline === false;
@@ -50,7 +92,7 @@ export function analyzeStory(story: ComposedStory): ExampleAnalysis {
   } catch (error) {
     return { mode: 'inline', serverError: messageOf(error) };
   }
-  return { mode: opensModal(html, story.parameters) ? 'on-demand' : 'inline' };
+  return { mode: opensModal(html, story.parameters, story.id) ? 'on-demand' : 'inline' };
 }
 
 let catalog: ComponentEntry[] | undefined;

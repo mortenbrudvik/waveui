@@ -11,7 +11,7 @@ import * as buttonStories from '../../../stories/Button.stories';
 import * as dialogStories from '../../../stories/Dialog.stories';
 import * as switchStories from '../../../stories/Switch.stories';
 import { getCatalog } from '../catalog/catalog';
-import { analyzeExample, analyzeStory, opensModal } from '../examples/analysis';
+import { analyzeExample, analyzeStory, OPENS_ON_MOUNT, opensModal } from '../examples/analysis';
 import { composeStoryExport, type StoryModule } from '../stories/runtime';
 import * as fixtureStories from './__fixtures__/example.stories';
 import { createExampleIsland } from './Example';
@@ -143,6 +143,14 @@ describe('stories that open a modal', () => {
       false,
     );
     expect(opensModal('<button>Open dialog</button>', {})).toBe(false);
+    // A portaled story without the hint is detected by its id in OPENS_ON_MOUNT.
+    const anchored = 'stories/TeachingPopover.stories.tsx#AnchoredToTarget';
+    expect(OPENS_ON_MOUNT.has(anchored)).toBe(true);
+    expect(opensModal('<button>Target</button>', {}, anchored)).toBe(true);
+    expect(opensModal('<button>Target</button>', {}, 'stories/Button.stories.tsx#Default')).toBe(
+      false,
+    );
+    for (const reason of OPENS_ON_MOUNT.values()) expect(reason.length).toBeGreaterThan(20);
   });
 
   it('a modal story is detected and shows no static preview (server)', async () => {
@@ -174,8 +182,12 @@ describe('stories that open a modal', () => {
     expect(serverErrors).toEqual([]);
     // A change to this list is a conscious one: each of these opens a dialog, a drawer or a modal
     // layer as soon as it renders (or Storybook's docs show it in an iframe for that reason).
+    // This list catches changes to what is detected, not misses: a new story that opens a
+    // portaled surface on mount needs `docs.story.inline: false` or an entry in OPENS_ON_MOUNT
+    // (src/examples/analysis.tsx), and example.sweep.test.tsx, which mounts every inline story in
+    // jsdom, fails until it has one.
     expect([...detected].sort()).toEqual([...EXPECTED_MODAL_STORIES].sort());
-    expect(detected).toHaveLength(27);
+    expect(detected).toHaveLength(31);
   }, 240_000);
 });
 
@@ -190,6 +202,12 @@ const EXPECTED_MODAL_STORIES = [
   'teaching-popover#SecondStep',
   'teaching-popover#SingleStep',
   'teaching-popover#VerticalFooter',
+  // OPENS_ON_MOUNT: portaled, open on mount, focus the surface; no `inline: false` hint (found by
+  // the client-mount sweep).
+  'teaching-popover#AnchoredToTarget',
+  'teaching-popover#MultiTargetTour',
+  'teaching-popover#TourFromParts',
+  'teaching-popover#PageCountHeaderAndMedia',
   // `docs.story.inline: false`: a dialog, drawer or popup opens as the story mounts (portaled, so
   // the server markup has none of it).
   'custom-overlays#PopupOnPublicHooks',
