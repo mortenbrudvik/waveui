@@ -32,6 +32,36 @@ function toCount(value: number, fallback: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : fallback;
 }
 
+/** `value`, or 0 when it is not a finite number. */
+function finiteOrZero(value: number): number {
+  return Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Where the scroll offset goes to place the row `[top, top + size)` in a viewport of `viewport`
+ * pixels, unbounded: `'start'`, `'end'` or `'center'`, or `'auto'`, the smallest move from `current`
+ * that shows the row whole (`current` when it already is).
+ */
+function alignedOffset(
+  align: ScrollOffsetInput['align'],
+  top: number,
+  size: number,
+  current: number,
+  viewport: number,
+): number {
+  const bottom = top + size;
+  switch (align) {
+    case 'start':
+      return top;
+    case 'end':
+      return bottom - viewport;
+    case 'center':
+      return top + size / 2 - viewport / 2;
+    default:
+      return top < current ? top : bottom > current + viewport ? bottom - viewport : current;
+  }
+}
+
 /**
  * The rows to render for a scrolled list and the spacers that keep its scroll height: the rows in
  * view with `overscan` rows on both sides, plus every `keep` index as a run of its own. The sizes
@@ -117,35 +147,20 @@ export interface ScrollOffsetInput {
 
 /** The scroll offset, clamped to the content, that brings row `index` to the requested place. */
 export function scrollOffsetForIndex(input: ScrollOffsetInput): number {
-  const { align, scrollTop, viewportSize } = input;
   const count = toCount(input.count, 0);
   const rowSize = Number.isFinite(input.itemSize) && input.itemSize > 0 ? input.itemSize : 0;
-  const viewport = Number.isFinite(viewportSize) ? Math.max(0, viewportSize) : 0;
+  const viewport = Math.max(0, finiteOrZero(input.viewportSize));
   const maxOffset = Math.max(0, count * rowSize - viewport);
   if (count === 0 || maxOffset === 0) return 0;
 
-  const index = Math.min(
-    Math.max(0, Number.isFinite(input.index) ? Math.floor(input.index) : 0),
-    count - 1,
+  const index = Math.min(Math.max(0, Math.floor(finiteOrZero(input.index))), count - 1);
+  const target = alignedOffset(
+    input.align,
+    index * rowSize,
+    rowSize,
+    finiteOrZero(input.scrollTop),
+    viewport,
   );
-  const top = index * rowSize;
-  const bottom = top + rowSize;
-  const current = Number.isFinite(scrollTop) ? scrollTop : 0;
-
-  let target: number;
-  switch (align) {
-    case 'start':
-      target = top;
-      break;
-    case 'end':
-      target = bottom - viewport;
-      break;
-    case 'center':
-      target = top + rowSize / 2 - viewport / 2;
-      break;
-    default:
-      target = top < current ? top : bottom > current + viewport ? bottom - viewport : current;
-  }
   return Math.min(Math.max(0, target), maxOffset);
 }
 
@@ -326,26 +341,16 @@ export function scrollOffsetForMeasuredIndex(input: {
   scrollTop: number;
   viewportSize: number;
 }): number {
-  const { align, sizes, scrollTop, viewportSize } = input;
-  const viewport = Number.isFinite(viewportSize) ? Math.max(0, viewportSize) : 0;
-  const index = Math.max(0, Number.isFinite(input.index) ? Math.floor(input.index) : 0);
-  const top = virtualOffsetOf(sizes, index);
-  const size = virtualSizeOf(sizes, index);
-  const bottom = top + size;
-  const current = Number.isFinite(scrollTop) ? scrollTop : 0;
-  let target: number;
-  switch (align) {
-    case 'start':
-      target = top;
-      break;
-    case 'end':
-      target = bottom - viewport;
-      break;
-    case 'center':
-      target = top + size / 2 - viewport / 2;
-      break;
-    default:
-      target = top < current ? top : bottom > current + viewport ? bottom - viewport : current;
-  }
-  return Math.max(0, target);
+  const { sizes } = input;
+  const index = Math.max(0, Math.floor(finiteOrZero(input.index)));
+  return Math.max(
+    0,
+    alignedOffset(
+      input.align,
+      virtualOffsetOf(sizes, index),
+      virtualSizeOf(sizes, index),
+      finiteOrZero(input.scrollTop),
+      Math.max(0, finiteOrZero(input.viewportSize)),
+    ),
+  );
 }
