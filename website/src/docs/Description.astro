@@ -1,0 +1,41 @@
+---
+/**
+ * A JSDoc text as the page shows it (`formatDescription`): a `<p>` per paragraph, a `<br>` between
+ * its lines, `<code>` for a backtick span. Every run is an expression, so Astro escapes it: the
+ * text never becomes markup.
+ */
+import { formatDescription } from './page';
+
+export interface Props {
+  text: string;
+  class?: string;
+  /** Marks the page's own description (`data-description`), which the page tests find. */
+  main?: boolean;
+}
+
+const { text, class: className, main = false } = Astro.props;
+const paragraphs = formatDescription(text);
+---
+
+{
+  paragraphs.length > 0 && (
+    <div class={className} data-description={main ? '' : undefined}>
+      {paragraphs.map((lines) => (
+        <p class="m-0 [&+p]:mt-2">
+          {lines.map((runs, index) => (
+            <Fragment>
+              {index > 0 && <br />}
+              {runs.map((run) =>
+                run.code ? (
+                  <code class="rounded-sm bg-wave-muted px-1 font-wave-mono text-[0.9em]">{run.text}</code>
+                ) : (
+                  run.text
+                ),
+              )}
+            </Fragment>
+          ))}
+        </p>
+      ))}
+    </div>
+  )
+}

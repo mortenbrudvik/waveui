@@ -1,0 +1,51 @@
+---
+/**
+ * The components index, `/waveui/docs/components`: every catalog entry as a link to its page,
+ * grouped by category in the catalog's order. Static HTML; with the navigation pane it is the way
+ * to a page without scripts (the spec's "Search without scripts").
+ */
+import AppLayout from '../../layouts/AppLayout.astro';
+import { getCatalog } from '../../catalog/catalog';
+import { getLibraryVersion } from '../../docs/sizes';
+import { groupByCategory } from '../../shell/NavPane';
+import { componentHref } from '../../shell/urls';
+
+const groups = groupByCategory(getCatalog());
+const count = groups.reduce((sum, group) => sum + group.entries.length, 0);
+const headingId = (category: string) =>
+  `category-${category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+---
+
+<AppLayout title="Components" status={{ version: getLibraryVersion() }}>
+  <article class="flex flex-col gap-6 p-4 md:p-6">
+    <header class="flex flex-col gap-1">
+      <h1 class="m-0 text-wave-title-1 font-semibold">Components</h1>
+      <p class="m-0 max-w-prose text-wave-body-1">
+        {`WaveUI's ${count} components, by category. Each page shows the component's examples, props, parts and class names.`}
+      </p>
+    </header>
+    <div class="grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        groups.map((group) => (
+          <section aria-labelledby={headingId(group.category)}>
+            <h2 id={headingId(group.category)} class="m-0 mb-2 text-wave-subtitle-1 font-semibold">
+              {group.category}
+            </h2>
+            <ul class="m-0 flex list-none flex-col gap-1 p-0">
+              {group.entries.map((entry) => (
+                <li>
+                  <a
+                    href={componentHref(entry.slug)}
+                    class="rounded-sm text-wave-body-1 text-wave-primary underline underline-offset-2 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-wave-ring"
+                  >
+                    {entry.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+    </div>
+  </article>
+</AppLayout>

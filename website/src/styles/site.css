@@ -67,3 +67,52 @@
     box-shadow: var(--wave-shadow-28);
   }
 }
+
+/*
+ * A component page's props table: five columns where its section is at least 40rem wide, else
+ * one block per prop (the name, then each cell under its column's name, an empty one left out).
+ * The table's elements carry explicit roles, so it stays a table to assistive technology.
+ */
+.props-section {
+  container-type: inline-size;
+}
+
+@container (max-width: 39.99rem) {
+  .props-table,
+  .props-table tbody,
+  .props-table tr,
+  .props-table th,
+  .props-table td {
+    display: block;
+  }
+
+  .props-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .props-table tbody tr {
+    border-bottom: 1px solid var(--wave-border);
+    padding-block: 0.5rem;
+  }
+
+  .props-table tbody th,
+  .props-table tbody td {
+    border: 0;
+    padding-block: 0.125rem;
+  }
+
+  .props-table td[data-empty] {
+    display: none;
+  }
+
+  .props-table td[data-label]::before {
+    content: attr(data-label) ': ';
+    font-weight: 600;
+    color: var(--wave-muted-foreground);
+  }
+}

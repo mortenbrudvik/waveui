@@ -9,6 +9,9 @@
  *   and the SSR transform at once (an `.astro` file transformed for the browser refuses to
  *   render), which `test/jsdom-ssr.ts` provides; a docblock can name only an installed
  *   environment package, so the project selects it.
+ * - `pages`: the tests of the built pages in `dist` (`tests/`). They read an earlier
+ *   `astro build` and skip, naming the reason, when there is none or it is older than the sources
+ *   (`test/builtSite.ts`); `npm run site:test:pages` builds first and requires them.
  */
 import { getViteConfig } from 'astro/config';
 
@@ -32,6 +35,10 @@ export default getViteConfig({
       {
         extends: true,
         test: { name: 'shell', include: SHELL_TESTS, environment: './test/jsdom-ssr.ts' },
+      },
+      {
+        extends: true,
+        test: { name: 'pages', include: ['tests/**/*.test.ts'], testTimeout: 120_000 },
       },
     ],
   },

@@ -77,7 +77,8 @@ export function exampleIslandFiles(
   });
 }
 
-function readSkipped(): string[] {
+/** The stories `website/skipped-stories.json` lists, as `<storyFile>#<ExportName>`. */
+export function readSkippedStories(): string[] {
   const file = join(REPO_ROOT, 'website/skipped-stories.json');
   return (JSON.parse(readFileSync(file, 'utf8')) as { story: string }[]).map((item) => item.story);
 }
@@ -90,7 +91,7 @@ export function writeExampleIslands(outDir: string = join(REPO_ROOT, EXAMPLE_ISL
   written: string[];
   removed: string[];
 } {
-  const files = exampleIslandFiles(getCatalog(), readSkipped());
+  const files = exampleIslandFiles(getCatalog(), readSkippedStories());
   mkdirSync(outDir, { recursive: true });
   const written: string[] = [];
   for (const file of files) {

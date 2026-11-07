@@ -1,0 +1,230 @@
+---
+/**
+ * A component's page, `/waveui/docs/components/<slug>`, one per catalog entry, pre-rendered (the
+ * spec's "Page anatomy"). In order: the name, the description from its JSDoc, every story as a
+ * live example with its source, the props table, the parts, the stable class names, and an "On
+ * this page" pane listing the sections the page has. The status bar shows the export's measured
+ * import size and the library version; Copy code copies the first story's source.
+ *
+ * A hook entry (the table hooks, the overlay hooks) has its description and examples, and no props
+ * table. Everything is static HTML except the example islands and the shell's island.
+ */
+import AppLayout from '../../layouts/AppLayout.astro';
+import Description from '../../docs/Description.astro';
+import Example from '../../islands/Example.astro';
+import { getCatalog, type ComponentEntry } from '../../catalog/catalog';
+import { exampleAnchor, getSiteImportSizes, isHookEntry, pageSections } from '../../docs/page';
+import { extractDocs } from '../../docs/props';
+import { getLibraryVersion } from '../../docs/sizes';
+import { readSkippedStories } from '../../examples/islands';
+import { loadStory } from '../../stories/runtime';
+import { extractStorySource } from '../../stories/source';
+
+export function getStaticPaths() {
+  return getCatalog().map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+export interface Props {
+  entry: ComponentEntry;
+}
+
+const { entry } = Astro.props;
+const docs = extractDocs(entry);
+const hook = isHookEntry(entry);
+const skipped = new Set(readSkippedStories());
+const stories = await Promise.all(
+  entry.storyNames
+    .filter((exportName) => !skipped.has(`${entry.storyFile}#${exportName}`))
+    .map(async (exportName) => ({
+      exportName,
+      name: (await loadStory(entry, exportName)).name,
+      anchor: exampleAnchor(exportName),
+      source: extractStorySource(entry.storyFile, exportName),
+    })),
+);
+const propsTable = !hook && docs.props.length > 0;
+const sections = pageSections({
+  examples: stories.length,
+  propsTable,
+  parts: docs.parts.length,
+  classNames: docs.classNames !== null,
+});
+const sizes = await getSiteImportSizes();
+const status = { importSize: sizes[entry.exportName], version: getLibraryVersion() };
+
+const H2 = 'm-0 mt-10 mb-3 text-wave-title-3 font-semibold';
+const CODE = 'rounded-sm bg-wave-muted px-1 font-wave-mono text-[0.9em]';
+const CELL = 'border-b border-wave-border px-2 py-2 align-top';
+---
+
+<AppLayout title={entry.name} current={entry.slug} status={status} copyText={stories[0]?.source}>
+  <article
+    class="flex flex-col gap-6 p-4 break-words md:p-6 lg:grid lg:grid-cols-[minmax(0,1fr)_12rem] lg:grid-rows-[auto_1fr] lg:gap-x-8"
+  >
+    <header class="flex min-w-0 flex-col gap-1 lg:col-start-1">
+      <h1 class="m-0 text-wave-title-1 font-semibold">{entry.name}</h1>
+      {
+        hook && (
+          <p class="m-0 text-wave-body-1 text-wave-muted-foreground">
+            This page documents the hook <code class={CODE}>{entry.exportName}</code>.
+          </p>
+        )
+      }
+    </header>
+
+    <nav
+      aria-label="On this page"
+      class="text-wave-body-1 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start"
+    >
+      <p class="m-0 mb-1 text-wave-caption-1 font-semibold text-wave-muted-foreground">
+        On this page
+      </p>
+      <ul class="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 lg:flex-col">
+        {
+          sections.map((section) => (
+            <li>
+              <a
+                href={`#${section.id}`}
+                class="rounded-sm text-wave-primary underline underline-offset-2 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-wave-ring"
+              >
+                {section.title}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <div class="min-w-0 lg:col-start-1">
+      <Description text={docs.description} main class="max-w-prose text-wave-body-1" />
+
+      {
+        stories.length > 0 && (
+          <section aria-labelledby="examples">
+            <h2 id="examples" class={H2}>
+              Examples
+            </h2>
+            {stories.map((story) => (
+              <div class="mb-8 flex flex-col gap-3">
+                <h3 id={story.anchor} class="m-0 text-wave-subtitle-2 font-semibold">
+                  {story.name}
+                </h3>
+                <Example slug={entry.slug} storyName={story.exportName} />
+                <pre class="m-0 rounded border border-wave-border bg-wave-muted p-3 font-wave-mono text-wave-caption-1 whitespace-pre-wrap [overflow-wrap:anywhere]"><code>{story.source}</code></pre>
+              </div>
+            ))}
+          </section>
+        )
+      }
+
+      {
+        propsTable && (
+          <section aria-labelledby="props" class="props-section">
+            <h2 id="props" class={H2}>
+              Props
+            </h2>
+            {/* Explicit roles keep the table's semantics where site.css stacks its rows (narrow). */}
+            <table role="table" class="props-table w-full border-collapse text-start text-wave-body-1">
+              <thead role="rowgroup">
+                <tr role="row" class="text-wave-caption-1 text-wave-muted-foreground">
+                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Name</th>
+                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Type</th>
+                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Required</th>
+                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Default</th>
+                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Description</th>
+                </tr>
+              </thead>
+              <tbody role="rowgroup">
+                {docs.props.map((prop) => (
+                  <tr role="row">
+                    <th role="rowheader" scope="row" class={`${CELL} text-start font-normal`}>
+                      <code class={CODE}>{prop.name}</code>
+                    </th>
+                    <td role="cell" class={CELL} data-label="Type">
+                      <code class={`${CODE} [overflow-wrap:anywhere]`}>{prop.type}</code>
+                    </td>
+                    <td role="cell" class={CELL} data-label="Required">{prop.required ? 'Yes' : 'No'}</td>
+                    <td role="cell" class={CELL} data-label="Default" data-empty={prop.default === undefined ? '' : undefined}>{prop.default !== undefined && <code class={`${CODE} [overflow-wrap:anywhere]`}>{prop.default}</code>}</td>
+                    <td
+                      role="cell"
+                      class={CELL}
+                      data-label="Description"
+                      data-empty={!prop.description && prop.deprecated === undefined ? '' : undefined}
+                    >
+                      <Description text={prop.description} />
+                      {prop.deprecated !== undefined && (
+                        <p class="m-0 mt-1">
+                          <strong>Deprecated:</strong> {prop.deprecated}
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {docs.nativeElement && (
+              <p class="m-0 mt-3 text-wave-body-1">
+                Any other prop is passed to the element it renders (<code class={CODE}>{docs.nativeElement}</code>).
+              </p>
+            )}
+          </section>
+        )
+      }
+
+      {
+        !propsTable && !hook && docs.nativeElement && (
+          <p class="m-0 mt-6 text-wave-body-1">
+            Its props are passed to the element it renders (<code class={CODE}>{docs.nativeElement}</code>).
+          </p>
+        )
+      }
+
+      {
+        docs.parts.length > 0 && (
+          <section aria-labelledby="parts">
+            <h2 id="parts" class={H2}>
+              Parts
+            </h2>
+            <ul class="m-0 flex list-none flex-wrap gap-2 p-0">
+              {docs.parts.map((part) => (
+                <li>
+                  <code class={CODE}>{part}</code>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+
+      {
+        docs.classNames && (
+          <section aria-labelledby="class-names">
+            <h2 id="class-names" class={H2}>
+              Stable class names
+            </h2>
+            <table class="w-full border-collapse text-start text-wave-body-1">
+              <thead>
+                <tr class="text-wave-caption-1 text-wave-muted-foreground">
+                  <th scope="col" class={`${CELL} text-start`}>Part</th>
+                  <th scope="col" class={`${CELL} text-start`}>Class</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(docs.classNames).map(([part, className]) => (
+                  <tr>
+                    <td class={CELL}>
+                      <code class={CODE}>{part}</code>
+                    </td>
+                    <td class={CELL}>
+                      <code class={CODE}>{className}</code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )
+      }
+    </div>
+  </article>
+</AppLayout>
