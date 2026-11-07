@@ -18,6 +18,7 @@ import { useControllable } from '../../hooks/useControllable';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { getPartId } from './disclosureIds';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Heading level of the element that wraps each Accordion trigger: the shared {@link HeadingLevel}. */
 export type AccordionHeadingLevel = HeadingLevel;
@@ -234,6 +235,8 @@ function toItems(value: string | null | undefined): readonly string[] | undefine
 
 // The Accordion root, documented on the exported `Accordion` const.
 const AccordionRoot = (props: AccordionProps) => {
+  const appClassName = useAppClassName(accordionClassNames.root);
+
   // Both modes' props, read by mode: a single Accordion ignores the multiple-mode ones (and the
   // other way round), so neither reaches the root element.
   const {
@@ -316,6 +319,7 @@ const AccordionRoot = (props: AccordionProps) => {
               className={wcn(
                 accordionClassNames.root,
                 'wave:divide-y wave:divide-border',
+                appClassName,
                 className,
               )}
               {...rest}
@@ -442,6 +446,8 @@ const AccordionItem = ({
   ref,
   ...rest
 }: AccordionItemProps) => {
+  const appClassName = useAppClassName(accordionItemClassNames.root);
+
   const accordion = useAccordionContext('Accordion.Item');
   const isOpen = accordion.openItems.includes(value);
   const { toggle: toggleValue, baseId, registerItem } = accordion;
@@ -505,7 +511,7 @@ const AccordionItem = ({
         <div
           ref={ref}
           data-state={isOpen ? 'open' : 'closed'}
-          className={wcn(accordionItemClassNames.root, className)}
+          className={wcn(accordionItemClassNames.root, appClassName, className)}
           {...rest}
         >
           {hasTrigger ? null : <AccordionTrigger>{value}</AccordionTrigger>}
@@ -572,6 +578,8 @@ const AccordionTrigger = ({
   slotProps,
   ...rest
 }: AccordionTriggerProps) => {
+  const appClassName = useAppClassName(accordionTriggerClassNames.root);
+
   const item = useAccordionItemContext('Accordion.Trigger');
   const inPanel = React.useContext(AccordionPanelSlotContext)?.inPanel ?? false;
   React.useEffect(() => {
@@ -598,6 +606,7 @@ const AccordionTrigger = ({
         'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover wave:not-disabled:not-aria-disabled:active:bg-subtle-pressed',
         disabledStyles,
         focusRingInset,
+        appClassName,
         className,
       )}
       {...rest}
@@ -677,6 +686,8 @@ const AccordionPanel = ({
   ref,
   ...rest
 }: AccordionPanelProps) => {
+  const appClassName = useAppClassName(accordionPanelClassNames.root);
+
   const item = useAccordionItemContext('Accordion.Panel');
   const slot = React.useContext(AccordionPanelSlotContext);
   const inPanel = slot?.inPanel ?? false;
@@ -711,7 +722,7 @@ const AccordionPanel = ({
     // and stays while that region is mounted, so it also stays while the region collapses.
     return (
       <div
-        className={wcn(accordionPanelClassNames.root, className)}
+        className={wcn(accordionPanelClassNames.root, appClassName, className)}
         {...rest}
         id={idProp || undefined}
         ref={ref}
@@ -733,6 +744,7 @@ const AccordionPanel = ({
           className={wcn(
             accordionPanelClassNames.root,
             'wave:px-4 wave:pb-3 wave:text-body-1 wave:text-muted-foreground',
+            appClassName,
             className,
           )}
           {...rest}

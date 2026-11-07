@@ -21,6 +21,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { HiddenInput } from '../internal/HiddenInput';
 import { isInvalidLook } from './Input';
 import { useInputLook } from './inputLook';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Props that SpinButton routes to its `<input role="spinbutton">` (C-ROUTING): the id, the ARIA
@@ -361,6 +362,8 @@ const stepButtonClass = wcn(
  * <SpinButton aria-label="Quantity" min={1} max={10} value={qty} onValueChange={setQty} />
  */
 export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): React.ReactNode => {
+  const appClassName = useAppClassName(spinButtonClassNames.root);
+
   const {
     allowEmpty = false,
     value: valueProp,
@@ -843,6 +846,7 @@ export const SpinButton = (props: SpinButtonProps | SpinButtonAllowEmptyProps): 
       inputFocusWithin,
       invalidLook && inputInvalidWithin,
       disabled && 'wave:cursor-not-allowed wave:opacity-50',
+      appClassName,
       className,
     ),
     style,

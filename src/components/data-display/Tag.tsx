@@ -66,6 +66,7 @@ import {
   tagStartInsetClasses,
 } from './tagStyles';
 import type { TagLook } from './tagStyles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The Tag's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props only).
@@ -816,6 +817,8 @@ function isInListItem(root: HTMLElement): boolean {
  * <Tag dismissible dismissLabel="Remove" dismissIcon={<CloseIcon />}>Cherry</Tag>
  */
 export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
+  const appClassName = useAppClassName(tagClassNames.root);
+
   const {
     as,
     appearance: appearanceProp,
@@ -1119,6 +1122,7 @@ export const Tag: PolymorphicComponent<'span', TagOwnProps> = (props) => {
           : tagAppearanceClasses[appearance],
         disabled && [dimDisabled && TAG_DISABLED_DIM_CLASSES, forcedColors.disabled],
         tagShapeClasses[shape],
+        appClassName,
         className,
       )}
       onClick={handleClick}

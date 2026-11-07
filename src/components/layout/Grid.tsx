@@ -2,6 +2,7 @@ import * as React from 'react';
 import { gridClassNames } from '../../lib/classNames';
 import { wcn } from '../../lib/cn';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 const columnsMap = {
   1: 'wave:grid-cols-1',
@@ -98,6 +99,8 @@ type GridImplProps = GridOwnProps &
  * </Grid>
  */
 export const Grid: PolymorphicComponent<'div', GridOwnProps> = (props) => {
+  const appClassName = useAppClassName(gridClassNames.root);
+
   const {
     as,
     columns,
@@ -128,6 +131,7 @@ export const Grid: PolymorphicComponent<'div', GridOwnProps> = (props) => {
         rowGap && rowGapMap[rowGap],
         align && alignMap[align],
         justify && justifyMap[justify],
+        appClassName,
         className,
       )}
       style={{ ...rowStyle, ...style }}

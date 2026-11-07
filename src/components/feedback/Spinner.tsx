@@ -4,6 +4,7 @@ import { wcn } from '../../lib/cn';
 import { HIDDEN_PART_LOCKS, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { Size } from '../../lib/types';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Color treatment of a {@link Spinner}. */
 export type SpinnerAppearance = 'primary' | 'inverted';
@@ -150,6 +151,8 @@ export const Spinner = ({
   ref,
   ...rest
 }: SpinnerProps) => {
+  const appClassName = useAppClassName(spinnerClassNames.root);
+
   const wait = Number.isFinite(delay) && delay > 0 ? delay : 0;
   const [shown, setShown] = React.useState(wait === 0);
   const [announced, setAnnounced] = React.useState(false);
@@ -205,6 +208,7 @@ export const Spinner = ({
       className={wcn(
         spinnerClassNames.root,
         'wave:inline-flex wave:items-center wave:gap-2',
+        appClassName,
         className,
       )}
     >

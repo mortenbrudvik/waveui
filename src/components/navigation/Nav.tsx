@@ -38,6 +38,7 @@ import {
 } from './Nav.context';
 import { NavAppItem, NavAppItemStatic, NavDivider, NavSectionHeader } from './Nav.parts';
 import { NavRoot } from './Nav.root';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The Nav compound: the item types, styles and rendering of Nav.Item and Nav.SubItem, Nav.Category,
@@ -530,6 +531,8 @@ interface NavEntryClassNames {
   actions: string;
   icon?: string;
   content?: string;
+  /** The app-wide classes of the item's root class (`WaveProvider classNames`). */
+  appClassName?: string;
 }
 
 /**
@@ -618,6 +621,7 @@ function renderNavEntry(
     classes.base,
     isSelected ? (hasActions ? classes.selectedInRow : classes.selected) : classes.idle,
     hasActions && 'wave:min-w-0 wave:flex-1',
+    stable.appClassName,
     className,
   );
 
@@ -752,6 +756,8 @@ const NavCategory = ({
   slotProps,
   ...rest
 }: NavCategoryProps) => {
+  const appClassName = useAppClassName(navCategoryClassNames.root);
+
   const context = useNavContext('Nav.Category');
   const roving = React.useContext(NavRovingContext);
   const {
@@ -879,7 +885,7 @@ const NavCategory = ({
     : undefined;
 
   return (
-    <li ref={ref} {...rest} className={wcn(navCategoryClassNames.root, className)}>
+    <li ref={ref} {...rest} className={wcn(navCategoryClassNames.root, appClassName, className)}>
       <button
         type="button"
         aria-expanded={isOpen}
@@ -977,6 +983,7 @@ function NavItem(props: NavItemButtonProps): React.ReactElement;
 function NavItem(props: NavItemAnchorProps): React.ReactElement;
 function NavItem(props: NavItemDynamicProps): React.ReactElement;
 function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement {
+  const appClassName = useAppClassName(navItemClassNames.root);
   const context = useNavContext('Nav.Item');
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
@@ -990,6 +997,7 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
     roving,
     itemClasses,
     {
+      appClassName,
       root: navItemClassNames.root,
       listItem: navItemClassNames.listItem,
       actions: navItemClassNames.actions,
@@ -1016,6 +1024,7 @@ function NavSubItem(props: NavSubItemButtonProps): React.ReactElement;
 function NavSubItem(props: NavSubItemAnchorProps): React.ReactElement;
 function NavSubItem(props: NavSubItemDynamicProps): React.ReactElement;
 function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.ReactElement {
+  const appClassName = useAppClassName(navSubItemClassNames.root);
   const context = useNavContext('Nav.SubItem');
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
@@ -1029,6 +1038,7 @@ function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.Reac
     roving,
     subItemClasses,
     {
+      appClassName,
       root: navSubItemClassNames.root,
       listItem: navSubItemClassNames.listItem,
       actions: navSubItemClassNames.actions,

@@ -7,6 +7,7 @@ import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { useId } from '../../hooks/useId';
 import type { Orientation } from '../../lib/types';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The Divider's own props (the XOwnProps rule of `PolymorphicProps`: component-specific props
@@ -122,6 +123,8 @@ const labelClassName = 'wave:shrink-0 wave:text-caption-1 wave:text-muted-foregr
  * <Divider orientation="vertical" />
  */
 export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
+  const appClassName = useAppClassName(dividerClassNames.root);
+
   const {
     as,
     orientation = 'horizontal',
@@ -196,6 +199,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
             ? 'wave:inline-flex wave:min-h-12 wave:flex-col wave:items-center wave:gap-1 wave:self-stretch'
             : 'wave:flex wave:items-center wave:gap-3',
           inset && (vertical ? 'wave:py-3' : 'wave:px-3'),
+          appClassName,
           className,
         )}
         data-appearance={appearance}
@@ -226,6 +230,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
           'wave:inline-block wave:h-6 wave:border-s',
           borderClass,
           inset && 'wave:my-3',
+          appClassName,
           className,
         )}
         data-appearance={appearance}
@@ -247,6 +252,7 @@ export const Divider: PolymorphicComponent<'hr', DividerOwnProps> = (props) => {
         borderClass,
         // The rule is as wide as its container minus the two insets.
         inset && 'wave:mx-3 wave:w-[calc(100%-1.5rem)]',
+        appClassName,
         className,
       )}
       data-appearance={appearance}

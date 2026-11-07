@@ -17,6 +17,7 @@ import { useId } from '../../hooks/useId';
 import { unwrapButtonGlyph, type UnwrappedButton } from '../button/Button.slots';
 import { useSwatchPickerContext, type SwatchPickerSize } from './SwatchPicker.context';
 import { getCheckColors, type CheckColors } from './colorUtils';
+import { useAppClassName, type WaveRootClassName } from '../../hooks/useAppClassName';
 
 /*
  * The swatch kinds a `SwatchPicker` renders `items` through and a consumer can render as children
@@ -234,7 +235,7 @@ interface SwatchRadioProps extends Omit<
 > {
   kind: 'ColorSwatch' | 'ImageSwatch';
   /** The kind's stable root class, named by the module that sets its `displayName` (P3-00). */
-  rootClassName: string;
+  rootClassName: WaveRootClassName;
   /** The kind's stable `icon` part class (ColorSwatch only). */
   iconClassName?: string;
   value: string;
@@ -280,6 +281,7 @@ const SwatchRadio = ({
   ref,
   ...rest
 }: SwatchRadioProps) => {
+  const appClassName = useAppClassName(rootClassName);
   const {
     value: selectedValue,
     select,
@@ -341,6 +343,7 @@ const SwatchRadio = ({
               keepsColors && 'wave:forced-colors:ring-[Highlight]',
             )
           : 'wave:not-disabled:not-aria-disabled:hover:border-stroke-hover',
+        appClassName,
         className,
       )}
       style={{ ...style, ...paint }}
@@ -509,6 +512,8 @@ export const EmptySwatch = ({
   ref,
   ...rest
 }: EmptySwatchProps) => {
+  const appClassName = useAppClassName(emptySwatchClassNames.root);
+
   const { size, shape, layout, focusMode, spacing, getTabIndex } = useSwatchContext(
     'EmptySwatch',
     sizeProp,
@@ -547,6 +552,7 @@ export const EmptySwatch = ({
         'wave:border-dashed wave:border-stroke-accessible wave:bg-transparent wave:text-foreground',
         forcedColors.control,
         'wave:not-disabled:not-aria-disabled:hover:bg-subtle-hover',
+        appClassName,
         className,
       )}
     >

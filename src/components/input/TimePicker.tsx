@@ -64,6 +64,7 @@ import {
   pickerIconButtonClasses,
 } from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Option                                                             */
@@ -505,6 +506,8 @@ function startsWithQuery(item: ListboxItem, text: string): boolean {
  *   the server HTML and opens once the picker has hydrated.
  */
 export const TimePicker = (props: TimePickerProps) => {
+  const appClassName = useAppClassName(timePickerClassNames.root);
+
   const {
     value: valueProp,
     defaultValue,
@@ -1019,6 +1022,7 @@ export const TimePicker = (props: TimePickerProps) => {
     className: wcn(
       timePickerClassNames.root,
       'wave:relative wave:inline-flex wave:flex-col',
+      appClassName,
       className,
     ),
     style,

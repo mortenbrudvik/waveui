@@ -14,6 +14,7 @@ import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { usePresenceGroup, type PresenceGroupEntry } from '../../hooks/usePresenceGroup';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the MessageBarGroup component. */
 export interface MessageBarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -146,6 +147,8 @@ export const MessageBarGroup = ({
   ref,
   ...rest
 }: MessageBarGroupProps) => {
+  const appClassName = useAppClassName(messageBarGroupClassNames.root);
+
   const { entries, skipped, onExited } = usePresenceGroup(children, {
     appear: animate === 'both',
   });
@@ -174,6 +177,7 @@ export const MessageBarGroup = ({
       className={wcn(
         messageBarGroupClassNames.root,
         'wave:flex wave:flex-col wave:gap-2',
+        appClassName,
         className,
       )}
     >

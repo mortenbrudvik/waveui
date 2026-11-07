@@ -46,6 +46,7 @@ import {
   partitionMessageBarChildren,
   useTitlePlacement,
 } from './MessageBar.parts';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the MessageBar component. */
 export interface MessageBarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -431,6 +432,8 @@ const MessageBarRoot = ({
   ref,
   ...rest
 }: MessageBarProps) => {
+  const appClassName = useAppClassName(messageBarClassNames.root);
+
   const iconClassName = wcn(
     messageBarClassNames.icon,
     'wave:mt-0.5 wave:inline-flex wave:shrink-0',
@@ -657,6 +660,7 @@ const MessageBarRoot = ({
         'wave:flex wave:items-start wave:gap-3 wave:rounded wave:border-s-4 wave:px-4 wave:py-3 wave:text-foreground',
         tintClasses[status],
         STATUS_BORDER[status],
+        appClassName,
         className,
       )}
     >

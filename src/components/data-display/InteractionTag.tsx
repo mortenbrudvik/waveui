@@ -63,6 +63,7 @@ import {
   tagStartInsetClasses,
 } from './tagStyles';
 import type { TagLook } from './tagStyles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Props of InteractionTag: the element that holds the Primary and Secondary buttons. */
 export interface InteractionTagProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -370,6 +371,8 @@ const InteractionTagRoot = ({
   ref,
   ...rest
 }: InteractionTagProps) => {
+  const appClassName = useAppClassName(interactionTagClassNames.root);
+
   const group = useTagGroupContext();
   const rootRef = React.useRef<HTMLDivElement>(null);
   const mergedRef = useMergedRefs<HTMLDivElement>(rootRef, ref);
@@ -472,6 +475,7 @@ const InteractionTagRoot = ({
         className={wcn(
           interactionTagClassNames.root,
           'wave:group/interaction-tag wave:inline-flex wave:items-stretch',
+          appClassName,
           className,
         )}
       >
@@ -513,6 +517,8 @@ export const InteractionTagPrimary = ({
   ref,
   ...rest
 }: InteractionTagPrimaryProps) => {
+  const appClassName = useAppClassName(interactionTagPrimaryClassNames.root);
+
   const tag = useInteractionTagContext('InteractionTag.Primary');
   const { size, look, shape } = tag;
   const disabled = tag.disabled || disabledProp;
@@ -611,6 +617,7 @@ export const InteractionTagPrimary = ({
         disabledClasses(disabled, tag.dimDisabled),
         focusRing,
         size === 'extra-small' && INTERACTION_TAG_EXTRA_SMALL_HIT_CLASSES,
+        appClassName,
         className,
       )}
     >
@@ -693,6 +700,8 @@ export const InteractionTagSecondary = ({
   ref,
   ...rest
 }: InteractionTagSecondaryProps) => {
+  const appClassName = useAppClassName(interactionTagSecondaryClassNames.root);
+
   const tag = useInteractionTagContext('InteractionTag.Secondary');
   const { size, look } = tag;
   const disabled = tag.disabled || disabledProp;
@@ -803,6 +812,7 @@ export const InteractionTagSecondary = ({
         disabledClasses(disabled, tag.dimDisabled),
         focusRing,
         size === 'extra-small' && INTERACTION_TAG_EXTRA_SMALL_HIT_CLASSES,
+        appClassName,
         className,
       )}
     >

@@ -311,3 +311,42 @@ describe('class-name registry: applied in src/components (spec §1.4.3)', () => 
     expect(unknown).toEqual([]);
   });
 });
+
+describe('class-name registry: app-wide classes (WaveProvider classNames)', () => {
+  const sources = Object.values(
+    import.meta.glob<string>(['../components/**/*.{ts,tsx}', '!**/__tests__/**'], {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }),
+  ).join('\n');
+
+  /**
+   * Root constants whose element takes the app-wide classes without a `useAppClassName(<constant>.root)`
+   * call of their own: WaveProvider merges its own map, and the two swatches pass their root class
+   * to the shared radio, which reads it as `useAppClassName(rootClassName)`.
+   */
+  const READ_ELSEWHERE: readonly string[] = [
+    'waveProviderClassNames',
+    'colorSwatchClassNames',
+    'imageSwatchClassNames',
+  ];
+
+  it('reads the app-wide classes of every root class a component draws', () => {
+    const wired = new Set(
+      [...sources.matchAll(/useAppClassName\(([^)]*)\)/g)].flatMap((call) =>
+        [...call[1].matchAll(/([a-zA-Z]+ClassNames)\.root/g)].map((match) => match[1]),
+      ),
+    );
+    const unwired = constants
+      .filter(([, value]) => 'root' in value)
+      .map(([name]) => name)
+      .filter((name) => !wired.has(name) && !READ_ELSEWHERE.includes(name));
+    expect(unwired).toEqual([]);
+  });
+
+  it('lists in READ_ELSEWHERE only constants that really are', () => {
+    expect(sources).toContain('useAppClassName(rootClassName)');
+    expect(sources).toContain('appClassNames?.[waveProviderClassNames.root]');
+  });
+});

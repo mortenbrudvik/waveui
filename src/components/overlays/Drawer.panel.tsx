@@ -195,6 +195,8 @@ export interface DrawerPanelProps extends Omit<React.HTMLAttributes<HTMLElement>
    * variant's root (`wcn(drawerClassNames.root, navDrawerClassNames.root)`).
    */
   rootClassName: string;
+  /** The app-wide classes of `WaveProvider classNames` for the panel's roots, after its own. */
+  appClassName?: string;
   /**
    * The backdrop's stable class(es), first in its `wcn()`: `drawerClassNames.backdrop`, followed by
    * a variant's (`wcn(drawerClassNames.backdrop, navDrawerClassNames.backdrop)`).
@@ -275,6 +277,7 @@ export const DrawerPanel = ({
   trigger,
   finalFocusRef,
   rootClassName,
+  appClassName,
   backdropClassName,
   collapseClassName,
   backdrop,
@@ -442,6 +445,7 @@ export const DrawerPanel = ({
             rootClassName,
             inlinePanelClasses,
             getInlinePanelClasses(position, size),
+            appClassName,
             className,
           )}
         >
@@ -484,6 +488,7 @@ export const DrawerPanel = ({
           OVERLAY_PANEL_CLASSES,
           getOverlayPanelClasses(position, size),
           panelMotion,
+          appClassName,
           className,
         )}
       >

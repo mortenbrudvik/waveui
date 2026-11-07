@@ -15,6 +15,7 @@ import {
   type NavContextValue,
   type NavValueKind,
 } from './Nav.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The Nav root, and `useNavRootState`, the one state model of Nav and NavDrawer: the selection,
@@ -217,6 +218,8 @@ export const NavRoot = ({
   slotProps,
   ...rest
 }: NavProps) => {
+  const appClassName = useAppClassName(navClassNames.root);
+
   const contextValue = useNavRootState({
     componentName: 'Nav',
     value,
@@ -243,6 +246,7 @@ export const NavRoot = ({
         className={wcn(
           navClassNames.root,
           'wave:w-60 wave:border-e wave:border-border wave:bg-background wave:py-2',
+          appClassName,
           className,
         )}
       >

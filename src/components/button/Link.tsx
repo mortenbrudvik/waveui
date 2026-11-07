@@ -4,6 +4,7 @@ import { linkClassNames } from '../../lib/classNames';
 import { focusRing } from '../../lib/styles';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import { useButtonSemantics } from './Button.semantics';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Color treatment of a {@link Link}.
@@ -92,6 +93,8 @@ const appearanceClasses: Record<LinkAppearance, string> = {
  * <Link onClick={showMore}>Show more</Link>
  */
 export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
+  const appClassName = useAppClassName(linkClassNames.root);
+
   const {
     as,
     appearance: appearanceProp,
@@ -141,6 +144,7 @@ export const Link: PolymorphicComponent<'a', LinkOwnProps> = (props) => {
         // would dim below 3:1 (as for buttons).
         (disabled || disabledFocusable) &&
           'wave:cursor-not-allowed wave:opacity-50 wave:aria-disabled:focus-visible:opacity-100',
+        appClassName,
         className,
       )}
       {...enforced}

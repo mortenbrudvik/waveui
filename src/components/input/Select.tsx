@@ -13,6 +13,7 @@ import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
 import { useInputLook } from './inputLook';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Select component. */
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
@@ -99,6 +100,8 @@ export const Select = ({
   required,
   ...props
 }: SelectProps) => {
+  const appClassName = useAppClassName(selectClassNames.root);
+
   const { invalid, messageId, message } = useControlErrorMessage(
     error,
     errorMessageProps,
@@ -141,6 +144,7 @@ export const Select = ({
         inputFocus,
         'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
         invalidLook && inputInvalid,
+        appClassName,
         className,
       )}
       {...props}

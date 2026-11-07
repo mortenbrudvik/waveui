@@ -7,6 +7,7 @@ import type { CoreSize, InputAppearance } from '../../lib/types';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { isInvalidLook, useControlErrorMessage, type InputErrorMessageProps } from './Input';
 import { useInputLook } from './inputLook';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Textarea component. */
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -81,6 +82,8 @@ export const Textarea = ({
   required,
   ...props
 }: TextareaProps) => {
+  const appClassName = useAppClassName(textareaClassNames.root);
+
   const { invalid, messageId, message } = useControlErrorMessage(
     error,
     errorMessageProps,
@@ -116,6 +119,7 @@ export const Textarea = ({
         inputFocus,
         'wave:disabled:cursor-not-allowed wave:disabled:opacity-50',
         invalidLook && inputInvalid,
+        appClassName,
         className,
       )}
       {...props}

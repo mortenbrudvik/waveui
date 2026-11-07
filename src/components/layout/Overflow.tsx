@@ -22,6 +22,7 @@ import type {
   OverflowDirection,
   OverflowGroupVisibility,
 } from './Overflow.store';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { OverflowDirection, OverflowGroupVisibility };
 
@@ -584,6 +585,8 @@ const OverflowRoot = ({
   slotProps,
   ...rest
 }: OverflowProps) => {
+  const appClassName = useAppClassName(overflowClassNames.root);
+
   const [store] = React.useState(() => new OverflowStore());
   const hiddenIds = React.useSyncExternalStore(
     store.subscribe,
@@ -749,6 +752,7 @@ const OverflowRoot = ({
           overflowClassNames.root,
           'wave:flex wave:overflow-hidden wave:p-1',
           ROOT_ORIENTATION_CLASSES[orientation],
+          appClassName,
           className,
         )}
         data-orientation={orientation}
@@ -790,6 +794,8 @@ export const OverflowItem = ({
   inert,
   ...rest
 }: OverflowItemProps) => {
+  const appClassName = useAppClassName(overflowItemClassNames.root);
+
   const { store, hiddenSet } = useOverflowContext('OverflowItem');
   const isHidden = hiddenSet.has(itemId);
   React.useEffect(() => store.registerItemId(itemId), [store, itemId]);
@@ -828,7 +834,7 @@ export const OverflowItem = ({
     if (elementRef.current) store.setItemMeta(elementRef.current, priority, pinned, groupId);
   });
 
-  const itemClassName = wcn(overflowItemClassNames.root, 'wave:shrink-0', className);
+  const itemClassName = wcn(overflowItemClassNames.root, 'wave:shrink-0', appClassName, className);
 
   if (childElement) {
     // Only a hidden item sets these (and a consumer's own values), so a shown item keeps the
@@ -892,6 +898,8 @@ export const OverflowDivider = ({
   inert,
   ...rest
 }: OverflowDividerProps) => {
+  const appClassName = useAppClassName(overflowDividerClassNames.root);
+
   const { store, groupVisibility, orientation } = useOverflowContext('OverflowDivider');
   const isHidden = groupVisibility[groupId] === 'hidden';
   const registerRef = React.useCallback(
@@ -906,6 +914,7 @@ export const OverflowDivider = ({
       className={wcn(
         overflowDividerClassNames.root,
         DIVIDER_ORIENTATION_CLASSES[orientation],
+        appClassName,
         className,
       )}
       {...rest}

@@ -3,6 +3,7 @@ import { stackClassNames } from '../../lib/classNames';
 import { wcn } from '../../lib/cn';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Orientation } from '../../lib/types';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 const gapMap = {
   none: 'wave:gap-0',
@@ -76,6 +77,8 @@ type StackImplProps = StackOwnProps &
  * </Stack>
  */
 export const Stack: PolymorphicComponent<'div', StackOwnProps> = (props) => {
+  const appClassName = useAppClassName(stackClassNames.root);
+
   const {
     as,
     orientation: orientationProp,
@@ -103,6 +106,7 @@ export const Stack: PolymorphicComponent<'div', StackOwnProps> = (props) => {
         align && alignMap[align],
         justify && justifyMap[justify],
         wrap && 'wave:flex-wrap',
+        appClassName,
         className,
       )}
       {...rest}

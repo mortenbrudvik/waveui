@@ -41,6 +41,7 @@ import {
   useStaticMenuPartWarning,
   withTypeaheadText,
 } from './Menu.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the MenuPopover sub-component. */
 export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'id'> {
@@ -208,6 +209,8 @@ export const MenuPopover = ({
   ref,
   ...rest
 }: MenuPopoverProps) => {
+  const appClassName = useAppClassName(menuPopoverClassNames.root);
+
   const menu = useMenuContext('Menu.Popover');
   const {
     popup,
@@ -514,6 +517,7 @@ export const MenuPopover = ({
             menuPopoverClassNames.root,
             menuPopoverClasses,
             motionClassName,
+            appClassName,
             className,
           )}
         >

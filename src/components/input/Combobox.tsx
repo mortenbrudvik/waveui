@@ -58,6 +58,7 @@ import {
 } from './pickerStyles';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export { Option, OptionGroup } from './Option';
 export type { OptionProps, OptionGroupProps } from './Option';
@@ -474,6 +475,8 @@ function matchesText(item: ListboxItem, text: string): boolean {
 }
 
 const ComboboxRoot = (props: ComboboxProps<boolean>) => {
+  const appClassName = useAppClassName(comboboxClassNames.root);
+
   const {
     multiselect = false,
     value: valueProp,
@@ -1068,6 +1071,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
     className: wcn(
       comboboxClassNames.root,
       'wave:relative wave:inline-flex wave:flex-col',
+      appClassName,
       className,
     ),
     style,

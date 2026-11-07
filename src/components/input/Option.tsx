@@ -32,6 +32,7 @@ import {
   type UseListboxResult,
 } from '../../hooks/useListbox';
 import { Portal } from '../portal/Portal';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Option                                                             */
@@ -308,6 +309,8 @@ function renderCheck(
 }
 
 function OptionImpl(props: OptionProps) {
+  const appClassName = useAppClassName(optionClassNames.root);
+
   const {
     value,
     label,
@@ -373,6 +376,7 @@ function OptionImpl(props: OptionProps) {
         // While a multi-select option draws its box, the box carries the state, and
         // `forcedColors.selectedContainer` would draw every selected option like the active one.
         selected && !(multiselect && showCheck) && forcedColors.selectedContainer,
+        appClassName,
         className,
       )}
     >
@@ -544,6 +548,8 @@ function OptionGroupImpl({
   slotProps,
   ...rest
 }: OptionGroupProps) {
+  const appClassName = useAppClassName(optionGroupClassNames.root);
+
   const labelId = useId('option-group');
   const store = React.useContext(ListboxContext)?.store;
   const parentGroups = React.useContext(OptionGroupContext);
@@ -596,7 +602,7 @@ function OptionGroupImpl({
       ref={ref}
       role="presentation"
       hidden={hidden || empty || undefined}
-      className={wcn(optionGroupClassNames.root, className)}
+      className={wcn(optionGroupClassNames.root, appClassName, className)}
     >
       {hasLabel && (
         <div
@@ -886,6 +892,8 @@ export interface ListboxSurfaceParts {
  * </ListboxSurface>
  */
 export function ListboxSurface(props: ListboxSurfaceProps) {
+  const appClassName = useAppClassName(listboxSurfaceClassNames.root);
+
   const {
     listbox,
     layerId,
@@ -966,6 +974,7 @@ export function ListboxSurface(props: ListboxSurfaceProps) {
       listboxSurfaceClassNames.root,
       'wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4',
       surfaceClassName,
+      appClassName,
     ),
     locked: {
       ...placement,

@@ -9,6 +9,7 @@ import { disabledStyles, forcedColors } from '../../lib/styles';
 import type { CheckState } from '../../lib/treeCascade';
 import { useId } from '../../hooks/useId';
 import { useFlatTreeContext } from './FlatTree.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the FlatTreeItem sub-component. */
 export interface FlatTreeItemProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
@@ -78,6 +79,8 @@ export const FlatTreeItem = ({
   ref,
   ...rest
 }: FlatTreeItemProps) => {
+  const appClassName = useAppClassName(flatTreeItemClassNames.root);
+
   const ctx = useFlatTreeContext('FlatTree.Item');
   const { item, level, position, setSize, isBranch, expanded, index } = row;
   const { value } = item;
@@ -245,6 +248,7 @@ export const FlatTreeItem = ({
         'wave:box-border wave:block wave:outline-none',
         'wave:[&:focus-visible>[data-flat-tree-row]]:outline-2 wave:[&:focus-visible>[data-flat-tree-row]]:-outline-offset-2 wave:[&:focus-visible>[data-flat-tree-row]]:outline-ring',
         disabledStyles,
+        appClassName,
         className,
       )}
       {...rest}

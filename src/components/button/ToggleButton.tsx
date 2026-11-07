@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { wcn } from '../../lib/cn';
-import { toggleButtonClassNames } from '../../lib/classNames';
+import { toggleButtonClassNames, buttonClassNames } from '../../lib/classNames';
 import { composeEventHandlers } from '../../lib/composeEventHandlers';
 import { warnOnce } from '../../lib/dev';
 import { useControllable } from '../../hooks/useControllable';
@@ -8,6 +8,7 @@ import type { Size, Appearance, IconPosition, Slot } from '../../lib/types';
 import { Button } from './Button';
 import { withPartClass } from './Button.slots';
 import { buttonClassName } from './buttonStyles';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the ToggleButton component. */
 export interface ToggleButtonProps extends Omit<
@@ -146,6 +147,8 @@ export const ToggleButton = ({
   onClick,
   ...props
 }: ToggleButtonProps) => {
+  const appClassName = useAppClassName(buttonClassNames.root, toggleButtonClassNames.root);
+
   const [isPressed, setPressed] = useControllable(pressed, defaultPressed, onPressedChange);
 
   // With `disabledFocusable`, Button replaces this handler, so the toggle never runs.
@@ -187,6 +190,7 @@ export const ToggleButton = ({
       className={wcn(
         toggleButtonClassNames.root,
         isPressed && getPressedLayer(appearance, disabledLook, isAccessible),
+        appClassName,
         className,
       )}
     />

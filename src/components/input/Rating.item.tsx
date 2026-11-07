@@ -14,6 +14,7 @@ import { materialiseSlotContent, renderSlot, slotRendersContent, type Slot } fro
 import { focusRing } from '../../lib/styles';
 import type { Size } from '../../lib/types';
 import { unwrapButtonGlyph, type UnwrappedButton } from '../button/Button.slots';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Color of a rating's filled stars. */
 export type RatingColor = 'neutral' | 'brand' | 'marigold';
@@ -225,6 +226,8 @@ export interface StarGlyphProps extends Omit<React.HTMLAttributes<HTMLSpanElemen
    * `className`: a star part, and a RatingItem's root.
    */
   starClassName?: string;
+  /** The app-wide classes of `WaveProvider classNames` for the item's root, after its own. */
+  appClassName?: string;
   /** The stable classes of every glyph it draws (P3-00): the icon parts. */
   iconClassName?: string;
   /** Ref to the star's `<span>`. */
@@ -246,6 +249,7 @@ export const StarGlyph = ({
   color,
   glyphs,
   starClassName,
+  appClassName,
   iconClassName,
   className,
   ref,
@@ -264,6 +268,7 @@ export const StarGlyph = ({
           starClassName,
           'wave:relative wave:inline-flex',
           unfilled.colorClass,
+          appClassName,
           className,
         )}
       >
@@ -294,7 +299,7 @@ export const StarGlyph = ({
     <span
       {...rest}
       ref={ref}
-      className={wcn(starClassName, 'wave:inline-flex', look.colorClass, className)}
+      className={wcn(starClassName, 'wave:inline-flex', look.colorClass, appClassName, className)}
     >
       <GlyphLayer filled={filled} glyph={look.glyph} className={wcn(iconClassName, starSize)} />
     </span>
@@ -529,6 +534,8 @@ export const RatingItem = ({
   ref,
   ...rest
 }: RatingItemProps) => {
+  const appClassName = useAppClassName(ratingItemClassNames.root);
+
   const ctx = useRatingContext();
   const { registerItem } = ctx;
   React.useLayoutEffect(() => registerItem(value), [registerItem, value]);
@@ -555,6 +562,7 @@ export const RatingItem = ({
         {...rest}
         ref={ref as React.Ref<HTMLSpanElement>}
         starClassName={starClassName}
+        appClassName={appClassName}
         iconClassName={iconClassName}
         className={className}
         fraction={ctx.drawnValue - (value - 1)}
@@ -594,6 +602,7 @@ export const RatingItem = ({
           targetPaddingMap[ctx.size],
           'wave:has-focus-visible:outline-2 wave:has-focus-visible:outline-offset-2 wave:has-focus-visible:outline-ring',
           ctx.disabled && 'wave:cursor-not-allowed',
+          appClassName,
           className,
         )}
         onClick={composeEventHandlers(onClick, (event) => {
@@ -671,6 +680,7 @@ export const RatingItem = ({
         targetPaddingMap[ctx.size],
         focusRing,
         look.colorClass,
+        appClassName,
         className,
       )}
       onClick={composeEventHandlers(onClick, (event) => {

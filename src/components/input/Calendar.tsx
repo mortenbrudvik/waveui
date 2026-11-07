@@ -53,6 +53,7 @@ import {
   startOfMonth,
   type CalendarSelectionRange,
 } from './dateUtils';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * The built-in texts of the calendar, for localization: the names of the navigation buttons in
@@ -1243,6 +1244,8 @@ export const Calendar = ({
   slotProps,
   ...rest
 }: CalendarProps) => {
+  const appClassName = useAppClassName(calendarClassNames.root);
+
   const isUnavailable = (date: Date) => isDayUnavailable(date, minDate, maxDate, disabledDates);
   const [value, setValue] = useControllable<Date | null>(valueProp, defaultValue ?? null, (next) =>
     onValueChange?.(next, {
@@ -1336,6 +1339,7 @@ export const Calendar = ({
       className={wcn(
         calendarClassNames.root,
         'wave:relative wave:inline-flex wave:flex-col wave:text-foreground',
+        appClassName,
         className,
       )}
       {...rest}

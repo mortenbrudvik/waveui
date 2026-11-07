@@ -29,6 +29,7 @@ import {
   type ColorPickerLabels,
 } from './ColorPicker.parts';
 import { alphaToOpacity, formatHexColor, normalizeHexColor, parseHexColor } from './colorUtils';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export { ColorPickerHexField, ColorPickerPreview, ColorPickerSwatches };
 export type { ColorPickerLabels };
@@ -228,6 +229,8 @@ const ColorPickerRoot = ({
   slotProps,
   ...rest
 }: ColorPickerProps) => {
+  const appClassName = useAppClassName(colorPickerClassNames.root);
+
   // The default is written like every edit (C-FORMS): the picker shows, submits and restores it as
   // a lowercase `#rrggbb`/`#rrggbbaa`. A value that is not a hex color stays as given (warning
   // below).
@@ -400,6 +403,7 @@ const ColorPickerRoot = ({
       className={wcn(
         colorPickerClassNames.root,
         'wave:relative wave:inline-flex wave:flex-col wave:gap-3 wave:rounded wave:border wave:border-border wave:bg-background wave:p-3 wave:shadow-4',
+        appClassName,
         className,
       )}
       {...rest}

@@ -5,6 +5,7 @@ import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Slot } from '../../lib/types';
 import { CardOrientationContext } from './Card.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** The Card.Preview's own props (component-specific props only). */
 export interface CardPreviewOwnProps {
@@ -40,6 +41,8 @@ type CardPreviewImplProps = CardPreviewOwnProps &
  * </Card>
  */
 export const CardPreview: PolymorphicComponent<'div', CardPreviewOwnProps> = (props) => {
+  const appClassName = useAppClassName(cardPreviewClassNames.root);
+
   const { as, logo, className, children, ref, ...rest } = props as CardPreviewImplProps;
   const Component: React.ElementType = as ?? 'div';
   const orientation = React.useContext(CardOrientationContext);
@@ -51,6 +54,7 @@ export const CardPreview: PolymorphicComponent<'div', CardPreviewOwnProps> = (pr
         cardPreviewClassNames.root,
         'wave:relative wave:block wave:overflow-hidden',
         orientation === 'horizontal' ? 'wave:shrink-0 wave:self-stretch' : 'wave:w-full',
+        appClassName,
         className,
       )}
       {...rest}

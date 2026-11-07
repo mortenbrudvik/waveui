@@ -44,6 +44,7 @@ import {
   type CheckState,
   type TreeNode,
 } from './Tree.selection';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 const EMPTY: readonly string[] = [];
 
@@ -272,6 +273,8 @@ export const TreeRoot = ({
   ref,
   ...rest
 }: TreeProps) => {
+  const appClassName = useAppClassName(treeClassNames.root);
+
   const [initialExpanded] = React.useState<readonly string[]>(() => defaultExpandedItems ?? EMPTY);
   const [expandedList, setExpandedList] = useControllable<readonly string[]>(
     expandedItems,
@@ -462,7 +465,7 @@ export const TreeRoot = ({
             role="tree"
             data-selection-mode={selectionMode}
             aria-multiselectable={selectionMode === 'multiple' ? true : undefined}
-            className={wcn(treeClassNames.root, 'wave:text-body-1', className)}
+            className={wcn(treeClassNames.root, 'wave:text-body-1', appClassName, className)}
             {...rest}
             data-roving-container=""
             onKeyDown={composeEventHandlers(onKeyDown, handleKeyDown)}
@@ -886,6 +889,8 @@ export const TreeItem = ({
   slotProps,
   ...props
 }: TreeItemProps) => {
+  const appClassName = useAppClassName(treeItemClassNames.root);
+
   const { 'data-roving-text': typeaheadText, ...rest } = props as typeof props & {
     'data-roving-text'?: string;
   };
@@ -1255,6 +1260,7 @@ export const TreeItem = ({
         'wave:[&:focus-visible>[data-tree-row]]:outline-2 wave:[&:focus-visible>[data-tree-row]]:-outline-offset-2 wave:[&:focus-visible>[data-tree-row]]:outline-ring',
         hasActions && ACTIONS_ON_ITEM_FOCUS,
         hasActions && hasAside && ASIDE_OFF_ON_ITEM_FOCUS,
+        appClassName,
         className,
       )}
       {...rest}

@@ -17,6 +17,7 @@ import { warnOnce } from '../../lib/dev';
 import { mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { forcedColors } from '../../lib/styles';
 import type { PresenceStatus, Size } from '../../lib/types';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the PresenceBadge component. */
 export interface PresenceBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -185,6 +186,8 @@ export const PresenceBadge = ({
   slotProps,
   ...props
 }: PresenceBadgeProps) => {
+  const appClassName = useAppClassName(presenceBadgeClassNames.root);
+
   // A removed name from untyped code draws its new name; any other value that no type checker
   // caught (server data, `null`) draws `'offline'`, so the badge never throws (on the server too).
   const oldName = Object.hasOwn(RENAMED_STATUSES, statusProp) ? statusProp : undefined;
@@ -258,6 +261,7 @@ export const PresenceBadge = ({
         forcedColors.border,
         sizeClasses[size],
         statusClassName,
+        appClassName,
         className,
       )}
     >

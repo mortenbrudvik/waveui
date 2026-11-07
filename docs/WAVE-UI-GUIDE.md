@@ -1136,6 +1136,10 @@ Chip.displayName = 'Chip';
 - **Stability.** The names are public API under semantic versioning since 1.0: a class is removed or renamed only in a major release, and moving one to another element is a CHANGELOG "Changed" DOM entry. The `wave:` utility classes are not: which utilities a component draws may change in any release.
 - **Words.** The registry is under `src/lib`, which the CSS build scans: its JSDoc names elements by role ("the grid element"), never with a class name, prefixed or not ([Pattern 5](#pattern-5-cn-and-wcn)).
 
+#### App-wide classes
+
+`WaveProvider classNames` (`Partial<Record<root class, string>>`, Fluent's `customStyleHooks_unstable`) gives every component with that root class extra classes. How it fits the literal-access rule and the bundle budgets: the stable class stays a literal member access at every site, and a component reads the map from a context that holds nothing but that map (`AppClassNamesContext` in `hooks/useAppClassName`, a module that imports React and types only; the provider is not imported by components). Each component calls `useAppClassName(<constant>.root)` once (a variant passes the roots of the components it is built on first) and composes the result into the `wcn()` of its root element, after its own classes and before `className`: `wcn(buttonClassNames.root, base, appClassName, className)`. A shell that several components render (`DrawerPanel`, `TeachingSurface`, the menu item and Rating star elements) takes it as an `appClassName` prop and puts it after the classes it adds itself. `scripts/app-classnames-codemod.mjs` wires a new component (idempotent); `src/__tests__/classNames.test.ts` fails for a root constant that no component reads. Without a provider the context is `null`, the hook returns `undefined` and the class list is what it was.
+
 ### Pattern 11: The Input Recipe (sizes and appearances)
 
 The ten text controls and pickers (Input, Textarea, Select, SearchBox, SpinButton, Combobox, Dropdown, DatePicker, TimePicker, TagPicker) share one look, built from class maps in `src/lib/styles.ts` over the markup each control already had. A control draws its field either on its own element (Input without slots, Textarea, Select, the Dropdown button) or on a wrapper around the native element (Input with slots, SearchBox, SpinButton, the pickers, TagPicker); the maps serve both forms, so no control gains or loses an element.
@@ -3291,7 +3295,7 @@ Each part key of the registry is a `slotProps` key, a named slot, the root of a 
 | Menu.Item's check column | Menu.Item keeps only an unclassed placeholder there (shown while its list holds a checkable item); the checkable kinds' `checkmark` slot fills theirs |
 | The roots of `Rating.Item`, the swatches, `TagPicker.Control`, `Group`, `Input` and `List`, `TeachingPopover.Title`, `Body` and `Footer`, `Drawer.Body`, `DataGrid.SelectionCell` and `AvatarGroup.Popover` | Components you write yourself (or that a shorthand generates): they take their props directly |
 
-Neither are hidden form inputs, live regions and visually hidden text. App-wide class hooks per component (Fluent's `customStyleHooks_unstable`, a `WaveProvider classNames`) are left for after 1.0.
+Neither are hidden form inputs, live regions and visually hidden text. App-wide classes per component are `WaveProvider classNames` (Pattern 10, "App-wide classes"), not parts.
 
 ### Recipes
 

@@ -65,6 +65,7 @@ import {
   pickerIconButtonClasses,
 } from './pickerStyles';
 import type { RoutedHandlers } from './routedHandlers';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Why typed text was not accepted (see {@link DatePickerProps.onInvalidInput}). */
 export type DatePickerInvalidReason = 'unparseable' | 'out-of-range' | 'disabled';
@@ -588,6 +589,8 @@ const CALENDAR_PART_CLASS_NAMES: CalendarViewPartClassNames = {
  *   once the picker has hydrated.
  */
 export const DatePicker = (props: DatePickerProps) => {
+  const appClassName = useAppClassName(datePickerClassNames.root);
+
   const {
     value: valueProp,
     defaultValue,
@@ -1005,6 +1008,7 @@ export const DatePicker = (props: DatePickerProps) => {
     className: wcn(
       datePickerClassNames.root,
       'wave:relative wave:inline-flex wave:flex-col',
+      appClassName,
       className,
     ),
     style,

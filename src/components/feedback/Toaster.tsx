@@ -31,6 +31,7 @@ import { StatusText, getStatusLabel } from './MessageBar.status';
 import { ToastContext, ToasterContext } from './Toast.context';
 import type { ToastContextValue, ToastPartRegistration, ToastRegistration } from './Toast.context';
 import { ToastRoot } from './Toast.root';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -1124,6 +1125,8 @@ export const Toaster = ({
   ref,
   ...rest
 }: ToasterProps) => {
+  const appClassName = useAppClassName(toasterClassNames.root);
+
   const [toasts, setToasts] = React.useState<ToastEntry[]>([]);
   // Each toast's message, written by its container after the toast mounts (a layout effect), so
   // the severity is the rendered Toast's and the text what the toast renders.
@@ -1595,6 +1598,7 @@ export const Toaster = ({
             toasterClassNames.root,
             'wave:fixed wave:flex wave:w-80 wave:max-w-[calc(100vw-2rem)] wave:flex-col wave:gap-2',
             positionClasses[position],
+            appClassName,
             className,
           )}
         >

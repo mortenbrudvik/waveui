@@ -70,6 +70,7 @@ import {
   type SelectionStore,
   type SelectionUniverse,
 } from './DataGrid.store';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export { createSelectionStore };
 export type { SelectionStore, SelectionUniverse };
@@ -812,6 +813,8 @@ function DataGridRoot<T>(
 ): React.JSX.Element;
 function DataGridRoot<T = unknown>(props: DataGridProps<T>): React.JSX.Element;
 function DataGridRoot<T>(props: DataGridProps<T>) {
+  const appClassName = useAppClassName(dataGridClassNames.root);
+
   const {
     items,
     getRowId,
@@ -1328,6 +1331,7 @@ function DataGridRoot<T>(props: DataGridProps<T>) {
                           'wave:w-full wave:border-separate wave:border-spacing-0',
                           // The group whose hover or focus draws the subtle select-all checkbox.
                           subtleSelection && 'wave:group/grid',
+                          appClassName,
                           className,
                         )}
                         // The widths are runtime data: the layout and the width are inline.
@@ -1418,6 +1422,8 @@ const DataGridItemRow = React.memo(function DataGridItemRow({
  * row for each run of rows it leaves out.
  */
 const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyProps<T>) => {
+  const appClassName = useAppClassName(dataGridBodyClassNames.root);
+
   const itemsContext = React.useContext(DataGridItemsContext);
   const windowContext = React.useContext(DataGridWindowContext);
   const rows = itemsContext?.rows ?? null;
@@ -1481,7 +1487,11 @@ const DataGridBody = <T,>({ children, className, ref, ...rest }: DataGridBodyPro
 
   return (
     <DataGridSectionContext.Provider value="body">
-      <tbody ref={ref} className={wcn(dataGridBodyClassNames.root, className)} {...rest}>
+      <tbody
+        ref={ref}
+        className={wcn(dataGridBodyClassNames.root, appClassName, className)}
+        {...rest}
+      >
         {content}
       </tbody>
     </DataGridSectionContext.Provider>
@@ -1518,6 +1528,8 @@ const DataGridRow = ({
   ref,
   ...rest
 }: DataGridRowProps) => {
+  const appClassName = useAppClassName(dataGridRowClassNames.root);
+
   const { selectionMode, store, toggleRow, selectOnRowClick, selectionAppearance } =
     useDataGridContext('DataGrid.Row');
   // In a windowed grid: the row's place (and, for a body row, its fixed height).
@@ -1732,6 +1744,7 @@ const DataGridRow = ({
           'wave:group/table-row',
           !inHeader && BODY_ROW_CLASSES[selectionAppearance],
           selectable && isSelected && forcedColors.selectedContainer,
+          appClassName,
           className,
         )}
         aria-selected={selectable ? isSelected : undefined}
@@ -1848,6 +1861,7 @@ const DataGridSelectionCell = ({
   ref,
   ...rest
 }: DataGridSelectionCellProps) => {
+  const appClassName = useAppClassName(dataGridSelectionCellClassNames.root);
   const { selectionMode } = useDataGridContext('DataGrid.SelectionCell');
   const section = React.useContext(DataGridSectionContext);
   const firstHeaderRowHint = React.useContext(DataGridHeaderRowHintContext);
@@ -1888,7 +1902,7 @@ const DataGridSelectionCell = ({
         stableClassName={dataGridSelectionCellClassNames.root}
         cellProps={{
           ...rest,
-          className: wcn(rowProps?.className, className),
+          className: wcn(rowProps?.className, appClassName, className),
           disabled: disabled ?? rowProps?.disabled,
           invisible: invisible ?? rowProps?.invisible,
           'aria-label': ariaLabel ?? rowProps?.['aria-label'],
@@ -1905,7 +1919,7 @@ const DataGridSelectionCell = ({
       ref={ref}
       component="DataGrid.SelectionCell"
       stableClassName={dataGridSelectionCellClassNames.root}
-      className={className}
+      className={wcn(appClassName, className)}
       controlRef={controlRef}
       aria-describedby={ariaDescribedBy}
     />
@@ -1922,6 +1936,8 @@ markTablePart(DataGridSelectionCell, 'dataGridSelectionCell');
  * padding: the row has the window's height, which its content must fit in.
  */
 const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) => {
+  const appClassName = useAppClassName(dataGridCellClassNames.root);
+
   const fixedLayout = React.useContext(DataGridFixedLayoutContext);
   // A body row of a windowed grid has the window's height: its cells add no vertical padding.
   const windowedRow = React.useContext(DataGridWindowRowContext)?.index !== undefined;
@@ -1937,6 +1953,7 @@ const DataGridCell = ({ children, className, ref, ...rest }: DataGridCellProps) 
           'wave:overflow-hidden wave:text-ellipsis wave:whitespace-nowrap',
         windowedRow && 'wave:py-0 wave:align-middle',
         focusRingInset,
+        appClassName,
         className,
       )}
       {...rest}

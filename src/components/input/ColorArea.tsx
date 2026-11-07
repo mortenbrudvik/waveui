@@ -22,6 +22,7 @@ import {
   toPercent,
   toPosition,
 } from './colorUtils';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Texts of a ColorArea, for localisation. Every key is optional. */
 export interface ColorAreaLabels {
@@ -181,6 +182,8 @@ export const ColorArea = ({
   slotProps,
   ...rest
 }: ColorAreaProps) => {
+  const appClassName = useAppClassName(colorAreaClassNames.root);
+
   const part = useColorPartState({ value, defaultValue, onValueChange, disabled });
   const { picker } = part;
   const strings = {
@@ -422,6 +425,7 @@ export const ColorArea = ({
         colorAreaClassNames.root,
         'wave:group/color-area wave:relative wave:h-40 wave:w-full wave:min-w-40 wave:touch-none wave:select-none wave:data-[disabled]:cursor-not-allowed wave:data-[disabled]:opacity-50',
         resolvedShape === 'square' ? 'wave:rounded-none' : 'wave:rounded',
+        appClassName,
         className,
       )}
       style={areaStyle}

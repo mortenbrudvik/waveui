@@ -6,6 +6,7 @@ import type { SlotPart } from '../../lib/slotProps';
 import type { Slot } from '../../lib/types';
 import { MenuItemRow, useMenuItemActivation, useMenuItemPlacementWarning } from './Menu.items';
 import { menuItemClasses } from './Menu.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** The MenuItemLink's own props (the XOwnProps rule: component-specific props only). */
 export interface MenuItemLinkOwnProps {
@@ -94,6 +95,8 @@ type MenuItemLinkImplProps = MenuItemLinkOwnProps &
  * <Menu.ItemLink as={RouterLink} to="/billing">Billing</Menu.ItemLink>
  */
 export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (props) => {
+  const appClassName = useAppClassName(menuItemClassNames.root, menuItemLinkClassNames.root);
+
   const {
     as,
     icon,
@@ -143,6 +146,7 @@ export const MenuItemLink: PolymorphicComponent<'a', MenuItemLinkOwnProps> = (pr
         menuItemLinkClassNames.root,
         menuItemClasses,
         'wave:text-foreground wave:no-underline',
+        appClassName,
         className,
       )}
     >

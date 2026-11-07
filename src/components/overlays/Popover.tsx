@@ -42,6 +42,7 @@ import {
   usePopoverTabOrder,
   type PopoverPhysicalSide,
 } from './Popover.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Popover component. */
 export interface PopoverProps {
@@ -936,6 +937,8 @@ export const PopoverContent = ({
   slotProps,
   ...rest
 }: PopoverContentProps) => {
+  const appClassName = useAppClassName(popoverContentClassNames.root);
+
   const {
     open,
     contentId,
@@ -1092,6 +1095,7 @@ export const PopoverContent = ({
           popoverContentClassNames.root,
           'wave:w-64 wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-4 wave:text-body-1 wave:font-normal wave:text-foreground wave:normal-case wave:tracking-normal wave:text-start wave:shadow-4',
           motionClassName,
+          appClassName,
           className,
         )}
       >

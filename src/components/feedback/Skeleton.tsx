@@ -2,6 +2,7 @@ import * as React from 'react';
 import { skeletonClassNames, skeletonGroupClassNames } from '../../lib/classNames';
 import { wcn } from '../../lib/cn';
 import type { Shape } from '../../lib/types';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Forced colors replace the author fill with the page color, so the placeholder would vanish: it
@@ -41,6 +42,8 @@ const SkeletonRoot = ({
   ref,
   ...rest
 }: SkeletonProps) => {
+  const appClassName = useAppClassName(skeletonClassNames.root);
+
   const shape = shapeProp ?? 'rounded';
 
   return (
@@ -53,6 +56,7 @@ const SkeletonRoot = ({
         'wave:bg-skeleton wave:animate-wave-pulse wave:motion-reduce:animate-none',
         forcedColorsFill,
         shapeClasses[shape],
+        appClassName,
         className,
       )}
       style={{ width, height, ...style }}
@@ -89,13 +93,15 @@ export const SkeletonGroup = ({
   ref,
   ...rest
 }: SkeletonGroupProps) => {
+  const appClassName = useAppClassName(skeletonGroupClassNames.root);
+
   const loading = busy !== false && busy !== 'false';
   return (
     <div
       {...rest}
       aria-busy={busy}
       ref={ref}
-      className={wcn(skeletonGroupClassNames.root, className)}
+      className={wcn(skeletonGroupClassNames.root, appClassName, className)}
     >
       {loading && <span className="wave:sr-only">{label}</span>}
       {children}

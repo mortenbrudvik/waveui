@@ -25,6 +25,7 @@ import {
   useRadioItemState,
   type RadioGroupItemsContextValue,
 } from './RadioGroup.context';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 function warnDuplicateValue(value: string): void {
   warnOnce(
@@ -93,6 +94,8 @@ const RadioGroupRoot = ({
   ref,
   ...rest
 }: RadioGroupProps) => {
+  const appClassName = useAppClassName(radioGroupClassNames.root);
+
   const initialValue = defaultValue ?? '';
   const [value, setValue] = useControllable(valueProp, initialValue, onValueChange);
 
@@ -171,6 +174,7 @@ const RadioGroupRoot = ({
           radioGroupClassNames.root,
           'wave:relative wave:flex',
           orientation === 'vertical' ? 'wave:flex-col wave:gap-2' : 'wave:flex-row wave:gap-4',
+          appClassName,
           className,
         )}
         {...rest}
@@ -312,6 +316,8 @@ export function RadioItem({
   slotProps,
   ...rest
 }: RadioItemProps) {
+  const appClassName = useAppClassName(radioGroupItemClassNames.root);
+
   const {
     checked: selected,
     disabled: isDisabled,
@@ -407,6 +413,7 @@ export function RadioItem({
       isDisabled
         ? 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100'
         : 'wave:cursor-pointer',
+      appClassName,
       className,
     ),
     // The root holds the radio: a part neither hides it nor takes it out of reach, nor sends the

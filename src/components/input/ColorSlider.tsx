@@ -32,6 +32,7 @@ import {
   toPercent,
   toPosition,
 } from './colorUtils';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Texts of a ColorSlider, for localisation. Every key is optional. */
 export interface ColorSliderLabels {
@@ -205,6 +206,8 @@ export const ColorSlider = ({
   slotProps,
   ...rest
 }: ColorSliderProps) => {
+  const appClassName = useAppClassName(colorSliderClassNames.root);
+
   const part = useColorPartState({ value, defaultValue, onValueChange, disabled });
   const { picker } = part;
   const strings = {
@@ -289,6 +292,7 @@ export const ColorSlider = ({
       colorSliderClassNames.root,
       'wave:group/color-slider wave:relative wave:flex wave:touch-none wave:select-none wave:data-[disabled]:cursor-not-allowed wave:data-[disabled]:opacity-50',
       vertical ? RAIL_ROOT_VERTICAL : RAIL_ROOT_HORIZONTAL,
+      appClassName,
       className,
     ),
     style,

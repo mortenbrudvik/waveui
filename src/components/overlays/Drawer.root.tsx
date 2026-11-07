@@ -46,6 +46,7 @@ import {
   type DrawerBodyProps,
 } from './Drawer.parts';
 import { scrollSeparatorClasses, useScrollState } from './Drawer.scroll';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /*
  * The Drawer root: its props, the child scan, the layout and the development checks, on the drawer
@@ -435,6 +436,8 @@ function DrawerBuiltInHeader({
   closeButton,
   part,
 }: DrawerBuiltInHeaderProps) {
+  const appClassName = useAppClassName(drawerTitleClassNames.root);
+
   const scrollState = React.useContext(DrawerScrollStateContext) ?? 'none';
   const hasTitleAction = slotRendersContent(titleAction);
   if (!hasTitle && !hasTitleAction && closeButton === null) return null;
@@ -452,7 +455,11 @@ function DrawerBuiltInHeader({
       {hasTitle && (
         <h2
           id={titleId}
-          className={wcn(drawerTitleClassNames.root, 'wave:text-subtitle-1 wave:font-semibold')}
+          className={wcn(
+            drawerTitleClassNames.root,
+            'wave:text-subtitle-1 wave:font-semibold',
+            appClassName,
+          )}
         >
           {title}
         </h2>
@@ -551,6 +558,7 @@ export const DrawerRoot = ({
   slotProps,
   ...rest
 }: DrawerProps) => {
+  const appClassName = useAppClassName(drawerClassNames.root);
   const [openState, requestOpen] = useModalOpenState(openProp, defaultOpen, onOpenChange);
   // An overlay's panel lives in a portal, which renders only in the browser: until then (the
   // server HTML, hydration) it reports itself closed, so the trigger's aria-expanded and
@@ -673,6 +681,7 @@ export const DrawerRoot = ({
       trigger={trigger}
       finalFocusRef={finalFocusRef}
       rootClassName={drawerClassNames.root}
+      appClassName={appClassName}
       backdropClassName={drawerClassNames.backdrop}
       collapseClassName={drawerClassNames.collapse}
       backdrop={backdrop}

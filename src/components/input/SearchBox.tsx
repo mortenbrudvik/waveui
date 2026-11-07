@@ -40,6 +40,7 @@ import {
 } from '../button/Button.slots';
 import { isInvalidLook } from './Input';
 import { useInputLook } from './inputLook';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /**
  * Props that SearchBox routes to its `<input>` (C-ROUTING): the id, the ARIA naming/validation
@@ -496,6 +497,8 @@ export const SearchBox = ({
   hidden,
   ...rest
 }: SearchBoxProps) => {
+  const appClassName = useAppClassName(searchBoxClassNames.root);
+
   const [value, setValue] = useControllable(controlledValue, defaultValue, onValueChange);
 
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -696,6 +699,7 @@ export const SearchBox = ({
       // focusable by a merged `disabledFocusable` Button, focusable slot content; the disabled
       // input never takes focus): opacity would dim the ring below 3:1.
       disabled && 'wave:cursor-not-allowed wave:opacity-50 wave:has-focus-visible:opacity-100',
+      appClassName,
       className,
     ),
     style,

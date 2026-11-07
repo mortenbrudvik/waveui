@@ -13,6 +13,7 @@ import {
   useOptionalMenuContext,
 } from './Menu.context';
 import { BLOCK_CLICK, MENU_PART_LOCKS, menuItemClasses } from './Menu.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the MenuItem sub-component. */
 export interface MenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -434,6 +435,8 @@ export const MenuItem = ({
   slotProps,
   ...rest
 }: MenuItemProps) => {
+  const appClassName = useAppClassName(menuItemClassNames.root);
+
   const isSubmenuTrigger = React.useContext(MenuSubmenuTriggerContext);
   useMenuItemPlacementWarning('Menu.Item');
 
@@ -462,7 +465,7 @@ export const MenuItem = ({
       data-has-submenu={isSubmenuTrigger ? '' : undefined}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={wcn(menuItemClassNames.root, menuItemClasses, className)}
+      className={wcn(menuItemClassNames.root, menuItemClasses, appClassName, className)}
     >
       <MenuItemRow
         icon={icon}
@@ -519,6 +522,8 @@ function renderSubmenuIndicator(
  * Also exported as `MenuDivider` (import the flat name from React Server Components).
  */
 export const MenuDivider = ({ className, ref, ...rest }: MenuDividerProps) => {
+  const appClassName = useAppClassName(menuDividerClassNames.root);
+
   return (
     <div
       role="separator"
@@ -527,6 +532,7 @@ export const MenuDivider = ({ className, ref, ...rest }: MenuDividerProps) => {
       className={wcn(
         menuDividerClassNames.root,
         'wave:my-1 wave:border-t wave:border-border',
+        appClassName,
         className,
       )}
     />

@@ -8,6 +8,7 @@ import { useEventCallback } from '../../hooks/useEventCallback';
 import { useFieldControl } from '../../hooks/useFieldControl';
 import { useFormReset } from '../../hooks/useFormReset';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Size of the thumb and rail: a small 16px thumb on a 2px rail, or the 0.7 20px thumb on a 4px rail. */
 export type SliderSize = Extract<Size, 'small' | 'medium'>;
@@ -148,6 +149,8 @@ export const Slider = ({
   required,
   ...props
 }: SliderProps) => {
+  const appClassName = useAppClassName(sliderClassNames.root);
+
   // Any other value (an unknown string or a number from untyped code) resolves to medium, so the
   // classes and `data-size` always agree; `size` never reaches the input.
   const size: SliderSize = sizeProp === 'small' ? 'small' : 'medium';
@@ -224,6 +227,7 @@ export const Slider = ({
         // every part a system color instead.
         forcedColors.rangeInput,
         forcedColorsFill,
+        appClassName,
         className,
       )}
       style={{ ...style, [PROGRESS_VAR]: renderedProgress } as React.CSSProperties}

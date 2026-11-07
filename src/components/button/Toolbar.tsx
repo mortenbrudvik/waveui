@@ -17,6 +17,7 @@ import {
   ToolbarRadioGroup,
   ToolbarToggleButton,
 } from './Toolbar.parts';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export {
   ToolbarButton,
@@ -97,6 +98,8 @@ const toolbarPaddingClasses: Record<Size, string> = {
 
 // The root of the Toolbar compound; its component JSDoc is on the `Toolbar` export below (C-DOCS).
 const ToolbarRoot: PolymorphicComponent<'div', ToolbarOwnProps> = (props) => {
+  const appClassName = useAppClassName(toolbarClassNames.root);
+
   const {
     as,
     orientation = 'horizontal',
@@ -145,6 +148,7 @@ const ToolbarRoot: PolymorphicComponent<'div', ToolbarOwnProps> = (props) => {
           'wave:inline-flex wave:items-center wave:gap-1 wave:rounded wave:border wave:border-border',
           toolbarPaddingClasses[size],
           orientation === 'vertical' && 'wave:flex-col wave:items-stretch',
+          appClassName,
           className,
         )}
       />

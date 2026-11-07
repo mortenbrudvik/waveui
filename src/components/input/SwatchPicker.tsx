@@ -22,6 +22,7 @@ import {
   type SwatchPickerSize,
 } from './SwatchPicker.context';
 import { ColorSwatch } from './SwatchPicker.swatches';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 export type { SwatchPickerSize } from './SwatchPicker.context';
 
@@ -170,6 +171,8 @@ const SwatchRowContext = React.createContext(false);
  * </SwatchPicker>
  */
 export const SwatchPickerRow = ({ className, ref, ...rest }: SwatchPickerRowProps) => {
+  const appClassName = useAppClassName(swatchPickerRowClassNames.root);
+
   const { layout, focusMode, spacing } = useSwatchPickerContext('SwatchPicker.Row');
   const nested = React.useContext(SwatchRowContext);
   React.useEffect(() => {
@@ -195,6 +198,7 @@ export const SwatchPickerRow = ({ className, ref, ...rest }: SwatchPickerRowProp
           // has no arrow keys, so its rows wrap like the row layout's.
           isGridRow ? 'wave:flex' : 'wave:flex wave:basis-full wave:flex-wrap',
           swatchGap(spacing),
+          appClassName,
           className,
         )}
       />
@@ -266,6 +270,8 @@ const SwatchPickerRoot = ({
   ref,
   ...rest
 }: SwatchPickerProps) => {
+  const appClassName = useAppClassName(swatchPickerClassNames.root);
+
   const initialValue = defaultValue ?? '';
   const [value, setValue] = useControllable(valueProp, initialValue, onValueChange);
   const isTab = focusMode === 'tab';
@@ -383,6 +389,7 @@ const SwatchPickerRoot = ({
         swatchPickerClassNames.root,
         isGrid ? 'wave:relative wave:flex wave:flex-col' : 'wave:relative wave:flex wave:flex-wrap',
         swatchGap(spacing),
+        appClassName,
         className,
       )}
       {...rest}

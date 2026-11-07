@@ -918,7 +918,25 @@ export const OptionalTerms = ({ shown }: { shown: boolean }) => (
 - **Roots of components you write yourself** take their props directly and have no part: `Accordion.Item`, `Menu.Item`, the table cells, `Rating.Item` (also those `max` generates), the swatches, `TagPicker.Control`, `Group`, `Input` and `List`, `TeachingPopover.Title`, `Body` and `Footer`, `Drawer.Body`, `DataGrid.SelectionCell` and `AvatarGroup.Popover`'s button. Menu.Item keeps only an unclassed placeholder in the check column (shown while its list holds a checkable item), so it has no `checkmark` part; the checkable kinds' `checkmark` slot fills theirs.
 - **Locked attributes** stay the component's: set them through its own props.
 - **Hidden form inputs, live regions and visually hidden text** are no parts.
-- **App-wide classes per component** (Fluent's `customStyleHooks_unstable`, a `WaveProvider classNames`) are left for after 1.0: style the stable classes in a stylesheet, or pass `className` and `slotProps` per instance.
+- **App-wide classes per component** are `WaveProvider classNames` (below), not a part; a stylesheet can also target the stable classes, and `className` and `slotProps` style one instance.
+
+#### App-wide classes: `WaveProvider classNames`
+
+Fluent's `customStyleHooks_unstable`: give every component with a root class the same extra classes, written as your app writes classes, anywhere in the subtree (portaled overlays included).
+
+```tsx
+<WaveProvider
+  classNames={{
+    'wave-button': 'rounded-full',
+    'wave-dialog-content': 'shadow-xl',
+    'wave-menu-item': 'text-wave-body-2',
+  }}
+>
+  <App />
+</WaveProvider>
+```
+
+The keys are the root classes of the stable class-name registry (`buttonClassNames.root` is `'wave-button'`; the type lists them all) and the values are class lists. The classes go after the component's own and before the instance's `className`, so a class of the same kind replaces Wave's (`rounded-full` replaces the Button's `rounded`) and an instance's `className` still wins. A variant takes the classes of the components it is built on: `'wave-button'` reaches ToggleButton, MenuButton, SplitButton, CompoundButton and the Toolbar buttons, and `'wave-toggle-button'` only the toggles. Only a component's root takes them (a part is styled with `slotProps`). A nested provider merges its map over the enclosing one's key by key (`''` removes a key's classes, `null` clears everything). Without a provider, or without `classNames`, no component adds anything. In an app without Tailwind the classes need a rule of your own (`./styles` generates only Wave's classes).
 
 1.0 moved `ref` and added the `root` parts (above); [Upgrading to 1.0](#upgrading-to-10) lists what else changed.
 

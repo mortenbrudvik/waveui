@@ -8,6 +8,7 @@ import { useDirection } from '../../hooks/useDirection';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { DismissLayerContext, DismissLayerProvider } from '../../hooks/useDismiss';
 import { useWaveTheme } from '../provider/WaveProvider';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Props accepted by {@link Portal}. */
 export interface PortalProps {
@@ -70,6 +71,8 @@ export const Portal = ({
   className,
   ref,
 }: PortalProps) => {
+  const appClassName = useAppClassName(portalClassNames.root);
+
   const isClient = useIsClient();
   const { themeClassName, portalContainer, tokenStyle, applyStylesToPortals } = useWaveTheme();
   const dir = useDirection();
@@ -100,7 +103,7 @@ export const Portal = ({
   return createPortal(
     <div
       ref={wrapperRef}
-      className={wcn(portalClassNames.root, themeClassName, className)}
+      className={wcn(portalClassNames.root, themeClassName, appClassName, className)}
       dir={dir}
       data-wave-portal=""
       data-layer={layer}

@@ -25,6 +25,7 @@ import { useMotionClasses } from '../../hooks/useMotion';
 import { usePresence } from '../../hooks/usePresence';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { Portal } from '../portal/Portal';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Color treatment of a tooltip (`TooltipProps.appearance`). */
 export type TooltipAppearance = 'inverted' | 'normal';
@@ -362,6 +363,8 @@ export const Tooltip = ({
   slotProps,
   ...rest
 }: TooltipProps) => {
+  const appClassName = useAppClassName(tooltipClassNames.root);
+
   const appearance = appearanceProp ?? 'inverted';
   const openDelay = openDelayProp ?? 200;
   const [open, setOpen] = useControllable(openProp, defaultOpen ?? false, onOpenChange);
@@ -524,7 +527,7 @@ export const Tooltip = ({
     <span
       ref={wrapperElementRef}
       {...wrapperProps}
-      className={wcn(tooltipClassNames.root, 'wave:inline-block', className)}
+      className={wcn(tooltipClassNames.root, 'wave:inline-block', appClassName, className)}
       onMouseEnter={composeEventHandlers(onMouseEnter, showOnEnter)}
       onMouseLeave={composeEventHandlers(onMouseLeave, scheduleHide)}
       onMouseOver={composeEventHandlers(

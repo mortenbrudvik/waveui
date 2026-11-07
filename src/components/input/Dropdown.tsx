@@ -58,6 +58,7 @@ import {
 } from './pickerStyles';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 import type { RoutedHandlers } from './routedHandlers';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /* ------------------------------------------------------------------ */
 /*  Dropdown                                                          */
@@ -365,6 +366,8 @@ const NO_LABELS: ReadonlyMap<string, string> = new Map<string, string>();
 const BLOCK_CLICK = ['onClick'] as const;
 
 const DropdownRoot = (props: DropdownProps<boolean>) => {
+  const appClassName = useAppClassName(dropdownClassNames.root);
+
   const {
     multiselect = false,
     value: valueProp,
@@ -627,6 +630,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     className: wcn(
       dropdownClassNames.root,
       'wave:relative wave:inline-flex wave:flex-col',
+      appClassName,
       className,
     ),
     style,

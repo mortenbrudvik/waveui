@@ -20,6 +20,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { ownsArrowKeys, useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { ListRegistry, type ListFocusLoss } from './List.registry';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Selection modes of {@link List}: the shared `SelectionMode` (`'single'` or `'multiple'`). */
 export type ListSelectionMode = SelectionMode;
@@ -655,6 +656,8 @@ function getActionStops(cell: HTMLElement): HTMLElement[] {
 
 // The List root, documented on the exported `List` const.
 const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): React.ReactNode => {
+  const appClassName = useAppClassName(listClassNames.root);
+
   const {
     selectable = false,
     selectionMode,
@@ -1110,6 +1113,7 @@ const ListRoot = <M extends ListSelectionMode = 'single'>(props: ListProps<M>): 
           'wave:m-0 wave:list-none wave:p-0',
           // The window lays the items out: the browser's scroll anchoring only fights it.
           windowed && 'wave:overflow-y-auto wave:[overflow-anchor:none]',
+          appClassName,
           className,
         )}
         {...rest}
@@ -1209,6 +1213,8 @@ export const ListItem = ({
   ref,
   ...rest
 }: ListItemProps) => {
+  const appClassName = useAppClassName(listItemClassNames.root);
+
   const {
     mode,
     navigable,
@@ -1454,6 +1460,7 @@ export const ListItem = ({
               forcedColors.selectedContainer,
             ]
           : hoverable && 'wave:hover:bg-subtle-hover',
+        appClassName,
         className,
       )}
       style={listWindow && windowIndex !== null ? { ...style, height: listWindow.itemSize } : style}

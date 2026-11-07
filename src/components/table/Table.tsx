@@ -30,6 +30,7 @@ import { TableResizeHandle } from './Table.resize';
 import type { TableResizeHandleProps } from './Table.resize';
 import { SELECTION_CELL_CLASSES, TableSelectionControl, TableSortButton } from './Table.shared';
 import type { SortDirection } from './Table.shared';
+import { useAppClassName } from '../../hooks/useAppClassName';
 
 /** Properties for the Table component. */
 export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
@@ -366,6 +367,8 @@ const TableRoot = ({
   ref,
   ...props
 }: TableProps) => {
+  const appClassName = useAppClassName(tableClassNames.root);
+
   const {
     className: containerClassName,
     ref: containerRef,
@@ -439,6 +442,7 @@ const TableRoot = ({
           'wave:w-full wave:border-separate wave:border-spacing-0',
           // `:where()` keeps the stripe at specificity 0, so any row class wins (C-CLASS).
           striped && 'wave:[:where(&>tbody>tr:nth-child(odd))]:bg-card',
+          appClassName,
           className,
         )}
         {...props}
@@ -451,11 +455,18 @@ const TableRoot = ({
 TableRoot.displayName = 'Table';
 
 /** The table's `<thead>`. */
-const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) => (
-  <thead ref={ref} {...rest} className={wcn(tableHeaderClassNames.root, 'wave:bg-card', className)}>
-    {children}
-  </thead>
-);
+const TableHeader = ({ children, className, ref, ...rest }: TableHeaderProps) => {
+  const appClassName = useAppClassName(tableHeaderClassNames.root);
+  return (
+    <thead
+      ref={ref}
+      {...rest}
+      className={wcn(tableHeaderClassNames.root, 'wave:bg-card', appClassName, className)}
+    >
+      {children}
+    </thead>
+  );
+};
 TableHeader.displayName = 'TableHeader';
 
 /** A column header cell (`<th scope="col">`). */
@@ -471,6 +482,8 @@ const TableHeaderCell = ({
   ref,
   ...props
 }: TableHeaderCellProps) => {
+  const appClassName = useAppClassName(tableHeaderCellClassNames.root);
+
   const hasAside = slotRendersContent(aside);
   const asideNode = hasAside
     ? renderSlot(
@@ -520,6 +533,7 @@ const TableHeaderCell = ({
         tableHeaderCellClassNames.root,
         'wave:px-4 wave:py-3 wave:text-start wave:font-semibold wave:text-caption-1 wave:uppercase wave:tracking-wider wave:border-b wave:border-border',
         sortable && 'wave:p-0 wave:hover:bg-subtle-hover',
+        appClassName,
         className,
       )}
       {...props}
@@ -531,11 +545,14 @@ const TableHeaderCell = ({
 TableHeaderCell.displayName = 'TableHeaderCell';
 
 /** The table's `<tbody>`. */
-const TableBody = ({ children, className, ref, ...rest }: TableBodyProps) => (
-  <tbody ref={ref} {...rest} className={wcn(tableBodyClassNames.root, className)}>
-    {children}
-  </tbody>
-);
+const TableBody = ({ children, className, ref, ...rest }: TableBodyProps) => {
+  const appClassName = useAppClassName(tableBodyClassNames.root);
+  return (
+    <tbody ref={ref} {...rest} className={wcn(tableBodyClassNames.root, appClassName, className)}>
+      {children}
+    </tbody>
+  );
+};
 TableBody.displayName = 'TableBody';
 
 /**
@@ -543,36 +560,44 @@ TableBody.displayName = 'TableBody';
  * `group/table-row` group whose hover or focus draws the subtle selection controls and the cell
  * actions inside it (Tree's rows keep their own group).
  */
-const TableRow = ({ children, className, ref, ...props }: TableRowProps) => (
-  <tr
-    ref={ref}
-    className={wcn(
-      tableRowClassNames.root,
-      'wave:group/table-row',
-      'wave:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none',
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </tr>
-);
+const TableRow = ({ children, className, ref, ...props }: TableRowProps) => {
+  const appClassName = useAppClassName(tableRowClassNames.root);
+  return (
+    <tr
+      ref={ref}
+      className={wcn(
+        tableRowClassNames.root,
+        'wave:group/table-row',
+        'wave:hover:bg-subtle-hover wave:transition-colors wave:motion-reduce:transition-none',
+        appClassName,
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </tr>
+  );
+};
 TableRow.displayName = 'TableRow';
 
 /** A data cell (`<td>`), the positioning box of a `Table.CellActions` inside it. */
-const TableCell = ({ children, className, ref, ...props }: TableCellProps) => (
-  <td
-    ref={ref}
-    className={wcn(
-      tableCellClassNames.root,
-      'wave:relative wave:px-4 wave:py-3 wave:text-body-1 wave:border-b wave:border-border',
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </td>
-);
+const TableCell = ({ children, className, ref, ...props }: TableCellProps) => {
+  const appClassName = useAppClassName(tableCellClassNames.root);
+  return (
+    <td
+      ref={ref}
+      className={wcn(
+        tableCellClassNames.root,
+        'wave:relative wave:px-4 wave:py-3 wave:text-body-1 wave:border-b wave:border-border',
+        appClassName,
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </td>
+  );
+};
 TableCell.displayName = 'TableCell';
 
 /**
@@ -619,6 +644,8 @@ const TableSelectionCell = ({
   ref,
   ...rest
 }: TableSelectionCellProps) => {
+  const appClassName = useAppClassName(tableSelectionCellClassNames.root);
+
   // The details of the change being made, set around the setter.
   const detailsRef = React.useRef<TableSelectionCellCheckedChangeDetails | undefined>(undefined);
   const [checked, setChecked, isControlled] = useControllable<boolean | 'mixed'>(
@@ -681,7 +708,12 @@ const TableSelectionCell = ({
       ref={ref}
       data-type={type}
       {...rest}
-      className={wcn(tableSelectionCellClassNames.root, SELECTION_CELL_CLASSES, className)}
+      className={wcn(
+        tableSelectionCellClassNames.root,
+        SELECTION_CELL_CLASSES,
+        appClassName,
+        className,
+      )}
     >
       <TableSelectionControl
         ref={mergedControlRef}
@@ -761,6 +793,8 @@ const TableCellLayout = ({
   ref,
   ...rest
 }: TableCellLayoutProps) => {
+  const appClassName = useAppClassName(tableCellLayoutClassNames.root);
+
   const hasMedia = slotRendersContent(media);
   const hasMain = slotRendersContent(children);
   const hasDescription = slotRendersContent(description);
@@ -785,6 +819,7 @@ const TableCellLayout = ({
         tableCellLayoutClassNames.root,
         'wave:flex wave:items-center wave:gap-2',
         truncate && 'wave:overflow-x-hidden',
+        appClassName,
         className,
       )}
     >
@@ -867,19 +902,23 @@ const CELL_ACTIONS_REVEAL_CLASSES =
  * DataGrid's selected row); a row with a background of its own needs the same class on its
  * actions. The element carries `data-visible` while `visible` is set.
  */
-const TableCellActions = ({ visible = false, className, ref, ...rest }: TableCellActionsProps) => (
-  <div
-    ref={ref}
-    data-visible={visible ? '' : undefined}
-    {...rest}
-    className={wcn(
-      tableCellActionsClassNames.root,
-      CELL_ACTIONS_CLASSES,
-      visible ? undefined : CELL_ACTIONS_REVEAL_CLASSES,
-      className,
-    )}
-  />
-);
+const TableCellActions = ({ visible = false, className, ref, ...rest }: TableCellActionsProps) => {
+  const appClassName = useAppClassName(tableCellActionsClassNames.root);
+  return (
+    <div
+      ref={ref}
+      data-visible={visible ? '' : undefined}
+      {...rest}
+      className={wcn(
+        tableCellActionsClassNames.root,
+        CELL_ACTIONS_CLASSES,
+        visible ? undefined : CELL_ACTIONS_REVEAL_CLASSES,
+        appClassName,
+        className,
+      )}
+    />
+  );
+};
 TableCellActions.displayName = 'TableCellActions';
 
 export {
