@@ -19,7 +19,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-const BASE = '/waveui/docs/';
+export const BASE = '/waveui/docs/';
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(siteRoot, 'dist');
 
@@ -31,27 +31,46 @@ const DYNAMIC_IMPORT = /\bimport\(\s*["'`](\.{1,2}\/[^"'`]+?\.js)["'`]\s*\)/g;
 
 const gzip = (text) => gzipSync(text).length;
 
-function fileOfUrl(url) {
+/**
+ * An asset address of a page as a path under the app's base (`/waveui/docs/_assets/x.js` is
+ * `_assets/x.js`), which is how `readAsset` and the report name a file.
+ */
+function pathOfUrl(url) {
   if (!url.startsWith(BASE)) throw new Error(`asset URL outside ${BASE}: ${url}`);
-  return join(dist, url.slice(BASE.length));
+  return url.slice(BASE.length);
 }
 
-/** The modules `entries` load, statically (`loaded`), and the dynamic imports they hold. */
-function staticClosure(entries, loaded = new Set()) {
+/** The path under the base that `spec`, a relative import of the file at `fromPath`, names. */
+function resolveImport(fromPath, spec) {
+  return pathOfUrl(new URL(spec, `http://site${BASE}${fromPath}`).pathname);
+}
+
+/**
+ * The modules `entries` (paths under the base) load, statically (`loaded`), and the dynamic
+ * imports they hold.
+ */
+function staticClosure(entries, readAsset, loaded = new Set()) {
   const dynamic = new Set();
-  const visit = (file) => {
-    if (loaded.has(file)) return;
-    loaded.add(file);
-    const code = readFileSync(file, 'utf8');
-    for (const [, spec] of code.matchAll(STATIC_IMPORT)) visit(resolve(dirname(file), spec));
-    for (const [, spec] of code.matchAll(DYNAMIC_IMPORT)) dynamic.add(resolve(dirname(file), spec));
+  const visit = (path) => {
+    if (loaded.has(path)) return;
+    loaded.add(path);
+    const code = String(readAsset(path));
+    for (const [, spec] of code.matchAll(STATIC_IMPORT)) visit(resolveImport(path, spec));
+    for (const [, spec] of code.matchAll(DYNAMIC_IMPORT)) dynamic.add(resolveImport(path, spec));
   };
   for (const entry of entries) visit(entry);
   return { loaded, dynamic };
 }
 
-export function measurePage(pageFile) {
-  const html = readFileSync(pageFile, 'utf8');
+/**
+ * The JavaScript a page requests, from its HTML and a reader of its assets (`readAsset(path)`
+ * gives the file at `path` under the base, `_assets/x.js`, as a string or a Buffer): the rows of
+ * the first load (inline scripts, scripts, preloads and islands with their static imports), the
+ * rows of what only dynamic imports add, and the totals, gzipped. A script, preload or island
+ * outside the base throws, or is left out with `foreign: 'skip'` (the budget gate reports it as a
+ * problem of its own). `measurePage` and `scripts/check-budget.mjs` share this measuring.
+ */
+export function pageJsReport(html, readAsset, { foreign = 'throw' } = {}) {
   const inline = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
     .map(([, body]) => body)
     .filter((body) => body.trim() !== '');
@@ -66,23 +85,23 @@ export function measurePage(pageFile) {
     entryUrls.add(url);
   }
 
-  const first = staticClosure([...entryUrls].map(fileOfUrl));
+  const entries = [...entryUrls]
+    .filter((url) => foreign === 'throw' || url.startsWith(BASE))
+    .map(pathOfUrl);
+
+  const first = staticClosure(entries, readAsset);
   const later = new Set();
   let pending = [...first.dynamic];
   while (pending.length > 0) {
-    const next = staticClosure(pending, new Set([...first.loaded, ...later]));
+    const next = staticClosure(pending, readAsset, new Set([...first.loaded, ...later]));
     const added = [...next.loaded].filter((file) => !first.loaded.has(file) && !later.has(file));
     for (const file of added) later.add(file);
     pending = [...next.dynamic].filter((file) => !first.loaded.has(file) && !later.has(file));
   }
 
-  const row = (file) => {
-    const code = readFileSync(file, 'utf8');
-    return {
-      file: relative(dist, file).replaceAll('\\', '/'),
-      raw: Buffer.byteLength(code),
-      gzip: gzip(code),
-    };
+  const row = (path) => {
+    const code = String(readAsset(path));
+    return { file: path, raw: Buffer.byteLength(code), gzip: gzip(code) };
   };
   const firstRows = [...first.loaded].map(row);
   const laterRows = [...later].map(row);
@@ -93,13 +112,7 @@ export function measurePage(pageFile) {
   }));
   const sum = (rows, key) => rows.reduce((total, item) => total + item[key], 0);
 
-  const assets = join(dist, '_assets');
-  const chunks = readdirSync(assets).filter((name) => name.endsWith('.js'));
-  const holding = (marker) =>
-    chunks.filter((name) => readFileSync(join(assets, name), 'utf8').includes(marker));
-
   return {
-    page: relative(dist, pageFile).replaceAll('\\', '/'),
     inline: inlineRows,
     firstLoad: firstRows,
     later: laterRows,
@@ -110,6 +123,22 @@ export function measurePage(pageFile) {
       laterGzip: sum(laterRows, 'gzip'),
       everythingGzip: sum(inlineRows, 'gzip') + sum(firstRows, 'gzip') + sum(laterRows, 'gzip'),
     },
+  };
+}
+
+/** {@link pageJsReport} of a built page of `dist`, with the chunks that hold React's copies. */
+export function measurePage(pageFile) {
+  const html = readFileSync(pageFile, 'utf8');
+  const report = pageJsReport(html, (path) => readFileSync(join(dist, path)));
+
+  const assets = join(dist, '_assets');
+  const chunks = readdirSync(assets).filter((name) => name.endsWith('.js'));
+  const holding = (marker) =>
+    chunks.filter((name) => readFileSync(join(assets, name), 'utf8').includes(marker));
+
+  return {
+    page: relative(dist, pageFile).replaceAll('\\', '/'),
+    ...report,
     reactCoreChunks: holding('__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE='),
     reactDomClientChunks: holding('rendererPackageName'),
   };
