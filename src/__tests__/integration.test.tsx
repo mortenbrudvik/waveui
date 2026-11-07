@@ -10537,9 +10537,15 @@ describe('Phase 8 parts across components (0.13)', () => {
         fireEvent.pointerMove(track, pointer(120));
         fireEvent.pointerUp(track, pointer(120));
       });
-      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+      expect(onValueChange).toHaveBeenCalledExactlyOnceWith(
+        2,
+        expect.objectContaining({ reason: 'drag' }),
+      );
       await user.click(within(region).getByRole('button', { name: 'Next slide' }));
-      expect(onValueChange).toHaveBeenLastCalledWith(4);
+      expect(onValueChange).toHaveBeenLastCalledWith(
+        4,
+        expect.objectContaining({ reason: 'next' }),
+      );
       expect(screen.getByRole('dialog', { name: 'Gallery' })).toBeInTheDocument();
       await expectNoA11yViolations(document.body);
     });
