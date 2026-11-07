@@ -1232,6 +1232,7 @@ export const MODULE_ONLY_NAMES = [
   'scrollOffsetForIndex',
   'scrollOffsetForMeasuredIndex',
   'scrollSeparatorClasses',
+  'scrollWindowToItem',
   'selectAllIds',
   'setVirtualSizes',
   'sortTableRows',

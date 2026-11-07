@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { getElementType } from '../lib/children';
+import { getListboxRows, listboxScrollTarget } from '../lib/listboxRows';
 import { isDev, reportMissingContext, warnOnce } from '../lib/dev';
 import type { OpenChangeDetails } from '../lib/types';
 import { useActiveDescendant } from './useActiveDescendant';
@@ -49,6 +50,18 @@ export interface ListboxItem {
    * @default false
    */
   hidden?: boolean;
+  /**
+   * The name of the option's group, in data mode (`items`) of Listbox, Combobox and Dropdown:
+   * adjacent items with the same name form a group, drawn under a header row (`renderGroup`),
+   * and a name that returns after other items starts another group (development warns once).
+   * Items without a group (or with an empty name) are ungrouped options, where they stand in the
+   * list. The group is drawn as a `role="group"` named by it; `aria-posinset` and
+   * `aria-setsize` count the options of the group. A group header is no option: the keys,
+   * typeahead and the selection skip it. Groups are made of the shown items, so a filter that
+   * leaves out a whole group leaves out its header too. Registered options (`Option`) take their
+   * group from an `OptionGroup` around them instead and ignore this field.
+   */
+  group?: string;
 }
 
 /**
@@ -188,8 +201,13 @@ export interface UseListboxOptions {
    * window's `scrollToIndex(index)`, which moves the window in the same update); an element, when
    * there is one, is then scrolled into view as well. `aria-activedescendant` names the option
    * meanwhile. Passed to {@link useActiveDescendant}'s `onScrollToItem`, mapped to that index.
+   *
+   * `target` is given only when items have a {@link ListboxItem.group}, whose headers are rows
+   * of their own in a window: `row` is the option's row and `headerRow` the row of its group's
+   * header, present when the option opens its group. Scroll to `headerRow` first, then to
+   * `row`: the header shows above the first option, and the option stays in view either way.
    */
-  onScrollToItem?: (index: number) => void;
+  onScrollToItem?: (index: number, target?: { row: number; headerRow?: number }) => void;
   /** Prefix of the generated listbox id. @default 'listbox' */
   idPrefix?: string;
   /**
@@ -820,6 +838,10 @@ ListboxContext.displayName = 'ListboxContext';
 export interface ListboxOptionPosition {
   index: number;
   setSize: number;
+  /** The option's `aria-posinset` when it is not `index + 1`: an option of a group. */
+  posInSet?: number;
+  /** The option's row in a window that counts group headers as rows (`index` otherwise). */
+  rowIndex?: number;
   itemSize?: number;
   itemProps?: VirtualWindow['itemProps'];
 }
@@ -1211,7 +1233,11 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   const scrollToItem = useEventCallback((navigationIndex: number) => {
     const value = navigationValues[navigationIndex];
     const index = navigable.findIndex((item) => item.value === value);
-    if (index !== -1) onScrollToItem?.(index);
+    if (index === -1) return;
+    // A flat list is called with the index alone; a grouped one also gets its rows.
+    const rows = getListboxRows(navigable);
+    if (rows) onScrollToItem?.(index, listboxScrollTarget(rows, index));
+    else onScrollToItem?.(index);
   });
   const ad = useActiveDescendant({
     items: navigationValues,
@@ -1715,11 +1741,11 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   if (mode === 'standalone') optionProps.onMouseDown = onMouseDown;
   if (position) {
     optionProps['aria-setsize'] = position.setSize;
-    optionProps['aria-posinset'] = position.index + 1;
+    optionProps['aria-posinset'] = position.posInSet ?? position.index + 1;
     // A windowed list lays its options out at exactly the window's item size, or, in a window
     // that measures its rows, at the height of their content, found by the window's attributes.
     if (position.itemProps) {
-      Object.assign(optionProps, position.itemProps(position.index));
+      Object.assign(optionProps, position.itemProps(position.rowIndex ?? position.index));
       optionProps.style = { boxSizing: 'border-box', flexShrink: 0 };
     } else if (position.itemSize !== undefined) {
       optionProps.style = { height: position.itemSize, boxSizing: 'border-box', flexShrink: 0 };

@@ -177,6 +177,7 @@ import type {
   ListboxOpenChangeReason,
   ListboxOptionElementProps,
   ListboxOptionRenderState,
+  ListboxGroupRenderState,
   ListboxProps,
   ListboxProvider,
   ListboxProviderProps,
@@ -2217,6 +2218,13 @@ describe('0.16 data at scale from the package entry', () => {
       active: boolean;
       index: number;
     }>();
+    // Option groups (1.1): `group` on the items and `renderGroup` for the header.
+    type RenderGroup = ((group: string, state: ListboxGroupRenderState) => ReactNode) | undefined;
+    expectTypeOf<ListboxGroupRenderState>().toEqualTypeOf<{ index: number; size: number }>();
+    expectTypeOf<ListboxItem['group']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ComboboxProps['renderGroup']>().toEqualTypeOf<RenderGroup>();
+    expectTypeOf<DropdownProps['renderGroup']>().toEqualTypeOf<RenderGroup>();
+    expectTypeOf<ListboxProps['renderGroup']>().toEqualTypeOf<RenderGroup>();
   });
 
   it('FlatTree and useFlatTree: the flat data, the model, the rows and the compound', () => {

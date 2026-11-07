@@ -46,11 +46,13 @@ import {
   OptionGroup,
   PickerListboxSurface,
   useListboxPopup,
+  type ListboxGroupRenderState,
   type ListboxOptionRenderState,
 } from './Option';
 import {
   renderListboxItems,
   renderListboxWindow,
+  scrollWindowToItem,
   useDataModeWarnings,
   useItemsAndChildrenWarning,
   useShownListScroll,
@@ -242,7 +244,9 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
   labels?: DropdownLabels;
   /**
    * Data mode: the options as data, in list order (`value`, `label`, and optionally `textValue`,
-   * `disabled` and `hidden`; values unique). The open list renders one option per item that is
+   * `disabled`, `hidden` and `group`; values unique). Adjacent items with the same `group` are
+   * drawn as a named group under a header (`renderGroup`), the options of the group counting
+   * `aria-posinset` and `aria-setsize` among themselves. The open list renders one option per item that is
    * not `hidden` (see `renderOption`); the closed list renders none. The keys, typeahead, the
    * selection and the button's label text follow `items`, also for a selected item whose option
    * is not rendered. The children are neither read nor rendered: passing both warns once in
@@ -262,11 +266,25 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    */
   renderOption?: (item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode;
   /**
+   * Data mode: renders the header of a group of `items` (those with the same `group`, next to
+   * each other), given the group's name and its state (`index` among the groups, `size`: its
+   * shown options). Return text or a few inline elements: the header is a row of the list, not an
+   * option, so nothing in it is reachable, and it is out of the accessibility tree (`aria-hidden`):
+   * the group's list is named by its name. In a list with a `virtualWindow` the header is a row of
+   * the window (as tall as an option, or measured with `measureItems`) and is not sticky: it
+   * scrolls away with its group. It is called again when the group's name, index or size changes
+   * or the function itself changes. Ignored without `items`, with a development warning.
+   * @default the group's name, as text
+   */
+  renderGroup?: (group: string, state: ListboxGroupRenderState) => React.ReactNode;
+  /**
    * Data mode: renders only the options in view of a long list, plus an overscan, and spacers
    * (`aria-hidden`, `data-virtual-spacer`) as tall as the options they stand for: pass the result
    * of `useVirtualWindow({ itemSize })`, or an object of your own that implements `VirtualWindow`.
    * It needs `items`: without them, or beside `OptionGroup` children, it is ignored with a
-   * development warning (a window renders a flat list).
+   * development warning (a window cannot read the options of children). Items with a `group`
+   * are windowed with their headers, which are rows of the window (`itemSize` tall, or measured
+   * with `measureItems`) and scroll away with their group: they are not sticky.
    *
    * The open popup's list is the window's scroller, so it needs no height of yours: it scrolls
    * within its own maximum height (15rem, 240 pixels at the default root size, less where the
@@ -414,6 +432,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     labels,
     items,
     renderOption,
+    renderGroup,
     virtualWindow,
     autoFocus,
     tabIndex,
@@ -495,7 +514,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     [dataMode, children],
   );
   useItemsAndChildrenWarning('Dropdown', items, children);
-  useDataModeWarnings('Dropdown', { items, renderOption, virtualWindow, children });
+  useDataModeWarnings('Dropdown', { items, renderOption, renderGroup, virtualWindow, children });
   // A window renders data mode only.
   const activeWindow = dataMode ? virtualWindow : undefined;
 
@@ -530,7 +549,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     // An active option that the window does not render (an adapter that keeps nothing): scrolled
     // to by its index among the shown options, the window's count.
     onScrollToItem: activeWindow
-      ? (index) => activeWindow.scrollToIndex(index, { align: 'auto' })
+      ? (index, target) => scrollWindowToItem(activeWindow, index, target)
       : undefined,
     idPrefix: 'dropdown-listbox',
   });
@@ -656,6 +675,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     selected: new Set(values),
     activeValue: listbox.activeValue,
     renderOption,
+    renderGroup,
   };
 
   const rootProps = mergeSlotProps(slotProps?.root, {

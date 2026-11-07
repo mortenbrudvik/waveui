@@ -67,6 +67,7 @@ export {
 } from './Listbox';
 export {
   type ListboxOptionRenderState,
+  type ListboxGroupRenderState,
   ListboxProvider,
   type ListboxProviderProps,
   ListboxSurface,
