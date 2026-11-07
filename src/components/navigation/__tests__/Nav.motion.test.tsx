@@ -259,7 +259,7 @@ describe('presence (D7, the presence pair on the wrapper)', () => {
 
     await user.click(toggle());
     expect(onOpenCategoriesChange).toHaveBeenCalledTimes(1);
-    expect(onOpenCategoriesChange).toHaveBeenCalledWith([]);
+    expect(onOpenCategoriesChange).toHaveBeenCalledWith([], expect.anything());
     expect(wrapper()).toHaveAttribute('data-presence', 'exiting');
     expect(motion.started).toBe(1);
     await finish(motion);

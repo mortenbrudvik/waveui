@@ -47,7 +47,7 @@ import { NavRoot } from './Nav.root';
  * `Nav.parts.tsx`.
  */
 
-export type { NavProps } from './Nav.root';
+export type { NavProps, NavDensity, NavSelectDetails, NavCategoryToggleDetails } from './Nav.root';
 export type {
   NavSectionHeaderProps,
   NavDividerProps,
@@ -435,7 +435,18 @@ function renderIcon(
     : null;
 }
 
+/**
+ * The vertical padding a `small` density sets: it replaces the medium row's, which stays in each
+ * base string (so a medium row renders the classes it always did).
+ */
+const smallPadding = {
+  entry: 'wave:py-1',
+  subEntry: 'wave:py-0.5',
+  category: 'wave:py-1',
+} as const;
+
 const itemClasses = {
+  small: smallPadding.entry,
   base: wcn(
     'wave:flex wave:w-full wave:items-center wave:gap-2 wave:px-4 wave:py-2 wave:text-body-1 wave:text-start wave:no-underline wave:transition-colors wave:motion-reduce:transition-none',
     focusRingInset,
@@ -450,6 +461,7 @@ const itemClasses = {
 };
 
 const subItemClasses = {
+  small: smallPadding.subEntry,
   base: wcn(
     'wave:flex wave:w-full wave:items-center wave:ps-11 wave:pe-4 wave:py-1.5 wave:text-body-1 wave:text-start wave:no-underline wave:transition-colors wave:motion-reduce:transition-none',
     focusRingInset,
@@ -464,6 +476,8 @@ const subItemClasses = {
 
 /** The classes an entry's link or button and its row share. */
 interface NavEntryClasses {
+  /** The vertical padding of a `small` density. */
+  small: string;
   base: string;
   selected: string;
   idle: string;
@@ -550,6 +564,7 @@ function renderNavEntry(
   withIcon: boolean,
   generatedId: string,
   motionPreference: MotionPreference,
+  category: string | null,
 ): React.ReactElement {
   const {
     value,
@@ -584,7 +599,7 @@ function renderNavEntry(
     // nothing elsewhere), but not when the browser opens it elsewhere (the current page does not
     // change); a button honours `preventDefault()` (C-COMPOSE).
     if (isLink ? !event.defaultPrevented && opensElsewhere(event) : event.defaultPrevented) return;
-    context.select(value);
+    context.select(value, { event: event.nativeEvent, category: category ?? undefined });
   };
 
   // The parts are merged only when given: a Nav renders many entries.
@@ -617,6 +632,7 @@ function renderNavEntry(
     stable.root,
     classes.base,
     isSelected ? (hasActions ? classes.selectedInRow : classes.selected) : classes.idle,
+    context.density === 'small' && classes.small,
     hasActions && 'wave:min-w-0 wave:flex-1',
     className,
   );
@@ -866,13 +882,17 @@ const NavCategory = ({
   // so `preventDefault()` in that part (inside the button) acts as in the button part, whose merge
   // already skips this locked handler on a prevented event.
   const handleToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (!(labelPart && event.defaultPrevented)) toggleCategory(value);
+    if (!(labelPart && event.defaultPrevented)) toggleCategory(value, event.nativeEvent);
   };
   const ariaControls = isOpen ? listId : undefined;
   const ariaCurrent = containsCurrent ? true : undefined;
   const containsCurrentMarker = containsCurrent ? '' : undefined;
   const rovingValue = roving ? `wave-nav-category:${value}` : undefined;
-  const buttonClassName = wcn(navCategoryClassNames.button, categoryButtonClasses);
+  const buttonClassName = wcn(
+    navCategoryClassNames.button,
+    categoryButtonClasses,
+    context.density === 'small' && smallPadding.category,
+  );
   const labelClassName = wcn(navCategoryClassNames.label, 'wave:flex-1 wave:text-start');
   const listClassName = isListMounted
     ? wcn(navCategoryClassNames.list, 'wave:m-0 wave:list-none wave:p-0')
@@ -981,6 +1001,7 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
   const roving = React.useContext(NavRovingContext);
+  const category = React.useContext(NavCategoryValueContext);
   // Called always, rendered only while the item's actions render (D119).
   const generatedId = useId('wave-nav-item');
   const motionPreference = useMotionPreference();
@@ -999,6 +1020,7 @@ function NavItem(props: NavItemProps | NavItemDynamicProps): React.ReactElement 
     true,
     generatedId,
     motionPreference,
+    category,
   );
 }
 NavItem.displayName = 'NavItem';
@@ -1020,6 +1042,7 @@ function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.Reac
   useNavValue(context, 'item', props.value);
   useRecordCategory(context, props.value);
   const roving = React.useContext(NavRovingContext);
+  const category = React.useContext(NavCategoryValueContext);
   // Called always, rendered only while the sub-item's actions render (D119).
   const generatedId = useId('wave-nav-item');
   const motionPreference = useMotionPreference();
@@ -1036,6 +1059,7 @@ function NavSubItem(props: NavSubItemProps | NavSubItemDynamicProps): React.Reac
     false,
     generatedId,
     motionPreference,
+    category,
   );
 }
 NavSubItem.displayName = 'NavSubItem';
@@ -1049,7 +1073,12 @@ markNavPart(NavSubItem, 'entry');
  *   value changes). A click that opens a link in another tab or window (or downloads it) selects
  *   nothing, unless the item's `onClick` prevents the default (client-side routing: then nothing
  *   opens elsewhere).
- * - **Categories**: `openCategories`/`defaultOpenCategories`/`onOpenCategoriesChange`. Without
+ * - **Callbacks**: `onValueChange(value, details)` reports the selected item with the click and
+ *   the category it sits in, and `onOpenCategoriesChange(openCategories, details)` the toggled
+ *   category, whether it is open now and the click.
+ * - **Density**: `density="small"` sets the rows 8px shorter (`data-density`).
+ * - **Categories**: `openCategories`/`defaultOpenCategories`/`onOpenCategoriesChange`;
+ *   `multiple={false}` keeps at most one category open. Without
  *   `defaultOpenCategories`, the categories containing the selected item (`value` or
  *   `defaultValue`) start open. A closed category that contains the selected item marks its toggle
  *   (`aria-current="true"`, `data-contains-current`, the selected look); pass `currentCategory`

@@ -27,6 +27,7 @@ import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useRovingTabIndex } from '../../hooks/useRovingTabIndex';
 import { getTriggerFocusTarget, useTriggerFocusRef } from '../../hooks/useTriggerElement';
+import { Z_INDEX } from '../../lib/layers';
 import { Portal, PortalDepthContext } from '../portal/Portal';
 import {
   MenuListContext,
@@ -43,7 +44,7 @@ import {
 } from './Menu.shared';
 
 /** Properties for the MenuPopover sub-component. */
-export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'id'> {
+export interface MenuPopoverProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Side of the trigger the menu opens on (`start`/`end` follow the writing direction).
    * @default 'bottom' ('end' in a submenu)
@@ -57,8 +58,8 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
    * Where to place the menu instead of next to `Menu.Trigger`: an element or a `VirtualElement`
    * (a rectangle, such as a point; an inline object is fine). With a controlled `open`, a menu
    * with a `target` needs no trigger; name it with `aria-label`, and give a toggle button you use
-   * as the target `aria-haspopup="menu"` and `aria-expanded` yourself (the menu's `id` is
-   * generated, so the toggle cannot point `aria-controls` at it). A press on a target element
+   * as the target `aria-haspopup="menu"`, `aria-expanded` and, with an `id` of your own on
+   * `Menu.Popover`, `aria-controls` yourself. A press on a target element
    * does not close the menu. Hold the element in state, or pass a ref object (read after
    * each render of the menu). A menu opened by `openOnContext` is placed at
    * the gesture instead.
@@ -87,9 +88,10 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
   /** Menu items and dividers. */
   children: React.ReactNode;
   /**
-   * Ref to the portaled `role="menu"` surface. Its `id` is generated (the trigger's
-   * `aria-controls` points to it), and it is labelled by the trigger unless `aria-label` or
-   * `aria-labelledby` is given (one that holds `undefined` counts as not given).
+   * Ref to the portaled `role="menu"` surface. Its `id` is the `id` you give `Menu.Popover`, else
+   * a generated one; the trigger's `aria-controls` points to it, and so can an `aria-controls` of
+   * your own on a toggle button you use as the `target`. It is labelled by the trigger unless
+   * `aria-label` or `aria-labelledby` is given (one that holds `undefined` counts as not given).
    */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -99,6 +101,13 @@ export interface MenuPopoverProps extends Omit<React.HTMLAttributes<HTMLDivEleme
  * parent menu, to stay inside the viewport (as native and Fluent menus do).
  */
 const SUBMENU_SHIFT = { padding: 8, crossAxis: true } as const;
+
+/** The DOM event behind an event argument: an event, a React event's native one, else a new one. */
+function toDomEvent(value: unknown): Event {
+  if (value instanceof Event) return value;
+  const native = (value as { nativeEvent?: unknown } | null | undefined)?.nativeEvent;
+  return native instanceof Event ? native : new Event('click');
+}
 
 /** Whether a `target` is an element (duck typed, so an element of another realm counts). */
 function isElementTarget(target: PopupTarget | undefined): target is HTMLElement {
@@ -205,6 +214,7 @@ export const MenuPopover = ({
   onPointerLeave,
   onPointerMove,
   onContextMenu,
+  id: idProp,
   ref,
   ...rest
 }: MenuPopoverProps) => {
@@ -215,6 +225,9 @@ export const MenuPopover = ({
     takeInitialFocus,
     registerSurface,
     menuId,
+    onMenuId,
+    inline,
+    mountNode,
     labelledBy,
     triggerRef,
     triggerElement,
@@ -231,6 +244,11 @@ export const MenuPopover = ({
     contextOpener,
   } = menu;
   useStaticMenuPartWarning('Menu.Popover', popup);
+  // The trigger's `aria-controls` points at the id this surface renders.
+  React.useLayoutEffect(() => {
+    onMenuId(idProp);
+    return () => onMenuId(undefined);
+  }, [onMenuId, idProp]);
   const { target, pending: targetPending } = usePopupTarget(
     'Menu.Popover',
     targetProp,
@@ -261,6 +279,8 @@ export const MenuPopover = ({
     side: side ?? (isSubmenu ? 'end' : 'bottom'),
     align,
     shift: isSubmenu ? SUBMENU_SHIFT : undefined,
+    // Inline, the surface sits among the page's elements and scrolls with them.
+    ...(inline && { strategy: 'absolute' as const }),
     ...resolvePositioning(positioning, { offset: isSubmenu ? 0 : 4, fitViewport: true }),
     ...(offset !== undefined && { offset }),
   });
@@ -427,20 +447,28 @@ export const MenuPopover = ({
   // The list the items render in. Its children sit inside the Portal, one portal level deeper.
   // Item activation closes the whole chain; the item under the mouse takes focus while focus is
   // inside the menu tree.
-  const portalDepth = React.useContext(PortalDepthContext) + 1;
+  // An inline surface renders in no portal, so its items are one level shallower.
+  const portalDepth = React.useContext(PortalDepthContext) + (inline ? 0 : 1);
   const registerCheckable = useCheckableRegistry();
   const { hoverGroup, isHoverFocusing, onPointerMove: listPointerMove } = useMenuListPointer(menu);
+  // An item's activation closes the chain; the event behind it is the details' event.
+  // It is also the `close` of `useMenuContext`, which an app may pass as a click handler: a React
+  // event stands for its native one, and anything else for none.
+  const closeFromItem = React.useCallback(
+    (event?: unknown) => closeChain({ reason: 'item-click', event: toDomEvent(event) }),
+    [closeChain],
+  );
   const listContext = React.useMemo<MenuListContextValue>(
     () => ({
       menu,
       isStatic: false,
       portalDepth,
-      closeFromItem: closeChain,
+      closeFromItem,
       registerCheckable,
       hoverGroup,
       isHoverFocusing,
     }),
-    [menu, portalDepth, closeChain, registerCheckable, hoverGroup, isHoverFocusing],
+    [menu, portalDepth, closeFromItem, registerCheckable, hoverGroup, isHoverFocusing],
   );
 
   // C-COMPOSE: the consumer's onKeyDown runs first; preventDefault() skips the built-in keys. A key
@@ -452,7 +480,7 @@ export const MenuPopover = ({
     if (event.key === 'Tab') {
       // Close every menu of the chain and put focus on the root trigger; the default Tab action
       // then continues from there.
-      closeChain();
+      closeChain({ reason: 'tab', event: event.nativeEvent });
       return;
     }
     // "Previous" (ArrowLeft, ArrowRight in RTL) closes a submenu and returns to its trigger item.
@@ -469,7 +497,7 @@ export const MenuPopover = ({
     ) {
       event.preventDefault();
       getReturnFocus()?.focus({ preventScroll: true });
-      requestClose();
+      requestClose({ reason: 'arrow-key', event: event.nativeEvent });
       return;
     }
     rovingKeyDown(event);
@@ -478,7 +506,7 @@ export const MenuPopover = ({
   if (!isMounted) return null;
 
   return (
-    <Portal layerId={layerId}>
+    <Portal layerId={layerId} disabled={inline} container={mountNode}>
       <MenuListContext.Provider value={listContext}>
         <div
           role="menu"
@@ -495,12 +523,16 @@ export const MenuPopover = ({
           }
           {...presenceProps}
           ref={mergedRef}
-          id={menuId}
+          id={idProp ?? menuId}
           data-state={open ? 'open' : 'closed'}
           data-side={floatingProps['data-side']}
           data-align={floatingProps['data-align']}
           data-roving-container=""
-          style={{ ...positionStyle, ...style }}
+          style={{
+            ...positionStyle,
+            ...(inline && { zIndex: `calc(${Z_INDEX.overlay} + ${portalDepth})` }),
+            ...style,
+          }}
           onKeyDown={handleKeyDown}
           onKeyDownCapture={withTypeaheadText(
             composeEventHandlers(onKeyDownCapture, rovingKeyDownCapture),

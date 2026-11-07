@@ -304,7 +304,7 @@ describe('Menu.Popover on the presence core', () => {
       expect(item('Share')).toHaveAttribute('aria-expanded', 'false');
       expect(item('Share')).not.toHaveAttribute('aria-controls');
       expect(actions()).toHaveFocus();
-      expect(onShareOpenChange.mock.calls).toEqual([[true]]);
+      expect(onShareOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
 
       await act(async () => {
         await motion.finishAll();

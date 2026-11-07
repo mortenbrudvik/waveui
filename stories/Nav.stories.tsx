@@ -358,3 +358,25 @@ export const CustomExpandIcon: Story = {
     );
   },
 };
+
+/**
+ * `density="small"` sets every row 8px shorter (Fluent's `density`); the text and indentation stay.
+ * Rendered as `data-density`.
+ */
+export const Density: Story = {
+  args: {
+    density: 'small',
+  },
+};
+
+/**
+ * `multiple={false}` keeps at most one category open: opening one closes the other. The callbacks
+ * report the click and the toggled category: `onOpenCategoriesChange(open, { category, open, event })`
+ * and `onValueChange(value, { category, event })`.
+ */
+export const SingleOpenCategory: Story = {
+  args: {
+    multiple: false,
+    defaultOpenCategories: ['settings'],
+  },
+};

@@ -1776,12 +1776,12 @@ describe('Menu.ItemCheckbox, Menu.ItemRadio and Menu.ItemSwitch — slotProps', 
   });
 
   it('types each kind’s parts for their elements, and takes no children', () => {
-    expectTypeOf<keyof RowSlotProps>().toEqualTypeOf<'content' | 'shortcut'>();
+    expectTypeOf<keyof RowSlotProps>().toEqualTypeOf<'content' | 'shortcut' | 'subText'>();
     expectTypeOf<keyof NonNullable<MenuItemRadioProps['slotProps']>>().toEqualTypeOf<
-      'content' | 'shortcut'
+      'content' | 'shortcut' | 'subText'
     >();
     expectTypeOf<keyof SwitchSlotProps>().toEqualTypeOf<
-      'content' | 'shortcut' | 'track' | 'thumb'
+      'content' | 'shortcut' | 'subText' | 'track' | 'thumb'
     >();
     expectTypeOf<NonNullable<RowSlotProps['content']>['ref']>().toEqualTypeOf<
       React.Ref<HTMLSpanElement> | undefined

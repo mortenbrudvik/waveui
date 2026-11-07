@@ -799,7 +799,7 @@ describe('Menu.ItemLink — slotProps', () => {
   });
 
   it('declares slotProps among its own props, typed for each part’s element', () => {
-    expectTypeOf<keyof LinkSlotProps>().toEqualTypeOf<'content' | 'shortcut'>();
+    expectTypeOf<keyof LinkSlotProps>().toEqualTypeOf<'content' | 'shortcut' | 'subText'>();
     expectTypeOf<MenuItemLinkProps<typeof RouterLink>['slotProps']>().toEqualTypeOf<
       MenuItemLinkOwnProps['slotProps']
     >();

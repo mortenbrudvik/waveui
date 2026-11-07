@@ -325,7 +325,7 @@ describe('useMenuContext (P13-02, R14)', () => {
     // Focus left the exiting surface in the commit that closed it (it is inert from then on).
     expect(newButton()).toHaveFocus();
     expect(newButton()).toHaveAttribute('aria-expanded', 'false');
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     const surface = screen.getByRole('menu', { name: 'New', hidden: true });
     expect(surface.closest('[inert]')).toBe(surface);
     await act(async () => {
@@ -374,7 +374,7 @@ describe('useMenuContext (P13-02, R14)', () => {
       await activate();
       await act(async () => {});
       const result = {
-        calls: onOpenChange.mock.calls,
+        calls: onOpenChange.mock.calls.map(([open]) => [open]),
         focused: document.activeElement === newButton(),
         menu: queryMenu() !== null,
       };
@@ -464,7 +464,7 @@ describe('useMenuContext (P13-02, R14)', () => {
     await user.click(item('Paste special'));
     expect(item('Text only')).toHaveFocus();
     await user.keyboard('{Enter}');
-    expect(onSubmenuOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onSubmenuOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     expect(queryMenu('Paste special')).not.toBeInTheDocument();
     expect(item('Paste special')).toHaveFocus();
   });
@@ -490,10 +490,10 @@ describe('useMenuContext (P13-02, R14)', () => {
     await user.click(screen.getByRole('button', { name: 'Format' }));
     // The items of the static Menu close nothing: neither the built-in one nor yours.
     await user.click(item('Italic'));
-    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
     await user.click(item('Bold'));
     expect(onBold).toHaveBeenCalledTimes(1);
-    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
     expect(screen.getByRole('menu', { name: 'Format' })).toBeInTheDocument();
   });
 
@@ -749,7 +749,7 @@ describe('a menu item of your own (useMenuContext, useMenuListContext)', () => {
     expect(onNotes).not.toHaveBeenCalled();
     expect(queryMenu()).not.toBeInTheDocument();
     expect(newButton()).toHaveFocus();
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('a click activates it and closes the menu; the pointer focuses it while focus is in the menu', async () => {
@@ -788,11 +788,16 @@ describe('a menu item of your own (useMenuContext, useMenuListContext)', () => {
     await openNewMenu(user);
     await user.keyboard('{Enter}');
     expect(onBlank).toHaveBeenCalledTimes(1);
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     await user.click(newButton());
     await user.click(item('Blank document'));
     expect(onBlank).toHaveBeenCalledTimes(2);
-    expect(onOpenChange.mock.calls).toEqual([[true], [false], [true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([
+      [true],
+      [false],
+      [true],
+      [false],
+    ]);
   });
 
   describe('server rendering', () => {

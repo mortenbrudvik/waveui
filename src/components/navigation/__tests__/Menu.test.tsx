@@ -827,7 +827,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     const { container } = render(<PopupMenu onOpenChange={onOpenChange} />);
     await user.click(trigger());
     const menu = screen.getByRole('menu', { name: 'Actions' });
-    expect(onOpenChange).toHaveBeenCalledWith(true);
+    expect(onOpenChange).toHaveBeenCalledWith(true, expect.anything());
     expect(trigger()).toHaveAttribute('aria-expanded', 'true');
     expect(trigger()).toHaveAttribute('aria-controls', menu.id);
     expect(container.contains(menu)).toBe(false); // portaled
@@ -876,7 +876,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     await user.click(item('Edit'));
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(queryMenu()).not.toBeInTheDocument();
-    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false, expect.anything());
     expect(trigger()).toHaveFocus();
     expect(trigger()).toHaveAttribute('aria-expanded', 'false');
   });
@@ -907,7 +907,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     expect(item('Edit')).toHaveFocus();
     await user.keyboard(' ');
     expect(onEdit).toHaveBeenCalledTimes(1);
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     expect(queryMenu()).not.toBeInTheDocument();
     expect(trigger()).toHaveFocus();
   });
@@ -991,7 +991,7 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     await user.keyboard('{ArrowDown}');
     await user.keyboard('{Escape}');
     expect(queryMenu()).not.toBeInTheDocument();
-    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false, expect.anything());
     expect(trigger()).toHaveFocus();
   });
 
@@ -1184,12 +1184,12 @@ describe('Menu popup (Menu.Trigger + Menu.Popover)', () => {
     const onOpenChange = vi.fn();
     const { rerender } = render(<PopupMenu open={false} onOpenChange={onOpenChange} />);
     await user.click(trigger());
-    expect(onOpenChange).toHaveBeenCalledWith(true);
+    expect(onOpenChange).toHaveBeenCalledWith(true, expect.anything());
     expect(queryMenu()).not.toBeInTheDocument();
     rerender(<PopupMenu open onOpenChange={onOpenChange} />);
     expect(screen.getByRole('menu')).toBeInTheDocument();
     await user.keyboard('{Escape}');
-    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false, expect.anything());
     expect(screen.getByRole('menu')).toBeInTheDocument();
   });
 
@@ -2033,11 +2033,11 @@ describe('Menu.Trigger around an aria-disabled element', () => {
     rerender(<AriaDisabledTriggerMenu asChild ariaDisabled="true" onOpenChange={onOpenChange} />);
     await user.click(trigger());
     expect(screen.getByRole('menu')).toBeInTheDocument();
-    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
     await user.keyboard('{Escape}');
     expect(queryMenu()).not.toBeInTheDocument();
     expect(trigger()).toHaveFocus();
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 });
 

@@ -476,6 +476,171 @@ describe('useContextMenuAnchor', () => {
     });
   });
 
+  describe('long press (browsers that fire no contextmenu)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const press = (
+      el: Element,
+      init: Partial<PointerEventInit & { clientX: number; clientY: number }> = {},
+    ) =>
+      fireEvent.pointerDown(el, {
+        pointerType: 'touch',
+        pointerId: 7,
+        isPrimary: true,
+        clientX: 30,
+        clientY: 12,
+        ...init,
+      });
+
+    it.each(['touch', 'pen'] as const)(
+      'a %s press held for 600 ms opens at its point, once, with its pointerdown event',
+      (pointerType) => {
+        const { onOpen, snapshot } = setup();
+        act(() => row(2).focus());
+        press(row(2), { pointerType });
+        act(() => {
+          vi.advanceTimersByTime(599);
+        });
+        expect(onOpen).not.toHaveBeenCalled();
+        act(() => {
+          vi.advanceTimersByTime(1);
+        });
+        expect(onOpen).toHaveBeenCalledTimes(1);
+        expect(onOpen.mock.calls[0][0]).toBe('pointer');
+        expect(onOpen.mock.calls[0][1].type).toBe('pointerdown');
+        const { anchor, origin, fromContext, opener } = snapshot();
+        expect(origin).toBe('pointer');
+        expect(fromContext).toBe(true);
+        expect(opener).toBe(row(2));
+        expect(rectOf(anchor)).toEqual({ x: 30, y: 12, width: 0, height: 0 });
+        expect(surface()).not.toBeNull();
+      },
+    );
+
+    it('the contextmenu event that some browsers fire after it is its echo: prevented, no second opening', () => {
+      const { onOpen } = setup();
+      press(row(1));
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+      expect(onOpen).toHaveBeenCalledTimes(1);
+      const notPrevented = fireEvent.contextMenu(row(1), { clientX: 30, clientY: 12 });
+      expect(notPrevented).toBe(false);
+      expect(onOpen).toHaveBeenCalledTimes(1);
+      // A later gesture is a gesture again.
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+      fireEvent.contextMenu(row(1), { button: 2, clientX: 80, clientY: 90 });
+      expect(onOpen).toHaveBeenCalledTimes(2);
+    });
+
+    it('a browser that fires contextmenu first (around 500 ms) cancels the timer: one opening', () => {
+      const { onOpen } = setup();
+      press(row(1));
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      fireEvent.contextMenu(row(1), { clientX: 30, clientY: 12 });
+      expect(onOpen).toHaveBeenCalledTimes(1);
+      expect(onOpen.mock.calls[0][1].type).toBe('contextmenu');
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(onOpen).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      [
+        'a release',
+        (el: Element) => fireEvent.pointerUp(el, { pointerType: 'touch', pointerId: 7 }),
+      ],
+      [
+        'a cancel (the page scrolls)',
+        (el: Element) => fireEvent.pointerCancel(el, { pointerType: 'touch', pointerId: 7 }),
+      ],
+      [
+        'a move of more than 10 px',
+        (el: Element) =>
+          fireEvent.pointerMove(el, {
+            pointerType: 'touch',
+            pointerId: 7,
+            clientX: 45,
+            clientY: 12,
+          }),
+      ],
+    ])('%s before the 600 ms cancels it', (_name, end) => {
+      const { onOpen } = setup();
+      press(row(1));
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      end(row(1));
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('a drift of up to 10 px keeps the press', () => {
+      const { onOpen } = setup();
+      press(row(1));
+      fireEvent.pointerMove(row(1), {
+        pointerType: 'touch',
+        pointerId: 7,
+        clientX: 38,
+        clientY: 12,
+      });
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+      expect(onOpen).toHaveBeenCalledTimes(1);
+    });
+
+    it('a second finger, a mouse, an editable field, an aria-disabled element and a disabled hook start nothing', () => {
+      const { onOpen, rerender, onClose } = setup();
+      fireEvent.pointerDown(row(1), {
+        pointerType: 'touch',
+        pointerId: 8,
+        isPrimary: false,
+        clientX: 1,
+        clientY: 1,
+      });
+      press(row(1), { pointerType: 'mouse' });
+      press(screen.getByRole('textbox', { name: 'Rename' }));
+      press(screen.getByRole('button', { name: 'Locked row' }));
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onOpen).not.toHaveBeenCalled();
+      rerender(<ContextHarness enabled={false} onOpen={onOpen} onClose={onClose} />);
+      press(row(1));
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('disabling the hook while a press waits cancels it, and unmounting leaves no timer', () => {
+      const { onOpen, rerender, onClose, unmount } = setup();
+      press(row(1));
+      rerender(<ContextHarness enabled={false} onOpen={onOpen} onClose={onClose} />);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onOpen).not.toHaveBeenCalled();
+      rerender(<ContextHarness enabled onOpen={onOpen} onClose={onClose} />);
+      press(row(1));
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
   describe('fromContext and the kept anchor', () => {
     it('is false for an open from outside, and becomes true with a gesture while open', () => {
       const { snapshot } = setup();

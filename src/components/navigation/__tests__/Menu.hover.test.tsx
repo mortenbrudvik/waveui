@@ -125,7 +125,7 @@ describe('hover opening of submenus', () => {
     expect(menu('Open recent')).toBeInTheDocument();
     advance(200);
     expect(queryMenu('Open recent')).not.toBeInTheDocument();
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('a diagonal path across a sibling trigger keeps the submenu open, opens nothing else and moves no focus', async () => {
@@ -230,8 +230,8 @@ describe('hover opening of submenus', () => {
     advance(300);
     expect(menu('Share')).toBeInTheDocument();
     expect(queryMenu('Open recent')).not.toBeInTheDocument();
-    expect(onRecentOpenChange.mock.calls).toEqual([[true], [false]]);
-    expect(onShareOpenChange.mock.calls).toEqual([[true]]);
+    expect(onRecentOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
+    expect(onShareOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
   });
 
   it('a submenu inherits its parent’s delays', async () => {
@@ -283,7 +283,7 @@ describe('hover opening of submenus', () => {
     advance(300);
     await user.unhover(item('Open recent'));
     advance(300);
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('has no axe violations with a hover-opened submenu', async () => {
@@ -352,7 +352,7 @@ describe('focus follows the mouse inside a focused menu tree', () => {
     expect(queryMenu('Open recent')).not.toBeInTheDocument();
     expect(item('Open recent')).toHaveAttribute('aria-expanded', 'false');
     expect(item('Exit')).toHaveFocus();
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('Escape on the trigger item of a hover-opened submenu closes only the submenu; focus stays', async () => {
@@ -416,7 +416,7 @@ describe('a root menu with openOnHover', () => {
     await user.hover(button('Elsewhere'));
     advance(300);
     expect(queryMenu('Actions')).not.toBeInTheDocument();
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('a click on its trigger pins it and focuses its first item', async () => {
@@ -524,7 +524,7 @@ describe('a root menu with openOnHover', () => {
     await user.hover(button('Actions'));
     advance(300);
     // The hover asked to open; the app kept the menu closed.
-    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
     expect(queryMenu('Actions')).not.toBeInTheDocument();
     await user.hover(button('Elsewhere'));
     act(() => button('Elsewhere').focus());
@@ -536,7 +536,7 @@ describe('a root menu with openOnHover', () => {
     await user.hover(button('Actions'));
     await user.hover(button('Elsewhere'));
     advance(1000);
-    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
   });
 
   it('a hover opening that a controlled menu applies in a transition stays a hover opening: no focus move, and it closes after the pointer leaves', async () => {
@@ -563,7 +563,7 @@ describe('a root menu with openOnHover', () => {
     advance(300);
     await act(async () => {});
     expect(queryMenu('Actions')).not.toBeInTheDocument();
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('a disabledFocusable MenuButton trigger does not open on hover', async () => {
@@ -645,7 +645,7 @@ describe('a root menu with openOnHover', () => {
     await act(async () => {});
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(document.body).toHaveFocus();
-    expect(onRecentOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onRecentOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('a submenu closed by hover while its hover-opened menu stays open moves no focus', async () => {

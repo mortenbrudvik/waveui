@@ -1371,6 +1371,71 @@ describe('useRestoreFocus — onlyIfFocusInside (popovers)', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
+  /**
+   * A surface in a layer of its own that closes by hover, and a surface rendered inside it that
+   * has neither a trigger nor a focused opener (an app opened it with a `target`).
+   */
+  function HoverLayerPage({
+    outer,
+    inner,
+    byHover,
+  }: {
+    outer: boolean;
+    inner: boolean;
+    byHover: boolean;
+  }) {
+    const [container, setContainer] = React.useState<HTMLDivElement | null>(null);
+    React.useLayoutEffect(() => {
+      if (!outer || !container) return undefined;
+      return registerLayer(
+        makeLayer('hover-card', { kind: 'popover', getElements: () => [container] }),
+      );
+    }, [outer, container]);
+    useRestoreFocus({
+      enabled: outer,
+      container,
+      onlyIfFocusInside: true,
+      isHoverClose: () => byHover,
+    });
+    return (
+      <>
+        <button type="button">Anchor</button>
+        {outer && (
+          <div ref={setContainer} role="dialog" aria-label="Hover card">
+            <DismissLayerProvider layerId="hover-card">
+              <Surface
+                open={inner}
+                onlyIfFocusInside
+                fallback={() => screen.queryByRole('button', { name: 'Anchor' })}
+              />
+            </DismissLayerProvider>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  it('a surface with no opener, opened from inside a surface that closes by hover, goes along (the layer tree)', async () => {
+    const { rerender } = render(<HoverLayerPage outer={false} inner={false} byHover />);
+    rerender(<HoverLayerPage outer inner={false} byHover />);
+    rerender(<HoverLayerPage outer inner byHover />);
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+    expect(document.activeElement).toBe(document.body);
+    rerender(<HoverLayerPage outer={false} inner={false} byHover />);
+    await flushMicrotasks();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('the same surface still restores to its fallback when the outer surface does not close by hover', async () => {
+    const { rerender } = render(<HoverLayerPage outer={false} inner={false} byHover={false} />);
+    rerender(<HoverLayerPage outer inner={false} byHover={false} />);
+    rerender(<HoverLayerPage outer inner byHover={false} />);
+    rerender(<HoverLayerPage outer={false} inner={false} byHover={false} />);
+    await flushMicrotasks();
+    expect(button('Anchor')).toHaveFocus();
+  });
+
   /** A restore target outside every surface, for nested surfaces that would otherwise find none. */
   const elsewhere = () => screen.queryByRole('button', { name: 'Elsewhere' });
 

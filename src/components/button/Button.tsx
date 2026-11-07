@@ -10,6 +10,7 @@ import {
 } from '../../lib/slot';
 import type { PolymorphicComponent, PolymorphicProps } from '../../lib/polymorphic';
 import type { Size, Appearance, IconPosition, Shape, Slot } from '../../lib/types';
+import { markButton } from './Button.mark';
 import { useButtonSemantics } from './Button.semantics';
 import { buttonClassName } from './buttonStyles';
 
@@ -237,3 +238,4 @@ export const Button: PolymorphicComponent<'button', ButtonOwnProps> = (props) =>
 };
 
 Button.displayName = 'Button';
+markButton(Button);

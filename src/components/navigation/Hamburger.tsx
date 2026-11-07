@@ -66,7 +66,8 @@ const GLYPH_SIZES: Readonly<Record<Size, number>> = {
  * that drawer and reports it with `aria-expanded` and `aria-controls`. Elsewhere (your page
  * header) it is a plain button: pass `aria-expanded={open}`, `aria-controls` (while the drawer's
  * panel is rendered) and, for an overlay drawer, `aria-haspopup="dialog"`, and toggle your state
- * in `onClick`. Fluent's `Hamburger`.
+ * in `onClick`, or spread what `useNavDrawerToggle` returns, which wires all of that and the
+ * drawer's `finalFocusRef`. Fluent's `Hamburger`.
  *
  * @example
  * <Hamburger

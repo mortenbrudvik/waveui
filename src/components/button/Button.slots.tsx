@@ -15,10 +15,10 @@
  */
 import * as React from 'react';
 import { focusableDisabledProps } from '../../lib/aria';
-import { isElementOfType } from '../../lib/children';
+import { getElementType } from '../../lib/children';
 import { resolveSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot, SlotObject } from '../../lib/slot';
-import { Button } from './Button';
+import { isButtonType } from './Button.mark';
 import type { ButtonOwnProps } from './Button';
 
 /**
@@ -131,7 +131,7 @@ function isButtonSlotObject(value: unknown): value is Pick<SlotObject<'span'>, '
   if (typeof value !== 'object' || value === null || React.isValidElement(value)) return false;
   if (Symbol.iterator in value || !('as' in value)) return false;
   const { as } = value as { as?: unknown };
-  return as === 'button' || as === Button;
+  return isButtonType(as);
 }
 
 /**
@@ -152,7 +152,10 @@ export function unwrapButtonGlyph(slot: Slot<'span'> | undefined): {
 } {
   // A slot object is never an element, so any slot value can be checked as a node.
   const node = slot as React.ReactNode;
-  if (isElementOfType<{ children?: React.ReactNode }>(node, 'button', Button)) {
+  if (
+    React.isValidElement<{ children?: React.ReactNode }>(node) &&
+    isButtonType(getElementType(node))
+  ) {
     return { glyph: node.props.children, button: 'a button element' };
   }
   if (isButtonSlotObject(slot)) {

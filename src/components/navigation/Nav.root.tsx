@@ -12,9 +12,14 @@ import {
   createCategoryStore,
   findCategoriesContaining,
   useNavListChildCheck,
+  type NavCategoryToggleDetails,
   type NavContextValue,
+  type NavDensity,
+  type NavSelectDetails,
   type NavValueKind,
 } from './Nav.context';
+
+export type { NavCategoryToggleDetails, NavDensity, NavSelectDetails } from './Nav.context';
 
 /*
  * The Nav root, and `useNavRootState`, the one state model of Nav and NavDrawer: the selection,
@@ -32,8 +37,13 @@ export interface NavProps extends Omit<React.HTMLAttributes<HTMLElement>, 'defau
    * @default ''
    */
   defaultValue?: string;
-  /** Called with the new value when the selection changes (not when the current item is re-selected). */
-  onValueChange?: (value: string) => void;
+  /**
+   * Called with the new value when the selection changes (not when the current item is
+   * re-selected), and with `details`: the `event` (the click) and the `category` the item sits in
+   * (Fluent's `onNavItemSelect(event, { value, categoryValue })`). `details` is optional in the
+   * type for code written before it existed; WaveUI always passes it.
+   */
+  onValueChange?: (value: string, details?: NavSelectDetails) => void;
   /** Controlled list of open category values. */
   openCategories?: readonly string[];
   /**
@@ -42,8 +52,29 @@ export interface NavProps extends Omit<React.HTMLAttributes<HTMLElement>, 'defau
    * first render; an empty list keeps every category closed.
    */
   defaultOpenCategories?: readonly string[];
-  /** Called with the new list of open category values (a new array) when a category is toggled. */
-  onOpenCategoriesChange?: (openCategories: string[]) => void;
+  /**
+   * Called with the new list of open category values (a new array) when a category is toggled, and
+   * with `details`: the `event` (the click), the toggled `category` and whether it is now `open`
+   * (Fluent's `onNavCategoryItemToggle(event, { categoryValue })`). `details` is optional in the
+   * type for code written before it existed; WaveUI always passes it.
+   */
+  onOpenCategoriesChange?: (openCategories: string[], details?: NavCategoryToggleDetails) => void;
+  /**
+   * Keep at most one category open (Fluent's `multiple`, which is `true` by default): opening a
+   * category closes the one that was open, and a Nav that starts with several open
+   * (`defaultOpenCategories`, or the categories that contain the selected item) keeps the first.
+   * A controlled `openCategories` is yours: it is not trimmed, and the next toggle replaces it
+   * (opening a category gives `[category]`, closing an open one removes only it).
+   * @default true
+   */
+  multiple?: boolean;
+  /**
+   * How tightly the items and category buttons are set (Fluent's `density`): `medium` rows are
+   * 36px high (28px for a sub-item) and `small` ones 8px shorter, with the same text and
+   * indentation. Rendered as `data-density`.
+   * @default 'medium'
+   */
+  density?: NavDensity;
   /**
    * The `value` of the category that contains the current item, for sub-items Nav cannot find by
    * itself (rendered by your own component inside a closed category). Usually not needed: Nav
@@ -80,19 +111,24 @@ export interface UseNavRootStateOptions {
   value: string | undefined;
   /** Initial selected value of an uncontrolled root (`''`: nothing selected). */
   defaultValue: string;
-  /** Called with the new value when it changes (`useControllable`). */
-  onValueChange: ((value: string) => void) | undefined;
+  /** Called with the new value when it changes (`useControllable`), with the details. */
+  onValueChange: ((value: string, details?: NavSelectDetails) => void) | undefined;
   /**
    * Called on every activation, re-selection included, after the value update (NavDrawer's
    * `onItemSelect`; Nav has no such callback).
    */
-  onActivate?: (value: string) => void;
+  onActivate?: (value: string, details?: NavSelectDetails) => void;
   /** Controlled list of open category values (`undefined`: uncontrolled). */
   openCategories: readonly string[] | undefined;
   /** Categories open initially; without it, the categories that contain the selected value. */
   defaultOpenCategories: readonly string[] | undefined;
-  /** Called with the new list of open category values (a new array) when a category is toggled. */
-  onOpenCategoriesChange: ((openCategories: string[]) => void) | undefined;
+  /** Called with the new list of open category values (a new array) and the details. */
+  onOpenCategoriesChange:
+    ((openCategories: string[], details?: NavCategoryToggleDetails) => void) | undefined;
+  /** At most one open category (`multiple` off). @default false */
+  singleOpen?: boolean;
+  /** How tightly the rows are set. @default 'medium' */
+  density?: NavDensity;
   /** The value of the category that contains the current item (the root's hint). */
   currentCategory: string | undefined;
   /**
@@ -134,38 +170,57 @@ export function useNavRootState({
   openCategories: openCategoriesProp,
   defaultOpenCategories,
   onOpenCategoriesChange,
+  singleOpen = false,
+  density = 'medium',
   currentCategory,
   children,
 }: UseNavRootStateOptions): NavContextValue {
-  const [value, setValue] = useControllable(controlledValue, defaultValue, onValueChange);
+  // The details of the request behind a change, written around the setter that `useControllable`
+  // calls `onChange` inside of (synchronously, only on a change) and cleared right after.
+  const selectDetailsRef = React.useRef<NavSelectDetails | undefined>(undefined);
+  const [value, setValue] = useControllable(controlledValue, defaultValue, (next: string) =>
+    onValueChange?.(next, selectDetailsRef.current),
+  );
   const notifyActivate = useEventCallback(onActivate);
   const select = React.useCallback(
-    (next: string) => {
-      setValue(next);
+    (next: string, details?: NavSelectDetails) => {
+      selectDetailsRef.current = details;
+      try {
+        setValue(next);
+      } finally {
+        selectDetailsRef.current = undefined;
+      }
       // Event-named callback: every activation, re-selection included (C-NAMING).
-      notifyActivate(next);
+      notifyActivate(next, details);
     },
     [setValue, notifyActivate],
   );
 
-  const [initialOpenCategories] = React.useState<readonly string[]>(
-    () =>
-      defaultOpenCategories ?? findCategoriesContaining(children, controlledValue ?? defaultValue),
-  );
+  const [initialOpenCategories] = React.useState<readonly string[]>(() => {
+    const initial =
+      defaultOpenCategories ?? findCategoriesContaining(children, controlledValue ?? defaultValue);
+    return singleOpen ? initial.slice(0, 1) : initial;
+  });
+  const toggleDetailsRef = React.useRef<NavCategoryToggleDetails | undefined>(undefined);
   const [openCategories, setOpenCategories] = useControllable<readonly string[]>(
     openCategoriesProp,
     initialOpenCategories,
-    (next) => onOpenCategoriesChange?.([...next]),
+    (next) => onOpenCategoriesChange?.([...next], toggleDetailsRef.current),
   );
   const toggleCategory = React.useCallback(
-    (category: string) => {
-      setOpenCategories((previous) =>
-        previous.includes(category)
-          ? previous.filter((entry) => entry !== category)
-          : [...previous, category],
-      );
+    (category: string, event?: Event) => {
+      try {
+        setOpenCategories((previous) => {
+          const open = !previous.includes(category);
+          toggleDetailsRef.current = { event: event ?? new Event('click'), category, open };
+          if (!open) return previous.filter((entry) => entry !== category);
+          return singleOpen ? [category] : [...previous, category];
+        });
+      } finally {
+        toggleDetailsRef.current = undefined;
+      }
     },
-    [setOpenCategories],
+    [setOpenCategories, singleOpen],
   );
 
   // Duplicate values (C-DEV): the mounted items and categories per value (written from their
@@ -195,11 +250,21 @@ export function useNavRootState({
       select,
       openCategories,
       toggleCategory,
+      density,
       registerValue,
       currentCategory,
       categoryStore,
     }),
-    [value, select, openCategories, toggleCategory, registerValue, currentCategory, categoryStore],
+    [
+      value,
+      select,
+      openCategories,
+      toggleCategory,
+      density,
+      registerValue,
+      currentCategory,
+      categoryStore,
+    ],
   );
 }
 
@@ -210,6 +275,8 @@ export const NavRoot = ({
   openCategories,
   defaultOpenCategories,
   onOpenCategoriesChange,
+  multiple = true,
+  density = 'medium',
   currentCategory,
   className,
   children,
@@ -225,6 +292,8 @@ export const NavRoot = ({
     openCategories,
     defaultOpenCategories,
     onOpenCategoriesChange,
+    singleOpen: !multiple,
+    density,
     currentCategory,
     children,
   });
@@ -238,6 +307,7 @@ export const NavRoot = ({
     <NavContext.Provider value={contextValue}>
       <nav
         aria-label="Navigation"
+        data-density={density}
         {...rest}
         ref={ref}
         className={wcn(

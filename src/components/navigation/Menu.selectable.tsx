@@ -14,7 +14,12 @@ import { forcedColors } from '../../lib/styles';
 import type { Slot } from '../../lib/types';
 import { useMenuContext, useMenuListContext } from './Menu.context';
 import { BLOCK_CLICK, MENU_PART_LOCKS, menuItemClasses } from './Menu.shared';
-import { MenuItemRow, useMenuItemActivation, useMenuItemPlacementWarning } from './Menu.items';
+import {
+  MenuItemRow,
+  getMenuItemDisabledProps,
+  useMenuItemActivation,
+  useMenuItemPlacementWarning,
+} from './Menu.items';
 import type { MenuItemProps, MenuItemRowPartClassNames } from './Menu.items';
 
 /** The `checkedValues` group a checkable menu item belongs to (Fluent's `MenuItemSelectableProps`). */
@@ -67,6 +72,12 @@ export interface MenuItemCheckboxProps
      * or tab index, and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `subText`, under the label, rendered while `subText` renders content (stable
+     * classes `wave-menu-item__sub-text` and `wave-menu-item-checkbox__sub-text`). Locked: no role, tab index or roving container
+     * marker, and the menu's markers.
+     */
+    subText?: SlotPart<'span'>;
   };
 }
 
@@ -108,6 +119,12 @@ export interface MenuItemRadioProps
      * tab index, and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `subText`, under the label, rendered while `subText` renders content (stable
+     * classes `wave-menu-item__sub-text` and `wave-menu-item-radio__sub-text`). Locked: no role, tab index or roving container
+     * marker, and the menu's markers.
+     */
+    subText?: SlotPart<'span'>;
   };
 }
 
@@ -147,6 +164,12 @@ export interface MenuItemSwitchProps
      * tab index, and the menu's markers.
      */
     shortcut?: SlotPart<'span'>;
+    /**
+     * The `<span>` of `subText`, under the label, rendered while `subText` renders content (stable
+     * classes `wave-menu-item__sub-text` and `wave-menu-item-switch__sub-text`). Locked: no role, tab index or roving container
+     * marker, and the menu's markers.
+     */
+    subText?: SlotPart<'span'>;
     /**
      * The `<span>` of the switch at the row's end, its track, which follows the item's checked and
      * disabled state through its classes (stable class `wave-menu-item-switch__track`). Locked:
@@ -257,7 +280,10 @@ function SelectableMenuItem({
   checkmark,
   icon,
   shortcut,
+  secondaryContent,
+  subText,
   disabled = false,
+  disabledFocusable = false,
   persistOnClick,
   onClick,
   onKeyDown,
@@ -289,8 +315,14 @@ function SelectableMenuItem({
     );
   }, [checkmarkEmpty, componentName]);
 
-  const activation = useMenuItemActivation({
+  const { unavailable, ...disabledProps } = getMenuItemDisabledProps(
     disabled,
+    disabledFocusable,
+    rest['aria-disabled'],
+  );
+
+  const activation = useMenuItemActivation({
+    disabled: unavailable,
     persistOnClick,
     onClick,
     onKeyDown,
@@ -331,8 +363,7 @@ function SelectableMenuItem({
       ref={ref}
       aria-checked={checked}
       data-checked={checked ? '' : undefined}
-      aria-disabled={disabled ? true : rest['aria-disabled']}
-      data-disabled={disabled ? '' : undefined}
+      {...disabledProps}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
       className={wcn(rootClassName, menuItemClasses, className)}
@@ -342,11 +373,13 @@ function SelectableMenuItem({
         icon={icon}
         label={children}
         shortcut={shortcut}
+        secondaryContent={secondaryContent}
+        subText={subText}
         markLabel={!ownRovingText}
         partClassNames={partClassNames}
         parts={slotProps}
-        disabled={disabled}
-        end={kind === 'switch' ? renderSwitchIndicator(checked, disabled, slotProps) : undefined}
+        disabled={unavailable}
+        end={kind === 'switch' ? renderSwitchIndicator(checked, unavailable, slotProps) : undefined}
       />
     </div>
   );
@@ -375,6 +408,7 @@ export const MenuItemCheckbox = (props: MenuItemCheckboxProps) => (
       icon: wcn(menuItemClassNames.icon, menuItemCheckboxClassNames.icon),
       content: wcn(menuItemClassNames.content, menuItemCheckboxClassNames.content),
       shortcut: wcn(menuItemClassNames.shortcut, menuItemCheckboxClassNames.shortcut),
+      subText: wcn(menuItemClassNames.subText, menuItemCheckboxClassNames.subText),
     }}
   />
 );
@@ -405,6 +439,7 @@ export const MenuItemRadio = (props: MenuItemRadioProps) => (
       icon: wcn(menuItemClassNames.icon, menuItemRadioClassNames.icon),
       content: wcn(menuItemClassNames.content, menuItemRadioClassNames.content),
       shortcut: wcn(menuItemClassNames.shortcut, menuItemRadioClassNames.shortcut),
+      subText: wcn(menuItemClassNames.subText, menuItemRadioClassNames.subText),
     }}
   />
 );
@@ -429,6 +464,7 @@ export const MenuItemSwitch = (props: MenuItemSwitchProps) => (
       icon: wcn(menuItemClassNames.icon, menuItemSwitchClassNames.icon),
       content: wcn(menuItemClassNames.content, menuItemSwitchClassNames.content),
       shortcut: wcn(menuItemClassNames.shortcut, menuItemSwitchClassNames.shortcut),
+      subText: wcn(menuItemClassNames.subText, menuItemSwitchClassNames.subText),
     }}
   />
 );

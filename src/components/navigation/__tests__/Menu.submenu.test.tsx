@@ -136,7 +136,7 @@ describe('Menu submenus', () => {
     expect(item('report.docx')).toHaveFocus();
     // The trigger item never closes the menu it is in.
     expect(menu('File')).toBeInTheDocument();
-    expect(onRootOpenChange.mock.calls).toEqual([[true]]);
+    expect(onRootOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
   });
 
   it('a click on the trigger item of an open submenu keeps it open and focuses its first item', async () => {
@@ -150,7 +150,7 @@ describe('Menu submenus', () => {
     await user.click(item('Open recent'));
     expect(menu('Open recent')).toBeInTheDocument();
     expect(item('report.docx')).toHaveFocus();
-    expect(onOpenChange.mock.calls).toEqual([[true]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true]]);
   });
 
   it('ArrowLeft closes only the submenu and returns focus to its trigger item', async () => {
@@ -228,7 +228,7 @@ describe('Menu submenus', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(fileButton()).toHaveFocus();
     expect(fileButton()).toHaveAttribute('aria-expanded', 'false');
-    expect(onRootOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onRootOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('Tab in a submenu closes every menu, focuses the root trigger and lets the Tab move on', async () => {
@@ -277,7 +277,7 @@ describe('Menu submenus', () => {
     expect(menu('Share')).toBeInTheDocument();
     expect(queryMenu('Open recent')).not.toBeInTheDocument();
     expect(item('Email')).toHaveFocus();
-    expect(onRecentOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onRecentOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 
   it('focus moving to another item of the parent list closes the submenu', async () => {
@@ -370,7 +370,7 @@ describe('Menu submenus', () => {
     await openFileAtRecent(user);
     await user.keyboard('{ArrowRight}');
     await user.keyboard('{ArrowLeft}');
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 });
 
@@ -534,7 +534,7 @@ describe('closing a chain of controlled submenus', () => {
         recent={{ onOpenChange: onRecentOpenChange }}
       />,
     );
-    expect(onRecentOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onRecentOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
     rerender(
       <FileMenu
         root={{ open: true, onOpenChange: () => {} }}
@@ -544,7 +544,7 @@ describe('closing a chain of controlled submenus', () => {
     expect(menu('File')).toBeInTheDocument();
     expect(queryMenu('Open recent')).not.toBeInTheDocument();
     expect(item('New')).toHaveFocus();
-    expect(onRecentOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onRecentOpenChange.mock.calls.map(([open]) => [open])).toEqual([[true], [false]]);
   });
 });
 

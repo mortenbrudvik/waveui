@@ -860,3 +860,61 @@ export const CustomMenuItem: Story = {
     ),
   },
 };
+
+/**
+ * Item content beyond the label: `subText` is a second line under it (part of the item's name),
+ * `secondaryContent` takes the shortcut's place with any content (a count here), and
+ * `disabledFocusable` makes an item unavailable but still reachable by the arrow keys and typeahead,
+ * so a screen-reader user can find it. Try ArrowDown past "Share": the plain disabled item is
+ * skipped, the focusable one is not.
+ */
+export const ItemContent: Story = {
+  args: {
+    'aria-label': 'Message',
+    children: (
+      <>
+        <Menu.Item subText="Mark as read and archive">Archive</Menu.Item>
+        <Menu.Item secondaryContent={<strong>12</strong>}>Reply to all</Menu.Item>
+        <Menu.Item shortcut="Ctrl+Shift+F">Forward</Menu.Item>
+        <Menu.Item disabled>Share (skipped)</Menu.Item>
+        <Menu.Item disabledFocusable subText="Ask the owner for access">
+          Delete (reachable)
+        </Menu.Item>
+        <Menu.Item>Print</Menu.Item>
+      </>
+    ),
+  },
+};
+
+/**
+ * `inline` renders the popover where the menu is rendered, positioned against the trigger with
+ * `position: absolute`, instead of in a portal: it scrolls with its container and is clipped by it.
+ * `onOpenChange` receives `details.reason` and the event; `closeOnScroll` closes the menu when the
+ * page or a panel scrolls. `mountNode` (not shown) portals the popover into an element of your own.
+ */
+export const InlineWithDetails: Story = {
+  args: {
+    'aria-label': undefined,
+    inline: true,
+    closeOnScroll: true,
+    onOpenChange: fn(),
+    children: (
+      <>
+        <Menu.Trigger>
+          <Button>Actions</Button>
+        </Menu.Trigger>
+        <Menu.Popover>
+          <Menu.Item onClick={fn()}>Edit</Menu.Item>
+          <Menu.Item onClick={fn()}>Duplicate</Menu.Item>
+        </Menu.Popover>
+      </>
+    ),
+  },
+  decorators: [
+    (Story) => (
+      <div style={{ position: 'relative', padding: 24, minHeight: 160 }}>
+        <Story />
+      </div>
+    ),
+  ],
+};

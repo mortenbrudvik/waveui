@@ -36,7 +36,7 @@ import {
   useNavListChildCheck,
   type NavRovingContextValue,
 } from './Nav.context';
-import { useNavRootState, type NavProps } from './Nav.root';
+import { useNavRootState, type NavDensity, type NavProps, type NavSelectDetails } from './Nav.root';
 import {
   NavDrawerContext,
   NavDrawerLayoutContext,
@@ -67,6 +67,7 @@ export interface NavDrawerProps
       | 'openCategories'
       | 'defaultOpenCategories'
       | 'onOpenCategoriesChange'
+      | 'multiple'
       | 'currentCategory'
     > {
   /**
@@ -104,9 +105,18 @@ export interface NavDrawerProps
    * Called with an item's value every time an item is activated, also when the current page is
    * activated again (a disabled item, a link opened in another tab or window, and a button item
    * whose `onClick` calls `preventDefault()` are not activations). Close an overlay drawer here:
-   * `onValueChange` fires only when the value changes. Fluent's `onNavItemSelect`.
+   * `onValueChange` fires only when the value changes. It gets the same `details` as
+   * `onValueChange`: the click as `event` and the `category` the item sits in. Fluent's
+   * `onNavItemSelect`.
    */
-  onItemSelect?: (value: string) => void;
+  onItemSelect?: (value: string, details?: NavSelectDetails) => void;
+  /**
+   * How tightly the items and category buttons are set (Fluent's `density`, which Fluent's
+   * NavDrawer takes beside its `size`): see `Nav.density`. Rendered as `data-density` on the
+   * `<nav>`.
+   * @default 'medium'
+   */
+  density?: NavDensity;
   /**
    * The edge the panel is attached to: an overlay's screen edge; an inline panel's inner edge is
    * the opposite one. `start`/`end` follow the text direction; `left`/`right` are physical sides;
@@ -368,6 +378,8 @@ const NavDrawerRoot = ({
   openCategories,
   defaultOpenCategories,
   onOpenCategoriesChange,
+  multiple = true,
+  density = 'medium',
   currentCategory,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
@@ -391,6 +403,8 @@ const NavDrawerRoot = ({
     openCategories,
     defaultOpenCategories,
     onOpenCategoriesChange,
+    singleOpen: !multiple,
+    density,
     currentCategory,
     children,
   });
@@ -470,7 +484,7 @@ const NavDrawerRoot = ({
             navDrawerClassNames.nav,
             'wave:flex wave:min-h-0 wave:flex-1 wave:flex-col',
           ),
-          locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps },
+          locked: { ...NAV_SHOWN_PART_LOCKS, ...nameProps, 'data-density': density },
         })}
         ref={navMergedRef}
       >
