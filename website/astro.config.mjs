@@ -28,17 +28,10 @@ import { defineConfig } from 'astro/config';
 import { runnerImport } from 'vite';
 import { siteChunking } from './plugins/chunking.mjs';
 import { localStoryImages } from './plugins/localImages.mjs';
-import { splitModules } from './plugins/splitModules.mjs';
+import { REGISTRY_MODULES, splitModules } from './plugins/splitModules.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const siteRoot = fileURLToPath(new URL('.', import.meta.url));
-
-/**
- * The library modules the client build splits: each is a registry of many small exports, which
- * every island imports a few of. Splitting more (all of `src/lib`, the hooks or the components)
- * made more, smaller chunks and cost more than it saved (BUDGET.md).
- */
-const SPLIT_MODULES = ['src/lib/classNames.ts', 'src/lib/icons.tsx', 'src/lib/motion.ts'];
 
 /** The modules whose static closure is the `base` chunk: the shell island and the example runtime. */
 const BASE_ROOTS = ['website/src/islands/ShellControls.tsx', 'website/src/islands/Example.tsx'];
@@ -70,7 +63,7 @@ export default defineConfig({
     plugins: [
       tailwindcss(),
       localStoryImages({ storiesDir: `${repoRoot}stories` }),
-      splitModules({ files: SPLIT_MODULES.map((file) => `${repoRoot}${file}`) }),
+      splitModules({ files: REGISTRY_MODULES.map((file) => `${repoRoot}${file}`) }),
       siteChunking({ baseRoots: BASE_ROOTS.map((file) => `${repoRoot}${file}`) }),
     ],
     resolve: {

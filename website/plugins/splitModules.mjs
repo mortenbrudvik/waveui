@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Splits chosen library modules into one module per group of top-level declarations, in the site's
- * client build only (website/BUDGET.md, "Lever: split the registries").
+ * client build only (website/BUDGET.md, "Levers applied").
  *
  * Why: a bundler tree-shakes per statement across the whole build, then puts each module, whole,
  * in one chunk. A module that many islands use, such as the class-name registry
@@ -13,20 +13,33 @@
  * (`./icons.tsx?wave-split=3`); a part holds one strongly connected group of top-level
  * declarations (declarations that reference each other stay together, so no import cycle is
  * made), the import declarations it uses, and imports of the other parts it references. A
- * statement that only mutates declarations (`Thing.displayName = …`) goes with them. Types are
- * erased, so the facade re-exports values only. Every part evaluates after the parts it imports,
- * which is the order the original module's declarations already needed.
+ * property assignment to a declared name (`Thing.displayName = …`) goes with that declaration.
+ * Types are erased, so the facade re-exports values only. Every part evaluates after the parts it
+ * imports, which is the order the original module's declarations already needed.
  *
- * Behaviour-neutral by construction: the same declarations, with the same text, evaluated once
- * each. The splitter refuses (throws) any top-level statement it cannot place, so a library change
- * that adds one fails the site build instead of changing behaviour. The library's `src` and `dist`
- * are not touched.
+ * What it guarantees: every declaration keeps its text and is evaluated once, in one module, with
+ * a `let`/`var` binding kept together with every declaration that uses it. What changes is when a
+ * part evaluates: when something first imports it, not when the original module loads. That is
+ * equivalent only for modules whose top level has no side effects other than property assignments
+ * to their own declarations, so the splitter throws, naming the file, on anything else it finds at
+ * the top level: a side-effect-only import (`import './x'`), any other expression statement
+ * (`register(DismissIcon)`), or a statement it does not know. A library change of that kind fails
+ * the site build (and `splitModules.real.test.ts`) instead of changing what the site runs. The
+ * library's `src` and `dist` are not touched. Apply it only to modules of plain declarations.
  */
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import ts from 'typescript';
 
 export const SPLIT_QUERY = 'wave-split';
+
+/**
+ * The library modules the site's client build splits (paths from the repository root): each is a
+ * registry of many small exports, which every island imports a few of. Splitting more (all of
+ * `src/lib`, the hooks or the components) made more, smaller chunks and cost more than it saved
+ * (website/BUDGET.md). `splitModules.real.test.ts` splits each of them on every test run.
+ */
+export const REGISTRY_MODULES = ['src/lib/classNames.ts', 'src/lib/icons.tsx', 'src/lib/motion.ts'];
 
 /**
  * @typedef {object} SplitPart
@@ -156,14 +169,20 @@ export function splitModule(source, fileName) {
   const nodes = [];
   /** @type {[local: string, exported: string][]} */
   const exportsList = [];
+  /** The name each property-assignment statement (by node index) assigns to. */
+  /** @type {Map<number, string>} */
+  const assignedTo = new Map();
 
   for (const statement of file.statements) {
     if (ts.isImportDeclaration(statement)) {
       const clause = statement.importClause;
       if (!clause) {
-        facadeStatements.push(statement.getText(file));
-        continue;
+        // Importers are pointed at the parts, so a side effect of the module itself might not run.
+        fail(
+          `cannot split a side-effect import (${statement.getText(file)}): it runs when the module loads, which importers of its parts skip`,
+        );
       }
+      if (!clause) continue;
       if (clause.isTypeOnly) continue;
       /** @type {string[]} */
       const bindings = [];
@@ -228,6 +247,20 @@ export function splitModule(source, fileName) {
       if (ts.isFunctionDeclaration(statement) && !statement.body) continue; // an overload signature
       names = [/** @type {ts.Identifier} */ (statement.name).text];
     } else if (ts.isExpressionStatement(statement)) {
+      // Only `Name.prop = …` on a name this module declares (checked below): it belongs to that
+      // declaration. Any other expression is a side effect of loading the module.
+      const expression = statement.expression;
+      if (
+        !ts.isBinaryExpression(expression) ||
+        expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+        !ts.isPropertyAccessExpression(expression.left) ||
+        !ts.isIdentifier(expression.left.expression)
+      ) {
+        return fail(
+          `cannot split the top-level expression \`${statement.getText(file)}\`: only a property assignment to a declared name (\`Name.prop = …\`) may stand at the top level`,
+        );
+      }
+      assignedTo.set(nodes.length, expression.left.expression.text);
       names = [];
     } else {
       return fail(`cannot split a top-level ${ts.SyntaxKind[statement.kind]}`);
@@ -275,11 +308,15 @@ export function splitModule(source, fileName) {
       if (mutable.has(name)) uses[target].add(index);
     }
     if (node.names.length === 0) {
-      if (uses[index].size === 0)
-        fail('cannot split a top-level statement that declares and references nothing');
-      // A statement that mutates declarations goes with them: an edge back from each makes them
-      // one strongly connected group.
-      for (const target of uses[index]) uses[target].add(index);
+      const owner = declaredBy.get(/** @type {string} */ (assignedTo.get(index)));
+      if (owner === undefined) {
+        fail(
+          `cannot split \`${node.text}\`: it assigns to \`${assignedTo.get(index)}\`, which the module does not declare`,
+        );
+      }
+      // The assignment goes with its declaration: an edge each way makes them one group.
+      uses[/** @type {number} */ (owner)].add(index);
+      uses[index].add(/** @type {number} */ (owner));
     }
   });
 

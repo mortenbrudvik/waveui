@@ -1,5 +1,35 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as dev from '../../src/lib/dev';
 import { PURE_FUNCTIONS, siteChunking, staticClosure } from './chunking.mjs';
+
+describe('PURE_FUNCTIONS', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    dev.__resetWarnings();
+  });
+
+  it('names functions of src/lib/dev.ts that do nothing and return nothing in production', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubEnv('NODE_ENV', 'production');
+    for (const name of PURE_FUNCTIONS) {
+      const call = (dev as unknown as Record<string, (...args: string[]) => unknown>)[name];
+      expect(call, name).toBeTypeOf('function');
+      expect(call!('site:pure-check', 'message'), name).toBeUndefined();
+    }
+    expect(dev.hasWarned('site:pure-check')).toBe(false);
+    expect(warn).not.toHaveBeenCalled();
+
+    // Outside production they do warn, so the check above is not vacuous.
+    vi.stubEnv('NODE_ENV', 'development');
+    dev.devWarn('site pure check');
+    dev.warnOnce('site:pure-check', 'site pure check once');
+    expect(warn.mock.calls).toEqual([
+      ['[WaveUI] site pure check'],
+      ['[WaveUI] site pure check once'],
+    ]);
+  });
+});
 
 const GRAPH: Record<string, string[]> = {
   '/site/Shell.tsx': ['/lib/Button.tsx', '/lib/icons.tsx?wave-split=3'],

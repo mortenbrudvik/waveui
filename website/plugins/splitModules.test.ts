@@ -128,9 +128,39 @@ export const read = (value: { root: string }) => value.root;
     }
   });
 
+  it('refuses a side-effect import, which importers of the parts would skip', () => {
+    expect(() => splitModule("import './register';\nexport const a = 1;\n", 'effects.ts')).toThrow(
+      "effects.ts: cannot split a side-effect import (import './register';): it runs when the module loads, which importers of its parts skip",
+    );
+  });
+
+  it('refuses a top-level expression other than a property assignment to a declared name', () => {
+    const icons = (statement: string) =>
+      [
+        "import { register } from './registry';",
+        'export const DismissIcon = () => null;',
+        statement,
+        '',
+      ].join('\n');
+    // A call would run only when its part is imported, not when the module loads.
+    expect(() => splitModule(icons('register(DismissIcon);'), 'icons.tsx')).toThrow(
+      'icons.tsx: cannot split the top-level expression `register(DismissIcon);`: only a property assignment to a declared name (`Name.prop = …`) may stand at the top level',
+    );
+    expect(() => splitModule(icons('DismissIcon.count += 1;'), 'icons.tsx')).toThrow(
+      /icons\.tsx: cannot split the top-level expression `DismissIcon\.count \+= 1;`/,
+    );
+    expect(() => splitModule(icons("register.icons = 'all';"), 'icons.tsx')).toThrow(
+      "icons.tsx: cannot split `register.icons = 'all';`: it assigns to `register`, which the module does not declare",
+    );
+    // The accepted shape still goes with its declaration.
+    const { parts } = splitModule(icons("DismissIcon.displayName = 'DismissIcon';"), 'icons.tsx');
+    expect(parts).toHaveLength(1);
+    expect(parts[0]!.code).toContain("DismissIcon.displayName = 'DismissIcon';");
+  });
+
   it('refuses a top-level statement it cannot place', () => {
     expect(() => splitModule("console.log('loaded');\nexport const a = 1;\n", 'side.ts')).toThrow(
-      /side\.ts: cannot split a top-level statement that declares and references nothing/,
+      /side\.ts: cannot split the top-level expression `console\.log\('loaded'\);`/,
     );
     expect(() => splitModule('if (globalThis.x) {}\nexport const a = 1;\n', 'if.ts')).toThrow(
       /if\.ts: cannot split a top-level IfStatement/,

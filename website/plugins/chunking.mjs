@@ -25,7 +25,11 @@
 const REACT =
   /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]|[\\/]node_modules[\\/]@astrojs[\\/]react[\\/]/;
 
-/** The library's development warnings, no-ops in production (`src/lib/dev.ts`). */
+/**
+ * The library's development warnings. Treating their calls as pure is correct only because
+ * `src/lib/dev.ts` returns from both at once when `process.env.NODE_ENV` is `'production'` (and
+ * they return nothing); `chunking.test.ts` fails if that stops being true.
+ */
 export const PURE_FUNCTIONS = ['warnOnce', 'devWarn'];
 
 /** A path with forward slashes, for comparing ids on Windows. */
