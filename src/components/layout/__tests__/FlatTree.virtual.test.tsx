@@ -653,3 +653,41 @@ describe('FlatTree virtualWindow — slotProps', () => {
     });
   });
 });
+
+describe('FlatTree virtualWindow — navigationMode="treegrid"', () => {
+  const cellOf = (index: number, cell: number) => {
+    const el = itemAt(index).querySelector<HTMLElement>(`:scope > [data-flat-tree-cell="${cell}"]`);
+    if (!el) throw new Error(`cell ${cell} of item ${index} is not rendered`);
+    return el;
+  };
+  const pressKey = async (init: KeyboardEventInit) => {
+    act(() => {
+      fireEvent.keyDown(document.activeElement ?? document.body, init);
+    });
+    await act(async () => {});
+  };
+
+  it('Ctrl+End from a cell focuses the same column of the last row, which the window renders; the rows carry aria-rowindex', async () => {
+    render(<WindowedTree navigationMode="treegrid" renderCells={(row) => [`size ${row.index}`]} />);
+    expect(screen.getByRole('treegrid')).toHaveAttribute('aria-rowcount', String(VISIBLE));
+    expect(screen.getAllByRole('row')).toHaveLength(FIRST_WINDOW);
+    expect(itemAt(2)).toHaveAttribute('aria-rowindex', '3');
+    await focus(itemAt(0));
+    await pressKey({ key: 'ArrowRight' });
+    await pressKey({ key: 'ArrowRight' });
+    expect(cellOf(0, 1)).toHaveFocus();
+    await pressKey({ key: 'End', ctrlKey: true });
+    expect(cellOf(VISIBLE - 1, 1)).toHaveFocus();
+    expect(cellOf(VISIBLE - 1, 1)).toHaveTextContent(`size ${VISIBLE - 1}`);
+    expect(treeRoot().scrollTop).toBe(MAX_SCROLL);
+    expect(treeRoot().querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    await pressKey({ key: 'Home', ctrlKey: true });
+    expect(cellOf(0, 1)).toHaveFocus();
+    expect(treeRoot().scrollTop).toBe(0);
+  });
+
+  it('has no accessibility violations', async () => {
+    render(<WindowedTree navigationMode="treegrid" renderCells={(row) => [`size ${row.index}`]} />);
+    await expectNoA11yViolations();
+  });
+});
