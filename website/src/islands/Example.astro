@@ -1,0 +1,36 @@
+---
+/**
+ * The live example of one story, for a page: `<Example slug="button" storyName="Primary" />`.
+ *
+ * It analyzes the story at build time (`src/examples/analysis.tsx`: the server render inside a
+ * `try`, and whether the story opens a modal as it renders) and renders the slug's generated
+ * island (`src/generated/examples/<slug>.astro`, which hydrates `<slug>.tsx` `client:visible`)
+ * with the result. The generated island imports only its entry's story file, so the page's client
+ * code holds no other story; `Example.tsx` documents what the island does.
+ */
+import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
+import { analyzeExample } from '../examples/analysis';
+
+export interface Props {
+  /** The catalog slug of the component (`data-grid`). */
+  slug: string;
+  /** The story's export name (`Default`). */
+  storyName: string;
+}
+
+const islands = import.meta.glob<{ default: AstroComponentFactory }>(
+  '../generated/examples/*.astro',
+);
+
+const { slug, storyName } = Astro.props;
+const loadIsland = islands[`../generated/examples/${slug}.astro`];
+if (!loadIsland) {
+  throw new Error(
+    `No example island for "${slug}": the site config writes them to src/generated/examples when it loads`,
+  );
+}
+const { default: Island } = await loadIsland();
+const analysis = await analyzeExample(slug, storyName);
+---
+
+<Island slug={slug} storyName={storyName} {...analysis} />

@@ -76,6 +76,8 @@ export interface ComposedStory {
   Component: React.ComponentType<Record<string, unknown>>;
   args: Record<string, unknown>;
   argTypes: Record<string, unknown>;
+  /** The meta's and the story's parameters merged as argTypes are (`docs.story.inline`, …). */
+  parameters: Record<string, unknown>;
   name: string;
 }
 
@@ -273,7 +275,7 @@ function composeSiteStory(
   }
   Component.displayName = `Story(${id})`;
 
-  return { Component, args, argTypes, name };
+  return { Component, args, argTypes, parameters, name };
 }
 
 /**

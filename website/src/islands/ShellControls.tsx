@@ -22,7 +22,12 @@ import { CHOICE_EVENT, SEARCH_EVENT } from '../shell/events';
 import { SHELL_IDS } from '../shell/ids';
 import { MaximizeButton } from '../shell/TitleBar';
 import { saveMaximized } from '../shell/windowState';
-import { saveChoice, type SiteChoice, type SiteTheme } from '../theme/themeChoice';
+import {
+  readDocumentChoice,
+  saveChoice,
+  type SiteChoice,
+  type SiteTheme,
+} from '../theme/themeChoice';
 
 export interface ShellControlsProps {
   /** The text Copy code copies (the page's first story's source); without it, no Copy code. */
@@ -40,14 +45,6 @@ function storage(): Storage | null {
   } catch {
     return null;
   }
-}
-
-function readChoice(): SiteChoice {
-  const html = document.documentElement;
-  return {
-    theme: THEMES.find((theme) => html.classList.contains(`wave-${theme}`)) ?? 'light',
-    dir: html.dir === 'rtl' ? 'rtl' : 'ltr',
-  };
 }
 
 function applyChoice(choice: SiteChoice): void {
@@ -69,7 +66,7 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
   const hamburgerRef = React.useRef<HTMLButtonElement>(null);
 
   React.useEffect(() => {
-    setChoice(readChoice());
+    setChoice(readDocumentChoice());
     setMaximized(byId(SHELL_IDS.window)?.hasAttribute('data-maximized') ?? false);
     setMaximizeSlot(byId(SHELL_IDS.maximizeSlot));
     setReady(true);

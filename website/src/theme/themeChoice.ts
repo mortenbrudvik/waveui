@@ -57,6 +57,19 @@ export function resolveInitialChoice(
   return { theme, dir };
 }
 
+/**
+ * The choice the page carries: `<html>`'s `wave-*` theme class (light when it has none) and its
+ * `dir`. Browser code, for the islands: read it in an effect, never during render, so the first
+ * client render matches the server's light, left-to-right markup.
+ */
+export function readDocumentChoice(doc: Document = document): SiteChoice {
+  const html = doc.documentElement;
+  return {
+    theme: THEMES.find((theme) => html.classList.contains(`wave-${theme}`)) ?? 'light',
+    dir: html.dir === 'rtl' ? 'rtl' : 'ltr',
+  };
+}
+
 /** Remember the choice. A missing or failing storage is ignored. */
 export function saveChoice(storage: Pick<Storage, 'setItem'> | null, choice: SiteChoice): void {
   try {

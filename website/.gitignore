@@ -1,2 +1,5 @@
 # Astro's generated types (the root .gitignore already ignores dist/ and node_modules/).
 .astro/
+
+# The example islands written by src/examples/islands.ts when the config loads.
+src/generated/

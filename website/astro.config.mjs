@@ -6,19 +6,44 @@
  * folder; `storybook/test` is replaced by a stub, so a story's `fn()` action pulls in no Storybook
  * or testing-library code. Tailwind compiles the stylesheets the pages import (the library sheet
  * with its `wave:` prefix, as Storybook does).
+ *
+ * The `waveui-example-islands` integration writes one example island per catalog entry to
+ * `src/generated/examples/` (git-ignored) whenever the configuration loads, so `astro build`,
+ * `astro dev` and the Vitest projects all find them (`src/examples/islands.ts` says why they are
+ * generated). The generator is TypeScript and reads the catalog, so Vite's module runner loads it.
  */
 import { fileURLToPath } from 'node:url';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
+import { runnerImport } from 'vite';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const siteRoot = fileURLToPath(new URL('.', import.meta.url));
+
+/** @returns {import('astro').AstroIntegration} */
+function exampleIslands() {
+  return {
+    name: 'waveui-example-islands',
+    hooks: {
+      'astro:config:setup': async () => {
+        const generator = fileURLToPath(new URL('./src/examples/islands.ts', import.meta.url));
+        const { module } = await runnerImport(generator, {
+          configFile: false,
+          root: siteRoot,
+          logLevel: 'silent',
+        });
+        /** @type {{ writeExampleIslands: () => unknown }} */ (module).writeExampleIslands();
+      },
+    },
+  };
+}
 
 export default defineConfig({
   base: '/waveui/docs',
   trailingSlash: 'never',
   build: { assets: '_assets', format: 'file' },
-  integrations: [react()],
+  integrations: [react(), exampleIslands()],
   vite: {
     plugins: [tailwindcss()],
     resolve: {
