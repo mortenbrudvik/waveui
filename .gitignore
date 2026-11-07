@@ -8,3 +8,4 @@ storybook-static/
 .claude/worktrees/
 website/dist
 website/.astro
+website/.cache
