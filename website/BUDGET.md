@@ -48,23 +48,30 @@ code).
 
 ## Levers applied
 
-Each measured on all 82 pages against the build before it; the median is over the 80 component
-pages. Cumulative result: **25 pages over 150,000 B before, 11 after**; the median component page
-went from 128,305 B to 116,030 B; the index pages from 105,129 B to 96,790 B.
+Each measured on all 82 pages against the build before it. "Median" is the true median of the 80
+component pages (the mean of the 40th and 41st values). Cumulative result: **25 pages over
+150,000 B before, 11 after**; the median component page went from 127,835 B to 115,463 B (a
+median change of −12,492.5 B); the index pages from 105,129 B to 96,790 B.
 
 | Lever                                                                                                                                                                                                              |                           Median change | Pages over |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------: | ---------: |
 | The site's client modules import the library's modules directly, not its barrel (`CommandBar.tsx`, `Example.tsx`, `runtime.tsx`): no change by itself, it lets the build's graph walk below see only what they use |                                       0 |         25 |
-| `react` chunk (`plugins/chunking.mjs`): React and Astro's renderer in one chunk                                                                                                                                    |                                    −515 |         25 |
-| `base` chunk: the static closure of `ShellControls.tsx` and `Example.tsx` in one chunk (every page loads the shell; every component page loads the example runtime, so a component page loads nothing extra)       | −4,672 (both groups, against the start) |         23 |
-| Split the registries `classNames.ts`, `icons.tsx` and `motion.ts` into one module per export in the client build (`plugins/splitModules.mjs`, which also points importers at the parts they use)                   |                             −4,977 more |         12 |
-| `warnOnce` and `devWarn` treated as pure by tree-shaking: both return at once in production, so their calls and message text go (`plugins/chunking.mjs`)                                                           |                             −1,125 more |         11 |
+| `react` chunk (`plugins/chunking.mjs`): React and Astro's renderer in one chunk                                                                                                                                    |                                    −513 |         25 |
+| `base` chunk: the static closure of `ShellControls.tsx` and `Example.tsx` in one chunk (every page loads the shell; every component page loads the example runtime, so a component page loads nothing extra)       | −4,682 (both groups, against the start) |         23 |
+| Split the registries `classNames.ts`, `icons.tsx` and `motion.ts` into one module per export in the client build (`plugins/splitModules.mjs`, which also points importers at the parts they use)                   |                           −6,589.5 more |         12 |
+| `warnOnce` and `devWarn` treated as pure by tree-shaking: both return at once in production, so their calls and message text go (`plugins/chunking.mjs`)                                                           |                             −1,214 more |         11 |
 
-The splitter refuses any top-level statement it cannot place, keeps `let`/`var` bindings with every
-declaration that uses them, and groups declarations that reference each other, so it cannot change
-what the code does; a library change it cannot handle fails the site build. Each of the three
-registries earns its place: splitting only the class names gives +1,805 median against all three,
-without the icons +1,302 median, without the motion recipes up to +1,104 on some pages.
+What the splitter guarantees: each declaration keeps its text and is evaluated once, in one module;
+a `let`/`var` binding stays with every declaration that uses it; declarations that reference each
+other stay together. What changes is when a part evaluates (when first imported, not when the
+module loads), which is equivalent only for a module whose top level has no side effects but
+property assignments to its own declarations (`Icon.displayName = …`). So it throws, naming the
+file, on a side-effect import, any other top-level expression or a statement it does not know, and
+`plugins/splitModules.real.test.ts` splits the three registries on every test run and checks that
+the split exports exactly what the module exports. Each of the three registries earns its place:
+against splitting all three, splitting only the class names costs +1,803.5 median, leaving out the
+icons +1,300 median, leaving out the motion recipes 0 median but up to +1,104 on some pages. (Split
+alone, with Rolldown's automatic chunking, the registries give −6,264.5 median and 20 pages over.)
 
 ## Levers measured and not kept
 
@@ -75,9 +82,9 @@ without the icons +1,302 median, without the motion recipes up to +1,104 on some
 | A "popup stack" chunk (the closure of Tooltip)                                                      | Button −8.6 KB but Table +14.6 KB, Dialog +4.2 KB; 24 pages over                                                                                                  |
 | Splitting all of `src/lib` (+ Input), + `src/hooks`, + every component module that splits           | more, smaller chunks: 13 / 13 / 20 pages over                                                                                                                     |
 | Splitting `Input.tsx`, `styles.ts` or `slot.ts` as well as the registries                           | within ±2 KB per page, Dialog and WaveProvider worse; no page crosses                                                                                             |
-| The command bar's Hamburger as a WaveUI `Button` with a glyph                                       | −701 median, −1.2 KB on the index; no page crosses                                                                                                                |
-| … and its two WaveUI `Select`s as native `<select>`s                                                | −1,666 median, −5.0 KB on the index, but Dialog +1.2 KB and WaveProvider +1.5 KB; 13 pages over. Not worth trading the "built from WaveUI components" chrome for. |
-| esbuild instead of Rolldown's (oxc) minifier                                                        | +2,230 median; 14 pages over                                                                                                                                      |
+| The command bar's Hamburger as a WaveUI `Button` with a glyph                                       | −701 median, −1.2 KB on the index; 12 pages over (no page crosses)                                                                                                |
+| … and its two WaveUI `Select`s as native `<select>`s                                                | −1,658 median, −5.0 KB on the index, but Dialog +1.2 KB and WaveProvider +1.5 KB; 13 pages over. Not worth trading the "built from WaveUI components" chrome for. |
+| esbuild instead of Rolldown's (oxc) minifier                                                        | +2,234 median; 14 pages over                                                                                                                                      |
 | Rolldown's runtime helper (368 B) in the `react` chunk                                              | no effect (Rolldown places it itself)                                                                                                                             |
 
 Checked and fine: the HTML requests no `modulepreload` for islands and no hydration script for an
@@ -86,24 +93,24 @@ the first focus or pointer over an example); there is one React and one react-do
 
 ## Pages over 150,000 B after every neutral lever
 
-| Page            | First load (gzip) | Over 150,000 B by | Everything (gzip) |
-| --------------- | ----------------: | ----------------: | ----------------: |
-| wave-provider   |           181,826 |            31,826 |           182,867 |
-| nav-drawer      |           177,074 |            27,074 |           178,115 |
-| tag-picker      |           168,365 |            18,365 |           169,406 |
-| data-grid       |           167,354 |            17,354 |           168,395 |
-| color-picker    |           164,021 |            14,021 |           165,062 |
-| custom-overlays |           163,581 |            13,581 |           164,622 |
-| nav             |           160,190 |            10,190 |           161,231 |
-| breadcrumb      |           155,152 |             5,152 |           156,193 |
-| overflow        |           153,647 |             3,647 |           154,688 |
-| toast           |           153,321 |             3,321 |           154,362 |
-| drawer          |           150,100 |               100 |           151,141 |
+| Page            | First load (gzip) | Over 150,000 B by | Everything (gzip) | Own code beyond the `react` and `base` chunks: its largest chunks (gzip)                                                                                                                                    |
+| --------------- | ----------------: | ----------------: | ----------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| wave-provider   |           181,826 |            31,826 |           182,867 | 84,773 B in 53 chunks: its stories show many components at once (Combobox/List data mode `Option.data` 10,721, positioning 9,189, List 6,723, roving 4,223, Combobox 4,185, Dialog 3,439, SpinButton 3,266) |
+| nav-drawer      |           177,074 |            27,074 |           178,115 | 80,021 B in 48 chunks: the app shell story (Menu 10,384, positioning 9,189, Nav 5,276, roving 4,223, Drawer 3,328, its stories 3,160, Tooltip 3,059)                                                        |
+| tag-picker      |           168,365 |            18,365 |           169,406 | 71,312 B in 40 chunks: TagPicker itself 12,501, the listbox data mode 10,721, positioning 9,189, TagGroup 5,307, roving 4,223, Avatar 3,622, Portal 3,025                                                   |
+| data-grid       |           167,354 |            17,354 |           168,395 | 70,301 B in 34 chunks: DataGrid itself 18,341, Menu (header menus) 10,384, positioning 9,189, roving 4,223, `Table.shared` 3,273, Portal 3,025, the virtual window 2,787                                    |
+| color-picker    |           164,021 |            14,021 |           165,062 | 66,968 B in 40 chunks: a Popover picker story (positioning 9,189, Popover 4,473, Portal 3,025), SwatchPicker 6,404, roving 4,223, SpinButton 3,266, its stories 3,259                                       |
+| custom-overlays |           163,581 |            13,581 |           164,622 | 66,528 B in 38 chunks: the public overlay hooks with a Toaster 10,272, positioning 9,189, Popover 4,473, roving 4,223, Dialog 3,439, Portal 3,025, focus restore 2,622                                      |
+| nav             |           160,190 |            10,190 |           161,231 | 63,137 B in 39 chunks: Menu 10,384, positioning 9,189, Nav 5,276, roving 4,223, Avatar 3,622, Tooltip 3,059, Portal 3,025                                                                                   |
+| breadcrumb      |           155,152 |             5,152 |           156,193 | 58,099 B in 32 chunks: the collapse menu (Menu 10,384, positioning 9,189), Overflow 4,560, roving 4,223, its stories 4,156, Tooltip 3,059, Portal 3,025                                                     |
+| overflow        |           153,647 |             3,647 |           154,688 | 56,594 B in 38 chunks: the overflow menu (Menu 10,384, positioning 9,189), Overflow 4,560, roving 4,223, Portal 3,025, focus restore 2,622, Toolbar 2,127                                                   |
+| toast           |           153,321 |             3,321 |           154,362 | 56,268 B in 37 chunks: Toaster 10,272, roving 4,223, its stories 3,691, a Drawer story (Drawer 3,328, `Drawer.scroll` 2,771), Portal 3,025, focus restore 2,622                                             |
+| drawer          |           150,100 |               100 |           151,141 | 53,047 B in 34 chunks: positioning 9,189 (Tooltip 3,059 in a story), its stories 4,067, Drawer 3,328, Portal 3,025, `Drawer.scroll` 2,771, Field 2,622                                                      |
 
-No page is near 250 KB (the largest, WaveProvider, can ever request 182,867 B). What dominates
-these pages is their own story file: each page's island module imports the whole story file, so the
-page loads every component its stories use (WaveProvider's stories show Dialog, menus and many
-components; NavDrawer's an app shell with Nav and Drawer).
+"Positioning" is the `usePopupPosition` chunk (floating-ui and the hook), "roving" the
+`useRovingTabIndex` chunk. No page is near 250 KB (the largest, WaveProvider, can ever request
+182,867 B). What dominates these pages is their own story file: each page's island module imports
+the whole story file, so the page loads every component its stories use.
 
 Options, measured but not implemented (each is the owner's call):
 
