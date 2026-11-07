@@ -9,7 +9,7 @@ everything a page can ever request. Task 12 adds the failing check; this file is
 
 - `npm run site:build`, then `node website/scripts/measure-page.mjs <page>` for every page of
   `website/dist` (80 component pages, the components index `components.html` and the placeholder
-  `index.html`; the getting-started, theming and changelog pages do not exist yet).
+  `index.html`; the getting-started, theming and changelog pages came with Task 11, below).
 - Gzip is Node's `gzipSync` at zlib's default level, as `scripts/verify-dist.mjs` measures.
 - **First load**: the page's inline scripts, its external scripts and module preloads, and the
   component, renderer and before-hydration modules of **every** island on the page, each with its
@@ -226,8 +226,31 @@ first load above 150,000 B.
 The index pages' "everything" now includes the Controls chunk (1,041 B), because the example
 runtime that can import it is in the `base` chunk they load.
 
+## The search palette and the guide pages (Task 11)
+
+Measured 2026-11-08 against the build above, on all 85 pages.
+
+- **First load: +783 to +907 B on every page** (median component page +828.5 B, now 116,274.5 B;
+  the index pages 96,790 → 97,599 B). It is the shell island's Ctrl+K / Cmd+K and Search listener
+  with the lazy import (about 385 B), and Vite's preload list of the palette's 22 chunks (424 B),
+  in the `base` chunk; no new first-load request. Without the preload list a first opening would
+  fetch the palette in five sequential rounds (its import depth) instead of one; the list was kept.
+  The increase takes **presence** over 150,000 B (149,878 → 150,752 B): **12 pages over**, from 11.
+  Any listener in the first load does that (the listener alone would give 150,262 B).
+- **Later, on the first opening**: the palette's chunks, 29,425 B gzipped on a shell-only page
+  (WaveUI's `Dialog` with its modal stack and `Input`; less on pages that already load `Dialog`:
+  +3,115 B on the Dialog page), and the index `_assets/search-index.json`, 108,631 B raw and
+  7,568 B gzipped (80 components, 1,072 props, 4 pages): **36,993 B** in all, under the 40 KB target.
+  `SearchBox` in place of `Input` measured 33,563 B + 7,568 B = 41,131 B, over it.
+- **Everything** a page can request is now at most 190,794 B (tag-picker), under 250 KB.
+- The guide pages (getting-started, theming, changelog) load what the index pages load: 97,599 B.
+
+`website/tests/pages.test.ts` checks that no page's first load holds the palette's chunk or its
+text, and that every page can load it later.
+
 ## Regression guard
 
 `website/tests/pages.test.ts` ("the components index loads at most its recorded first-load
-JavaScript plus 2 KB") fails when `components.html` loads more than 96,790 + 2,048 B. It fails
-without the `base` chunk and the split (105,129 B), as checked when it was written.
+JavaScript plus 2 KB") fails when `components.html` loads more than 97,599 + 2,048 B. The record
+was 96,790 B until the search palette's listener and preload list added 809 B (Task 11, above). It
+fails without the `base` chunk and the split (105,129 B), as checked when it was written.
