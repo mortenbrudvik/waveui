@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Accordion** takes `collapsible={false}`, number item values (`Accordion<V>`), `AccordionToggleDetails` as the optional second argument of its change callbacks, `size`, `expandIconPosition`, and a Trigger `expandIcon` slot, `icon` slot (`wave-accordion-trigger__icon`) and `inline` (closes `acc-1` to `acc-5`).
 - **Card** takes `disabled`, `defaultSelected`, `onSelectionChange(selected, { event })`, an optional `event` on `onSelect`, and `focusMode` (closes `card-4` to `card-6`). **TabList** takes `disabled` (closes `tab-4`). **Carousel** `onValueChange(index, details?)` reports `CarouselChangeDetails` (`reason`, `event`; closes `car-5`). **Drawer** takes `mountNode` (closes `drw-5`).
 - **Tree** takes `size`, `appearance`, `independentChecks`, range selection in a checkbox tree (Ctrl+A, Shift+Space, Shift+Arrow), `Tree.Item` `open`, `onOpenChange` and `actionsVisible`, and `onExpandedItemsChange` reports `TreeOpenChangeDetails` (closes `tree-3`, `tree-5`, `tree-6`).
+- **`FlatTree navigationMode="treegrid"`**: real WAI-ARIA treegrid roles (`treegrid`, `row`, `gridcell`) with `aria-level`, `aria-posinset`, `aria-setsize`, `aria-rowindex` and `aria-rowcount`, and the APG keyboard (rows and cells, Enter or F2 into a cell's controls, Escape back); it works with `virtualWindow`. `renderCells(row)` draws the further cells, `slotProps.cell` and the class `wave-flat-tree-item__cell` style them. The nested `Tree` keeps its `tree` roles (its `navigationMode="treegrid"` changes the keyboard only).
+- **Option groups in data mode**: `ListboxItem.group` and `renderGroup(group, { index, size })` (type `ListboxGroupRenderState`) on Listbox, Combobox and Dropdown draw the items of a group under a header as a named `role="group"`, and a `virtualWindow` windows them with their headers. Headers are no options, so the keys and typeahead skip them; `useListbox` `onScrollToItem(index, target?)` receives the window rows of an option when items have groups. Sticky headers are not supported.
+- **NavDrawer** takes `mountNode`, as Drawer does.
 
 ### Changed
 
@@ -61,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Toasts stay beside an overlay drawer while it slides out, and a toast's shadow stays visible while it fades out.
 - `ToastController` has three more members (`updateToast`, `pauseToast`, `playToast`): code that implements the type itself must add them.
 - `WaveProvider tokens={null}` also resets the theme-independent tokens (the ramps, font families, stacking layers, motion) that an enclosing provider overrode.
+- A popup with the default motion (Popover, `Menu.Popover`, the InfoButton note, the TeachingPopover surface, the DatePicker calendar, the AvatarGroup popup and the picker listbox popups) carries `data-presence="exited"` for the moment before it is placed, and an open-by-default popup reaches `entering` only after floating-ui has placed it. The class string of `popupMotion` grew by six `exited` classes.
+- The development warning for `OptionGroup` children beside a `virtualWindow` points to `group` and `renderGroup`.
+- Smaller bundles: the provider's token reset table and `useVirtualWindow` are leaner (`WaveProvider` with `Dialog` -748 B minified, `useVirtualWindow` -728 B minified and -334 B gzip).
 
 ### Fixed
 
@@ -73,6 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Dropdown opened with a mouse click is focused on pointerdown, so its keys work in WebKit. Combobox, Dropdown, DatePicker, TimePicker and SearchBox move focus to the control when the clear button disappears while focused.
 - A `<Fragment ref>` around a trigger child, a Tooltip target, a Presence child or an `asChild` Overflow.Item receives its ref.
 - A selection changed while the TabList line still slides starts the next slide from the line's visible box. A percentage `max-height` on an Accordion region, a Tree group or a Nav list no longer resolves against the collapsing track. The check cascade of Tree and FlatTree no longer overflows the stack on very deep trees.
+- A popup whose placement flips now enters sliding away from its anchor, not toward it: the surface starts its enter on the side floating-ui resolved (Popover, `Menu.Popover`, the InfoButton note, the TeachingPopover surface, the DatePicker calendar, the AvatarGroup popup, and the picker listbox popups). Popups with a custom `motion` string, `motion={null}` or `WaveProvider motion="none"` are unchanged.
+- `Dialog.Footer stackOnNarrow` stacks the actions at a viewport of exactly 480px, as documented (Tailwind's `max-[480px]` stopped at 479px).
 
 ### Documentation
 
