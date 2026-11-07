@@ -1,0 +1,75 @@
+---
+/**
+ * The app window every page of the docs renders in (the spec's "Page anatomy"): a title bar, the
+ * navigation pane, the command bar and the content, and the status bar, as static HTML. The one
+ * island, `ShellControls` (`client:idle`), adds what needs script: maximize/restore, the theme and
+ * direction, the hamburger drawer, Copy code and Search. With scripts off the links, the content
+ * and the status bar all work.
+ *
+ * - The head inlines `THEME_INIT_SCRIPT`, so the theme class and `dir` on `<html>` are set before
+ *   first paint (the static markup is light and left to right); the window inlines
+ *   `WINDOW_INIT_SCRIPT` as its first child, so a maximized window stays maximized across pages.
+ * - The skip link is the first focusable element; then the title bar's controls, the navigation
+ *   and the content (the command bar first).
+ * - No web fonts: `.wave-root` sets WaveUI's system font stack.
+ * - Below 48rem (768px) the window fills the screen, the navigation is a drawer (site.css) and the
+ *   page scrolls; from 48rem the window is centered, at most 1200px wide, or fills the screen while
+ *   maximized, and its panes scroll on their own.
+ *
+ * Props: `title` (the page title), `current` (the catalog slug of the page, marked in the
+ * navigation), `status` (the status bar's measured facts; nothing is shown that is not given) and
+ * `copyText` (what Copy code copies; without it there is no Copy code).
+ */
+import '../styles/library.css';
+import '../styles/site.css';
+import { getCatalog } from '../catalog/catalog';
+import ShellControls from '../islands/ShellControls';
+import { SHELL_IDS } from '../shell/ids';
+import { NavPane } from '../shell/NavPane';
+import { StatusBar, type ShellStatus } from '../shell/StatusBar';
+import { TitleBar } from '../shell/TitleBar';
+import { WINDOW_INIT_SCRIPT } from '../shell/windowState';
+import { THEME_INIT_SCRIPT } from '../theme/themeInit';
+
+export interface Props {
+  title: string;
+  current?: string;
+  status?: ShellStatus;
+  copyText?: string;
+}
+
+const { title, current, status, copyText } = Astro.props;
+const entries = getCatalog().map(({ slug, name, category }) => ({ slug, name, category }));
+---
+
+<!doctype html>
+<html lang="en" dir="ltr" class="wave-light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{`${title} · WaveUI docs`}</title>
+    <script is:inline set:html={THEME_INIT_SCRIPT} />
+  </head>
+  <body class="wave-root m-0 bg-wave-muted">
+    <a
+      href={`#${SHELL_IDS.main}`}
+      class="sr-only focus:not-sr-only focus:fixed focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-wave-background focus:px-3 focus:py-2 focus:text-wave-foreground focus:shadow-wave-8 focus:outline-2 focus:outline-wave-ring"
+      >Skip to content</a
+    >
+    <div
+      id={SHELL_IDS.window}
+      class="shell-window flex min-h-dvh flex-col bg-wave-background text-wave-foreground md:mx-auto md:my-6 md:h-[calc(100dvh-3rem)] md:min-h-0 md:w-[calc(100%-3rem)] md:max-w-300 md:overflow-hidden md:rounded-lg md:border md:border-wave-border md:shadow-wave-28 md:data-maximized:my-0 md:data-maximized:h-dvh md:data-maximized:w-full md:data-maximized:max-w-none md:data-maximized:rounded-none md:data-maximized:border-0 md:data-maximized:shadow-none"
+    >
+      <script is:inline set:html={WINDOW_INIT_SCRIPT} />
+      <TitleBar title={title} />
+      <div class="flex min-h-0 flex-1 flex-col md:flex-row">
+        <NavPane entries={entries} current={current} />
+        <main id={SHELL_IDS.main} tabindex="-1" class="flex min-w-0 flex-1 flex-col md:overflow-y-auto">
+          <ShellControls client:idle copyText={copyText} />
+          <slot />
+        </main>
+      </div>
+      <StatusBar status={status} />
+    </div>
+  </body>
+</html>

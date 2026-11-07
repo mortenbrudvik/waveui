@@ -1,0 +1,69 @@
+/*
+ * The site's own stylesheet, imported by the layout after library.css: the site's classes and the
+ * stories' (the examples), compiled as an app's Tailwind build compiles them next to Wave, as
+ * Storybook's .storybook/stories.css does (website/SPIKE.md): plain Tailwind without a prefix,
+ * Wave's namespaced theme keys of tokens.css (`bg-wave-primary`, `text-wave-body-1`,
+ * `shadow-wave-4`) and the `wave-rtl:` variant. `reference` keeps the token rules out (library.css
+ * ships them). Unlayered, like the library sheet, so a site class on a component's element wins a
+ * tie by coming later.
+ *
+ * Below the utilities: the window's view transition and the navigation drawer, as plain CSS on
+ * tokens.
+ */
+@import 'tailwindcss/theme.css' theme(inline);
+@import '../../../src/styles/tokens.css' reference;
+@import '../../../src/styles/variants.css';
+@import 'tailwindcss/utilities.css' source(none);
+
+@source '..';
+@source '../../../stories';
+@source not '../**/*.test.*';
+
+/* `noscript:` styles apply only where the browser runs no script. */
+@custom-variant noscript (@media (scripting: none));
+
+/*
+ * The intro page at /waveui transitions into the app window, and the window carries over between
+ * the app's pages. Off under reduced motion.
+ */
+@view-transition {
+  navigation: auto;
+}
+
+.shell-window {
+  view-transition-name: waveui-window;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+
+  .shell-window {
+    view-transition-name: none;
+  }
+}
+
+/*
+ * Below 48rem (768px, Tailwind's `md`) the navigation pane is a drawer while scripts run: hidden
+ * until the island's hamburger sets `data-nav-open` on the window. Where scripting is off (or the
+ * browser does not know the `scripting` feature) the query does not match and the pane stays in
+ * the page above the content.
+ */
+@media (max-width: 47.99rem) and (scripting: enabled) {
+  .shell-nav {
+    display: none;
+  }
+
+  .shell-window[data-nav-open] .shell-nav {
+    display: block;
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    z-index: 40;
+    width: min(20rem, 85vw);
+    overflow-y: auto;
+    border-inline-end: 1px solid var(--wave-border);
+    box-shadow: var(--wave-shadow-28);
+  }
+}
