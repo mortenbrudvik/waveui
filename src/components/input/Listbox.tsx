@@ -14,10 +14,17 @@ import { useListbox, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { HiddenInput } from '../internal/HiddenInput';
-import { ListboxProvider, Option, OptionGroup, type ListboxOptionRenderState } from './Option';
+import {
+  ListboxProvider,
+  Option,
+  OptionGroup,
+  type ListboxGroupRenderState,
+  type ListboxOptionRenderState,
+} from './Option';
 import {
   renderListboxItems,
   renderListboxWindow,
+  scrollWindowToItem,
   useDataModeWarnings,
   useItemsAndChildrenWarning,
 } from './Option.data';
@@ -126,7 +133,9 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
   labels?: ListboxLabels;
   /**
    * Data mode: the options as data, in list order (`value`, `label`, and optionally `textValue`,
-   * `disabled` and `hidden`; values unique). The list renders one option per item that is not
+   * `disabled`, `hidden` and `group`; values unique). Adjacent items with the same `group` are
+   * drawn as a named group under a header (`renderGroup`), the options of the group counting
+   * `aria-posinset` and `aria-setsize` among themselves. The list renders one option per item that is not
    * `hidden` (see `renderOption`), and the keys, typeahead and the selection follow `items`. The
    * children are neither read nor rendered: passing both warns once in development. Each option
    * gets `aria-posinset` and `aria-setsize` from its place among the shown items, and keeps one id
@@ -145,11 +154,25 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
    */
   renderOption?: (item: ListboxItem, state: ListboxOptionRenderState) => React.ReactNode;
   /**
+   * Data mode: renders the header of a group of `items` (those with the same `group`, next to
+   * each other), given the group's name and its state (`index` among the groups, `size`: its
+   * shown options). Return text or a few inline elements: the header is a row of the list, not an
+   * option, so nothing in it is reachable, and it is out of the accessibility tree (`aria-hidden`):
+   * the group's list is named by its name. In a list with a `virtualWindow` the header is a row of
+   * the window (as tall as an option, or measured with `measureItems`) and is not sticky: it
+   * scrolls away with its group. It is called again when the group's name, index or size changes
+   * or the function itself changes. Ignored without `items`, with a development warning.
+   * @default the group's name, as text
+   */
+  renderGroup?: (group: string, state: ListboxGroupRenderState) => React.ReactNode;
+  /**
    * Data mode: renders only the options in view of a long list, plus an overscan, and spacers
    * (`aria-hidden`, `data-virtual-spacer`) as tall as the options they stand for: pass the result
    * of `useVirtualWindow({ itemSize })`, or an object of your own that implements `VirtualWindow`.
    * It needs `items`: without them, or beside `OptionGroup` children, it is ignored with a
-   * development warning (a window renders a flat list).
+   * development warning (a window cannot read the options of children). Items with a `group`
+   * are windowed with their headers, which are rows of the window (`itemSize` tall, or measured
+   * with `measureItems`) and scroll away with their group: they are not sticky.
    *
    * The list element is the window's scroller: give it a bounded height (a height or a maximum
    * height, through `className` or `style`); without one the window measures the whole list and
@@ -222,6 +245,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     labels,
     items,
     renderOption,
+    renderGroup,
     virtualWindow,
     name,
     form,
@@ -311,7 +335,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     // An active option that the window does not render (an adapter that keeps nothing): scrolled
     // to by its index among the shown options, the window's count.
     onScrollToItem: activeWindow
-      ? (index) => activeWindow.scrollToIndex(index, { align: 'auto' })
+      ? (index, target) => scrollWindowToItem(activeWindow, index, target)
       : undefined,
     onSelect: (next, details) => {
       if (disabled) return;
@@ -400,7 +424,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     if (unnamed) warnOnce('Listbox:unnamed', UNNAMED_WARNING);
   }, [unnamed]);
   useItemsAndChildrenWarning('Listbox', items, children);
-  useDataModeWarnings('Listbox', { items, renderOption, virtualWindow, children });
+  useDataModeWarnings('Listbox', { items, renderOption, renderGroup, virtualWindow, children });
 
   // C-COMPOSE: keys typed in a portal rendered inside the list bubble through it in React; they
   // are not the list's.
@@ -426,6 +450,7 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
     selected: new Set(values),
     activeValue: listbox.activeValue,
     renderOption,
+    renderGroup,
   };
 
   return (
@@ -547,7 +572,9 @@ export const ListboxOptionGroup = OptionGroup;
  *   keys, typeahead and the selection follow the data, and each option carries `aria-posinset`
  *   and `aria-setsize`. A long list takes a `virtualWindow` (from `useVirtualWindow({ itemSize
  *   })`): the list then renders only the options in view, plus an overscan, with spacers for the
- *   others, every option `itemSize` tall, and the active option stays rendered.
+ *   others, every option `itemSize` tall, and the active option stays rendered. Items with a `group`
+ *   are drawn under group headers (`renderGroup`), also in a window: each group is a
+ *   `role="group"` named by its name, and the header is a row that no key reaches.
  * - **Forms and Field.** With `name` the value is submitted with its form (one entry, or one per
  *   value with `multiselect`), and `required` needs a value (native validation; a missing value
  *   moves focus to the list). A reset of its form restores `defaultValue`, with or without a

@@ -133,6 +133,17 @@ export interface ListboxOptionRenderState {
   index: number;
 }
 
+/**
+ * The state of a group's header, which `renderGroup` of Listbox, Combobox and Dropdown receives
+ * with the group's name (data mode, items with a `group`).
+ */
+export interface ListboxGroupRenderState {
+  /** The group's place among the groups of the shown items, from 0. */
+  index: number;
+  /** The number of options in the group (the shown items: a filter leaves some out). */
+  size: number;
+}
+
 /** Whether options draw the selected check mark (P05-internal; TagPicker lists no selected options). */
 const OptionCheckContext = React.createContext(true);
 OptionCheckContext.displayName = 'OptionCheckContext';

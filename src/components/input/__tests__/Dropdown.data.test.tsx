@@ -296,9 +296,9 @@ const WINDOW_WITHOUT_ITEMS =
   'are windowed, so every option child is rendered. Pass the options as `items`.';
 
 const WINDOW_GROUPS =
-  '[WaveUI] Dropdown: option groups cannot be windowed: `virtualWindow` renders the flat list of ' +
-  '`items` only, and `OptionGroup` children are not windowed. Pass the options as `items`, ' +
-  'without groups.';
+  '[WaveUI] Dropdown: `OptionGroup` children cannot be windowed: `virtualWindow` renders the ' +
+  'options of `items` only. Pass the options as `items`, with a `group` on each item that ' +
+  'belongs to one (and `renderGroup` for its header).';
 
 describe('Dropdown windowed options (virtualWindow)', () => {
   beforeEach(() => {

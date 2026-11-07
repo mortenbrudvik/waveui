@@ -16,7 +16,7 @@ import {
   type ListboxProps,
 } from '../src';
 import { MountedOptions } from './_mountedOptions';
-import { PEOPLE, TEN_THOUSAND_PEOPLE } from './_people';
+import { GROUPED_PEOPLE, PEOPLE, TEN_THOUSAND_PEOPLE } from './_people';
 
 const meta = {
   title: 'Components/Input/Listbox',
@@ -170,6 +170,55 @@ export const TenThousandOptions: StoryObj<TenThousandOptionsArgs> = {
     itemSize: { control: 'select', options: [32, 40, 48] },
   },
   render: (args) => <TenThousandListbox {...args} />,
+};
+
+/** A Listbox of the 10,000 grouped people, windowed, with the mounted-option count. */
+function TenThousandGroupedListbox({ itemSize, ...args }: TenThousandOptionsArgs) {
+  const virtualWindow = useVirtualWindow({ itemSize });
+  const [list, setList] = React.useState<HTMLUListElement | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <Listbox
+        {...args}
+        ref={setList}
+        items={GROUPED_PEOPLE}
+        virtualWindow={virtualWindow}
+        renderGroup={(letter, { size }) => (
+          <>
+            {letter}
+            <span className="ms-2 font-normal">({size})</span>
+          </>
+        )}
+      />
+      <MountedOptions scope={list} total={GROUPED_PEOPLE.length} />
+    </div>
+  );
+}
+
+/**
+ * Option groups in a window: the 10,000 people carry a `group` (the first letter of their first
+ * name, 25 groups), and `renderGroup` draws each header with its size. A header is a row of the
+ * window, as tall as an option; it is out of the accessibility tree, and the options of a group
+ * are a `role="group"` named by the letter, with `aria-posinset` and `aria-setsize` counting
+ * within it. The arrow keys, Home, End, PageDown and typeahead cross the headers without stopping on
+ * them; a header scrolls away with its group (it is not sticky).
+ */
+export const TenThousandGroupedOptions: StoryObj<TenThousandOptionsArgs> = {
+  args: {
+    'aria-label': 'Person',
+    defaultValue: 'person-5000',
+    itemSize: 32,
+    className: 'h-72',
+    style: { width: 260 },
+  },
+  argTypes: {
+    items: { control: false },
+    renderOption: { control: false },
+    renderGroup: { control: false },
+    virtualWindow: { control: false },
+    itemSize: { control: 'select', options: [32, 40, 48] },
+  },
+  render: (args) => <TenThousandGroupedListbox {...args} />,
 };
 
 /** Named by a Field label instead of `aria-label`. */

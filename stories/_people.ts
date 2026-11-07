@@ -106,3 +106,13 @@ export const TEN_THOUSAND_PEOPLE: readonly ListboxItem[] = PEOPLE.flatMap((perso
     label: `${person.label} (${city})`,
   })),
 );
+
+/**
+ * The 10,000 people of {@link TEN_THOUSAND_PEOPLE} in groups by the first letter of their first
+ * name (25 groups of 400, in alphabetical order, so the people of a group are adjacent): the data
+ * of the grouped windowed stories.
+ */
+export const GROUPED_PEOPLE: readonly ListboxItem[] = TEN_THOUSAND_PEOPLE.map((person) => ({
+  ...person,
+  group: person.label.slice(0, 1),
+}));

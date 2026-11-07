@@ -25,7 +25,7 @@ interface DataPickerProps {
   /** The values whose options are rendered (a window); every shown item without it. */
   mounted?: readonly string[];
   filter?: (item: ListboxItem) => boolean;
-  onScrollToItem?: (index: number) => void;
+  onScrollToItem?: (index: number, target?: { row: number; headerRow?: number }) => void;
   resultRef?: React.RefObject<UseListboxResult | null>;
 }
 
@@ -174,5 +174,45 @@ describe('useListboxOption position', () => {
     const option = screen.getByRole('option', { name: 'Charlie' });
     expect(option).toHaveAttribute('aria-posinset', '1');
     expect(option).toHaveAttribute('aria-setsize', '1');
+  });
+});
+
+describe('useListbox data mode: onScrollToItem with groups', () => {
+  /** Fruit (a, b), a loose option, Veg (d, e): rows header, a, b, c, header, d, e. */
+  const GROUPED: readonly ListboxItem[] = [
+    { value: 'a', label: 'Alpha', group: 'Fruit' },
+    { value: 'b', label: 'Bravo', group: 'Fruit' },
+    { value: 'c', label: 'Charlie' },
+    { value: 'd', label: 'Delta', group: 'Veg' },
+    { value: 'e', label: 'Echo', group: 'Veg' },
+  ];
+
+  it('passes the rows of the option as a second argument: its row, and the header row of a group it opens', () => {
+    const onScrollToItem = vi.fn();
+    render(<DataPicker items={GROUPED} mounted={[]} onScrollToItem={onScrollToItem} />);
+    const button = screen.getByRole('combobox');
+    button.focus();
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    fireEvent.keyDown(button, { key: 'End' });
+    expect(onScrollToItem.mock.calls).toEqual([
+      [0, { row: 1, headerRow: 0 }],
+      [1, { row: 2 }],
+      [2, { row: 3 }],
+      [3, { row: 5, headerRow: 4 }],
+      [4, { row: 6 }],
+    ]);
+  });
+
+  it('calls a flat list with the index alone', () => {
+    const onScrollToItem = vi.fn();
+    render(<DataPicker items={ITEMS} mounted={[]} onScrollToItem={onScrollToItem} />);
+    const button = screen.getByRole('combobox');
+    button.focus();
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    expect(onScrollToItem.mock.calls).toEqual([[0]]);
+    expect(onScrollToItem.mock.calls[0]).toHaveLength(1);
   });
 });

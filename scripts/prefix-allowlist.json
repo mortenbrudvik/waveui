@@ -29,6 +29,7 @@
   "src/components/input/ColorPicker.tsx": ["group", "rounded"],
   "src/components/input/ColorSlider.tsx": ["rounded"],
   "src/components/input/Combobox.expand.tsx": ["outline"],
+  "src/components/input/Option.data.tsx": ["group"],
   "src/components/input/Option.tsx": ["group", "hidden"],
   "src/components/input/SpinButton.tsx": ["blur", "outline"],
   "src/components/input/SwatchPicker.swatches.tsx": ["grid"],
