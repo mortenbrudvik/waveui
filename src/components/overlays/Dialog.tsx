@@ -1029,7 +1029,9 @@ export const DialogFooter = ({
         setFooterHeight ? stickyFooterClasses : footerRowClasses,
         position === 'start' && 'wave:justify-start',
         fluid && 'wave:*:flex-1',
-        stackOnNarrow && 'wave:max-[480px]:flex-col wave:max-[480px]:*:w-full',
+        // Tailwind's max-[480px] is a strict `width < 480px`; the viewport at exactly 480px stacks too.
+        stackOnNarrow &&
+          'wave:[@media(width<=480px)]:flex-col wave:[@media(width<=480px)]:*:w-full',
         appClassName,
         className,
       )}

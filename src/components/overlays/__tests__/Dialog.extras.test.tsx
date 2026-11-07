@@ -270,8 +270,8 @@ describe('Dialog.Footer layout (dialogactions-1, dialogactions-2)', () => {
   it('stacks on a narrow viewport with stackOnNarrow and marks it', () => {
     renderFooter({ stackOnNarrow: true, children: <button type="button">Save</button> });
     expect(footer()).toHaveAttribute('data-stack-on-narrow', '');
-    expect(footer()).toHaveClass('wave:max-[480px]:flex-col');
-    expect(footer()).toHaveClass('wave:max-[480px]:*:w-full');
+    expect(footer()).toHaveClass('wave:[@media(width<=480px)]:flex-col');
+    expect(footer()).toHaveClass('wave:[@media(width<=480px)]:*:w-full');
   });
 
   it('keeps a consumer className last and replaces a conflicting justify', () => {
