@@ -10,6 +10,7 @@ import axe from 'axe-core';
 import { JSDOM } from 'jsdom';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AVATAR_IMAGE } from '../plugins/localImages.mjs';
+import { measurePage } from '../scripts/measure-page.mjs';
 import { getCatalog, type ComponentEntry } from '../src/catalog/catalog';
 import { extractDocs, type ComponentDocs } from '../src/docs/props';
 import { formatDescription, isHookEntry } from '../src/docs/page';
@@ -481,6 +482,15 @@ describe.skipIf(!state.ready)(title, () => {
       titles.set(text, name);
     }
     expect(normalise(load(pageFile(catalog[0]!)).title)).toBe(`${catalog[0]!.name} · WaveUI docs`);
+  });
+
+  it('the components index loads at most its recorded first-load JavaScript plus 2 KB', () => {
+    // website/BUDGET.md records 96,790 B gzipped (scripts/measure-page.mjs). The full budget
+    // check of every page is a later task; this guards the shell-only page, which every page pays.
+    const { totals, reactCoreChunks, reactDomClientChunks } = measurePage(INDEX_FILE);
+    expect(totals.firstLoadGzip).toBeLessThanOrEqual(96_790 + 2_048);
+    expect(reactCoreChunks).toHaveLength(1);
+    expect(reactDomClientChunks).toHaveLength(1);
   });
 
   describe('accessibility of a sample of pages (axe, without color contrast)', () => {
