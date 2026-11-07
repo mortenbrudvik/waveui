@@ -1,0 +1,25 @@
+{
+  "name": "waveui-website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The WaveUI documentation app at brudvik.com/waveui/docs (never published)",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@astrojs/react": "7.0.1",
+    "@storybook/react": "^10.6.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "astro": "7.3.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "vitest": "^5.0.2"
+  }
+}

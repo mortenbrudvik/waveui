@@ -1,0 +1,34 @@
+---
+/**
+ * The stack spike (website/SPIKE.md): a Button rendered on the server from the library's source,
+ * with no script, and the Default story of stories/Button.stories.tsx as a client:visible island.
+ * The island's module brings the stylesheets of .storybook/preview.tsx, which Astro links in the
+ * head, so both buttons are styled with scripts off.
+ */
+import { Button, WaveProvider } from '../../../src';
+import ButtonStoryIsland from '../islands/ButtonStoryIsland';
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WaveUI stack spike</title>
+  </head>
+  <body>
+    <main>
+      <h1>WaveUI stack spike</h1>
+      <section aria-labelledby="server-heading">
+        <h2 id="server-heading">Button rendered on the server</h2>
+        <WaveProvider theme="light" dir="ltr">
+          <Button appearance="primary">Server button</Button>
+        </WaveProvider>
+      </section>
+      <section aria-labelledby="island-heading">
+        <h2 id="island-heading">Button Default story, a client:visible island</h2>
+        <ButtonStoryIsland client:visible />
+      </section>
+    </main>
+  </body>
+</html>
