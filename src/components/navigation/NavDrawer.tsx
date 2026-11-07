@@ -166,6 +166,13 @@ export interface NavDrawerProps
    */
   unmountOnClose?: boolean;
   /**
+   * The element an overlay NavDrawer's panel and backdrop render into, in place of the
+   * `WaveProvider`'s `portalContainer` or `document.body` (Fluent's `mountNode`). Ignored by an
+   * inline NavDrawer. See `Drawer`'s `mountNode`.
+   * @default the provider's `portalContainer`, else `document.body`
+   */
+  mountNode?: HTMLElement | null;
+  /**
    * Where focus goes when the drawer closes with focus inside it (a modal overlay: whenever it
    * closes). Pass your page's Hamburger, so a Hamburger inside the drawer that closes it hands
    * focus to the one that opens it again.
@@ -369,6 +376,7 @@ const NavDrawerRoot = ({
   separator = true,
   modalType: modalTypeProp = 'modal',
   unmountOnClose = true,
+  mountNode,
   finalFocusRef,
   backdrop,
   motion,
@@ -467,6 +475,7 @@ const NavDrawerRoot = ({
       separator={separator}
       modalType={modalType}
       unmountOnClose={unmountOnClose}
+      mountNode={mountNode}
       inlineAs="div"
       trigger={inertModalTrigger}
       finalFocusRef={finalFocusRef}
