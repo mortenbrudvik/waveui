@@ -9,6 +9,7 @@ import type {
 } from '../../lib/types';
 import type { UseListboxPopupResult } from './Option';
 import type { UseListboxResult } from '../../hooks/useListbox';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import type { Slot } from '../../lib/slot';
 import type { TagPickerOption } from './TagPicker.option';
 import type { TagPickerProps, TagPickerSize } from './TagPicker.root';
@@ -97,7 +98,19 @@ export interface TagPickerContextValue {
   warnsUnknownValues: boolean;
   /** Whether the listbox is in data mode (no `TagPicker.List` children). */
   dataMode: boolean;
+  /** `noPopover` with the Input trigger: no list, no combobox semantics, Enter adds the text. */
+  noPopover: boolean;
+  /** The root's `secondaryAction`. */
+  secondaryAction: Slot<'span'> | undefined;
+  /** Enter in a picker without a popup: adds the typed text as a tag; whether it was handled. */
+  submitText: (event: Event) => boolean;
   listbox: UseListboxResult;
+  /**
+   * The window of a windowed data-mode list (the root's `virtualWindow`, set only in data mode),
+   * and the ref that makes the shown list its scroller (the closed list is another element).
+   */
+  virtualWindow: VirtualWindow | undefined;
+  listScrollRef: React.RefCallback<HTMLUListElement>;
   /** The popup (open state, list shown with options or the create option). */
   open: boolean;
   expanded: boolean;

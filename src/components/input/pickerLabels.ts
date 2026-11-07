@@ -15,6 +15,14 @@ export const defaultAddedLabel = (label: string, count: number): string =>
 export const defaultRemovedLabel = (label: string, count: number): string =>
   `${label} removed, ${count} selected`;
 
+/** Listbox `labels.rangeAdded`: announced when a range key selects several options at once. */
+export const defaultRangeAddedLabel = (changed: number, count: number): string =>
+  `${changed} added, ${count} selected`;
+
+/** Listbox `labels.rangeRemoved`: announced when Ctrl+A deselects every option. */
+export const defaultRangeRemovedLabel = (changed: number, count: number): string =>
+  `${changed} removed, ${count} selected`;
+
 /** The members of a picker's `labels` that word a toggle announcement. */
 export interface ToggleAnnouncementLabels {
   added?: (label: string, count: number) => string;
@@ -37,6 +45,29 @@ export function announceToggle(
     ? (labels?.added ?? defaultAddedLabel)
     : (labels?.removed ?? defaultRemovedLabel);
   announce(text(label, count));
+}
+
+/** The members of Listbox's `labels` that word the announcement of a range key. */
+export interface RangeAnnouncementLabels {
+  rangeAdded?: (changed: number, count: number) => string;
+  rangeRemoved?: (changed: number, count: number) => string;
+}
+
+/**
+ * Announces a range selection the user made (Shift+Space, Ctrl+Shift+Home/End, Ctrl+A):
+ * `labels.rangeAdded` or `labels.rangeRemoved` (else their English defaults) with the number of
+ * options `changed` and the `count` of values selected after it.
+ */
+export function announceRange(
+  labels: RangeAnnouncementLabels | undefined,
+  changed: number,
+  added: boolean,
+  count: number,
+): void {
+  const text = added
+    ? (labels?.rangeAdded ?? defaultRangeAddedLabel)
+    : (labels?.rangeRemoved ?? defaultRangeRemovedLabel);
+  announce(text(changed, count));
 }
 
 /**

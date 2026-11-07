@@ -14,7 +14,7 @@ import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
-import { slotRendersContent } from '../../lib/slot';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot, SlotObject } from '../../lib/slot';
 import { mergeSlotProps } from '../../lib/slotProps';
 import {
@@ -23,7 +23,7 @@ import {
   inputFocusWithin,
   inputInvalidWithin,
 } from '../../lib/styles';
-import { OPTION_STATE_LOCKS, preventMouseDown } from '../../hooks/useListbox';
+import { OPTION_STATE_LOCKS, preventMouseDown, type ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePreserveFocus } from '../../hooks/usePreserveFocus';
 import { MERGED_DISABLED_FOCUSABLE_PROPS } from '../button/Button.slots';
@@ -38,6 +38,7 @@ import type { TagGroupHostOptions, TagHostContextValue } from '../data-display/T
 import { tagRootClasses } from '../data-display/tagStyles';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
 import { Option, OptionGroup, PickerListboxSurface } from './Option';
+import { renderListboxWindow } from './Option.data';
 import {
   pickerButtonOffset,
   pickerEndPadding,
@@ -226,6 +227,11 @@ TagPickerClearButton.displayName = 'TagPickerClearButton';
 export interface TagPickerControlProps extends React.HTMLAttributes<HTMLDivElement> {
   /** As TagPicker's `expandIcon`; wins over it when it is not `undefined`. */
   expandIcon?: Slot<'span'>;
+  /**
+   * As TagPicker's `secondaryAction`: an action after the trigger, before the end buttons (stable
+   * class `wave-tag-picker__secondary-action`); wins over it when it is not `undefined`.
+   */
+  secondaryAction?: Slot<'span'>;
   /** @default `<TagPicker.Group /><TagPicker.Input />` */
   children?: React.ReactNode;
   ref?: React.Ref<HTMLDivElement>;
@@ -238,6 +244,7 @@ interface ControlImplProps extends TagPickerControlProps {
 function TagPickerControlImpl({
   ctx,
   expandIcon,
+  secondaryAction,
   children,
   className,
   onMouseDown,
@@ -253,7 +260,10 @@ function TagPickerControlImpl({
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, controlElementRef, setReference);
 
   const glyph = expandIcon !== undefined ? expandIcon : ctx.expandIcon;
-  const showExpand = showsExpandButton(glyph);
+  // Without a popup there is nothing to open: no expand button.
+  const showExpand = !ctx.noPopover && showsExpandButton(glyph);
+  const secondary = secondaryAction !== undefined ? secondaryAction : ctx.secondaryAction;
+  const showSecondary = slotRendersContent(secondary);
   const showClear = ctx.clearable && ctx.selected.length > 0 && !ctx.readOnly;
   const buttons = (showExpand ? 1 : 0) + (showClear ? 1 : 0);
 
@@ -302,6 +312,15 @@ function TagPickerControlImpl({
             <TagPickerInput />
           </>
         )}
+        {showSecondary &&
+          renderSlot(
+            secondary,
+            'span',
+            wcn(
+              tagPickerClassNames.secondaryAction,
+              'wave:ms-auto wave:flex wave:shrink-0 wave:items-center',
+            ),
+          )}
         {showClear && <TagPickerClearButton ctx={ctx} position={showExpand ? 2 : 1} />}
         {showExpand && (
           <PickerExpandButton
@@ -660,6 +679,17 @@ function TagPickerInputImpl({
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     // Read-only: no listbox keys at all (they would open the list, add or remove tags).
     if (!ctx.interactive) return;
+    // Without a popup Enter adds the typed text; an Enter that adds nothing goes to the page.
+    if (ctx.noPopover && event.key === 'Enter' && !event.nativeEvent.isComposing) {
+      if (ctx.submitText(event.nativeEvent)) event.preventDefault();
+      return;
+    }
+    // Escape clears the typed text, as the list's Escape does.
+    if (ctx.noPopover && event.key === 'Escape' && ctx.query !== '') {
+      event.preventDefault();
+      ctx.editText('');
+      return;
+    }
     if (event.key === 'Escape' && ctx.open && !ctx.surfaceOpen && !event.nativeEvent.isComposing) {
       // Open with nothing shown (every option selected, no query): close, but leave Escape to an
       // enclosing layer (overlays#1) instead of consuming it for an invisible list.
@@ -684,7 +714,8 @@ function TagPickerInputImpl({
         return;
       }
     }
-    listbox.onKeyDown(event);
+    // No popup, no listbox keys.
+    if (!ctx.noPopover) listbox.onKeyDown(event);
   };
 
   const naming = triggerNaming(ctx, {
@@ -711,8 +742,9 @@ function TagPickerInputImpl({
       autoFocus={triggerProps.autoFocus}
       {...rest}
       {...naming}
-      {...listbox.getComboboxProps()}
-      aria-expanded={ctx.expanded}
+      // A picker without a popup is a plain text field: no combobox role, state or list wiring.
+      {...(ctx.noPopover ? undefined : listbox.getComboboxProps())}
+      aria-expanded={ctx.noPopover ? undefined : ctx.expanded}
       aria-describedby={joinIds(ariaDescribedBy, triggerProps['aria-describedby'], ctx.summaryId)}
       ref={mergedRef}
       disabled={ctx.disabled}
@@ -724,7 +756,7 @@ function TagPickerInputImpl({
       )}
       // A click opens a closed list and never closes it (Combobox's input rule, D66).
       onClick={composeEventHandlers(onClick, () => {
-        if (ctx.interactive && !ctx.open) ctx.setOpen(true);
+        if (ctx.interactive && !ctx.open && !ctx.noPopover) ctx.setOpen(true);
       })}
       onKeyDown={composeEventHandlers(
         onKeyDown,
@@ -930,72 +962,109 @@ function TagPickerListImpl({
   ref,
   ...rest
 }: ListImplProps) {
-  const { registerList, listbox, slotProps } = ctx;
+  const { registerList, listbox, slotProps, virtualWindow } = ctx;
   React.useLayoutEffect(() => registerList(), [registerList]);
+  // The list element's ref, with the window's: the shown list is its scroller.
+  const listRef = useMergedRefs<HTMLUListElement>(
+    ref,
+    virtualWindow ? ctx.listScrollRef : undefined,
+  );
 
   // The generated options' parts are merged only when given: an option renders often.
   const optionPart = slotProps?.option;
   const createPart = slotProps?.createOption;
   const createLabel = ctx.showCreate ? ctx.labels.create(ctx.createText) : '';
   const createClasses = wcn(tagPickerClassNames.option, tagPickerClassNames.createOption);
-  const createOption = ctx.showCreate ? (
-    <Option
-      key={ctx.createValue}
-      value={ctx.createValue}
-      label={createLabel}
-      data-create=""
-      className={createClasses}
-      // `option` applies first, then `createOption`.
-      {...((optionPart || createPart) &&
-        mergeSlotProps([optionPart, createPart], {
-          className: createClasses,
-          locked: {
-            ...OPTION_STATE_LOCKS,
-            value: ctx.createValue,
-            label: createLabel,
-            'data-value': ctx.createValue,
-            'data-create': '',
-          },
-        }))}
-    >
-      {createLabel}
-    </Option>
-  ) : null;
+  const { createValue, entryOf, showCreate } = ctx;
+  const createOptionElement = React.useCallback(
+    () => (
+      <Option
+        key={createValue}
+        value={createValue}
+        label={createLabel}
+        data-create=""
+        className={createClasses}
+        // `option` applies first, then `createOption`.
+        {...((optionPart || createPart) &&
+          mergeSlotProps([optionPart, createPart], {
+            className: createClasses,
+            locked: {
+              ...OPTION_STATE_LOCKS,
+              value: createValue,
+              label: createLabel,
+              'data-value': createValue,
+              'data-create': '',
+            },
+          }))}
+      >
+        {createLabel}
+      </Option>
+    ),
+    [createValue, createLabel, createClasses, optionPart, createPart],
+  );
+  const createOption = showCreate ? createOptionElement() : null;
+
+  // The option of a listed entry (data mode).
+  const entryOption = React.useCallback(
+    (item: ListboxItem) => {
+      const entry = entryOf(item.value);
+      return (
+        <TagPickerOption
+          key={item.value}
+          value={item.value}
+          label={item.label}
+          media={entry?.media}
+          secondaryContent={entry?.secondaryContent}
+          disabled={item.disabled}
+          className={tagPickerClassNames.option}
+          {...(optionPart &&
+            mergeSlotProps(optionPart, {
+              className: tagPickerClassNames.option,
+              locked: {
+                ...OPTION_STATE_LOCKS,
+                value: item.value,
+                label: item.label,
+                'data-value': item.value,
+                media: entry?.media,
+                secondaryContent: entry?.secondaryContent,
+              },
+            }))}
+        >
+          {item.label}
+        </TagPickerOption>
+      );
+    },
+    [entryOf, optionPart],
+  );
+  // What a window renders for an item: the create option (the last item) or an entry's option. A
+  // stable function while the options' inputs hold, so the window's memoized rows follow only a
+  // real change.
+  const renderWindowOption = React.useCallback(
+    (item: ListboxItem) => (item.value === createValue ? createOptionElement() : entryOption(item)),
+    [createValue, createOptionElement, entryOption],
+  );
+  const selectedSet = React.useMemo(() => new Set(ctx.selected), [ctx.selected]);
 
   let content: React.ReactNode;
   if (ctx.dataMode) {
     // Data mode (0.10's rendering): an option per listed entry while expanded, the create option
-    // in its place, last.
+    // in its place, last; or, with a window, the options in view.
     content =
       ctx.expanded &&
-      listbox.items.map((item) => {
-        if (item.value === ctx.createValue) return createOption;
-        const entry = ctx.entryOf(item.value);
-        return (
-          <TagPickerOption
-            key={item.value}
-            value={item.value}
-            label={item.label}
-            media={entry?.media}
-            secondaryContent={entry?.secondaryContent}
-            className={tagPickerClassNames.option}
-            {...(optionPart &&
-              mergeSlotProps(optionPart, {
-                className: tagPickerClassNames.option,
-                locked: {
-                  ...OPTION_STATE_LOCKS,
-                  value: item.value,
-                  label: item.label,
-                  'data-value': item.value,
-                  media: entry?.media,
-                  secondaryContent: entry?.secondaryContent,
-                },
-              }))}
-          >
-            {item.label}
-          </TagPickerOption>
-        );
-      });
+      (virtualWindow
+        ? renderListboxWindow(
+            listbox.items,
+            virtualWindow,
+            {
+              selected: selectedSet,
+              activeValue: listbox.activeValue,
+              renderOption: renderWindowOption,
+            },
+            tagPickerClassNames.spacer,
+          )
+        : listbox.items.map((item) =>
+            item.value === ctx.createValue ? createOption : entryOption(item),
+          ));
   } else {
     // Registration mode: the consumer's options, then the create option after every option and
     // group.
@@ -1017,7 +1086,13 @@ function TagPickerListImpl({
       open={ctx.open}
       expanded={ctx.expanded}
       showCheck={false}
-      listClassName={wcn(tagPickerListClassNames.root, tagPickerClassNames.listbox, className)}
+      listClassName={wcn(
+        tagPickerListClassNames.root,
+        tagPickerClassNames.listbox,
+        // A windowed list is laid out by the window: the browser's scroll anchoring only fights it.
+        virtualWindow && 'wave:[overflow-anchor:none]',
+        className,
+      )}
       surfaceClassName={tagPickerClassNames.surface}
       motion={ctx.motion}
       emptyContent={
@@ -1037,7 +1112,7 @@ function TagPickerListImpl({
       }
       aria-label={ownName ? ariaLabel : ctx.listLabel['aria-label']}
       aria-labelledby={ownName ? ariaLabelledBy : ctx.listLabel['aria-labelledby']}
-      listProps={{ ...rest, ref }}
+      listProps={{ ...rest, ref: listRef }}
       parts={{ surface: slotProps?.surface }}
     >
       {content}
@@ -1058,7 +1133,8 @@ TagPickerListImpl.displayName = 'TagPickerListImpl';
  */
 export const TagPickerList = (props: TagPickerListProps) => {
   const ctx = useTagPickerContext('TagPicker.List');
-  if (!ctx) return null;
+  // Without a popup (`noPopover`) there is no list.
+  if (!ctx || ctx.noPopover) return null;
   return <TagPickerListImpl {...props} ctx={ctx} />;
 };
 TagPickerList.displayName = 'TagPickerList';

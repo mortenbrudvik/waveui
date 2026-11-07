@@ -275,6 +275,45 @@ export const Windowed: Story = {
   render: (args) => <WindowedDemo {...args} />,
 };
 
+/** A message list whose items wrap to one, two or three lines, windowed with measured heights. */
+function MeasuredDemo(props: ListProps) {
+  const { style, ...rest } = props;
+  // `itemSize` is the estimate for an item the window has not rendered yet: the median height.
+  const virtualWindow = useVirtualWindow({ itemSize: 64, measureItems: true });
+  return (
+    <List
+      {...rest}
+      style={{ ...style, height: 320 }}
+      virtualWindow={virtualWindow}
+      count={FILE_COUNT}
+    >
+      {(index) => (
+        <List.Item value={`message-${index + 1}`}>
+          {`Message ${index + 1}. ${MESSAGE_TEXT.slice(0, 40 + ((index * 53) % 7) * 40)}`}
+        </List.Item>
+      )}
+    </List>
+  );
+}
+
+const MESSAGE_TEXT =
+  'The build finished, but two of the checks that run after it need a second look before the ' +
+  'release goes out: the bundle grew by a few hundred bytes, and one story lost its accessible ' +
+  'name. Both are small, and both are listed in the notes of the pull request, with the places ' +
+  'to look and the commands that reproduce them on a clean checkout of the main branch.';
+
+/**
+ * A windowed list whose items have different heights: `useVirtualWindow({ itemSize, measureItems:
+ * true })` measures each item when it renders, lays the list out from the measured heights (and
+ * `itemSize`, an estimate, for the items it has not seen) and keeps what is in view in place when
+ * an item above it turns out taller or shorter than the estimate. Scroll fast and jump with the
+ * scrollbar: the thumb is as exact as the estimate, and the rows never jump.
+ */
+export const WindowedVariableHeights: Story = {
+  args: { 'aria-label': 'Messages' },
+  render: (args) => <MeasuredDemo {...args} />,
+};
+
 /**
  * `checkmark` draws a check at the start of every item of a selectable list while the item is
  * selected. An item's own `checkmark` replaces the glyph or, with `false`, hides it.

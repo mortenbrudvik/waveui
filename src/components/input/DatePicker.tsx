@@ -63,6 +63,7 @@ import {
 } from './dateUtils';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
+import { PickerClearButton } from './PickerClearButton';
 import {
   pickerButtonOffset,
   pickerEndPadding,
@@ -1112,7 +1113,8 @@ export const DatePicker = (props: DatePickerProps) => {
           ref={inputRefs}
         />
         {showClear && (
-          <button
+          <PickerClearButton
+            fallbackRef={inputRef}
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot
             // change it).
             type="button"
@@ -1134,7 +1136,7 @@ export const DatePicker = (props: DatePickerProps) => {
             })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-          </button>
+          </PickerClearButton>
         )}
         <button
           type="button"

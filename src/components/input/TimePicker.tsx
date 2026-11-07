@@ -48,10 +48,13 @@ import {
 import type { ListboxItem } from '../../hooks/useListbox';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useMotionClasses } from '../../hooks/useMotion';
+import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { HiddenInput } from '../internal/HiddenInput';
 import { Portal } from '../portal/Portal';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
+import { PickerClearButton } from './PickerClearButton';
+import { renderListboxWindow, useShownListScroll } from './Option.data';
 import {
   DEFAULT_TIME_STEP,
   generateTimeOptions,
@@ -344,6 +347,19 @@ export interface TimePickerProps extends Omit<
    */
   expandIcon?: Slot<'span'>;
   /**
+   * Renders only the options in view of a long list of times (a step of one minute makes 1,440),
+   * plus an overscan, and spacers (`aria-hidden`, `data-virtual-spacer`) as tall as the options
+   * they stand for: pass the result of `useVirtualWindow({ itemSize })`, or an object of your own
+   * that implements `VirtualWindow`. The open list is the window's scroller (it scrolls within its
+   * own maximum height, 15rem), has no block padding while windowed, and no scroll anchoring of
+   * the browser; every option is exactly `itemSize` tall (the default option with one line of
+   * text is 32 pixels tall). The window counts the listed options: typing
+   * narrows it, as it narrows `aria-setsize`. The keys move over all of them, the active option
+   * stays rendered while it is scrolled away, and opening the list scrolls the active option, else
+   * the selected one, to the middle. A closed list renders no option. The server renders no list.
+   */
+  virtualWindow?: VirtualWindow;
+  /**
    * Controlled open state of the list (never shown while `disabled` or `readOnly`). The list
    * renders only in the browser: an open picker is closed in the server HTML and opens once it has
    * hydrated.
@@ -589,6 +605,7 @@ export const TimePicker = (props: TimePickerProps) => {
     readOnly,
     clearable = false,
     expandIcon,
+    virtualWindow,
     open: openProp,
     defaultOpen,
     onOpenChange,
@@ -864,6 +881,11 @@ export const TimePicker = (props: TimePickerProps) => {
     onSelect: (next) => commitValue(next),
     items: allOptions,
     filter,
+    // An active option that the window does not render: scrolled to by its index among the shown
+    // options, the window's count.
+    onScrollToItem: virtualWindow
+      ? (index) => virtualWindow.scrollToIndex(index, { align: 'auto' })
+      : undefined,
     // Typing sets the active option itself (getTypedActiveValue in handleInputChange), so an exact
     // typed time wins over an earlier substring match; highlightOnFilter would force the first one.
     autoHighlight: draft === null && selectedInList ? 'selected' : false,
@@ -882,6 +904,29 @@ export const TimePicker = (props: TimePickerProps) => {
   // The popup surface mounts through the presence core: the list stays in it while it exits.
   const popup = usePickerSurfacePresence(open ? (hasMatches ? 'list' : 'empty') : null, lb.items);
   const motionClassName = useMotionClasses(motion, popupMotion);
+  // The window scrolls the shown list only (the closed list in place is another, hidden element).
+  const listScrollRef = useMergedRefs<HTMLUListElement>(
+    expanded ? virtualWindow?.scrollRef : undefined,
+  );
+  useShownListScroll(
+    expanded,
+    virtualWindow,
+    lb.items,
+    lb.activeValue,
+    selectedValue ? [selectedValue] : [],
+  );
+  const selectedSet = React.useMemo(() => new Set(selectedValues), [selectedValues]);
+  const renderWindowOption = React.useCallback(
+    (item: ListboxItem) => (
+      <TimePickerOption
+        value={item.value}
+        label={item.label}
+        part={slotProps?.option}
+        checkIconPart={slotProps?.checkIcon}
+      />
+    ),
+    [slotProps?.option, slotProps?.checkIcon],
+  );
 
   const displayLabel = selectedValue
     ? (lb.getItem(selectedKey)?.label ?? displayTime(selectedValue))
@@ -1058,8 +1103,13 @@ export const TimePicker = (props: TimePickerProps) => {
       {...mergeSlotProps(slotProps?.listbox, {
         className: wcn(
           timePickerClassNames.listbox,
-          'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden',
+          // A window counts the options from the top of the list: no block padding, and the
+          // browser's scroll anchoring only fights the window.
+          virtualWindow
+            ? 'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:[overflow-anchor:none] wave:focus:outline-hidden'
+            : 'wave:max-h-60 wave:min-h-0 wave:overflow-auto wave:py-1 wave:focus:outline-hidden',
         ),
+        ref: virtualWindow ? listScrollRef : undefined,
         locked: {
           inert: undefined,
           'aria-hidden': undefined,
@@ -1073,15 +1123,28 @@ export const TimePicker = (props: TimePickerProps) => {
         },
       })}
     >
-      {items.map((item) => (
-        <TimePickerOption
-          key={item.value}
-          value={item.value}
-          label={item.label}
-          part={slotProps?.option}
-          checkIconPart={slotProps?.checkIcon}
-        />
-      ))}
+      {virtualWindow
+        ? // The options of the window while the list shows; the closed list needs none.
+          !hidden &&
+          renderListboxWindow(
+            items,
+            virtualWindow,
+            {
+              selected: selectedSet,
+              activeValue: lb.activeValue,
+              renderOption: renderWindowOption,
+            },
+            timePickerClassNames.spacer,
+          )
+        : items.map((item) => (
+            <TimePickerOption
+              key={item.value}
+              value={item.value}
+              label={item.label}
+              part={slotProps?.option}
+              checkIconPart={slotProps?.checkIcon}
+            />
+          ))}
     </ul>
   );
 
@@ -1218,7 +1281,8 @@ export const TimePicker = (props: TimePickerProps) => {
             ref={inputRefs}
           />
           {showClear && (
-            <button
+            <PickerClearButton
+              fallbackRef={inputRef}
               // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot
               // change it).
               type="button"
@@ -1248,7 +1312,7 @@ export const TimePicker = (props: TimePickerProps) => {
               })}
             >
               <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-            </button>
+            </PickerClearButton>
           )}
           {showExpand && (
             <PickerExpandButton

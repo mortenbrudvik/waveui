@@ -37,6 +37,7 @@ import { useMergedRefs } from '../../hooks/useMergedRefs';
 import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { HiddenInput } from '../internal/HiddenInput';
 import { PickerExpandButton, showsExpandButton } from './Combobox.expand';
+import { PickerClearButton } from './PickerClearButton';
 import { insertedText, replacedText } from './Combobox.text';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
@@ -343,7 +344,7 @@ export interface ComboboxProps<M extends boolean = false> extends Omit<
    * within its own maximum height (15rem, 240 pixels at the default root size, less where the
    * viewport has no room). Every option is exactly `itemSize` tall (the list sets its height,
    * after the option's own `style`), so an option's content must fit in it: the default `Option`
-   * with one line of text is 32 pixels tall.
+   * with one line of text is 32 pixels tall. With a window that measures its rows (`useVirtualWindow({ itemSize, measureItems: true })`, `itemSize` being the estimate) an option has the height of its content instead, and carries the window's `itemProps`.
    *
    * The window counts the shown options: typing narrows it, as it narrows `aria-setsize`. The
    * arrow keys move over all of them; the active option stays rendered while it is scrolled away,
@@ -1122,7 +1123,8 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
           )}
         />
         {showClear && (
-          <button
+          <PickerClearButton
+            fallbackRef={inputRef}
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
@@ -1151,7 +1153,7 @@ const ComboboxRoot = (props: ComboboxProps<boolean>) => {
             })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-          </button>
+          </PickerClearButton>
         )}
         {showExpand && (
           <PickerExpandButton

@@ -40,6 +40,7 @@ import {
 } from '../button/Button.slots';
 import { isInvalidLook } from './Input';
 import { useInputLook } from './inputLook';
+import { PickerClearButton } from './PickerClearButton';
 
 /**
  * Props that SearchBox routes to its `<input>` (C-ROUTING): the id, the ARIA naming/validation
@@ -798,7 +799,8 @@ export const SearchBox = ({
 
       {/* No clear button while read-only: clearing would change a value the user cannot edit. */}
       {value && !readOnly ? (
-        <button
+        <PickerClearButton
+          fallbackRef={inputRef}
           // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change
           // it).
           type="button"
@@ -806,7 +808,7 @@ export const SearchBox = ({
           ref={clearRef}
         >
           {clearContent}
-        </button>
+        </PickerClearButton>
       ) : null}
     </div>
   );

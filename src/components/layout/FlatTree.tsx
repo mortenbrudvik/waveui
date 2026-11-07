@@ -29,7 +29,8 @@ export interface FlatTreeProps extends Omit<
   /**
    * Renders only the items in view (and a few beyond), from `useVirtualWindow({ itemSize })`. The
    * tree is then the scrolling element: give it a bounded height (a class or a style). Every item
-   * is exactly `itemSize` pixels tall, so its content must fit in one row. Without it every visible
+   * is exactly `itemSize` pixels tall, so its content must fit in one row (the rows are not measured:
+   * a window that measures its rows lays the tree out from its estimate). Without it every visible
    * item is rendered.
    *
    * The tree element is then no tab stop of its own while an item is (`tabIndex` -1, as Firefox

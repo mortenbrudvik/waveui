@@ -304,7 +304,8 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   listboxSurfaceClassNames: ['list'],
   comboboxClassNames: ['expandIcon'],
   dropdownClassNames: ['expandIcon'],
-  tagPickerClassNames: ['expandIcon'],
+  // `secondaryAction` (the root's and TagPicker.Control's) fills `secondaryAction`.
+  tagPickerClassNames: ['expandIcon', 'secondaryAction'],
   tagPickerOptionClassNames: ['media', 'secondaryContent'],
   timePickerClassNames: ['expandIcon'],
   colorSwatchClassNames: ['icon'],
@@ -399,6 +400,18 @@ export const SLOT_PART_EXCLUSIONS: readonly SlotPartExclusion[] = [
   },
   {
     component: 'dropdownClassNames',
+    key: 'spacer',
+    reason:
+      'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
+  },
+  {
+    component: 'timePickerClassNames',
+    key: 'spacer',
+    reason:
+      'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',
+  },
+  {
+    component: 'tagPickerClassNames',
     key: 'spacer',
     reason:
       'a virtual spacer: stands in for the options a windowed list does not render, sized by the window',

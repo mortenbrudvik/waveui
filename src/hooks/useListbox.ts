@@ -17,6 +17,7 @@ import { useEventCallback } from './useEventCallback';
 import { useId } from './useId';
 import { useMergedRefs } from './useMergedRefs';
 import { isAltGraphCharacter, useTypeahead } from './useTypeahead';
+import type { VirtualWindow } from './useVirtualWindow';
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -65,6 +66,19 @@ export interface ListboxSelectDetails {
   /** The committed option. */
   item: ListboxItem;
   /** The key or click event behind the commit. */
+  event: Event;
+}
+
+/**
+ * Second argument of {@link UseListboxOptions.onSelectRange}: the options a range key selects or
+ * deselects, and the event behind it.
+ */
+export interface ListboxRangeDetails {
+  /** The options of `values`, in list order. */
+  items: readonly ListboxItem[];
+  /** `true`: select them; `false`: deselect them (Ctrl+A on a list whose options are all selected). */
+  select: boolean;
+  /** The key event behind the change. */
   event: Event;
 }
 
@@ -183,6 +197,18 @@ export interface UseListboxOptions {
    * default), so you can clear the typed text. Not handled when omitted.
    */
   onClearDraft?: () => void;
+  /**
+   * Standalone and `multiselect` only: turns on the optional range keys of the APG listbox
+   * pattern and is called with the values they select or deselect. Shift+ArrowDown and
+   * Shift+ArrowUp move to the next or previous option and toggle it (through `onSelect`, as a
+   * click does); Shift+Space selects the options from the most recently selected one to the
+   * active one; Ctrl+Shift+Home and Ctrl+Shift+End select the active option and every option up
+   * to the first or the last, and move there; Ctrl+A (Cmd+A) selects every enabled option, or,
+   * when they all are selected already, deselects them. Only options that are navigable (not
+   * filtered out or hidden) and enabled are named; `values` holds the ones whose state changes,
+   * in list order. Without it the keys keep their plain meaning (the arrows move, Space toggles).
+   */
+  onSelectRange?: (values: readonly string[], details: ListboxRangeDetails) => void;
 }
 
 /** Props for the combobox element (spread them; see {@link UseListboxResult.getComboboxProps}). */
@@ -786,14 +812,16 @@ ListboxContext.displayName = 'ListboxContext';
 
 /**
  * Where an option of a data-mode list stands among the shown options: `index` from 0 and the
- * number of shown options, and in a windowed list the window's `itemSize`. Read by
- * {@link useListboxOption}, which renders `aria-posinset` and `aria-setsize` from it, and the
- * option's height from `itemSize`.
+ * number of shown options, and in a windowed list the window's `itemSize`, or, for a window that
+ * measures its rows, its `itemProps`. Read by {@link useListboxOption}, which renders
+ * `aria-posinset` and `aria-setsize` from it, and the option's height from `itemSize` (an
+ * option of a measuring window has the height of its content and the attributes of `itemProps`).
  */
 export interface ListboxOptionPosition {
   index: number;
   setSize: number;
   itemSize?: number;
+  itemProps?: VirtualWindow['itemProps'];
 }
 
 /**
@@ -956,6 +984,9 @@ function hasText(element: EventTarget): boolean {
 /** Ctrl/Cmd shortcuts that change the text: cut, paste, undo, redo. */
 const TEXT_SHORTCUTS: ReadonlySet<string> = new Set(['x', 'v', 'z', 'y']);
 
+/** The keys that move the caret of a text input. */
+const CARET_KEYS: ReadonlySet<string> = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
+
 /**
  * Editable: whether a keydown edits the text of the combobox input — printable characters (AltGr,
  * i.e. Ctrl+Alt, included), Backspace/Delete, the cut/paste/undo/redo shortcuts and the
@@ -1043,8 +1074,9 @@ export const OPTION_STATE_LOCKS = {
  * - **Keys (APG).** Editable: ArrowDown/ArrowUp open (selected, else first/last) and move;
  *   Alt+ArrowDown opens without moving; Alt+ArrowUp closes; Enter commits the active option (with
  *   the listbox closed Enter is not prevented, so forms submit); Escape closes (closed + text:
- *   `onClearDraft`); Tab closes; Home/End/printable keys stay with the input (text-editing keys
- *   clear the highlight, see above). Select-only:
+ *   `onClearDraft`); Tab closes; Home/End, ArrowLeft/ArrowRight and printable keys stay with the
+ *   input (text-editing keys and caret keys clear the highlight and `aria-activedescendant`, which
+ *   returns visual focus to the textbox as the APG editable combobox does). Select-only:
  *   ArrowDown/ArrowUp/Home/End/typeahead open and position (a closed typeahead starts from the
  *   selected option; characters typed with AltGr, i.e. Ctrl+Alt on Windows, count); PageUp/PageDown
  *   jump 10; Enter/Space open or commit (always prevented on keydown, Space also on keyup, so a
@@ -1103,6 +1135,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     onScrollToItem,
     idPrefix,
     onClearDraft,
+    onSelectRange,
   } = options;
 
   const standalone = mode === 'standalone';
@@ -1193,10 +1226,14 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   });
   const { activeValue, activeDescendantId } = ad;
 
+  // The option a range key (Shift+Space) extends from: the one most recently selected by a commit.
+  const anchorRef = useRef<string | null>(null);
+
   const commit = useEventCallback(
     (value: string, reason: 'select' | 'tab', event: Event, fallbackItem?: ListboxItem): void => {
       const item = itemByValue.get(value) ?? fallbackItem;
       if (!item || item.disabled) return;
+      if (multiselect && !selectedSet.has(value)) anchorRef.current = value;
       onSelect(value, { item, event });
       // Standalone and multi-select commits keep the list as it is, on the committed option.
       if (standalone || (multiselect && reason === 'select')) {
@@ -1238,7 +1275,7 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
   // event parameter of its own (useTypeahead is unchanged by this hook).
   const keyEventRef = useRef<Event | null>(null);
 
-  const { onTypeahead } = useTypeahead({
+  const { onTypeahead, isSearching } = useTypeahead({
     getItems: () =>
       navigable.map((item) => ({
         value: item.value,
@@ -1252,6 +1289,70 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     },
   });
 
+  /**
+   * The range keys (see {@link UseListboxOptions.onSelectRange}). Returns whether the key was
+   * handled; one that does not apply (no active option, an unrelated key) is left to the plain
+   * keys.
+   */
+  const handleRangeKey = (event: React.KeyboardEvent): boolean => {
+    if (!onSelectRange || event.altKey) return false;
+    const { key, shiftKey } = event;
+    const modifier = event.ctrlKey || event.metaKey;
+    const activeIndex = activeValue === null ? -1 : navigationValues.indexOf(activeValue);
+    const itemOf = (value: string) => itemByValue.get(value) as ListboxItem;
+    const enabled = (value: string) => !itemByValue.get(value)?.disabled;
+    const report = (values: readonly string[], select: boolean) => {
+      if (values.length === 0) return;
+      onSelectRange(values, { items: values.map(itemOf), select, event: event.nativeEvent });
+    };
+    // The enabled options of `values` that are not selected yet.
+    const unselected = (values: readonly string[]) =>
+      values.filter((value) => enabled(value) && !selectedSet.has(value));
+
+    if (modifier && !shiftKey && key.toLowerCase() === 'a') {
+      event.preventDefault();
+      const everyEnabled = navigationValues.filter(enabled);
+      const missing = unselected(everyEnabled);
+      if (missing.length > 0) report(missing, true);
+      else report(everyEnabled, false);
+      return true;
+    }
+    if (modifier && shiftKey && (key === 'Home' || key === 'End')) {
+      event.preventDefault();
+      const target =
+        key === 'Home' ? navigationValues[0] : navigationValues[navigationValues.length - 1];
+      if (target === undefined) return true;
+      const range =
+        activeIndex === -1
+          ? [target]
+          : key === 'Home'
+            ? navigationValues.slice(0, activeIndex + 1)
+            : navigationValues.slice(activeIndex);
+      ad.setActiveValue(target);
+      report(unselected(range), true);
+      return true;
+    }
+    if (modifier || !shiftKey || activeIndex === -1) return false;
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
+      event.preventDefault();
+      const next = navigationValues[activeIndex + (key === 'ArrowDown' ? 1 : -1)];
+      if (next === undefined) return true;
+      ad.setActiveValue(next);
+      commit(next, 'select', event.nativeEvent);
+      return true;
+    }
+    if (key === ' ' && !isSearching()) {
+      event.preventDefault();
+      const anchorIndex =
+        anchorRef.current === null ? -1 : navigationValues.indexOf(anchorRef.current);
+      const from = Math.min(anchorIndex === -1 ? activeIndex : anchorIndex, activeIndex);
+      const to = Math.max(anchorIndex === -1 ? activeIndex : anchorIndex, activeIndex);
+      report(unselected(navigationValues.slice(from, to + 1)), true);
+      return true;
+    }
+    return false;
+  };
+
   const onKeyDown = useEventCallback((event: React.KeyboardEvent) => {
     if (event.defaultPrevented || event.nativeEvent.isComposing) return;
     // Every open change and commit below comes from this key, so its native event is always
@@ -1263,6 +1364,15 @@ export function useListbox(options: UseListboxOptions): UseListboxResult {
     if (mode === 'editable' && open && editsText(event)) {
       ad.setActiveValue(highlightOnFilter ? (navigationValues[0] ?? null) : null);
     }
+    // Editable: a key that moves the caret (ArrowLeft, ArrowRight, Home, End, with Shift or Ctrl
+    // too) is the input's, and returns visual focus to the textbox as the APG editable combobox
+    // does: the highlight and `aria-activedescendant` are cleared, so a screen reader does not read
+    // an option while the caret moves through the text. Alt+Arrow keys open and close the list.
+    if (mode === 'editable' && open && !event.altKey && CARET_KEYS.has(event.key)) {
+      if (activeValue !== null) ad.setActiveValue(null);
+    }
+    // The range keys of a standalone multi-select list, before Ctrl and Meta are left to the page.
+    if (standalone && multiselect && onSelectRange && handleRangeKey(event)) return;
     const altGraph = isAltGraphCharacter(event);
     if ((event.ctrlKey && !altGraph) || event.metaKey) return;
     const { key, altKey } = event;
@@ -1606,8 +1716,12 @@ export function useListboxOption<E extends HTMLElement = HTMLElement>(
   if (position) {
     optionProps['aria-setsize'] = position.setSize;
     optionProps['aria-posinset'] = position.index + 1;
-    // A windowed list lays its options out at exactly the window's item size.
-    if (position.itemSize !== undefined) {
+    // A windowed list lays its options out at exactly the window's item size, or, in a window
+    // that measures its rows, at the height of their content, found by the window's attributes.
+    if (position.itemProps) {
+      Object.assign(optionProps, position.itemProps(position.index));
+      optionProps.style = { boxSizing: 'border-box', flexShrink: 0 };
+    } else if (position.itemSize !== undefined) {
       optionProps.style = { height: position.itemSize, boxSizing: 'border-box', flexShrink: 0 };
     }
   }

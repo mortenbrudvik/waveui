@@ -40,6 +40,7 @@ export { InteractionTag, InteractionTagPrimary, InteractionTagSecondary } from '
 export type {
   InteractionTagProps,
   InteractionTagPrimaryProps,
+  InteractionTagPrimaryOwnProps,
   InteractionTagSecondaryProps,
 } from './InteractionTag';
 

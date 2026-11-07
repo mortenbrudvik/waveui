@@ -21,7 +21,7 @@ import {
   useDataModeWarnings,
   useItemsAndChildrenWarning,
 } from './Option.data';
-import { announceToggle, PickerAnnouncer } from './pickerLabels';
+import { announceRange, announceToggle, PickerAnnouncer } from './pickerLabels';
 import { EMPTY_VALUES, resetValues, toggleValue, toValues } from './pickerValues';
 
 /* ------------------------------------------------------------------ */
@@ -45,6 +45,19 @@ export interface ListboxLabels {
    * @default (label, count) => `${label} removed, ${count} selected`
    */
   removed?: (label: string, count: number) => string;
+  /**
+   * Announced when a range key (Shift+Space, Ctrl+Shift+Home/End, Ctrl+A) selects several options
+   * of a `multiselect` list at once; `changed` is the number of options it selected and
+   * `count` the number of values selected after the change.
+   * @default (changed, count) => `${changed} added, ${count} selected`
+   */
+  rangeAdded?: (changed: number, count: number) => string;
+  /**
+   * Announced when Ctrl+A deselects every option of a `multiselect` list; `changed` is the number
+   * of options it deselected and `count` the number of values selected after the change.
+   * @default (changed, count) => `${changed} removed, ${count} selected`
+   */
+  rangeRemoved?: (changed: number, count: number) => string;
 }
 
 /** Properties for the Listbox component. */
@@ -143,7 +156,10 @@ export interface ListboxProps<M extends boolean = false> extends Omit<
    * `className`), so the options start at its top, where the window counts them, and no scroll
    * anchoring of the browser (the window lays the options out). Every option is exactly
    * `itemSize` tall (the list sets its height, after the option's own `style`), so an option's
-   * content must fit in it: the default `Option` with one line of text is 32 pixels tall.
+   * content must fit in it: the default `Option` with one line of text is 32 pixels tall. With a
+   * window that measures its rows (`useVirtualWindow({ itemSize, measureItems: true })`,
+   * `itemSize` being the estimate) an option has the height of its content instead, and carries
+   * the window's `itemProps`.
    *
    * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
    * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the
@@ -307,6 +323,20 @@ const ListboxRoot = (props: ListboxProps<boolean>) => {
       // callback. `details` carries the registered option (or the item), whose label is its text.
       announceToggle(labels, details.item.label ?? next, added, updated.length);
     },
+    // The optional range keys of the APG pattern: only a multi-select list has them.
+    onSelectRange: multiselect
+      ? (rangeValues, details) => {
+          if (disabled) return;
+          const changing = new Set(rangeValues);
+          const present = new Set(values);
+          const updated = details.select
+            ? [...values, ...rangeValues.filter((value) => !present.has(value))]
+            : values.filter((value) => !changing.has(value));
+          if (updated.length === values.length) return;
+          setValue(updated);
+          announceRange(labels, rangeValues.length, details.select, updated.length);
+        }
+      : undefined,
     onActiveValueChange: onActiveOptionChange,
     idPrefix: 'listbox',
   });
@@ -497,8 +527,13 @@ export const ListboxOptionGroup = OptionGroup;
  *   Listbox keeps the selected option when it is selected again (no deselection). `multiselect`
  *   turns the value into an array: options draw a checkbox, Space, Enter and a click toggle an
  *   option, the value keeps selection order, and every toggle the user makes is announced
- *   (`labels.added`/`labels.removed`; never a controlled change or a form reset). A non-literal
- *   `multiselect={flag}` is a type error: render two elements, one for each mode.
+ *   (`labels.added`/`labels.removed`; never a controlled change or a form reset). A multi-select
+ *   list also has the range keys of the APG pattern: Shift+ArrowDown and Shift+ArrowUp move and
+ *   toggle the next or previous option, Shift+Space selects the options from the most recently
+ *   selected one to the active one, Ctrl+Shift+Home and Ctrl+Shift+End select up to the first or
+ *   last option and move there, and Ctrl+A (Cmd+A) selects every enabled option, or deselects them
+ *   when they all are selected (`labels.rangeAdded`/`labels.rangeRemoved` announce them). A
+ *   non-literal `multiselect={flag}` is a type error: render two elements, one for each mode.
  * - **Disabled.** `disabled` takes the list out of the tab order (a click does not focus it
  *   either), dims it, takes pointer input off its options, selects nothing and submits nothing.
  *   Disabled options are skipped by the keys unless `disabledOptionsFocusable`, and are never

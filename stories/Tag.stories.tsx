@@ -260,6 +260,19 @@ export const Disabled: Story = {
 };
 
 /**
+ * `disabledFocusable` dims the tag like `disabled` but keeps its dismiss button focusable
+ * (`aria-disabled`): it stays in the Tab order, so a Tooltip can say why, and does nothing.
+ */
+export const DisabledFocusable: Story = {
+  args: {
+    disabledFocusable: true,
+    dismissible: true,
+    onDismiss: fn(),
+  },
+  render: (args) => <Tag {...args}>Disabled but focusable</Tag>,
+};
+
+/**
  * `selected` is a look only (the brand fill, `data-selected`): a Tag is not interactive, so the
  * state is not announced. For a tag the user selects, use
  * [InteractionTag](?path=/docs/components-data-display-interactiontag--docs), whose primary

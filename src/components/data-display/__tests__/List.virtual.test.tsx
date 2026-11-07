@@ -193,6 +193,9 @@ const zebraItem = (index: number) => (
   <List.Item value={`file-${index}`}>{index === COUNT - 1 ? 'Zebra' : `File ${index}`}</List.Item>
 );
 
+/** The labels of {@link zebraItem}. */
+const zebraLabel = (index: number) => (index === COUNT - 1 ? 'Zebra' : `File ${index}`);
+
 /** An item per index, each with a "Rename" text field as its action. */
 const inputItem = (index: number) => (
   <List.Item value={`file-${index}`} action={<input aria-label={`Rename ${index}`} />}>
@@ -1237,6 +1240,104 @@ describe('List virtualWindow', () => {
         </>,
       );
       expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('typeahead over every item (getItemLabel)', () => {
+    /** Every item is "File <index>", but item 37 of each hundred is "Mango <index>". */
+    const mangoLabel = (index: number) => (index % 100 === 37 ? `Mango ${index}` : `File ${index}`);
+    const mangoItem = (index: number) => (
+      <List.Item value={`file-${index}`}>{mangoLabel(index)}</List.Item>
+    );
+
+    it('moves focus to an item that is not rendered, scrolled into view and focused once it renders', async () => {
+      render(<WindowedList selectable renderItem={zebraItem} getItemLabel={zebraLabel} />);
+      await focus(item(0));
+      await press('z');
+      expect(listRoot().scrollTop).toBe(MAX_SCROLL);
+      expect(document.activeElement).toBe(option('Zebra'));
+      expect(document.activeElement).toHaveAttribute('aria-posinset', String(COUNT));
+    });
+
+    it('matches from the focused item and wraps around, and a repeated character cycles', async () => {
+      render(<WindowedList selectable renderItem={mangoItem} getItemLabel={mangoLabel} />);
+      await focus(item(0));
+      await press('m');
+      expect(document.activeElement).toHaveTextContent('Mango 37');
+      // The same character again moves on to the next match, which is not rendered either.
+      await press('m');
+      expect(document.activeElement).toHaveTextContent('Mango 137');
+    });
+
+    it('matches a longer prefix, keeping the focused item when it still matches', async () => {
+      render(<WindowedList selectable renderItem={mangoItem} getItemLabel={mangoLabel} />);
+      await focus(item(0));
+      await press('m');
+      await press('a');
+      await press('n');
+      expect(document.activeElement).toHaveTextContent('Mango 37');
+      expect(document.activeElement).toHaveAttribute('aria-posinset', '38');
+    });
+
+    it('keeps a Space that continues a search from toggling the focused item', async () => {
+      render(<WindowedList selectable renderItem={mangoItem} getItemLabel={mangoLabel} />);
+      await focus(item(0));
+      for (const key of ['m', 'a', 'n', 'g', 'o']) await press(key);
+      expect(await press(' ')).toBe(false);
+      expect(document.activeElement).toHaveTextContent('Mango 37');
+      expect(document.activeElement).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('lets a key that matches nothing stand, and a search that has begun consume the rest', async () => {
+      render(<WindowedList selectable renderItem={mangoItem} getItemLabel={mangoLabel} />);
+      await focus(item(0));
+      expect(await press('q')).toBe(true);
+      expect(document.activeElement).toBe(item(0));
+      // "qq" is a search in progress that matches nothing: it is consumed.
+      expect(await press('q')).toBe(false);
+    });
+
+    it('skips an item with no label', async () => {
+      render(
+        <WindowedList
+          selectable
+          renderItem={mangoItem}
+          getItemLabel={(index) => (index === 37 ? null : mangoLabel(index))}
+        />,
+      );
+      await focus(item(0));
+      await press('m');
+      expect(document.activeElement).toHaveTextContent('Mango 137');
+    });
+
+    it('is off in a list of seven items or fewer, and does not read labels without a window', async () => {
+      const getItemLabel = vi.fn(mangoLabel);
+      render(<WindowedList selectable count={7} getItemLabel={getItemLabel} />);
+      await focus(item(0));
+      await press('f');
+      expect(getItemLabel).not.toHaveBeenCalled();
+    });
+
+    it('leaves the keys of a text field in an item alone', async () => {
+      const getItemLabel = vi.fn(mangoLabel);
+      render(
+        <WindowedList
+          navigationMode="composite"
+          renderItem={inputItem}
+          getItemLabel={getItemLabel}
+        />,
+      );
+      const input = screen.getByRole('textbox', { name: 'Rename 3' });
+      await focus(input);
+      await press('m');
+      expect(getItemLabel).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(input);
+    });
+
+    it('types getItemLabel', () => {
+      expectTypeOf<ListProps['getItemLabel']>().toEqualTypeOf<
+        ((index: number) => string | null | undefined) | undefined
+      >();
     });
   });
 

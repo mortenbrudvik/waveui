@@ -38,6 +38,7 @@ import type { VirtualWindow } from '../../hooks/useVirtualWindow';
 import { unwrapButtonGlyph } from '../button/Button.slots';
 import { HiddenInput } from '../internal/HiddenInput';
 import { showsExpandButton } from './Combobox.expand';
+import { PickerClearButton } from './PickerClearButton';
 import { useInputLook } from './inputLook';
 import { isInvalidLook } from './Input';
 import {
@@ -270,7 +271,7 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    * within its own maximum height (15rem, 240 pixels at the default root size, less where the
    * viewport has no room). Every option is exactly `itemSize` tall (the list sets its height,
    * after the option's own `style`), so an option's content must fit in it: the default `Option`
-   * with one line of text is 32 pixels tall.
+   * with one line of text is 32 pixels tall. With a window that measures its rows (`useVirtualWindow({ itemSize, measureItems: true })`, `itemSize` being the estimate) an option has the height of its content instead, and carries the window's `itemProps`.
    *
    * The window counts the shown options (the items that are not `hidden`). The keys and typeahead
    * move over all of them (Home and End to the first and the last, PageUp and PageDown by ten); the
@@ -334,7 +335,9 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
      * `autoFocus`, `name`, `form` and `required` (the value is submitted by the Dropdown's
      * hidden input), `hidden`, `inert` and `aria-hidden` (a focusable control is never hidden).
      * Your handlers run before the Dropdown's: `preventDefault()` in your `onClick` keeps the
-     * list as it is, in your `onKeyDown` skips the listbox keys.
+     * list as it is, in your `onKeyDown` skips the listbox keys, in your `onPointerDown` keeps
+     * the press from focusing the button (WebKit does not focus a clicked `<button>`, so the
+     * Dropdown does, with the primary button, and the keys work after a mouse click).
      */
     button?: SlotPart<'button'>;
     /**
@@ -607,6 +610,16 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
         )
       : displayText;
 
+  // WebKit (Safari) does not focus a `<button>` that a mouse press clicks, so the opened list would
+  // have no keyboard focus (Home, End, PageDown and typeahead do nothing): the press focuses it,
+  // as Chromium and Firefox do on mousedown. A programmatic focus after a pointer press shows no
+  // focus ring.
+  const focusOnPress = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    const button = event.currentTarget;
+    if (button.ownerDocument.activeElement !== button) button.focus({ preventScroll: true });
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'Escape' && open && !expanded && !event.nativeEvent.isComposing) {
       // Open with nothing shown (no options): close, but leave Escape to an enclosing layer
@@ -705,6 +718,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
               autoFocus,
               tabIndex,
               onClick: () => setOpen((current) => !current),
+              onPointerDown: focusOnPress,
               onKeyDown: composeEventHandlers(onKeyDown, handleKeyDown),
               onKeyUp: composeEventHandlers(onKeyUp, listbox.onKeyUp),
               onFocus,
@@ -760,7 +774,8 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             ))}
         </button>
         {showClear && (
-          <button
+          <PickerClearButton
+            fallbackRef={buttonRef}
             // The literal marks C-BUTTON-TYPE; the merged props lock the type (a part cannot change it).
             type="button"
             {...mergeSlotProps(slotProps?.clearButton, {
@@ -790,7 +805,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
             })}
           >
             <DismissIcon size={pickerGlyphSize(size, 'icon')} />
-          </button>
+          </PickerClearButton>
         )}
       </div>
       <PickerListboxSurface

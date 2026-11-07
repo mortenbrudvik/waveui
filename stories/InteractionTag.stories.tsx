@@ -240,6 +240,40 @@ export const Disabled: Story = {
 };
 
 /**
+ * `disabledFocusable` makes both buttons unavailable like `disabled`, but they stay focusable and
+ * in the Tab order (`aria-disabled`), so a Tooltip can say why and a toolbar keeps its arrow order.
+ */
+export const DisabledFocusable: Story = {
+  args: {
+    disabledFocusable: true,
+  },
+  render: (args) => (
+    <InteractionTag {...args}>
+      <InteractionTag.Primary onClick={fn()}>Cherry</InteractionTag.Primary>
+      <InteractionTag.Secondary onClick={fn()} />
+    </InteractionTag>
+  ),
+};
+
+/**
+ * The Primary is polymorphic: `as="a"` with an `href` makes a link chip that keeps the tag's look
+ * and its Secondary.
+ */
+export const PrimaryAsLink: Story = {
+  args: {
+    value: 'docs',
+  },
+  render: (args) => (
+    <InteractionTag {...args}>
+      <InteractionTag.Primary as="a" href="#docs">
+        Documentation
+      </InteractionTag.Primary>
+      <InteractionTag.Secondary onClick={fn()} />
+    </InteractionTag>
+  ),
+};
+
+/**
  * The Primary as a Popover's trigger (Fluent's "has primary action"): it opens details about the
  * person, and the Secondary stays a separate Dismiss button.
  */
