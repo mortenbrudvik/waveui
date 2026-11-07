@@ -157,8 +157,25 @@ function parseStoryFile(fileName: string, text: string): ParsedStoryFile {
   return { title, componentIdentifier, storyNames };
 }
 
-/** The component entries, sorted by category and then name. Reads the stories on every call. */
+let cached: readonly ComponentEntry[] | undefined;
+
+function copyEntry(entry: ComponentEntry): ComponentEntry {
+  return { ...entry, storyNames: [...entry.storyNames] };
+}
+
+/**
+ * The component entries, sorted by category and then name. The stories are read on the first call
+ * of the process (every page of a build asks for the catalog); each call returns a copy, so a caller
+ * may change what it gets. A story file added while `astro dev` runs needs a restart, as the
+ * generated example islands do.
+ */
 export function getCatalog(): ComponentEntry[] {
+  cached ??= readCatalog();
+  return cached.map(copyEntry);
+}
+
+/** The component entries, read from the story files on every call ({@link getCatalog} keeps them). */
+export function readCatalog(): ComponentEntry[] {
   const directory = resolve(REPO_ROOT, STORIES_DIR);
   const entries: ComponentEntry[] = [];
   for (const file of readdirSync(directory)

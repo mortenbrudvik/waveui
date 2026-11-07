@@ -1,9 +1,15 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as library from '../../../src';
-import { getCatalog } from './catalog';
+import { getCatalog, readCatalog } from './catalog';
+
+// The catalog's reads of the stories directory are counted (the memo test); every call passes on.
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs')>();
+  return { ...fs, readdirSync: vi.fn(fs.readdirSync) };
+});
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -104,9 +110,24 @@ describe('component catalog', () => {
     const original = process.cwd();
     process.chdir(resolve(REPO_ROOT, 'website'));
     try {
-      expect(getCatalog()).toHaveLength(80);
+      expect(readCatalog()).toHaveLength(80);
     } finally {
       process.chdir(original);
     }
+  });
+
+  it('reads the stories once per process and hands out copies the caller may change', () => {
+    getCatalog();
+    vi.mocked(readdirSync).mockClear();
+    const first = getCatalog();
+    const second = getCatalog();
+    expect(readdirSync).not.toHaveBeenCalled();
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
+    first.pop();
+    first[0]!.name = 'Changed';
+    first[1]!.storyNames.push('Changed');
+    expect(getCatalog()).toEqual(second);
+    expect(getCatalog()).toEqual(readCatalog());
   });
 });
