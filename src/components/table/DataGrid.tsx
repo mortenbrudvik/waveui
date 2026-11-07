@@ -1968,6 +1968,7 @@ const DataGridSelectionCell = ({
   ref,
   ...rest
 }: DataGridSelectionCellProps) => {
+  const appClassName = useAppClassName(dataGridSelectionCellClassNames.root);
   const { selectionMode } = useDataGridContext('DataGrid.SelectionCell');
   const section = React.useContext(DataGridSectionContext);
   const firstHeaderRowHint = React.useContext(DataGridHeaderRowHintContext);
@@ -2008,7 +2009,7 @@ const DataGridSelectionCell = ({
         stableClassName={dataGridSelectionCellClassNames.root}
         cellProps={{
           ...rest,
-          className: wcn(rowProps?.className, className),
+          className: wcn(rowProps?.className, appClassName, className),
           disabled: disabled ?? rowProps?.disabled,
           invisible: invisible ?? rowProps?.invisible,
           'aria-label': ariaLabel ?? rowProps?.['aria-label'],
@@ -2025,7 +2026,7 @@ const DataGridSelectionCell = ({
       ref={ref}
       component="DataGrid.SelectionCell"
       stableClassName={dataGridSelectionCellClassNames.root}
-      className={className}
+      className={wcn(appClassName, className)}
       controlRef={controlRef}
       aria-describedby={ariaDescribedBy}
     />
