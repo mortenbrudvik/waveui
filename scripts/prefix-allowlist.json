@@ -37,6 +37,7 @@
   "src/components/input/inputLook.ts": ["outline", "underline"],
   "src/components/input/pickerStyles.ts": ["outline"],
   "src/components/internal/HiddenInput.tsx": ["absolute", "hidden"],
+  "src/components/layout/Card.tsx": ["group"],
   "src/components/layout/Carousel.tsx": ["group", "inline"],
   "src/components/layout/Overflow.store.ts": ["hidden", "resize", "visible"],
   "src/components/layout/Overflow.tsx": ["hidden", "resize", "visible"],

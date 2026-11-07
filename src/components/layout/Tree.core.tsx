@@ -699,6 +699,16 @@ export interface TreeItemProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   leaf?: boolean;
   /**
+   * Keeps the `actions` shown whatever the pointer and focus do, so a hidden action cannot refuse
+   * the focus that a surface returns to it. Set it while a Dialog, Menu or Popover that your app
+   * renders outside `actions` and opens through state (a "Delete…" menu item that opens a confirm
+   * Dialog) is open, and clear it after the surface has closed and returned focus: the actions
+   * then take that focus instead of the item. The actions also give way to the `aside` while held,
+   * as while they have focus. Rendered as `data-focus-in-popup` on the actions.
+   * @default false
+   */
+  actionsVisible?: boolean;
+  /**
    * Controls this item's expanded state from outside the tree's list (Fluent UI's `TreeItem
    * open`): `true` shows the child group, `false` hides it, whatever `expandedItems` and
    * `defaultExpandedItems` say about this item. The item's chevron, Enter, Space, the arrow keys
@@ -871,6 +881,8 @@ interface TreeItemActionsProps {
   navigationMode: 'tree' | 'treegrid';
   /** Moves focus back to the item. */
   onReturn: () => void;
+  /** The item's `actionsVisible`: the actions stay shown whatever the pointer and focus do. */
+  held: boolean;
   /** The item's `slotProps.actions`, merged only when given. */
   part: SlotPart<'span'> | undefined;
   children: React.ReactNode;
@@ -887,6 +899,7 @@ const TreeItemActions = ({
   tabStop,
   navigationMode,
   onReturn,
+  held,
   part,
   children,
 }: TreeItemActionsProps) => {
@@ -966,7 +979,7 @@ const TreeItemActions = ({
   // A part's ref joins the roving container's after the spread, so an inline ref never detaches
   // the container (which would hand its stamped tab stops back).
   const toolbarRef = useMergedRefs<HTMLSpanElement>(rovingRef, part?.ref);
-  const focusInPopup = popupFocus === null ? undefined : '';
+  const focusInPopup = popupFocus === null && !held ? undefined : '';
   const className = wcn(
     treeItemClassNames.actions,
     'wave:inline-flex wave:items-center wave:gap-1',
@@ -1057,6 +1070,7 @@ export const TreeItem = ({
   aside,
   actions,
   leaf = false,
+  actionsVisible = false,
   open,
   onOpenChange,
   className,
@@ -1610,6 +1624,7 @@ export const TreeItem = ({
                 }
                 navigationMode={ctx.navigationMode}
                 onReturn={() => ctx.focusValue(value)}
+                held={actionsVisible}
                 part={slotProps?.actions}
               >
                 {materialiseSlotContent(actions)}
