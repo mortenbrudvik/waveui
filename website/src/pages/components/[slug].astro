@@ -19,7 +19,9 @@ import { getCatalog, type ComponentEntry } from '../../catalog/catalog';
 import { exampleAnchors, getSiteImportSizes, isHookEntry, pageSections } from '../../docs/page';
 import { extractDocs } from '../../docs/props';
 import { getLibraryVersion } from '../../docs/sizes';
+import { analyzeExample } from '../../examples/analysis';
 import { readSkippedStories } from '../../examples/islands';
+import { buildPageStoryReport, writePageStoryReport } from '../../examples/storyReport';
 import { loadStory } from '../../stories/runtime';
 import { extractStorySource } from '../../stories/source';
 
@@ -47,6 +49,11 @@ const stories = await Promise.all(
     source: extractStorySource(entry.storyFile, exportName),
   })),
 );
+// The build's report of which stories render, skipped ones included, for `npm run site:check`
+// (scripts/check-skipped.mjs). Written by the build only; the dev server writes nothing.
+if (import.meta.env.PROD) {
+  writePageStoryReport(await buildPageStoryReport(entry, analyzeExample));
+}
 const propsTable = !hook && docs.props.length > 0;
 const sections = pageSections({
   examples: stories.length,

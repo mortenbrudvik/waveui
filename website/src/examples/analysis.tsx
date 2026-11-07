@@ -102,7 +102,24 @@ let catalog: ComponentEntry[] | undefined;
  * page that names no component is a bug of the page); a story that cannot be loaded or composed
  * is a `serverError`, so the page still builds and the island shows the panel.
  */
-export async function analyzeExample(slug: string, storyName: string): Promise<ExampleAnalysis> {
+export function analyzeExample(slug: string, storyName: string): Promise<ExampleAnalysis> {
+  const key = `${slug}#${storyName}`;
+  let analysis = analyses.get(key);
+  if (!analysis) {
+    analysis = analyzeUncached(slug, storyName);
+    analyses.set(key, analysis);
+  }
+  return analysis;
+}
+
+/**
+ * Analyses are kept for the life of the build process: a page analyses each of its stories for
+ * the story report (`storyReport.ts`) and again for each example, and a story renders the same
+ * every time. A rejected analysis (an unknown slug) is kept too, and rejects again.
+ */
+const analyses = new Map<string, Promise<ExampleAnalysis>>();
+
+async function analyzeUncached(slug: string, storyName: string): Promise<ExampleAnalysis> {
   catalog ??= getCatalog();
   const entry = catalog.find((candidate) => candidate.slug === slug);
   if (!entry) throw new Error(`No catalog entry has the slug "${slug}"`);
