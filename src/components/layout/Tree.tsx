@@ -2,10 +2,12 @@ import { TreeItem, TreeRoot } from './Tree.core';
 import { TreeItemPersonaLayout } from './Tree.itemPersonaLayout';
 
 export type {
+  TreeAppearance,
   TreeCheckedItemsChangeDetails,
   TreeItemProps,
   TreeOpenChangeDetails,
   TreeProps,
+  TreeSize,
 } from './Tree.core';
 export type { TreeItemPersonaLayoutProps } from './Tree.itemPersonaLayout';
 

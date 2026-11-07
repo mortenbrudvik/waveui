@@ -47,6 +47,8 @@ export type {
   TreeItemPersonaLayoutProps,
   TreeCheckedItemsChangeDetails,
   TreeOpenChangeDetails,
+  TreeAppearance,
+  TreeSize,
 } from './Tree';
 
 export { useFlatTree } from './useFlatTree';

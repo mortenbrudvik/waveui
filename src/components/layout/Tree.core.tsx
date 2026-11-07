@@ -35,16 +35,22 @@ import {
   type PersonaLayoutIds,
   type TreeContextValue,
   type TreeItemContextValue,
+  type TreeAppearance,
   type TreeItemOpenControl,
   type TreeOpenChangeDetails,
   type TreeSelectionEntry,
+  type TreeSize,
 } from './Tree.context';
 
-export type { TreeOpenChangeDetails };
+export type { TreeAppearance, TreeOpenChangeDetails, TreeSize };
 import {
+  allItemValues,
+  checkItems,
+  checkItemsIndependent,
   collectItems,
   computeCheckStates,
   toggleCheck,
+  toggleCheckIndependent,
   type CheckState,
   type TreeNode,
 } from './Tree.selection';
@@ -100,6 +106,22 @@ function forestInTreeOrder(
  * roving container of their own, which the default selector would count as one more item.
  */
 const TREE_ITEM_SELECTOR = '[role="treeitem"]';
+
+/** The gap and vertical padding of a row, per size (24 and 28px high). Literal strings only. */
+const ROW_SIZE_CLASSES: Readonly<Record<TreeSize, { gap: string; padding: string }>> = {
+  small: { gap: 'wave:gap-1', padding: 'wave:py-0.5' },
+  medium: { gap: 'wave:gap-1.5', padding: 'wave:py-1' },
+};
+
+/** The hover and selected fills of a row, per appearance. Literal strings only. */
+const ROW_LOOKS: Readonly<Record<TreeAppearance, { hover: string; selected: string }>> = {
+  subtle: { hover: 'wave:hover:bg-subtle-hover', selected: 'wave:bg-subtle-selected' },
+  'subtle-alpha': {
+    hover: 'wave:hover:bg-subtle-hover/60',
+    selected: 'wave:bg-subtle-selected/70',
+  },
+  transparent: { hover: '', selected: '' },
+};
 
 /** Every focusable control a row's actions can hold (Toolbar's rule). */
 const ACTION_ITEM_SELECTOR = 'button, [href], input, select, textarea, [role="button"], [tabindex]';
@@ -237,6 +259,28 @@ export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
    */
   onCheckedItemsChange?: (checkedItems: string[], details: TreeCheckedItemsChangeDetails) => void;
   /**
+   * Size of the rows (Fluent UI's `Tree size`): `small` rows are 24px high, `medium` 28px. Rendered
+   * as `data-size` on the tree.
+   * @default 'medium'
+   */
+  size?: TreeSize;
+  /**
+   * With `selectionMode="multiple"`, makes the checks independent: checking an item checks only
+   * that item, and a parent is neither checked by its children nor mixed (the default cascades,
+   * Fluent UI's behaviour). `checkedItems` then lists exactly the items checked. Rendered as
+   * `data-independent-checks` on the tree.
+   * @default false
+   */
+  independentChecks?: boolean;
+  /**
+   * Look of the rows (Fluent UI's `Tree appearance`): `subtle` fills a hovered or selected row with
+   * the subtle colors, `subtle-alpha` with translucent versions of them, so a surface behind the
+   * tree shows through, and `transparent` draws no fill at all: a selected row then shows by its
+   * bold text (and its outline in forced colors). Rendered as `data-appearance` on the tree.
+   * @default 'subtle'
+   */
+  appearance?: TreeAppearance;
+  /**
    * `'tree'`: Tab from a focused item enters its actions. `'treegrid'`: the "next" arrow
    * (ArrowRight, ArrowLeft in RTL) moves into an item's actions and "previous" returns; on an
    * expanded parent "next" no longer moves to the first child (ArrowDown does). The roles stay
@@ -272,6 +316,9 @@ export const TreeRoot = ({
   defaultCheckedItems,
   onCheckedItemsChange,
   motion,
+  size = 'medium',
+  appearance = 'subtle',
+  independentChecks = false,
   className,
   children,
   onKeyDown,
@@ -389,14 +436,54 @@ export const TreeRoot = ({
     },
     [],
   );
+  // The item checked last, where Shift+Space starts a range.
+  const anchorRef = React.useRef<string | null>(null);
+  const treeRef = React.useRef<HTMLDivElement | null>(null);
   const toggleChecked = useEventCallback((value: string, event: Event) => {
     const forest = forestInTreeOrder(topLevel.current);
+    anchorRef.current = value;
     setCheckedList((previous) => {
-      const next = toggleCheck(forest, previous, value);
+      const next = (independentChecks ? toggleCheckIndependent : toggleCheck)(
+        forest,
+        previous,
+        value,
+      );
       pendingDetails.current = { value, checked: next.includes(value), event };
       return next;
     });
     pendingDetails.current = undefined;
+  });
+  // The treeitems that are visible: not in a group that is collapsing (`inert`).
+  const getVisibleItems = useEventCallback(() =>
+    Array.from(treeRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? []).filter(
+      (el) => !el.closest('[inert]'),
+    ),
+  );
+  const checkValues = (values: readonly string[], value: string, event: Event) => {
+    const forest = forestInTreeOrder(topLevel.current);
+    setCheckedList((previous) => {
+      const next = (independentChecks ? checkItemsIndependent : checkItems)(
+        forest,
+        previous,
+        values,
+      );
+      pendingDetails.current = { value, checked: true, event };
+      return next;
+    });
+    pendingDetails.current = undefined;
+  };
+  const checkRange = useEventCallback((value: string, event: Event) => {
+    const values = getVisibleItems().map((el) => el.getAttribute('data-roving-value') ?? '');
+    const from = values.indexOf(anchorRef.current ?? value);
+    const to = values.indexOf(value);
+    const range =
+      from === -1 || to === -1 ? [value] : values.slice(Math.min(from, to), Math.max(from, to) + 1);
+    anchorRef.current ??= value;
+    checkValues(range, value, event);
+  });
+  const checkAll = useEventCallback((value: string, event: Event) => {
+    anchorRef.current = value;
+    checkValues(allItemValues(forestInTreeOrder(topLevel.current)), value, event);
   });
 
   // An item carries aria-checked or aria-selected, never both (APG); in single mode every item
@@ -473,6 +560,12 @@ export const TreeRoot = ({
       toggleChecked,
       registerTopLevel,
       motion,
+      independentChecks,
+      checkRange,
+      checkAll,
+      getVisibleItems,
+      size,
+      appearance,
     }),
     [
       expanded,
@@ -492,10 +585,16 @@ export const TreeRoot = ({
       toggleChecked,
       registerTopLevel,
       motion,
+      independentChecks,
+      checkRange,
+      checkAll,
+      getVisibleItems,
+      size,
+      appearance,
     ],
   );
 
-  const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref);
+  const mergedRef = useMergedRefs<HTMLDivElement>(ref, containerProps.ref, treeRef);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // Typeahead reads `data-roving-text` at key time: fill it from each item's label first.
@@ -521,6 +620,11 @@ export const TreeRoot = ({
           <div
             role="tree"
             data-selection-mode={selectionMode}
+            data-size={size}
+            data-appearance={appearance}
+            data-independent-checks={
+              selectionMode === 'multiple' && independentChecks ? '' : undefined
+            }
             aria-multiselectable={selectionMode === 'multiple' ? true : undefined}
             className={wcn(treeClassNames.root, 'wave:text-body-1', className)}
             {...rest}
@@ -1115,7 +1219,11 @@ export const TreeItem = ({
     [multiple, value, leaf, children],
   );
   const checkState: CheckState | undefined = ownNode
-    ? computeCheckStates([ownNode], ctx.checked, ancestorListed).get(value)
+    ? ctx.independentChecks
+      ? ctx.checked.has(value)
+        ? 'checked'
+        : 'unchecked'
+      : computeCheckStates([ownNode], ctx.checked, ancestorListed).get(value)
     : undefined;
   const selectionEntry = React.useRef<TreeSelectionEntry | null>(null);
   React.useLayoutEffect(() => {
@@ -1143,7 +1251,38 @@ export const TreeItem = ({
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isOwnKeyEvent(event)) return;
     onKeyDown?.(event);
-    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.defaultPrevented) return;
+
+    // Range selection in a checkbox tree (APG, optional): Ctrl+A checks every item, Shift+Space
+    // the items between the last one checked and this one, Shift+Up and Down move and toggle.
+    if (checkState !== undefined && !event.altKey) {
+      const key = event.key;
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && key.toLowerCase() === 'a') {
+        event.preventDefault();
+        ctx.checkAll(value, event.nativeEvent);
+        return;
+      }
+      if (event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        if (key === ' ') {
+          event.preventDefault();
+          ctx.checkRange(value, event.nativeEvent);
+          return;
+        }
+        if (key === 'ArrowDown' || key === 'ArrowUp') {
+          const visible = ctx.getVisibleItems();
+          const index = visible.indexOf(event.currentTarget);
+          const target = visible[index + (key === 'ArrowDown' ? 1 : -1)];
+          event.preventDefault();
+          const targetValue = target?.getAttribute('data-roving-value');
+          if (target && targetValue != null) {
+            ctx.focusValue(targetValue);
+            ctx.toggleChecked(targetValue, event.nativeEvent);
+          }
+          return;
+        }
+      }
+    }
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
 
     switch (event.key) {
       case 'Enter':
@@ -1319,13 +1458,19 @@ export const TreeItem = ({
   const indicator = checkbox ?? radio;
 
   // Items in this item's group are checked when the list checks this item or an ancestor.
-  const groupListed = ancestorListed || (multiple && ctx.checked.has(value));
+  const groupListed =
+    !ctx.independentChecks && (ancestorListed || (multiple && ctx.checked.has(value)));
 
+  const looks = ROW_LOOKS[ctx.appearance];
   const rowClasses = wcn(
     treeItemClassNames.row,
-    'wave:flex wave:cursor-pointer wave:items-center wave:gap-1.5 wave:rounded wave:px-2 wave:py-1 wave:hover:bg-subtle-hover',
+    'wave:flex wave:cursor-pointer wave:items-center',
+    ROW_SIZE_CLASSES[ctx.size].gap,
+    'wave:rounded wave:px-2',
+    ROW_SIZE_CLASSES[ctx.size].padding,
+    looks.hover,
     hasActions && 'wave:group/row',
-    isSelected && wcn('wave:bg-subtle-selected wave:font-semibold', forcedColors.selectedContainer),
+    isSelected && wcn(looks.selected, 'wave:font-semibold', forcedColors.selectedContainer),
   );
   // The label shrinks (and truncates) when the row has content after it.
   const labelClasses = wcn(

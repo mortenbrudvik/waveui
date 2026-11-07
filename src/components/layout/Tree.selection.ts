@@ -2,7 +2,14 @@ import * as React from 'react';
 import { getElementType } from '../../lib/children';
 import type { TreeNode } from '../../lib/treeCascade';
 
-export { computeCheckStates, toggleCheck } from '../../lib/treeCascade';
+export {
+  allItemValues,
+  checkItems,
+  checkItemsIndependent,
+  computeCheckStates,
+  toggleCheck,
+  toggleCheckIndependent,
+} from '../../lib/treeCascade';
 export type { CheckState, TreeNode } from '../../lib/treeCascade';
 
 /** The element types the scan compares with: the item type, and the tree type (a tree of its own). */

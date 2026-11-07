@@ -417,3 +417,67 @@ export const Motion: Story = {
     </div>
   ),
 };
+
+/**
+ * `independentChecks`: a check changes only its own item, so a folder can be checked without its
+ * files. Ctrl+A checks every item, Shift+Space checks the visible items from the last one checked
+ * to the focused one, and Shift+Up and Shift+Down move and toggle.
+ */
+export const IndependentChecks: Story = {
+  args: {
+    'aria-label': 'Independent checks',
+    selectionMode: 'multiple',
+    independentChecks: true,
+    defaultExpandedItems: ['docs', 'work'],
+    defaultCheckedItems: ['docs'],
+  },
+  render: (args) => <Tree {...args}>{files}</Tree>,
+};
+
+/** `size` (small 24px rows, medium 28px) and `appearance` (subtle, subtle-alpha, transparent). */
+export const SizesAndAppearances: Story = {
+  args: { selected: 'work', defaultExpandedItems: ['docs'] },
+  render: (args) => (
+    <div className="flex flex-wrap gap-6">
+      {(['subtle', 'subtle-alpha', 'transparent'] as const).flatMap((appearance) =>
+        (['small', 'medium'] as const).map((size) => (
+          <Tree
+            key={`${appearance}-${size}`}
+            {...args}
+            aria-label={`${appearance} ${size}`}
+            size={size}
+            appearance={appearance}
+            style={{ width: 200 }}
+          >
+            {files}
+          </Tree>
+        )),
+      )}
+    </div>
+  ),
+};
+
+/**
+ * An item's own `open` and `onOpenChange` control it from outside the tree's list; the tree's
+ * `onExpandedItemsChange` also gets the item, its new state and the event.
+ */
+export const ControlledItemOpen: Story = {
+  render: function ControlledItemOpenTree(args) {
+    const [open, setOpen] = React.useState(true);
+    return (
+      <div className="flex flex-col gap-3">
+        <Button onClick={() => setOpen((value) => !value)}>
+          {open ? 'Collapse' : 'Expand'} Documents
+        </Button>
+        <Tree {...args}>
+          <Tree.Item value="docs" open={open} onOpenChange={(next) => setOpen(next)}>
+            Documents
+            <Tree.Item value="work">Work</Tree.Item>
+            <Tree.Item value="personal">Personal</Tree.Item>
+          </Tree.Item>
+          <Tree.Item value="readme">README.md</Tree.Item>
+        </Tree>
+      </div>
+    );
+  },
+};
