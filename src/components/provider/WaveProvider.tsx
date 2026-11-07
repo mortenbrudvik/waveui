@@ -234,25 +234,22 @@ function mergeClassNames(
   return Object.keys(merged).length > 0 ? merged : null;
 }
 
-/** Whether two class maps (or none) hold the same keys, in the same order, with the same values. */
-function sameClassNames(a: WaveClassNames | null, b: WaveClassNames | null): boolean {
+/**
+ * Whether two maps (or none) hold the same keys, in the same order, with the same values: the
+ * class maps and the token overrides, which keep their identity while their entries are equal.
+ */
+function sameEntries(a: object | null, b: object | null): boolean {
   if (a === b) return true;
   if (a === null || b === null) return false;
-  const keys = Object.keys(a) as (keyof WaveClassNames)[];
+  const keys = Object.keys(a);
   const others = Object.keys(b);
   return (
     keys.length === others.length &&
-    keys.every((key, index) => key === others[index] && Object.is(a[key], b[key]))
-  );
-}
-
-/** Whether two override maps have the same keys in the same order, with the same values. */
-function sameTokens(a: WaveTokenOverrides, b: WaveTokenOverrides): boolean {
-  const keys = Object.keys(a) as (keyof WaveTokenOverrides)[];
-  const others = Object.keys(b);
-  return (
-    keys.length === others.length &&
-    keys.every((key, index) => key === others[index] && Object.is(a[key], b[key]))
+    keys.every(
+      (key, index) =>
+        key === others[index] &&
+        Object.is((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
+    )
   );
 }
 
@@ -333,7 +330,7 @@ export const WaveProvider = ({
   // re-renders the consumers nor rebuilds the style.
   const mergedTokens = mergeTokenOverrides(parent.tokens, tokensProp);
   const [tokens, setTokens] = React.useState(mergedTokens);
-  if (!sameTokens(tokens, mergedTokens)) setTokens(mergedTokens);
+  if (!sameEntries(tokens, mergedTokens)) setTokens(mergedTokens);
   // Collected without warnings during render; the skipped entries are reported from an effect.
   // `tokens={null}` also writes the stylesheet's value of each theme-independent token that the
   // providers above overrode, which the theme class on this root cannot reset (it does not declare
@@ -363,7 +360,7 @@ export const WaveProvider = ({
   const parentClassNames = React.useContext(AppClassNamesContext);
   const mergedClassNames = mergeClassNames(parentClassNames, classNamesProp);
   const [appClassNames, setAppClassNames] = React.useState(mergedClassNames);
-  if (!sameClassNames(appClassNames, mergedClassNames)) setAppClassNames(mergedClassNames);
+  if (!sameEntries(appClassNames, mergedClassNames)) setAppClassNames(mergedClassNames);
 
   // Defined keys override the enclosing provider's; the merged object keeps its identity while the
   // two values are equal, so an inline `inputDefaults={{ … }}` does not re-render every input.

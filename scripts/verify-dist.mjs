@@ -874,28 +874,36 @@ function record1_0(label, names, measured, allowedExternals) {
  * (`measured`; the budget is that size plus the margin again), deliberately: `WaveProvider
  * classNames` and the token reset (the provider), `measureItems` (the window), the range and
  * independent checks of Tree, and the toast and spinner features. The `baseline` of each stays the
- * published 0.18.1 size, and `Button`, the presence core, `createBrandTokens` and `waveTokens`
- * keep their 1.0 records.
+ * published 0.18.1 size. The bundle review after the backlog re-set `Button`, the presence core
+ * and `waveTokens` to what the build measures (`WaveProvider classNames`' context read, the
+ * button marker, the presence phases: +388 and +36, +195 and +66, +71 and +25 over their 1.0
+ * records), and cut the window (the development warning of `itemSize` behind the literal
+ * `process.env.NODE_ENV` check, one align routine for both layouts: -728 and -334) and the
+ * provider (the token reset table written compactly, one comparison for the two merged maps:
+ * -748 and -20). Growth over 0.18.1 now: `Button` +1,346 and +340; `MessageBar` +1,639 and +352;
+ * `Tree` +5,009 and +1,502; `Dialog` +3,352 and +910; `WaveProvider` with `Dialog` +5,141 and
+ * +1,848; `DataGrid` -1,174 and -405; the presence core +195 and +66; `useVirtualWindow` +3,065
+ * and +966; `createBrandTokens` 0 and 0; `waveTokens` +71 and +25.
  */
 export const RECORDED_IMPORTS_1_0 = [
-  record1_0('Button', ['Button'], { minified: 12037, gzip: 4033 }, COMPONENT_EXTERNALS),
+  record1_0('Button', ['Button'], { minified: 12425, gzip: 4205 }, COMPONENT_EXTERNALS),
   record1_0('MessageBar', ['MessageBar'], { minified: 30860, gzip: 10553 }, COMPONENT_EXTERNALS),
   record1_0('Tree', ['Tree'], { minified: 55392, gzip: 18773 }, COMPONENT_EXTERNALS),
   record1_0('Dialog', ['Dialog'], { minified: 75951, gzip: 25376 }, PORTAL_EXTERNALS),
   record1_0(
     'WaveProvider + Dialog',
     ['WaveProvider', 'Dialog'],
-    { minified: 81036, gzip: 27326 },
+    { minified: 80288, gzip: 27306 },
     PORTAL_EXTERNALS,
   ),
   record1_0('DataGrid', ['DataGrid'], { minified: 72132, gzip: 24521 }, PORTAL_EXTERNALS),
-  record1_0('usePresence + Presence', ['usePresence', 'Presence'], { minified: 5453, gzip: 2341 }, [
+  record1_0('usePresence + Presence', ['usePresence', 'Presence'], { minified: 5648, gzip: 2407 }, [
     'react',
     'react/jsx-runtime',
   ]),
-  record1_0('useVirtualWindow', ['useVirtualWindow'], { minified: 7661, gzip: 3117 }, ['react']),
+  record1_0('useVirtualWindow', ['useVirtualWindow'], { minified: 6933, gzip: 2783 }, ['react']),
   record1_0('createBrandTokens', ['createBrandTokens'], { minified: 3630, gzip: 1956 }, []),
-  record1_0('waveTokens', ['waveTokens'], { minified: 3071, gzip: 969 }, []),
+  record1_0('waveTokens', ['waveTokens'], { minified: 3142, gzip: 994 }, []),
 ];
 
 /**

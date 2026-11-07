@@ -4564,20 +4564,20 @@ describe('the 0.18 probes (INTEGRATION)', () => {
     const components = ['clsx', 'react', 'react/jsx-runtime', 'tailwind-merge'];
     const portal = ['clsx', 'react', 'react-dom', 'react/jsx-runtime', 'tailwind-merge'];
     const records = [
-      [['Button'], [12037, 4033], components],
+      [['Button'], [12425, 4205], components],
       [['MessageBar'], [30860, 10553], components],
       [['Tree'], [55392, 18773], components],
       [['Dialog'], [75951, 25376], portal],
-      [['WaveProvider', 'Dialog'], [81036, 27326], portal],
+      [['WaveProvider', 'Dialog'], [80288, 27306], portal],
       [['DataGrid'], [72132, 24521], portal],
       [
         ['usePresence', 'Presence'],
-        [5453, 2341],
+        [5648, 2407],
         ['react', 'react/jsx-runtime'],
       ],
-      [['useVirtualWindow'], [7661, 3117], ['react']],
+      [['useVirtualWindow'], [6933, 2783], ['react']],
       [['createBrandTokens'], [3630, 1956], []],
-      [['waveTokens'], [3071, 969], []],
+      [['waveTokens'], [3142, 994], []],
     ];
     expect(RECORDED_IMPORTS_1_0).toEqual(
       records.map(([names, measured, allowedExternals]) => ({
@@ -4600,16 +4600,16 @@ describe('the 0.18 probes (INTEGRATION)', () => {
         measured.gzip - baseline.gzip,
       ]),
     ).toEqual([
-      ['Button', 958, 168],
+      ['Button', 1346, 340],
       ['MessageBar', 1639, 352],
       ['Tree', 5009, 1502],
       ['Dialog', 3352, 910],
-      ['WaveProvider + Dialog', 5889, 1868],
+      ['WaveProvider + Dialog', 5141, 1848],
       ['DataGrid', -1174, -405],
-      ['usePresence + Presence', 0, 0],
-      ['useVirtualWindow', 3793, 1300],
+      ['usePresence + Presence', 195, 66],
+      ['useVirtualWindow', 3065, 966],
       ['createBrandTokens', 0, 0],
-      ['waveTokens', 0, 0],
+      ['waveTokens', 71, 25],
     ]);
     // The 0.18.1 sizes of the component imports are those of the 0.18.0 CHANGELOG's Size table
     // (0.18.1 changed no size), and those of createBrandTokens and waveTokens of the 0.17.0 one.

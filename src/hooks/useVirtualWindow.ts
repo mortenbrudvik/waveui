@@ -163,6 +163,14 @@ function isValidItemSize(itemSize: number): boolean {
   return Number.isFinite(itemSize) && itemSize > 0;
 }
 
+/** The development warning of an invalid `itemSize` (module level, so a production bundle drops it). */
+function warnItemSize(itemSize: number): void {
+  warnOnce(
+    'useVirtualWindow:item-size',
+    `useVirtualWindow: itemSize must be a positive number of pixels (got ${String(itemSize)}); 1 is used.`,
+  );
+}
+
 /**
  * A window over a long list of rows, for rendering only the rows in view. Give `scrollRef` to the
  * scrolling element and render `layout(count)`: rows for the item entries and empty blocks of
@@ -231,11 +239,17 @@ export function useVirtualWindow({
   const syncRowsRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    if (!isValidItemSize(itemSize))
-      warnOnce(
-        'useVirtualWindow:item-size',
-        `useVirtualWindow: itemSize must be a positive number of pixels (got ${String(itemSize)}); 1 is used.`,
-      );
+    if (isValidItemSize(itemSize)) return;
+    // The mode is read here as `lib/dev` reads it, written out so a bundler replaces it: a
+    // production bundle then drops the warning, its text and the warning helpers, which an import
+    // of only this hook would otherwise carry. Without a bundler and without `process` (an
+    // unbundled import in a browser), the read throws and the warning runs, as in `lib/dev`.
+    try {
+      if (process.env.NODE_ENV !== 'production') warnItemSize(itemSize);
+    } catch {
+      // No `process` (the read throws): development.
+      warnItemSize(itemSize);
+    }
   }, [itemSize]);
 
   /** The measured heights with the current estimate (`null` for a window of fixed rows). */
@@ -276,9 +290,17 @@ export function useVirtualWindow({
     setState(next);
   });
 
+  // A sticky header covers the top of the viewport and leaves the rows where they are: the rows are
+  // seen in the area below it (at least one row tall).
+  const rowsViewport = (element: HTMLElement): number =>
+    Math.max(
+      size,
+      (element.clientHeight > 0 ? element.clientHeight : initialViewportSize) - paddingStart,
+    );
+
   const scrollElementTo = useEventCallback((element: HTMLElement, request: ScrollRequest) => {
-    const { scrollTop, scrollHeight, clientHeight } = element;
-    const viewport = clientHeight > 0 ? clientHeight : initialViewportSize;
+    const { scrollTop, scrollHeight } = element;
+    const viewportSize = rowsViewport(element);
     const sizes = currentSizes();
     if (sizes) {
       // The browser bounds `scrollTop` by the content it laid out.
@@ -287,7 +309,7 @@ export function useVirtualWindow({
         align: request.align,
         sizes,
         scrollTop,
-        viewportSize: Math.max(size, viewport - paddingStart),
+        viewportSize,
       });
       aligningRef.current = { element, request, offset: element.scrollTop };
       measure(element);
@@ -304,9 +326,7 @@ export function useVirtualWindow({
           ? Math.floor((scrollHeight - paddingStart) / size)
           : Number.MAX_SAFE_INTEGER,
       scrollTop,
-      // A sticky header covers the top of the viewport and leaves the rows where they are: the
-      // rows are seen in the area below it (at least one row tall).
-      viewportSize: Math.max(size, viewport - paddingStart),
+      viewportSize,
     });
     measure(element);
   });
@@ -346,10 +366,7 @@ export function useVirtualWindow({
           align: aligning.request.align,
           sizes: next,
           scrollTop: element.scrollTop,
-          viewportSize: Math.max(
-            size,
-            (element.clientHeight || initialViewportSize) - paddingStart,
-          ),
+          viewportSize: rowsViewport(element),
         });
         if (Math.abs(target - element.scrollTop) < 1) aligningRef.current = null;
         else {
