@@ -583,7 +583,7 @@ export const MenuRoot = ({
       startHoverClose(event);
       return;
     }
-    requestClose({ reason, event });
+    requestClose({ reason: reason === 'parent-closed' ? 'parent' : reason, event });
   });
 
   const registerOpenSubmenu = React.useCallback((submenu: OpenSubmenu) => {
