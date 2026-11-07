@@ -725,12 +725,12 @@ The glyphs Wave's components draw are exported, so an app can draw the same ones
 | Group | Exports (`data-wave-icon`) |
 |---|---|
 | Actions | `DismissIcon` (`dismiss`), `AddIcon` (`add`), `SubtractIcon` (`subtract`), `CheckIcon` (`check`), `SearchIcon` (`search`), `NavigationIcon` (`navigation`, 20px) |
-| Chevrons and arrows | `ChevronDownIcon`, `ChevronUpIcon`, `ChevronLeftIcon`, `ChevronRightIcon`, `ChevronDoubleLeftIcon`, `ChevronDoubleRightIcon` (12px; `chevron-down`, …), `SortArrowUpIcon`, `SortArrowDownIcon` (`sort-arrow-up`, `sort-arrow-down`) |
+| Chevrons | `ChevronDownIcon`, `ChevronUpIcon`, `ChevronLeftIcon`, `ChevronRightIcon`, `ChevronDoubleLeftIcon`, `ChevronDoubleRightIcon` (12px; `chevron-down`, …) |
 | Objects | `CalendarIcon`, `ClockIcon`, `StarIcon`, `PersonIcon` |
 | Status | `InfoIcon`, `SuccessIcon`, `WarningIcon`, `ErrorIcon` |
 | Presence | `PresenceAvailableIcon`, `PresenceBusyIcon`, `PresenceAwayIcon`, `PresenceOfflineIcon`, `PresenceDndIcon`, `PresenceOofIcon`, `PresenceBlockedIcon`, `PresenceUnknownIcon` (a 16px box that a badge's circle fills; pass `className="size-full"`) |
 
-The export names and the `data-wave-icon` values are part of the public API: a 1.x minor adds glyphs and never removes or renames one. `IconProps` and `IconComponent` are the types.
+The export names and the `data-wave-icon` values are part of the public API: a 1.x minor adds glyphs and never removes or renames one. `IconProps` and `IconComponent` are the types. The two sort arrows of the table sort buttons stay internal.
 
 **Mirroring in right-to-left layouts.** The chevrons, the double chevrons and `PresenceOofIcon` point along a physical direction, so mirror them where they mean "forward" or "back": `<ChevronRightIcon flipInRtl />` adds Wave's `wave-rtl` flip (the one the components use), which follows the element's own `dir`. Fluent's icon package marks directional icons when it creates them (`flipInRtl`); an icon of another library cannot be known to be directional, so say so: `flipIconInRtl(icon)` returns the element with the same flip class added to its `className`, for any element that takes one:
 

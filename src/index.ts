@@ -52,8 +52,6 @@ export {
   ChevronUpIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  SortArrowUpIcon,
-  SortArrowDownIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   CalendarIcon,
@@ -196,6 +194,7 @@ export { hasOpenModal, modalAllowProps } from './lib/layers';
 
 // Provider
 export { WaveProvider, useWaveTheme, getThemeClassName } from './components/provider/WaveProvider';
+export type { WaveClassNames, WaveRootClassName } from './hooks/useAppClassName';
 export type {
   WaveProviderProps,
   WaveTheme,

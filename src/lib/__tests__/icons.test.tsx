@@ -347,8 +347,11 @@ describe('icons (input-datetime#22, button-provider#20)', () => {
   describe('the public entry (foundation-44)', () => {
     it('exports every icon of the module, the same component', async () => {
       const entry = (await import('../../index')) as unknown as Record<string, unknown>;
+      // The sort arrows stay module-only: they are the DataGrid and Table sort buttons' internals.
+      const internal = ['SortArrowUpIcon', 'SortArrowDownIcon'];
       for (const [name] of ICONS) {
-        expect(entry[name], name).toBe(getIcon(name));
+        if (internal.includes(name)) expect(entry[name], name).toBeUndefined();
+        else expect(entry[name], name).toBe(getIcon(name));
       }
     }, 60_000);
   });
