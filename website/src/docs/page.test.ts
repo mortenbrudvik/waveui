@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { exampleAnchor, formatDescription, isHookEntry, pageSections } from './page';
+import {
+  exampleAnchor,
+  exampleAnchors,
+  formatDescription,
+  isHookEntry,
+  pageSections,
+} from './page';
 
 describe('formatDescription', () => {
   it('splits paragraphs on blank lines and joins wrapped lines with a space', () => {
@@ -87,6 +93,23 @@ describe('page helpers', () => {
     expect(isHookEntry({ exportName: 'useModalLayer' })).toBe(true);
     expect(isHookEntry({ exportName: 'Button' })).toBe(false);
     expect(isHookEntry({ exportName: 'user' })).toBe(false);
+  });
+
+  it('exampleAnchors gives every story a distinct id, a numeric suffix after a collision', () => {
+    expect(exampleAnchors(['Size_Large', 'SizeLarge', 'Default', 'Size-Large'])).toEqual([
+      'example-size-large',
+      'example-size-large-2',
+      'example-default',
+      'example-size-large-3',
+    ]);
+    // A suffixed id never takes the plain id of a later story.
+    expect(exampleAnchors(['A', 'A', 'A2'])).toEqual(['example-a', 'example-a-2', 'example-a2']);
+    expect(exampleAnchors(['A2', 'A_2', 'A', 'A'])).toEqual([
+      'example-a2',
+      'example-a-2',
+      'example-a',
+      'example-a-3',
+    ]);
   });
 
   it('exampleAnchor is a kebab id under example-', () => {

@@ -11,9 +11,11 @@
  */
 import AppLayout from '../../layouts/AppLayout.astro';
 import Description from '../../docs/Description.astro';
+import PropsTable from '../../docs/PropsTable.astro';
+import StoryCode from '../../docs/StoryCode.astro';
 import Example from '../../islands/Example.astro';
 import { getCatalog, type ComponentEntry } from '../../catalog/catalog';
-import { exampleAnchor, getSiteImportSizes, isHookEntry, pageSections } from '../../docs/page';
+import { exampleAnchors, getSiteImportSizes, isHookEntry, pageSections } from '../../docs/page';
 import { extractDocs } from '../../docs/props';
 import { getLibraryVersion } from '../../docs/sizes';
 import { readSkippedStories } from '../../examples/islands';
@@ -32,15 +34,17 @@ const { entry } = Astro.props;
 const docs = extractDocs(entry);
 const hook = isHookEntry(entry);
 const skipped = new Set(readSkippedStories());
+const shown = entry.storyNames.filter(
+  (exportName) => !skipped.has(`${entry.storyFile}#${exportName}`),
+);
+const anchors = exampleAnchors(shown);
 const stories = await Promise.all(
-  entry.storyNames
-    .filter((exportName) => !skipped.has(`${entry.storyFile}#${exportName}`))
-    .map(async (exportName) => ({
-      exportName,
-      name: (await loadStory(entry, exportName)).name,
-      anchor: exampleAnchor(exportName),
-      source: extractStorySource(entry.storyFile, exportName),
-    })),
+  shown.map(async (exportName, index) => ({
+    exportName,
+    name: (await loadStory(entry, exportName)).name,
+    anchor: anchors[index]!,
+    source: extractStorySource(entry.storyFile, exportName),
+  })),
 );
 const propsTable = !hook && docs.props.length > 0;
 const sections = pageSections({
@@ -110,7 +114,7 @@ const CELL = 'border-b border-wave-border px-2 py-2 align-top';
                   {story.name}
                 </h3>
                 <Example slug={entry.slug} storyName={story.exportName} />
-                <pre class="m-0 rounded border border-wave-border bg-wave-muted p-3 font-wave-mono text-wave-caption-1 whitespace-pre-wrap [overflow-wrap:anywhere]"><code>{story.source}</code></pre>
+                <StoryCode source={story.source} />
               </div>
             ))}
           </section>
@@ -123,50 +127,11 @@ const CELL = 'border-b border-wave-border px-2 py-2 align-top';
             <h2 id="props" class={H2}>
               Props
             </h2>
-            {/* Explicit roles keep the table's semantics where site.css stacks its rows (narrow). */}
-            <table role="table" class="props-table w-full border-collapse text-start text-wave-body-1">
-              <thead role="rowgroup">
-                <tr role="row" class="text-wave-caption-1 text-wave-muted-foreground">
-                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Name</th>
-                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Type</th>
-                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Required</th>
-                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Default</th>
-                  <th role="columnheader" scope="col" class={`${CELL} text-start`}>Description</th>
-                </tr>
-              </thead>
-              <tbody role="rowgroup">
-                {docs.props.map((prop) => (
-                  <tr role="row">
-                    <th role="rowheader" scope="row" class={`${CELL} text-start font-normal`}>
-                      <code class={CODE}>{prop.name}</code>
-                    </th>
-                    <td role="cell" class={CELL} data-label="Type">
-                      <code class={`${CODE} [overflow-wrap:anywhere]`}>{prop.type}</code>
-                    </td>
-                    <td role="cell" class={CELL} data-label="Required">{prop.required ? 'Yes' : 'No'}</td>
-                    <td role="cell" class={CELL} data-label="Default" data-empty={prop.default === undefined ? '' : undefined}>{prop.default !== undefined && <code class={`${CODE} [overflow-wrap:anywhere]`}>{prop.default}</code>}</td>
-                    <td
-                      role="cell"
-                      class={CELL}
-                      data-label="Description"
-                      data-empty={!prop.description && prop.deprecated === undefined ? '' : undefined}
-                    >
-                      <Description text={prop.description} />
-                      {prop.deprecated !== undefined && (
-                        <p class="m-0 mt-1">
-                          <strong>Deprecated:</strong> {prop.deprecated}
-                        </p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {docs.nativeElement && (
-              <p class="m-0 mt-3 text-wave-body-1">
-                Any other prop is passed to the element it renders (<code class={CODE}>{docs.nativeElement}</code>).
-              </p>
-            )}
+            <PropsTable
+              label={`Props of ${entry.name}`}
+              props={docs.props}
+              nativeElement={docs.nativeElement}
+            />
           </section>
         )
       }
@@ -202,7 +167,10 @@ const CELL = 'border-b border-wave-border px-2 py-2 align-top';
             <h2 id="class-names" class={H2}>
               Stable class names
             </h2>
-            <table class="w-full border-collapse text-start text-wave-body-1">
+            <table
+              aria-label={`Stable class names of ${entry.name}`}
+              class="w-full border-collapse text-start text-wave-body-1"
+            >
               <thead>
                 <tr class="text-wave-caption-1 text-wave-muted-foreground">
                   <th scope="col" class={`${CELL} text-start`}>Part</th>

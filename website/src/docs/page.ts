@@ -123,6 +123,22 @@ export function exampleAnchor(exportName: string): string {
   return `example-${kebab}`;
 }
 
+/**
+ * The ids of a page's story headings, in order: {@link exampleAnchor} of each, with `-2`, `-3`, …
+ * added to one that an earlier story already took (`Size_Large` and `SizeLarge` are both
+ * `example-size-large`), so every heading keeps its own link target.
+ */
+export function exampleAnchors(exportNames: readonly string[]): string[] {
+  const used = new Set<string>();
+  return exportNames.map((exportName) => {
+    const base = exampleAnchor(exportName);
+    let id = base;
+    for (let suffix = 2; used.has(id); suffix++) id = `${base}-${suffix}`;
+    used.add(id);
+    return id;
+  });
+}
+
 let sizes: Promise<Record<string, ImportSize>> | undefined;
 
 /**

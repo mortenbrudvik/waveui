@@ -1,0 +1,88 @@
+---
+/**
+ * A component page's props table (name, type, required, default, description with its deprecated
+ * note) and, when the props also take an element's native attributes, the line that names it.
+ * Every value is an Astro expression, so the docs' text is escaped, never markup.
+ *
+ * The elements carry explicit table roles: below 40rem site.css stacks each prop into a block
+ * (`display: block`), and the roles keep it a table to assistive technology.
+ */
+import Description from './Description.astro';
+import type { PropDoc } from './props';
+
+export interface Props {
+  /** The table's accessible name. */
+  label: string;
+  props: PropDoc[];
+  /** The element whose native attributes the props also take (`HTMLButtonElement`). */
+  nativeElement?: string | undefined;
+}
+
+const { label, props, nativeElement } = Astro.props;
+
+const CODE = 'rounded-sm bg-wave-muted px-1 font-wave-mono text-[0.9em]';
+const CELL = 'border-b border-wave-border px-2 py-2 align-top';
+---
+
+<table
+  role="table"
+  aria-label={label}
+  class="props-table w-full border-collapse text-start text-wave-body-1"
+>
+  <thead role="rowgroup">
+    <tr role="row" class="text-wave-caption-1 text-wave-muted-foreground">
+      <th role="columnheader" scope="col" class={`${CELL} text-start`}>Name</th>
+      <th role="columnheader" scope="col" class={`${CELL} text-start`}>Type</th>
+      <th role="columnheader" scope="col" class={`${CELL} text-start`}>Required</th>
+      <th role="columnheader" scope="col" class={`${CELL} text-start`}>Default</th>
+      <th role="columnheader" scope="col" class={`${CELL} text-start`}>Description</th>
+    </tr>
+  </thead>
+  <tbody role="rowgroup">
+    {
+      props.map((prop) => (
+        <tr role="row">
+          <th role="rowheader" scope="row" class={`${CELL} text-start font-normal`}>
+            <code class={CODE}>{prop.name}</code>
+          </th>
+          <td role="cell" class={CELL} data-label="Type">
+            <code class={`${CODE} [overflow-wrap:anywhere]`}>{prop.type}</code>
+          </td>
+          <td role="cell" class={CELL} data-label="Required">
+            {prop.required ? 'Yes' : 'No'}
+          </td>
+          <td
+            role="cell"
+            class={CELL}
+            data-label="Default"
+            data-empty={prop.default === undefined ? '' : undefined}
+          >
+            {prop.default !== undefined && (
+              <code class={`${CODE} [overflow-wrap:anywhere]`}>{prop.default}</code>
+            )}
+          </td>
+          <td
+            role="cell"
+            class={CELL}
+            data-label="Description"
+            data-empty={!prop.description && prop.deprecated === undefined ? '' : undefined}
+          >
+            <Description text={prop.description} />
+            {prop.deprecated !== undefined && (
+              <p class="m-0 mt-1" data-deprecated>
+                <strong>Deprecated:</strong> {prop.deprecated}
+              </p>
+            )}
+          </td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>
+{
+  nativeElement && (
+    <p class="m-0 mt-3 text-wave-body-1">
+      Any other prop is passed to the element it renders (<code class={CODE}>{nativeElement}</code>).
+    </p>
+  )
+}

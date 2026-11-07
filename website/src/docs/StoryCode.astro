@@ -1,0 +1,15 @@
+---
+/**
+ * A story's source under its example, as plain text (an Astro expression, so escaped): no syntax
+ * highlighter and no script. It wraps instead of scrolling, so it adds no scroll region and no tab
+ * stop, and never widens the page.
+ */
+export interface Props {
+  source: string;
+}
+
+const { source } = Astro.props;
+---
+
+<pre
+  class="m-0 rounded border border-wave-border bg-wave-muted p-3 font-wave-mono text-wave-caption-1 whitespace-pre-wrap [overflow-wrap:anywhere]"><code>{source}</code></pre>

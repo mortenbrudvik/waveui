@@ -243,25 +243,67 @@ describe.skipIf(!state.ready)(title, () => {
     const URL_ATTRIBUTES = [
       'href',
       'src',
-      'srcset',
       'action',
       'poster',
       'component-url',
       'renderer-url',
       'before-hydration-url',
     ];
+    /** A whole string that is an address: `/x`, `//host/x` or `scheme://…`. */
+    const ADDRESS = /^(?:[a-z][a-z0-9+.-]*:\/\/|\/)\S*$/i;
+    const CSS_URL = /url\(\s*(['"]?)([^'")]*)\1\s*\)|@import\s+(['"])([^'"]+)\3/g;
+
     const pages = allPages();
     expect(pages.length).toBeGreaterThanOrEqual(82);
     const excepted = new Set<string>();
+    const sheets = new Set<string>();
+
+    /** An address in the app: under the prefix once, and not a directory (`…/`). */
+    const expectInternal = (value: string, where: string) => {
+      const path = value.split(/[?#]/)[0]!;
+      expect(path.startsWith(`${DOCS_BASE}/`), `${where}: "${value}" is outside the app`).toBe(
+        true,
+      );
+      expect(path.slice(DOCS_BASE.length).includes('/waveui/'), `${where}: "${value}"`).toBe(false);
+      expect(path.endsWith('/'), `${where}: "${value}" ends with /`).toBe(false);
+    };
+    /** `url(…)` and `@import` addresses of CSS text, resolved against `base`. */
+    const cssAddresses = (css: string, base: string) =>
+      [...css.matchAll(CSS_URL)]
+        .map((match) => (match[2] ?? match[4] ?? '').trim())
+        .filter((url) => url && !url.startsWith('data:') && !url.startsWith('#'))
+        .map((url) => (url.startsWith('/') ? url : new URL(url, `http://site${base}`).pathname));
+    /** Every string of an astro-island's serialised props that is an address. */
+    const propAddresses = (value: unknown): string[] =>
+      typeof value === 'string'
+        ? ADDRESS.test(value)
+          ? [value]
+          : []
+        : Array.isArray(value)
+          ? value.flatMap(propAddresses)
+          : value && typeof value === 'object'
+            ? Object.values(value).flatMap(propAddresses)
+            : [];
+
     for (const file of pages) {
       const document = load(file);
       const name = relative(SITE_DIST, file).replace(/\\/g, '/');
+      const pagePath = `${DOCS_BASE}/${name.replace(/\.html$/, '')}`;
       let closeLinks = 0;
       for (const element of document.querySelectorAll('*')) {
-        for (const attribute of URL_ATTRIBUTES) {
-          const value = element.getAttribute(attribute);
+        const values = URL_ATTRIBUTES.map((attribute) => [
+          attribute,
+          element.getAttribute(attribute),
+        ])
+          .concat(
+            (element.getAttribute('srcset') ?? '')
+              .split(',')
+              .map((candidate) => ['srcset', candidate.trim().split(/\s+/)[0] || null]),
+          )
+          .filter((pair): pair is [string, string] => pair[1] !== null);
+        for (const [attribute, value] of values) {
           // A fragment and an inline `data:` image request nothing.
-          if (value === null || value.startsWith('#') || value.startsWith('data:')) continue;
+          if (value.startsWith('#') || value.startsWith('data:')) continue;
           if (attribute === 'href' && value === INTRO_URL && element.tagName === 'A') {
             closeLinks++;
             continue;
@@ -274,19 +316,59 @@ describe.skipIf(!state.ready)(title, () => {
             excepted.add(name);
             continue;
           }
-          expect(value.startsWith(`${DOCS_BASE}/`), `${name}: ${attribute}="${value}"`).toBe(true);
+          expectInternal(value, `${name}: ${attribute}`);
+        }
+        const style = element.getAttribute('style');
+        if (style) {
+          for (const url of cssAddresses(style, pagePath)) expectInternal(url, `${name}: style`);
+        }
+        if (element.tagName === 'META') {
+          const content = element.getAttribute('content') ?? '';
+          if (ADDRESS.test(content)) expectInternal(content, `${name}: meta content`);
+        }
+        if (element.tagName === 'ASTRO-ISLAND') {
+          const props: unknown = JSON.parse(element.getAttribute('props') ?? '{}');
+          for (const url of propAddresses(props)) expectInternal(url, `${name}: island props`);
+        }
+        if (element.tagName === 'LINK' && element.getAttribute('rel') === 'stylesheet') {
+          sheets.add(element.getAttribute('href')!);
         }
       }
       expect(closeLinks, name).toBe(1);
       // Inline scripts and styles name no address outside the app either.
-      for (const inline of document.querySelectorAll('script:not([src]), style')) {
+      for (const inline of document.querySelectorAll('script:not([src])')) {
         for (const [url] of (inline.textContent ?? '').matchAll(/["'`(]\/(?!\/)[^"'`)\s]*/g)) {
-          expect(url.slice(1).startsWith(`${DOCS_BASE}/`), `${name}: ${url}`).toBe(true);
+          expectInternal(url.slice(1), `${name}: inline script`);
+        }
+      }
+      for (const inline of document.querySelectorAll('style')) {
+        for (const url of cssAddresses(inline.textContent ?? '', pagePath)) {
+          expectInternal(url, `${name}: <style>`);
         }
       }
     }
+    // The linked stylesheets: their url() and @import addresses.
+    expect(sheets.size).toBeGreaterThan(0);
+    for (const sheet of sheets) {
+      expectInternal(sheet, 'stylesheet link');
+      const css = readFileSync(join(SITE_DIST, sheet.slice(DOCS_BASE.length + 1)), 'utf8');
+      for (const url of cssAddresses(css, sheet)) expectInternal(url, sheet);
+    }
     // Every listed exception is still needed.
     expect([...excepted].sort()).toEqual(Object.keys(STORY_EXTERNAL_IMAGES).sort());
+  });
+
+  it('the h2 and h3 ids of every page are unique on the page', () => {
+    for (const file of allPages()) {
+      const document = load(file);
+      const name = relative(SITE_DIST, file);
+      for (const heading of document.querySelectorAll('h2[id], h3[id]')) {
+        expect(
+          document.querySelectorAll(`[id="${heading.id}"]`),
+          `${name} #${heading.id}`,
+        ).toHaveLength(1);
+      }
+    }
   });
 
   it('the index lists 80 links grouped by the 11 categories', () => {
