@@ -312,7 +312,7 @@ describe('Popover.Content presence (D7, D9, D22)', () => {
     await user.keyboard('{Escape}');
     expect(surface()).toHaveAttribute('data-presence', 'exiting');
     await finish(motion);
-    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+    expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([true, false]);
   });
 });
 

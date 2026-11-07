@@ -896,3 +896,22 @@ export const ResponsiveType: Story = {
     );
   },
 };
+
+/**
+ * `lightDismiss` on a non-modal drawer: a press on the page and focus moving away close it
+ * (`details.reason` is `outside-press` or `focus-outside`); the trigger still toggles it.
+ */
+export const LightDismiss: Story = {
+  args: { modalType: 'non-modal', lightDismiss: true, title: 'Filters' },
+  render: (args) => (
+    <div className="flex items-center gap-2">
+      <Drawer {...args}>
+        <Drawer.Trigger>
+          <Button appearance="primary">Open filters</Button>
+        </Drawer.Trigger>
+        <p>Click on the page to close this drawer.</p>
+      </Drawer>
+      <p>Page content</p>
+    </div>
+  ),
+};

@@ -513,7 +513,7 @@ describe('Drawer unmountOnClose', () => {
       );
     }
 
-    it('warns once when a controlled kept-mounted drawer closes while a popover inside is open', async () => {
+    it('closes a popover opened inside with a controlled kept-mounted overlay drawer, and warns of nothing', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -522,12 +522,12 @@ describe('Drawer unmountOnClose', () => {
         await user.click(button('Help'));
         expect(screen.getByText('Help text')).toBeInTheDocument();
         rerender(<DrawerWithPopover open={false} />);
-        expect(warn).not.toHaveBeenCalled();
         act(() => {
-          vi.advanceTimersByTime(0);
+          vi.advanceTimersByTime(10);
         });
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn).toHaveBeenCalledWith(OPEN_INSIDE_WARNING);
+        // The popover's layer was dismissed with the drawer's (`parent-closed`).
+        expect(screen.queryByText('Help text')).not.toBeInTheDocument();
+        expect(warn).not.toHaveBeenCalled();
       } finally {
         warn.mockRestore();
         vi.useRealTimers();

@@ -221,7 +221,6 @@ describe('Drawer motion slots (D5, D6)', () => {
     it.each([
       ['a non-modal overlay', { modalType: 'non-modal' }, 'my-motion'],
       ['an inline drawer', { type: 'inline' }, 'my-motion'],
-      ['a non-modal overlay, as null', { modalType: 'non-modal' }, null],
     ] as const)('is ignored on %s with the backdrop-ignored warning, once', (_, props, slot) => {
       render(
         <React.StrictMode>
@@ -234,6 +233,19 @@ describe('Drawer motion slots (D5, D6)', () => {
       expect(warn.mock.calls).toEqual([[BACKDROP_IGNORED]]);
       expect(error).not.toHaveBeenCalled();
     });
+
+    it.each([
+      ['a non-modal overlay', { modalType: 'non-modal' }],
+      ['an inline drawer', { type: 'inline' }],
+    ] as const)(
+      'does not warn for backdropMotion={null} on %s: null asks for no motion',
+      (_, props) => {
+        render(<FiltersDrawer defaultOpen backdropMotion={null} {...props} />);
+        expect(panel()).not.toBeNull();
+        expect(warn).not.toHaveBeenCalled();
+        expect(error).not.toHaveBeenCalled();
+      },
+    );
 
     it('does not warn without backdropMotion on a non-modal drawer, nor with it on a modal one', () => {
       const { unmount } = render(<FiltersDrawer defaultOpen modalType="non-modal" />);

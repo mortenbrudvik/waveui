@@ -737,3 +737,106 @@ export const Motion: Story = {
     );
   },
 };
+
+/**
+ * The footer's layout: `startActions` puts a group at the start (here a secondary action) while the
+ * children stay at the end; `position="start"` moves all actions to the start; `fluid` makes each
+ * action share the width; `stackOnNarrow` stacks them in a column at 480px and below (resize the
+ * viewport to see it).
+ */
+export const FooterLayouts: Story = {
+  render: function FooterLayoutsStory(args) {
+    const layouts = [
+      { label: 'Start group', footer: { startActions: <Button>Reset</Button> } },
+      { label: 'Actions at the start', footer: { position: 'start' as const } },
+      { label: 'Fluid and stacked', footer: { fluid: true, stackOnNarrow: true } },
+    ];
+    return (
+      <div className="flex flex-wrap gap-2">
+        {layouts.map(({ label, footer }) => (
+          <Dialog key={label} {...args}>
+            <Dialog.Trigger>
+              <Button>{label}</Button>
+            </Dialog.Trigger>
+            <Dialog.Content title={label} size="small">
+              <p>The actions of this footer: {label.toLowerCase()}.</p>
+              <Dialog.Footer {...footer}>
+                <Dialog.Close>
+                  <Button appearance="subtle">Cancel</Button>
+                </Dialog.Close>
+                <Dialog.Close>
+                  <Button appearance="primary">Save</Button>
+                </Dialog.Close>
+              </Dialog.Footer>
+            </Dialog.Content>
+          </Dialog>
+        ))}
+      </div>
+    );
+  },
+};
+
+/**
+ * `titleAs` (the `title` prop) and `Dialog.Title`'s `as` pick the element of the title: a heading
+ * of the level that fits the page's outline, or a `div` or `span`. It names the dialog either way.
+ */
+export const TitleLevel: Story = {
+  render: function TitleLevelStory(args) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Dialog {...args}>
+          <Dialog.Trigger>
+            <Button>Title as h3</Button>
+          </Dialog.Trigger>
+          <Dialog.Content title="An h3 title" titleAs="h3" size="small">
+            <p>The title prop renders an h3.</p>
+          </Dialog.Content>
+        </Dialog>
+        <Dialog {...args}>
+          <Dialog.Trigger>
+            <Button>Dialog.Title as h1</Button>
+          </Dialog.Trigger>
+          <Dialog.Content size="small">
+            <Dialog.Title as="h1">An h1 title</Dialog.Title>
+            <p>Dialog.Title renders an h1.</p>
+          </Dialog.Content>
+        </Dialog>
+      </div>
+    );
+  },
+};
+
+/**
+ * `lightDismiss` on a non-modal dialog: a press on the page and focus moving away close it
+ * (`details.reason` is `outside-press` or `focus-outside`), like a popover; its trigger still
+ * toggles it. `mountNode` on `Dialog.Content` renders the surface into another element (here the
+ * bordered box), which the rest of the page still goes inert around when the dialog is modal.
+ */
+export const LightDismissAndMountNode: Story = {
+  render: function LightDismissStory(args) {
+    const [mountNode, setMountNode] = React.useState<HTMLElement | null>(null);
+    return (
+      <div className="flex flex-wrap items-start gap-4">
+        <Dialog {...args} modalType="non-modal" lightDismiss>
+          <Dialog.Trigger>
+            <Button appearance="primary">Light dismiss</Button>
+          </Dialog.Trigger>
+          <Dialog.Content title="Click anywhere else" size="small">
+            <p>A press on the page closes this dialog.</p>
+          </Dialog.Content>
+        </Dialog>
+        <Dialog {...args}>
+          <Dialog.Trigger>
+            <Button>Mount into the box</Button>
+          </Dialog.Trigger>
+          <Dialog.Content title="Mounted in a node" size="small" mountNode={mountNode}>
+            <p>This surface is a child of the box below.</p>
+          </Dialog.Content>
+        </Dialog>
+        <div ref={setMountNode} className="w-full rounded-md border border-wave-border p-2">
+          Mount node
+        </div>
+      </div>
+    );
+  },
+};

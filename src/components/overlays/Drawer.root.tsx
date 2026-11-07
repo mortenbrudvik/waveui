@@ -147,6 +147,15 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    */
   modalType?: DrawerModalType;
   /**
+   * Light dismiss of a `non-modal` drawer, as Dialog's `lightDismiss`: a press on the page and
+   * focus moving out of the drawer close it, with the reasons `outside-press` and `focus-outside`
+   * in `onOpenChange`; the element that opened it counts as inside, so its trigger still toggles
+   * it. Without it a non-modal drawer closes only on Escape from inside, the Close button and
+   * `Drawer.Close`. Ignored with `modal`, `alert` and by an inline drawer. A WaveUI addition.
+   * @default false
+   */
+  lightDismiss?: boolean;
+  /**
    * The backdrop of a modal or alert drawer, as `Dialog.Content`'s `backdrop`: a `div` behind the
    * panel, `aria-hidden`. Shorthand content renders inside it; a slot object's `className` (merged
    * last), `style`, data attributes, `ref` and handlers go to it, and its `appearance`
@@ -189,7 +198,8 @@ export interface DrawerProps extends Omit<React.HTMLAttributes<HTMLElement>, 'ti
    * under a `WaveProvider` with `motion="none"`, which otherwise turns the default off. The
    * panel's motion decides when the drawer unmounts or hides: a replacement longer than the
    * panel's exit is cut off there. Ignored with `modalType="non-modal"` and by an inline drawer
-   * (a development warning says so). Fluent's `OverlayDrawer` `backdropMotion`.
+   * (a development warning says so, except for `null`, which asks for no motion anyway). Fluent's
+   * `OverlayDrawer` `backdropMotion`.
    * @default the fade above
    */
   backdropMotion?: MotionSlot | null;
@@ -536,6 +546,7 @@ export const DrawerRoot = ({
   position = 'end',
   size = 'small',
   modalType = 'modal',
+  lightDismiss = false,
   backdrop,
   motion,
   backdropMotion,
@@ -668,6 +679,7 @@ export const DrawerRoot = ({
       size={size}
       separator={separator}
       modalType={modalType}
+      lightDismiss={lightDismiss}
       unmountOnClose={unmountOnClose}
       inlineAs="aside"
       trigger={trigger}

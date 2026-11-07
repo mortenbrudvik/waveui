@@ -1825,11 +1825,12 @@ describe('TeachingPopover steps form markup (D2)', () => {
     ['aria-labelledby', ''],
     ['tabindex', '-1'],
     ['data-layout', 'horizontal'],
+    ['data-appearance', 'neutral'],
     ['data-presence', 'entered'],
     ['data-state', 'open'],
     [
       'class',
-      `wave-teaching-popover wave:relative wave:w-80 wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-5 wave:text-foreground wave:shadow-8 wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring ${popupMotion}`,
+      `wave-teaching-popover wave:relative wave:w-80 wave:rounded-md wave:border wave:p-5 wave:shadow-8 wave:border-border wave:bg-background wave:text-foreground wave:focus-visible:outline-2 wave:focus-visible:outline-offset-2 wave:focus-visible:outline-ring ${popupMotion}`,
     ],
   ];
 

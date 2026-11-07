@@ -1358,8 +1358,14 @@ export const dialogTitleClassNames = {
   action: 'wave-dialog-title__action',
 } as const;
 
-/** Dialog.Footer: `root` on the footer element. */
-export const dialogFooterClassNames = { root: 'wave-dialog-footer' } as const;
+/**
+ * Dialog.Footer: `root` on the footer element; `startActions` on the group of its `startActions`
+ * slot at the inline start.
+ */
+export const dialogFooterClassNames = {
+  root: 'wave-dialog-footer',
+  startActions: 'wave-dialog-footer__start-actions',
+} as const;
 
 /**
  * Popover.Content: `root` on the portaled `role="dialog"` surface; `beak` on the arrow; `title`
@@ -1371,10 +1377,14 @@ export const popoverContentClassNames = {
   title: 'wave-popover-content__title',
 } as const;
 
-/** Tooltip: `root` on the span around your child; `content` on the portaled tooltip. */
+/**
+ * Tooltip: `root` on the span around your child; `content` on the portaled tooltip; `beak` on its
+ * arrow (`withArrow`).
+ */
 export const tooltipClassNames = {
   root: 'wave-tooltip',
   content: 'wave-tooltip__content',
+  beak: 'wave-tooltip__beak',
 } as const;
 
 /**

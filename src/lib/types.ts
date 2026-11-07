@@ -138,10 +138,18 @@ export interface OpenChangeDetails<R extends string = string> {
 /**
  * Why a Dialog or Drawer asks to open or close: `trigger` (its Trigger part), `close` (a
  * `.Close` part), `close-button` (the built-in Close button), `escape`, `outside-press` (the
- * backdrop). The last two are `DismissReason` values of the dismiss-layer stack.
+ * backdrop, or a press on the page with `lightDismiss`), `focus-outside` (focus leaving a
+ * non-modal surface with `lightDismiss`) and `parent-closed` (the Dialog or Drawer it was opened
+ * from closed). The last four are `DismissReason` values of the dismiss-layer stack.
  */
 export type ModalOpenChangeReason =
-  'trigger' | 'close' | 'close-button' | 'escape' | 'outside-press';
+  | 'trigger'
+  | 'close'
+  | 'close-button'
+  | 'escape'
+  | 'outside-press'
+  | 'focus-outside'
+  | 'parent-closed';
 
 /**
  * How a Dialog or Drawer relates to the page (Fluent's `modalType`). `modal`: a backdrop dims the

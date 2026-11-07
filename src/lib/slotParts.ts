@@ -163,7 +163,7 @@ export const SLOT_PROPS_KEYS = {
   menuItemRadioClassNames: ['content', 'shortcut'],
   menuItemSwitchClassNames: ['content', 'shortcut', 'track', 'thumb'],
   menuItemLinkClassNames: ['content', 'shortcut'],
-  tooltipClassNames: ['content'],
+  tooltipClassNames: ['content', 'beak'],
   teachingPopoverClassNames: ['beak', 'closeButton', 'dot', 'backButton', 'nextButton'],
   teachingPopoverCarouselNavClassNames: ['button', 'indicator'],
   infoButtonClassNames: ['info', 'beak'],
@@ -337,6 +337,7 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   stepperStepClassNames: ['icon'],
   dialogContentClassNames: ['backdrop', 'titleAction', 'closeButton'],
   dialogTitleClassNames: ['action'],
+  dialogFooterClassNames: ['startActions'],
   drawerClassNames: ['backdrop', 'titleAction', 'closeButton'],
   drawerHeaderTitleClassNames: ['action'],
   // `primaryAction` fills `primaryButton`; `secondaryAction` fills `secondaryButton`.
