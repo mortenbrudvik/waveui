@@ -1194,6 +1194,14 @@ Low gaps that are not part of an item's work. Any package that touches the compo
 - The gap list has two entries with the id `nav-1`: the Nav density gap (navigation family, backlog below) and the Table keyboard-helper gap (table family), written `table/nav-1` in this document (closed by P7-03). The gap list should give the table gap a unique id (for example `table-nav-1`) when it is next regenerated.
 - Three gaps were mitigated early without being closed: `taggroup-1` by P1-15, closed by P6-02 (0.11), which leaves `badge-1` by P1-13 (closed by P14-05) and `buttons-29` by P3-00 (closed by P13-02) mitigated early.
 
+### 8.1a Status after the 1.1 backlog (unreleased)
+
+The 1.1 work closed the backlog of §8.2 and the follow-ups of §8.5 and §8.6 that the 1.0 freeze allowed (see the `[Unreleased]` CHANGELOG for each id). What stays open, and why:
+
+- **Intentional, as before:** §8.3; `form-basic-12` (Input `className` between the input and the wrapper: any change alters 1.0 markup, spec D2); `presence-4` (the glyph is the status; restyle it with `slotProps.icon`); `menu-18`, `foundation-2`, `foundation-17`, `foundation-43`, `foundation-47` (§8.4).
+- **Open follow-ups (§8.5):** the enter slide of a popup whose placement flips (a two-step presence in `usePresence`/`usePopupPosition`); arrow keys between toasts (no screen-reader pattern established); real `treegrid` roles for the nested Tree (would change the roles of existing usage; a `FlatTree` treegrid mode would not); a hover opening applied after the pointer has left (needs the app's apply/refuse signal); a warning for radio sets without a group (no cheap check); option groups in a windowed picker; long frames of a windowed Listbox in Firefox (not reproducible); the Firefox hydration error under a strict CSP (no fix planned).
+- **New, from the 1.1 work:** `DataGrid focusMode="composite"` (Fluent's two-level model; no counterpart), `focusMode="row"` with a `virtualWindow` (ignored, with a warning), the `Table.CellActions` background in a windowed striped `Table` (counts spacer rows), `NavDrawer mountNode` (one prop; `DrawerPanel` takes it), and a real-browser pass for the new popup motion, the chart stories in right-to-left layouts, the vertical Slider outside Chromium and the WebKit resize drag.
+
 ### 8.2 Backlog by family
 
 **Buttons and actions**
