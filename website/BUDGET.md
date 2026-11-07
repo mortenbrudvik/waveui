@@ -248,9 +248,17 @@ Measured 2026-11-08 against the build above, on all 85 pages.
 `website/tests/pages.test.ts` checks that no page's first load holds the palette's chunk or its
 text, and that every page can load it later.
 
+Fix round 1 (the same day): the shortcut became platform-aware (Cmd+K on Apple platforms, Ctrl+K
+elsewhere, the K key also by its place), toggles the palette closed, and a failed palette chunk
+shows a notice in the command bar. **First load +100 to +176 B** more (index pages 97,599 →
+97,774 B; median component page 116,274.5 → 116,438 B; still 12 pages over). The palette's lazy
+chunks grew by 83 B (a Retry button for a failed index) to 29,508 B: **37,076 B** with the index.
+The largest "everything" is 191,016 B (tag-picker).
+
 ## Regression guard
 
 `website/tests/pages.test.ts` ("the components index loads at most its recorded first-load
-JavaScript plus 2 KB") fails when `components.html` loads more than 97,599 + 2,048 B. The record
-was 96,790 B until the search palette's listener and preload list added 809 B (Task 11, above). It
+JavaScript plus 2 KB") fails when `components.html` loads more than 97,774 + 2,048 B. The record
+was 96,790 B until the search palette's listener and preload list added 809 B, and its fix round
+175 B more (Task 11, above). It
 fails without the `base` chunk and the split (105,129 B), as checked when it was written.

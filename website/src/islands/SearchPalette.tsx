@@ -14,10 +14,13 @@
  *   clear button and Escape-clears behaviour cost about 4 KB gzipped more in the lazy chunk, which
  *   the 40 KB target of the palette and its index could not afford (website/BUDGET.md).
  * - The results are a `listbox` of links (`role="option"`), so a click, or a middle click, is a
- *   link's; a status line says how many there are, or why there are none.
+ *   link's; a status line says how many there are, or why there are none. When the index cannot
+ *   be loaded, a Retry button fetches it again (and the next opening does too).
+ * - Keys an input method is composing with (its Enter and Escape) are left to it.
  */
 import * as React from 'react';
 // The library's modules, not its barrel: the build's chunking walks these imports (BUDGET.md).
+import { Button } from '../../../src/components/button/Button';
 import { Input } from '../../../src/components/input/Input';
 import { Dialog } from '../../../src/components/overlays/Dialog';
 import { WaveProvider } from '../../../src/components/provider/WaveProvider';
@@ -82,13 +85,16 @@ const KIND_TEXT: Readonly<Record<SearchEntry['kind'], string>> = {
 interface ResultsProps {
   index: IndexState;
   onClose: () => void;
+  /** Fetches the index again after a failure. */
+  onRetry: () => void;
 }
 
 /** The input, the results and the status: mounted with each opening, so each starts empty. */
-function PaletteBody({ index, onClose }: ResultsProps) {
+function PaletteBody({ index, onClose, onRetry }: ResultsProps) {
   const [query, setQuery] = React.useState('');
   const [active, setActive] = React.useState(0);
   const listId = React.useId();
+  const inputRef = React.useRef<HTMLInputElement>(null);
   const results = React.useMemo(
     () => (index.status === 'ready' ? searchEntries(index.entries, query) : []),
     [index, query],
@@ -102,6 +108,8 @@ function PaletteBody({ index, onClose }: ResultsProps) {
   });
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    // While an input method composes, its keys (Enter commits, Escape cancels) are its own.
+    if (event.nativeEvent.isComposing) return;
     const count = results.length;
     if (event.key === 'Escape') {
       // Escape closes the palette at once, whatever the text (the dialog's own handling skipped).
@@ -124,7 +132,7 @@ function PaletteBody({ index, onClose }: ResultsProps) {
   const trimmed = query.trim();
   let status: string;
   if (index.status === 'loading') status = 'Loading the search index…';
-  else if (index.status === 'failed') status = 'Search is unavailable. Try again later.';
+  else if (index.status === 'failed') status = 'Search is unavailable.';
   else if (trimmed === '') status = 'Type a component, a prop or a guide.';
   else if (results.length === 0) status = `No results for “${trimmed}”`;
   else status = `${results.length} ${results.length === 1 ? 'result' : 'results'}`;
@@ -154,10 +162,25 @@ function PaletteBody({ index, onClose }: ResultsProps) {
         spellCheck={false}
         enterKeyHint="go"
         className="w-full"
+        ref={inputRef}
       />
-      <p role="status" className="m-0 text-wave-caption-1 text-wave-muted-foreground">
-        {status}
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p role="status" className="m-0 text-wave-caption-1 text-wave-muted-foreground">
+          {status}
+        </p>
+        {index.status === 'failed' ? (
+          <Button
+            size="small"
+            onClick={() => {
+              onRetry();
+              // The button goes while the index loads: focus back to the input.
+              inputRef.current?.focus();
+            }}
+          >
+            Retry
+          </Button>
+        ) : null}
+      </div>
       <div
         id={listId}
         role="listbox"
@@ -212,9 +235,8 @@ export default function SearchPalette({
   const [index, setIndex] = React.useState<IndexState>({ status: 'loading' });
   const requested = React.useRef(false);
 
-  // The index is fetched when the palette first opens; after a failure, on the next opening.
-  React.useEffect(() => {
-    if (!open || requested.current) return;
+  const fetchIndex = React.useCallback(() => {
+    if (requested.current) return;
     requested.current = true;
     searchIndexSource.load().then(
       (entries) => setIndex({ status: 'ready', entries }),
@@ -223,7 +245,18 @@ export default function SearchPalette({
         setIndex({ status: 'failed' });
       },
     );
-  }, [open]);
+  }, []);
+
+  // The index is fetched when the palette first opens; after a failure, on Retry or on the next
+  // opening.
+  React.useEffect(() => {
+    if (open) fetchIndex();
+  }, [open, fetchIndex]);
+
+  const retry = () => {
+    setIndex({ status: 'loading' });
+    fetchIndex();
+  };
 
   const close = () => {
     // A failed index is fetched again on the next opening, which shows it loading meanwhile.
@@ -241,7 +274,7 @@ export default function SearchPalette({
         finalFocusRef={returnFocusRef}
       >
         <Dialog.Content title="Search" size="medium">
-          <PaletteBody index={index} onClose={close} />
+          <PaletteBody index={index} onClose={close} onRetry={retry} />
         </Dialog.Content>
       </Dialog>
     </WaveProvider>

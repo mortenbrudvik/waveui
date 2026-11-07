@@ -3,7 +3,8 @@
  * group (Getting started, Theming, Changelog, All components), then every component of the catalog
  * as a real link (`/waveui/docs/components/<slug>`), grouped by category in the catalog's order.
  * Each group is a list item holding its heading and the list the heading labels; the current
- * page's link carries `aria-current="page"` (Nav's `value`).
+ * page's link carries `aria-current="page"` (Nav's `value`: a component's slug, or `guide:<id>`
+ * for a link of the Guides group).
  *
  * Wide screens show it as the window's left pane (the right one in right to left). Below 48rem
  * (768px) it is a drawer while scripts run: hidden until the island's hamburger sets

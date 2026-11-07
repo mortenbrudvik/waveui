@@ -1,6 +1,7 @@
 /**
  * The command bar at the top of the content: the hamburger (narrow screens), Copy code (only when
- * the page has code), Search, and the Theme and Direction choices. Presentational: the island
+ * the page has code), Search with a status line (it says when the search palette could not be
+ * loaded), and the Theme and Direction choices. Presentational: the island
  * (`islands/ShellControls.tsx`) owns the state and renders it, so it is in the server HTML with
  * every control `disabled` until the island hydrates, and hidden without scripts, where none of
  * them could work.
@@ -26,6 +27,10 @@ export interface CommandBarProps {
   choice: SiteChoice;
   navOpen: boolean;
   copyStatus: CopyStatus;
+  /** The Search command's `aria-keyshortcuts`: `Meta+K` on Apple platforms. @default 'Control+K' */
+  searchShortcut?: 'Control+K' | 'Meta+K';
+  /** True while the bar says that the search palette could not be loaded. */
+  searchFailed?: boolean;
   hamburgerRef?: React.Ref<HTMLButtonElement>;
   onToggleNav: () => void;
   onCopy: () => void;
@@ -44,6 +49,8 @@ const DIR_OPTIONS: readonly { value: SiteDir; label: string }[] = [
   { value: 'ltr', label: 'Left to right' },
   { value: 'rtl', label: 'Right to left' },
 ];
+
+const SEARCH_FAILED = 'Search could not be loaded. Try again.';
 
 const COPY_MESSAGES: Readonly<Record<CopyStatus, string>> = {
   idle: '',
@@ -88,6 +95,8 @@ export function CommandBar({
   choice,
   navOpen,
   copyStatus,
+  searchShortcut = 'Control+K',
+  searchFailed = false,
   hamburgerRef,
   onToggleNav,
   onCopy,
@@ -118,12 +127,16 @@ export function CommandBar({
       <Button
         appearance="subtle"
         icon={<SearchGlyph />}
-        aria-keyshortcuts="Control+K Meta+K"
+        aria-keyshortcuts={searchShortcut}
         disabled={disabled}
         onClick={onSearch}
       >
         Search
       </Button>
+      {/* Always rendered, so a screen reader announces the text when it appears. */}
+      <span role="status" className="text-wave-caption-1 text-wave-foreground">
+        {searchFailed ? SEARCH_FAILED : ''}
+      </span>
       <span className="ms-auto flex flex-wrap items-center gap-2">
         <Select
           aria-label="Theme"

@@ -7,7 +7,7 @@
  * Runs in the `shell` Vitest project (vitest.config.ts): jsdom globals with the SSR transform.
  */
 import { getContainerRenderer } from '@astrojs/react/container-renderer';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { hydrateRoot, type Root } from 'react-dom/client';
@@ -87,6 +87,7 @@ const findPalette = () => screen.findByRole('dialog', { name: 'Search' });
 const input = () => screen.getByRole('combobox', { name: 'Search the docs' });
 const options = () =>
   within(screen.getByRole('listbox', { name: 'Results' })).getAllByRole('option');
+const paletteStatus = () => within(screen.getByRole('dialog')).getByRole('status');
 const activeOption = () => {
   const id = input().getAttribute('aria-activedescendant');
   return id ? document.getElementById(id) : null;
@@ -98,6 +99,21 @@ async function pressShortcut(
   modifier: 'Control' | 'Meta' = 'Control',
 ) {
   await user.keyboard(`{${modifier}>}k{/${modifier}}`);
+}
+
+/** A keydown of K (by default) dispatched on `target`; returns the event to read `defaultPrevented`. */
+function press(target: Element, init: KeyboardEventInit) {
+  const event = new KeyboardEvent('keydown', {
+    key: 'k',
+    code: 'KeyK',
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
+  act(() => {
+    target.dispatchEvent(event);
+  });
+  return event;
 }
 
 async function openWithResults(query: string) {
@@ -128,51 +144,65 @@ describe('the search palette', () => {
     expect(input().getAttribute('aria-autocomplete')).toBe('list');
   });
 
-  it('Cmd+K opens it as well', async () => {
+  it('on a Mac, Cmd+K opens it and Ctrl+K is left to the page', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
     const user = userEvent.setup();
     serveIndex();
     await mount();
+    expect(screen.getByRole('button', { name: 'Search' }).getAttribute('aria-keyshortcuts')).toBe(
+      'Meta+K',
+    );
+    // Ctrl+K is a text-editing key on a Mac (delete to the end of the line).
+    expect(press(document.body, { ctrlKey: true }).defaultPrevented).toBe(false);
+    await act(async () => {});
+    expect(screen.queryByRole('dialog')).toBeNull();
     await pressShortcut(user, 'Meta');
     await findPalette();
     await waitFor(() => expect(document.activeElement).toBe(input()));
   });
 
-  it('the shortcut opens it from a text field too, and is the browser’s again while it is open', async () => {
+  it('elsewhere, Ctrl+K opens it and the Windows key with K does not', async () => {
+    serveIndex();
+    await mount();
+    expect(screen.getByRole('button', { name: 'Search' }).getAttribute('aria-keyshortcuts')).toBe(
+      'Control+K',
+    );
+    expect(press(document.body, { metaKey: true }).defaultPrevented).toBe(false);
+    await act(async () => {});
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(press(document.body, { ctrlKey: true }).defaultPrevented).toBe(true);
+    await findPalette();
+  });
+
+  it('the K key is found by its position too, in a layout that types another letter there', async () => {
+    serveIndex();
+    await mount();
+    // A Russian layout: the K key types "л".
+    expect(press(document.body, { ctrlKey: true, key: 'л', code: 'KeyK' }).defaultPrevented).toBe(
+      true,
+    );
+    await findPalette();
+  });
+
+  it('the shortcut opens it from a text field too, and closes it again while it is open', async () => {
     serveIndex();
     await mount();
     const field = document.getElementById('name-field')!;
     act(() => field.focus());
-    const press = (target: Element) => {
-      const event = new KeyboardEvent('keydown', {
-        key: 'k',
-        ctrlKey: true,
-        bubbles: true,
-        cancelable: true,
-      });
-      act(() => {
-        target.dispatchEvent(event);
-      });
-      return event;
-    };
     // Opening it takes the key from the browser.
-    expect(press(field).defaultPrevented).toBe(true);
+    expect(press(field, { ctrlKey: true }).defaultPrevented).toBe(true);
     await findPalette();
     await waitFor(() => expect(document.activeElement).toBe(input()));
-    // While it is open the shortcut opens nothing, so it is left to the browser.
-    expect(press(input()).defaultPrevented).toBe(false);
-    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    // While it is open the shortcut closes it, and is taken from the browser too.
+    expect(press(input(), { ctrlKey: true }).defaultPrevented).toBe(true);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(field);
     // Other chords are never taken.
-    const shifted = new KeyboardEvent('keydown', {
-      key: 'K',
-      ctrlKey: true,
-      shiftKey: true,
-      bubbles: true,
-      cancelable: true,
-    });
-    act(() => {
-      document.body.dispatchEvent(shifted);
-    });
-    expect(shifted.defaultPrevented).toBe(false);
+    expect(press(document.body, { ctrlKey: true, shiftKey: true, key: 'K' }).defaultPrevented).toBe(
+      false,
+    );
+    expect(press(document.body, { ctrlKey: true, altKey: true }).defaultPrevented).toBe(false);
+    expect(press(document.body, { ctrlKey: true, isComposing: true }).defaultPrevented).toBe(false);
   });
 
   it('the Search command opens it', async () => {
@@ -180,7 +210,7 @@ describe('the search palette', () => {
     serveIndex();
     await mount();
     const search = screen.getByRole('button', { name: 'Search' });
-    expect(search.getAttribute('aria-keyshortcuts')).toBe('Control+K Meta+K');
+    expect(search.getAttribute('aria-keyshortcuts')).toBe('Control+K');
     await user.click(search);
     await findPalette();
     await waitFor(() => expect(document.activeElement).toBe(input()));
@@ -301,11 +331,7 @@ describe('the search palette', () => {
     await mount();
     await pressShortcut(user);
     await findPalette();
-    await waitFor(() =>
-      expect(screen.getByRole('status').textContent).toBe(
-        'Search is unavailable. Try again later.',
-      ),
-    );
+    await waitFor(() => expect(paletteStatus().textContent).toBe('Search is unavailable.'));
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fail = false;
@@ -316,14 +342,64 @@ describe('the search palette', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
+  it('a Retry button fetches the index again in the open palette, and focus goes back to the input', async () => {
+    let fail = true;
+    const fetchSpy = serveIndex(async () => {
+      if (fail) throw new Error('offline');
+      return index;
+    });
+    const user = userEvent.setup();
+    await mount();
+    await pressShortcut(user);
+    const dialog = await findPalette();
+    const retry = await within(dialog).findByRole('button', { name: 'Retry' });
+    fail = false;
+    await user.click(retry);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(within(dialog).queryByRole('button', { name: 'Retry' })).toBeNull());
+    expect(document.activeElement).toBe(input());
+    await user.keyboard('dat');
+    await waitFor(() => expect(options().length).toBeGreaterThan(0));
+  });
+
+  it('says so in the page when the palette cannot be loaded, and loads it on the next try', async () => {
+    serveIndex();
+    const load = vi
+      .spyOn(searchPaletteChunk, 'load')
+      .mockRejectedValueOnce(new Error('Failed to fetch dynamically imported module'));
+    const user = userEvent.setup();
+    await mount();
+    const field = document.getElementById('name-field')!;
+    act(() => field.focus());
+    await pressShortcut(user);
+    const notice = await screen.findByText('Search could not be loaded. Try again.');
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.closest('.sr-only')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(field);
+    // The next request loads it, and the notice goes.
+    await pressShortcut(user);
+    await findPalette();
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(notice.textContent).toBe('');
+  });
+
+  it('Enter and Escape do nothing while an input method composes', async () => {
+    const go = vi.spyOn(paletteNavigation, 'go').mockImplementation(() => {});
+    await openWithResults('dat');
+    fireEvent.keyDown(input(), { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input(), { key: 'Escape', isComposing: true });
+    await act(async () => {});
+    expect(go).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Search' })).toBeDefined();
+  });
+
   it('announces the results', async () => {
     const { user } = await openWithResults('dat');
-    expect(screen.getByRole('status').textContent).toMatch(/^\d+ results?$/);
+    expect(paletteStatus().textContent).toMatch(/^\d+ results?$/);
     await user.clear(input());
     await user.keyboard('zzzq');
-    await waitFor(() =>
-      expect(screen.getByRole('status').textContent).toBe('No results for “zzzq”'),
-    );
+    await waitFor(() => expect(paletteStatus().textContent).toBe('No results for “zzzq”'));
     expect(input().getAttribute('aria-expanded')).toBe('false');
     expect(input().hasAttribute('aria-activedescendant')).toBe(false);
   });

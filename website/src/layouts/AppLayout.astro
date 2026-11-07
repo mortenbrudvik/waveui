@@ -16,8 +16,9 @@
  *   page scrolls; from 48rem the window is centered, at most 1200px wide, or fills the screen while
  *   maximized, and its panes scroll on their own.
  *
- * Props: `title` (the page title), `current` (the catalog slug of the page, marked in the
- * navigation), `status` (the status bar's measured facts; nothing is shown that is not given) and
+ * Props: `title` (the page title), `current` (the page's navigation value, marked current: a
+ * component's catalog slug, or `guide:<id>` of `GUIDE_LINKS` for a guide page and the components
+ * index), `status` (the status bar's measured facts; nothing is shown that is not given) and
  * `copyText` (what Copy code copies; without it there is no Copy code).
  */
 import '../styles/library.css';

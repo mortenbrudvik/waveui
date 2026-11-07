@@ -214,6 +214,23 @@ describe('AppLayout (server-rendered HTML)', () => {
     }
   });
 
+  it('marks a guide link current with current="guide:<id>"', async () => {
+    for (const link of GUIDE_LINKS) {
+      const doc = parse(await renderLayout({ title: link.title, current: `guide:${link.id}` }));
+      const current = [...doc.querySelectorAll('nav [aria-current]')];
+      expect(current, link.id).toHaveLength(1);
+      expect(current[0]!.getAttribute('aria-current')).toBe('page');
+      expect(current[0]!.getAttribute('href')).toBe(link.href);
+    }
+  });
+
+  it('the drawer focuses the current guide link', async () => {
+    load(await renderLayout({ title: 'Theming', current: 'guide:theming' }));
+    await hydrateIsland();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Navigation' }));
+    expect(document.activeElement?.getAttribute('href')).toBe('/waveui/docs/theming');
+  });
+
   it('marks no link current without a current page', async () => {
     const doc = parse(await renderLayout({ title: 'WaveUI docs' }));
     expect(doc.querySelectorAll('nav [aria-current]')).toHaveLength(0);

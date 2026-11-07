@@ -88,6 +88,30 @@ describe('searchEntries', () => {
     expect(labels(searchEntries(ENTRIES, '  card '))).toEqual(['Card']);
   });
 
+  it('matches regular-expression characters literally and never throws on them', () => {
+    const special: SearchEntry[] = [
+      prop('Table.cell(x)'),
+      prop('Grid.items[0]'),
+      prop('Path.a\\b'),
+      prop('Glob.a*b'),
+      component('Dot'),
+    ];
+    for (const query of ['(', '[', '\\', '*', '.', ')', ']', '+?', '^$', '|', '{']) {
+      expect(() => searchEntries(special, query), query).not.toThrow();
+      expect(() => matchTier('a(b[c\\d*e.f', query), query).not.toThrow();
+    }
+    expect(labels(searchEntries(special, '('))).toEqual(['Table.cell(x)']);
+    expect(labels(searchEntries(special, '[0]'))).toEqual(['Grid.items[0]']);
+    expect(labels(searchEntries(special, '\\'))).toEqual(['Path.a\\b']);
+    expect(labels(searchEntries(special, 'a*b'))).toEqual(['Glob.a*b']);
+    // "." is a dot, not "any character": only the labels that hold one.
+    expect(labels(searchEntries(special, '.')).sort()).toEqual(
+      ['Glob.a*b', 'Grid.items[0]', 'Path.a\\b', 'Table.cell(x)'].sort(),
+    );
+    expect(searchEntries(special, '*')).toHaveLength(1);
+    expect(searchEntries(special, '+?')).toEqual([]);
+  });
+
   it('is stable: the same input gives the same order, whatever the order of the entries', () => {
     const reversed = [...ENTRIES].reverse();
     expect(searchEntries(reversed, 'dat')).toEqual(searchEntries(ENTRIES, 'dat'));

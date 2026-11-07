@@ -173,6 +173,18 @@ describe.skipIf(!state.ready)(title, () => {
     expect(normalise(index[0]!.textContent)).toBe('Components');
   });
 
+  it('each component page marks exactly its own navigation link current; the start page none', () => {
+    for (const entry of catalog) {
+      const current = [...load(pageFile(entry)).querySelectorAll('[aria-current]')].filter(
+        (element) => !element.closest('astro-island'),
+      );
+      expect(current, entry.slug).toHaveLength(1);
+      expect(current[0]!.getAttribute('aria-current'), entry.slug).toBe('page');
+      expect(current[0]!.getAttribute('href'), entry.slug).toBe(componentHref(entry.slug));
+    }
+    expect(load(join(SITE_DIST, 'index.html')).querySelector('[aria-current]')).toBeNull();
+  });
+
   it('each page has the description, a props table (except hooks) and the code of its first story', () => {
     for (const entry of catalog) {
       const document = load(pageFile(entry));
@@ -471,8 +483,12 @@ describe.skipIf(!state.ready)(title, () => {
         catalog.filter((entry) => entry.category === group.category).length,
       );
     }
-    // No navigation entry is marked current on the index.
-    expect(document.querySelector('[aria-current="page"]')).toBeNull();
+    // The navigation marks the Guides group's "All components" link current, and nothing else.
+    const current = [...document.querySelectorAll('[aria-current]')];
+    expect(current).toHaveLength(1);
+    expect(current[0]!.getAttribute('aria-current')).toBe('page');
+    expect(current[0]!.getAttribute('href')).toBe(`${DOCS_BASE}/components`);
+    expect(normalise(current[0]!.textContent)).toBe('All components');
   });
 
   it('the copy-code text of a page equals the source of its first story', () => {
@@ -546,12 +562,13 @@ describe.skipIf(!state.ready)(title, () => {
   });
 
   it('the components index loads at most its recorded first-load JavaScript plus 2 KB', () => {
-    // website/BUDGET.md records 97,599 B gzipped (scripts/measure-page.mjs): 96,790 B before the
-    // search palette's shortcut listener and the preload list of its lazy chunk (+809 B). The full
+    // website/BUDGET.md records 97,774 B gzipped (scripts/measure-page.mjs): 96,790 B before the
+    // search palette's shortcut listener and the preload list of its lazy chunk (+809 B), then the
+    // platform-aware shortcut, its toggle and the "could not be loaded" notice (+175 B). The full
     // budget check of every page is a later task; this guards the shell-only page, which every
     // page pays.
     const { totals, reactCoreChunks, reactDomClientChunks } = measurePage(INDEX_FILE);
-    expect(totals.firstLoadGzip).toBeLessThanOrEqual(97_599 + 2_048);
+    expect(totals.firstLoadGzip).toBeLessThanOrEqual(97_774 + 2_048);
     expect(reactCoreChunks).toHaveLength(1);
     expect(reactDomClientChunks).toHaveLength(1);
   });
@@ -607,7 +624,7 @@ describe.skipIf(!state.ready)(title, () => {
     const guideContent = (document: Document) =>
       document.querySelector('main article [data-guide-content]')!;
 
-    it('each guide page has one h1, its "On this page" pane and no current navigation link', () => {
+    it('each guide page has one h1, its "On this page" pane and its own navigation link current', () => {
       const titles = {
         'getting-started': 'Getting started',
         theming: 'Theming',
@@ -627,7 +644,12 @@ describe.skipIf(!state.ready)(title, () => {
           links.map((link) => [link.getAttribute('href'), normalise(link.textContent)]),
           key,
         ).toEqual(h2s.map((h2) => [`#${h2.id}`, normalise(h2.textContent)]));
-        expect(document.querySelector('nav [aria-current]'), key).toBeNull();
+        // Exactly one current link: the page's own, in the Guides group.
+        const current = [...document.querySelectorAll('[aria-current]')];
+        expect(current, key).toHaveLength(1);
+        expect(current[0]!.getAttribute('aria-current'), key).toBe('page');
+        expect(current[0]!.getAttribute('href'), key).toBe(`${DOCS_BASE}/${key}`);
+        expect(normalise(current[0]!.textContent), key).toBe(heading);
         // The navigation's Guides group links to every guide page.
         for (const path of ['getting-started', 'theming', 'changelog', 'components']) {
           expect(

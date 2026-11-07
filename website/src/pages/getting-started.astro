@@ -14,7 +14,11 @@ const sections = headings
   .map(({ id, text }) => ({ id, title: text }));
 ---
 
-<AppLayout title="Getting started" status={{ version: getLibraryVersion() }}>
+<AppLayout
+  title="Getting started"
+  current="guide:getting-started"
+  status={{ version: getLibraryVersion() }}
+>
   <GuideArticle title="Getting started" sections={sections}>
     <Fragment set:html={html} />
   </GuideArticle>

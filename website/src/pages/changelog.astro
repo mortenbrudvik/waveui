@@ -18,7 +18,11 @@ const sections = releases.map(({ id, version }) => ({ id, title: version }));
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 ---
 
-<AppLayout title="Changelog" status={{ version: getLibraryVersion() }}>
+<AppLayout
+  title="Changelog"
+  current="guide:changelog"
+  status={{ version: getLibraryVersion() }}
+>
   <GuideArticle title="Changelog" sections={sections}>
     <p>
       The changes of every 1.x release, newest first. The releases before 1.0 are in the

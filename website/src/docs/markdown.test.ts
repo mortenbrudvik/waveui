@@ -29,6 +29,8 @@ const HOSTILE = [
   '',
   '[x](javascript:alert(1)) [y](https://evil.example/) ![img](https://evil.example/a.png)',
   '',
+  '[d](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==) [v](vbscript:msgbox(1)) [p](//evil.example/x) [J](JaVaScRiPt:alert(1)) <data:text/html,x>',
+  '',
   '<style>body{display:none}</style>',
   '',
   '- [x] done',
@@ -58,6 +60,18 @@ describe('renderMarkdown', () => {
     expect(body.querySelectorAll('a')).toHaveLength(0);
     expect(text).toContain('x');
     expect(text).toContain('img');
+    // `data:`, `vbscript:`, any-case `javascript:` and a protocol-relative `//host` are text too,
+    // and no attribute anywhere carries one.
+    for (const word of ['d', 'v', 'p', 'J'])
+      expect(text).toMatch(new RegExp(`(^|\\s)${word}(\\s|$)`));
+    expect(body.querySelectorAll('[href], [src]')).toHaveLength(0);
+    for (const element of body.querySelectorAll('*')) {
+      for (const name of element.getAttributeNames()) {
+        expect(element.getAttribute(name), name).not.toMatch(
+          /data:|vbscript:|javascript:|\/\/evil/i,
+        );
+      }
+    }
   });
 
   it('gives headings GitHub ids, deduplicated, and lists them', () => {

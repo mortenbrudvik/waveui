@@ -16,7 +16,11 @@ const headingId = (category: string) =>
   `category-${category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 ---
 
-<AppLayout title="Components" status={{ version: getLibraryVersion() }}>
+<AppLayout
+  title="Components"
+  current="guide:components"
+  status={{ version: getLibraryVersion() }}
+>
   <article class="flex flex-col gap-6 p-4 md:p-6">
     <header class="flex flex-col gap-1">
       <h1 class="m-0 text-wave-title-1 font-semibold">Components</h1>
