@@ -9,7 +9,10 @@
  * arrow keys belong to the selects, and a toolbar's roving focus would add script for no gain.
  */
 import type * as React from 'react';
-import { Button, Hamburger, Select } from '../../../src';
+// The library's modules, not its barrel: the build's chunking walks these imports (BUDGET.md).
+import { Button } from '../../../src/components/button/Button';
+import { Select } from '../../../src/components/input/Select';
+import { Hamburger } from '../../../src/components/navigation/Hamburger';
 import type { SiteChoice, SiteDir, SiteTheme } from '../theme/themeChoice';
 import { SHELL_IDS } from './ids';
 

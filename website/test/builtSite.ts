@@ -11,9 +11,9 @@
  * With `WAVEUI_REQUIRE_PAGES=1` (CI and `site:test:pages`) a missing or stale build fails instead.
  *
  * "Stale" compares modification times: the build's `components.html` against the newest file of
- * the sources a page is built from (the site's `src`, its config and skipped list, the library's
- * `src` without its tests, `stories/` and the library's `dist/index.mjs`, whose sizes the status
- * bar shows).
+ * the sources a page is built from (the site's `src`, its build plugins, config and skipped list,
+ * the library's `src` without its tests, `stories/` and the library's `dist/index.mjs`, whose sizes
+ * the status bar shows).
  */
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,6 +26,7 @@ const MARKER = join(SITE_DIST, 'components.html');
 
 const SOURCES = [
   'website/src',
+  'website/plugins',
   'website/astro.config.mjs',
   'website/skipped-stories.json',
   'src',

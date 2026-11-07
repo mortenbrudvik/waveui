@@ -11,15 +11,34 @@
  * `src/generated/examples/` (git-ignored) whenever the configuration loads, so `astro build`,
  * `astro dev` and the Vitest projects all find them (`src/examples/islands.ts` says why they are
  * generated). The generator is TypeScript and reads the catalog, so Vite's module runner loads it.
+ *
+ * The plugins of `plugins/` (website/BUDGET.md has the measurements):
+ *
+ * - `splitModules`: the client build splits the library's registries into one module per export,
+ *   so a page loads the class names, icons and motion recipes its islands use, not those of all.
+ * - `siteChunking`: the client build's `react` and `base` chunks, and the development warnings
+ *   dropped from production code.
  */
 import { fileURLToPath } from 'node:url';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import { runnerImport } from 'vite';
+import { siteChunking } from './plugins/chunking.mjs';
+import { splitModules } from './plugins/splitModules.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const siteRoot = fileURLToPath(new URL('.', import.meta.url));
+
+/**
+ * The library modules the client build splits: each is a registry of many small exports, which
+ * every island imports a few of. Splitting more (all of `src/lib`, the hooks or the components)
+ * made more, smaller chunks and cost more than it saved (BUDGET.md).
+ */
+const SPLIT_MODULES = ['src/lib/classNames.ts', 'src/lib/icons.tsx', 'src/lib/motion.ts'];
+
+/** The modules whose static closure is the `base` chunk: the shell island and the example runtime. */
+const BASE_ROOTS = ['website/src/islands/ShellControls.tsx', 'website/src/islands/Example.tsx'];
 
 /** @returns {import('astro').AstroIntegration} */
 function exampleIslands() {
@@ -45,7 +64,11 @@ export default defineConfig({
   build: { assets: '_assets', format: 'file' },
   integrations: [react(), exampleIslands()],
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [
+      tailwindcss(),
+      splitModules({ files: SPLIT_MODULES.map((file) => `${repoRoot}${file}`) }),
+      siteChunking({ baseRoots: BASE_ROOTS.map((file) => `${repoRoot}${file}`) }),
+    ],
     resolve: {
       alias: {
         'storybook/test': fileURLToPath(

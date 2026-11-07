@@ -25,7 +25,9 @@
  * `composeStory` and compares the markup.
  */
 import * as React from 'react';
-import { WaveProvider, type WaveDir, type WaveTheme } from '../../../src';
+import type { WaveDir, WaveTheme } from '../../../src';
+// The library's module, not its barrel: the build's chunking walks these imports (BUDGET.md).
+import { WaveProvider } from '../../../src/components/provider/WaveProvider';
 import type { ComponentEntry } from '../catalog/catalog';
 
 type Args = Record<string, unknown>;

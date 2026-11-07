@@ -28,7 +28,7 @@ export default getViteConfig({
         extends: true,
         test: {
           name: 'site',
-          include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs'],
+          include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs', 'plugins/**/*.test.ts'],
           exclude: SHELL_TESTS,
         },
       },

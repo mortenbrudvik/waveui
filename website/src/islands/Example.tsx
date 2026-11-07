@@ -28,7 +28,8 @@
  *   error in the browser is caught by an error boundary that shows the same panel.
  */
 import * as React from 'react';
-import { Button } from '../../../src';
+// The library's module, not its barrel: the build's chunking walks these imports (BUDGET.md).
+import { Button } from '../../../src/components/button/Button';
 import { CHOICE_EVENT } from '../shell/events';
 import {
   composeStoryExport,

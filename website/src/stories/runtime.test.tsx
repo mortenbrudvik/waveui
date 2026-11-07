@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { renderToString } from 'react-dom/server';
 import { composeStory } from '@storybook/react';
 import { fn as aliasedFn } from 'storybook/test';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { getCatalog, type ComponentEntry } from '../catalog/catalog';
 import {
   composeStoryExport,
@@ -49,6 +49,12 @@ function evaluatedModuleIds(): string[] {
   if (!map) throw new Error('Vitest no longer exposes its module graph here: update this helper');
   return [...map.keys()].map((id) => id.replaceAll('\\', '/'));
 }
+
+// The stories import the library's barrel, whose first evaluation takes seconds; the runtime itself
+// imports only the modules it uses, so the first story loaded would pay it inside its test.
+beforeAll(async () => {
+  await import('../../../src');
+}, 60_000);
 
 describe('loadStory', () => {
   it('renders the Button Default story to a button element on the server', async () => {
