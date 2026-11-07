@@ -1268,6 +1268,21 @@ export const MODULE_ONLY_NAMES = [
   'visibleFlatItems',
   'wcn',
   'withoutRenderFunction',
+  'withFooterRowIndexes',
+  'checkItems',
+  'toggleCheckIndependent',
+  'checkItemsIndependent',
+  'allItemValues',
+  'createVirtualSizes',
+  'withVirtualEstimate',
+  'setVirtualSizes',
+  'virtualSizeOf',
+  'virtualOffsetOf',
+  'virtualIndexAt',
+  'computeMeasuredLayout',
+  'scrollOffsetForMeasuredIndex',
+  'VirtualSizes',
+  'MeasuredLayoutInput',
 ];
 
 /**

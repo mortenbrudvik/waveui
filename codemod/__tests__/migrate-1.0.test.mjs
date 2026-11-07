@@ -53,7 +53,7 @@ describe('the table', () => {
     expect(compact(block)).toBe(compact(printTable(parseThemeTable(TOKENS_CSS))));
   });
 
-  it('shares 17 color names with a stock shadcn/ui theme', () => {
+  it('shares 22 color names with a stock shadcn/ui theme (17 of 1.0 and its chart-1 to chart-5)', () => {
     expect(SHARED_COLORS).toEqual([
       'background',
       'foreground',
@@ -72,6 +72,11 @@ describe('the table', () => {
       'border',
       'input',
       'ring',
+      'chart-1',
+      'chart-2',
+      'chart-3',
+      'chart-4',
+      'chart-5',
     ]);
   });
 

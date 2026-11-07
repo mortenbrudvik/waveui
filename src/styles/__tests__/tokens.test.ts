@@ -1379,7 +1379,6 @@ const EXCLUDED_WORDS = [
   'lowercase',
   'not-disabled:not-aria-disabled:hover:bg-error',
   'outline',
-  'resize',
   'ring',
   'select-all',
   'shadow',

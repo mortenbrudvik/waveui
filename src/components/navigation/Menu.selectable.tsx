@@ -198,6 +198,8 @@ interface SelectableMenuItemProps extends Omit<MenuItemCheckboxProps, 'slotProps
   componentName: string;
   /** The item element's stable classes: the base item's and the kind's own. */
   rootClassName: string;
+  /** The app-wide classes of `WaveProvider classNames` for the item's roots, after its own. */
+  appClassName?: string;
   /** The row parts' stable classes (the base item's and the kind's own). */
   partClassNames: MenuItemRowPartClassNames;
 }
@@ -275,6 +277,7 @@ function SelectableMenuItem({
   kind,
   componentName,
   rootClassName,
+  appClassName,
   partClassNames,
   name,
   value,
@@ -367,7 +370,7 @@ function SelectableMenuItem({
       {...disabledProps}
       onClick={activation.onClick}
       onKeyDown={activation.onKeyDown}
-      className={wcn(rootClassName, menuItemClasses, className)}
+      className={wcn(rootClassName, menuItemClasses, appClassName, className)}
     >
       <MenuItemRow
         checkmark={checkColumn}
@@ -405,7 +408,8 @@ export const MenuItemCheckbox = (props: MenuItemCheckboxProps) => {
       {...props}
       kind="checkbox"
       componentName="Menu.ItemCheckbox"
-      rootClassName={wcn(menuItemClassNames.root, menuItemCheckboxClassNames.root, appClassName)}
+      rootClassName={wcn(menuItemClassNames.root, menuItemCheckboxClassNames.root)}
+      appClassName={appClassName}
       partClassNames={{
         checkmark: wcn(menuItemClassNames.checkmark, menuItemCheckboxClassNames.checkmark),
         icon: wcn(menuItemClassNames.icon, menuItemCheckboxClassNames.icon),
@@ -439,7 +443,8 @@ export const MenuItemRadio = (props: MenuItemRadioProps) => {
       {...props}
       kind="radio"
       componentName="Menu.ItemRadio"
-      rootClassName={wcn(menuItemClassNames.root, menuItemRadioClassNames.root, appClassName)}
+      rootClassName={wcn(menuItemClassNames.root, menuItemRadioClassNames.root)}
+      appClassName={appClassName}
       partClassNames={{
         checkmark: wcn(menuItemClassNames.checkmark, menuItemRadioClassNames.checkmark),
         icon: wcn(menuItemClassNames.icon, menuItemRadioClassNames.icon),
@@ -468,7 +473,8 @@ export const MenuItemSwitch = (props: MenuItemSwitchProps) => {
       {...props}
       kind="switch"
       componentName="Menu.ItemSwitch"
-      rootClassName={wcn(menuItemClassNames.root, menuItemSwitchClassNames.root, appClassName)}
+      rootClassName={wcn(menuItemClassNames.root, menuItemSwitchClassNames.root)}
+      appClassName={appClassName}
       partClassNames={{
         icon: wcn(menuItemClassNames.icon, menuItemSwitchClassNames.icon),
         content: wcn(menuItemClassNames.content, menuItemSwitchClassNames.content),
