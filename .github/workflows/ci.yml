@@ -140,8 +140,12 @@ jobs:
       - name: Build the site
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run site:build
+      # Runs after the site build: the tests of the built pages read website/dist, and
+      # WAVEUI_REQUIRE_PAGES makes a missing or stale build fail them rather than skip them.
       - name: Test the site
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          WAVEUI_REQUIRE_PAGES: '1'
         run: npm run site:test
       - name: Check the site
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
