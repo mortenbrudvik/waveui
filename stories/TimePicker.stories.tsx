@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import type * as React from 'react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
-import { Field, TimePicker } from '../src';
+import { Field, TimePicker, useVirtualWindow } from '../src';
 import { coreSizeArgType, inputAppearanceArgType } from './_helpers';
 import { SizeAppearanceGrid } from './_grids';
 
@@ -143,4 +144,15 @@ export const SizesAndAppearances: Story = {
       )}
     />
   ),
+};
+
+function WindowedTimes(args: React.ComponentProps<typeof TimePicker>) {
+  const virtualWindow = useVirtualWindow({ itemSize: 32 });
+  return <TimePicker {...args} virtualWindow={virtualWindow} />;
+}
+
+/** A step of one minute makes 1,440 options; `virtualWindow` mounts only the ones in view. */
+export const Windowed: Story = {
+  args: { step: 1, format: '24h' },
+  render: (args) => <WindowedTimes {...args} />,
 };
