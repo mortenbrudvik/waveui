@@ -12,7 +12,7 @@
  *   `__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE`) and react-dom's client (it
  *   names its `rendererPackageName`); one of each is expected.
  *
- * Usage: node scripts/measure-page.mjs [page.html under dist, default spike.html] [--json]
+ * Usage: node scripts/measure-page.mjs [page.html under dist, default index.html] [--json]
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -117,7 +117,7 @@ export function measurePage(pageFile) {
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const page = process.argv.slice(2).find((arg) => !arg.startsWith('--')) ?? 'spike.html';
+  const page = process.argv.slice(2).find((arg) => !arg.startsWith('--')) ?? 'index.html';
   const result = measurePage(join(dist, page));
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify(result, null, 2));
