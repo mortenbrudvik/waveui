@@ -9,7 +9,12 @@ import {
 } from './TagPicker.parts';
 import { TagPickerOption } from './TagPicker.option';
 
-export type { TagPickerLabels, TagPickerProps, TagPickerSize } from './TagPicker.root';
+export type {
+  TagPickerCreateDetails,
+  TagPickerLabels,
+  TagPickerProps,
+  TagPickerSize,
+} from './TagPicker.root';
 export type {
   TagPickerButtonProps,
   TagPickerControlProps,

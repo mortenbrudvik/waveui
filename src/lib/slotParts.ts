@@ -304,7 +304,8 @@ export const NAMED_SLOT_PARTS: SlotPartLists = {
   listboxSurfaceClassNames: ['list'],
   comboboxClassNames: ['expandIcon'],
   dropdownClassNames: ['expandIcon'],
-  tagPickerClassNames: ['expandIcon'],
+  // `secondaryAction` (the root's and TagPicker.Control's) fills `secondaryAction`.
+  tagPickerClassNames: ['expandIcon', 'secondaryAction'],
   tagPickerOptionClassNames: ['media', 'secondaryContent'],
   timePickerClassNames: ['expandIcon'],
   colorSwatchClassNames: ['icon'],

@@ -128,7 +128,7 @@ describe('TagPicker windowed options (virtualWindow)', () => {
     expect(create).toHaveAttribute('data-create');
     expect(create).toHaveAttribute('aria-posinset', '1');
     await user.keyboard('{ArrowDown}{Enter}');
-    expect(onOptionCreate).toHaveBeenCalledWith('zzz');
+    expect(onOptionCreate).toHaveBeenCalledWith('zzz', { event: expect.any(Event) });
   });
 
   it('ignores the window beside a List with children, with one development warning', async () => {

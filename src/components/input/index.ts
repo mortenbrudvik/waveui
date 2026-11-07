@@ -119,6 +119,7 @@ export {
   TagPickerOptionGroup,
   type TagPickerProps,
   type TagPickerLabels,
+  type TagPickerCreateDetails,
   type TagPickerSize,
   type TagPickerControlProps,
   type TagPickerGroupProps,

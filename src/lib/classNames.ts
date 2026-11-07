@@ -604,7 +604,8 @@ export const dropdownClassNames = {
  * on the create option of `allowCreate`; `overflowCount` on the "+N" count of the single-line
  * layout; `surface` on the portaled popup; `emptyMessage` on the "No matches" row; `spacer` on
  * each spacer element of the list with a `virtualWindow` (the elements that stand in for the
- * options that are not rendered).
+ * options that are not rendered); `secondaryAction` on the element around the `secondaryAction`
+ * content, after the trigger.
  */
 export const tagPickerClassNames = {
   root: 'wave-tag-picker',
@@ -621,6 +622,7 @@ export const tagPickerClassNames = {
   surface: 'wave-tag-picker__surface',
   emptyMessage: 'wave-tag-picker__empty-message',
   spacer: 'wave-tag-picker__spacer',
+  secondaryAction: 'wave-tag-picker__secondary-action',
 } as const;
 
 /**

@@ -24,6 +24,12 @@ export interface TagPickerOption {
   media?: React.ReactNode;
   /** A second line under the label in the option (a role, an e-mail address); tags do not show it. */
   secondaryContent?: React.ReactNode;
+  /**
+   * The option cannot be picked: it stays in the list, dimmed (`aria-disabled`), and a click or
+   * Enter does not add it; the arrow keys and typeahead skip it. As `disabled` on an `Option`.
+   * @default false
+   */
+  disabled?: boolean;
 }
 
 /**

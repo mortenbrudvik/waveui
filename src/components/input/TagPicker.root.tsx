@@ -95,6 +95,12 @@ export interface TagPickerLabels {
 /** Sizes of TagPicker (Fluent's): medium (the 0.7 look), large and extra-large. */
 export type TagPickerSize = Extract<Size, 'medium' | 'large' | 'extra-large'>;
 
+/** The second argument of TagPicker's `onOptionCreate`. */
+export interface TagPickerCreateDetails {
+  /** The key or click event behind the creation. */
+  event: Event;
+}
+
 /** Properties for the TagPicker component. */
 export interface TagPickerProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
@@ -260,10 +266,28 @@ export interface TagPickerProps extends Omit<
   allowCreate?: boolean;
   /**
    * Called with the trimmed text when the user creates a tag, before `onValueChange` reports the
-   * new value. Add an option for it if you keep options: until then the tag shows the raw text.
-   * WaveUI-only (see `allowCreate`).
+   * new value, and `details.event`, the key or click event behind it. Add an option for it if you
+   * keep options: until then the tag shows the raw text. WaveUI-only (see `allowCreate`).
    */
-  onOptionCreate?: (text: string) => void;
+  onOptionCreate?: (text: string, details?: TagPickerCreateDetails) => void;
+  /**
+   * Leaves the list out: the picker is a text field that adds tags of its own. There is no popup,
+   * no `aria-expanded`, `aria-controls` or `aria-haspopup`, the expand button is not rendered and
+   * the input is a plain text field (no `role="combobox"`). Enter adds the typed text as a tag: the
+   * unselected option whose label equals it (ignoring case), else, with `allowCreate`, a new tag
+   * after `onOptionCreate`; with neither, Enter is left to the page. A `TagPicker.List` is not
+   * rendered, and the `TagPicker.Button` trigger ignores it (a development warning). Fluent's
+   * `noPopover` only drops the list and leaves the adding to the app's own `onKeyDown`.
+   * @default false
+   */
+  noPopover?: boolean;
+  /**
+   * An action after the trigger, before the end buttons (a clear-all or an "Add all" button):
+   * rendered in a `<span>` (stable class `wave-tag-picker__secondary-action`) at the end of the
+   * field. `TagPicker.Control`'s `secondaryAction` wins when it is not `undefined`. Fluent's
+   * `secondaryAction` of `TagPickerControl`.
+   */
+  secondaryAction?: Slot<'span'>;
   /**
    * Shows a clear button at the end of the field while a tag is selected (not while `readOnly`;
    * disabled while `disabled`): it removes every tag (`onValueChange([])`), clears the typed
@@ -503,6 +527,8 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     readOnly = false,
     allowCreate = false,
     onOptionCreate,
+    noPopover: noPopoverProp = false,
+    secondaryAction,
     clearable = false,
     expandIcon,
     virtualWindow,
@@ -589,7 +615,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
   // HTML, hydration) the picker shows the closed inline list and reports it closed, so
   // aria-controls and aria-activedescendant never name a missing element.
   const isClient = useIsClient();
-  const open = openState && interactive && isClient;
+  const shown = openState && interactive && isClient;
   // The trigger parts (D63): their kind decides the listbox mode; the server HTML and the first
   // render use the editable mode of `TagPicker.Input`.
   const triggersRef = React.useRef(new Map<object, TagPickerTriggerKind>());
@@ -619,6 +645,19 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     if (listCountRef.current > 1) warnOnce('TagPicker.List:placement', LIST_PLACEMENT_MESSAGE);
   });
   const isButtonTrigger = triggerKind === 'button';
+  // The text field of a picker without a popup; a button trigger has nothing to type into.
+  const noPopover = noPopoverProp && !isButtonTrigger;
+  const noPopoverButton = noPopoverProp && isButtonTrigger;
+  const open = shown && !noPopover;
+  React.useEffect(() => {
+    if (noPopoverButton) {
+      warnOnce(
+        'TagPicker:noPopover-button',
+        'TagPicker: `noPopover` needs `TagPicker.Input`: `TagPicker.Button` has no text to add a tag ' +
+          'from, so the list is kept.',
+      );
+    }
+  }, [noPopoverButton]);
 
   // The query (D12): the text typed since the last tag was added, which filters the options. A
   // picker that starts locked starts without a query, as it starts closed.
@@ -713,7 +752,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     if (registration) return undefined;
     const available: ListboxItem[] = options
       .filter((option) => !selectedSet.has(option.value))
-      .map((option) => ({ value: option.value, label: option.label }));
+      .map((option) => ({ value: option.value, label: option.label, disabled: option.disabled }));
     if (dataCreateText !== null) {
       available.push({ value: createValue, label: resolvedLabels.create(dataCreateText) });
     }
@@ -740,10 +779,10 @@ export const TagPickerRoot = (props: TagPickerProps) => {
   };
 
   // Creates a tag of the trimmed text (D59): the create option was offered for it.
-  const commitCreate = () => {
+  const commitCreate = (event: Event) => {
     const text = query.trim();
     if (!interactive || text === '') return;
-    onOptionCreate?.(text);
+    onOptionCreate?.(text, { event });
     const next = [...selected, text];
     setSelected(next);
     setQuery('');
@@ -776,7 +815,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     multiselect: true,
     selectedValues: selected,
     onSelect: (value, details) => {
-      if (value === createValue) commitCreate();
+      if (value === createValue) commitCreate(details.event);
       else addTag(value, details.item.label ?? value);
     },
     items,
@@ -883,7 +922,31 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     triggerRef.current?.focus();
   });
   const toggleOpen = useEventCallback(() => {
-    if (interactive) setOpen(!open);
+    if (interactive && !noPopover) setOpen(!open);
+  });
+  // Enter in the text field of a picker without a popup (`noPopover`): the typed text becomes a
+  // tag. Returns whether the key was handled (otherwise the page's own Enter, a form submission,
+  // is left alone).
+  const submitText = useEventCallback((event: Event): boolean => {
+    const text = query.trim();
+    if (!interactive || text === '') return false;
+    const lower = text.toLowerCase();
+    const match = options.find(
+      (option) =>
+        !option.disabled && !selectedSet.has(option.value) && option.label.toLowerCase() === lower,
+    );
+    if (match) {
+      addTag(match.value, match.label);
+      return true;
+    }
+    if (!allowCreate) return false;
+    const known = {
+      labels: options.map((option) => option.label),
+      values: options.map((option) => option.value),
+      selected,
+    };
+    if (createOptionText(query, known) !== null) commitCreate(event);
+    return true;
   });
   const removeTag = useEventCallback((value: string) => {
     if (!interactive || !selected.includes(value)) return;
@@ -901,7 +964,7 @@ export const TagPickerRoot = (props: TagPickerProps) => {
   const editText = useEventCallback((text: string) => {
     if (!interactive) return;
     setQuery(text);
-    if (!open) setOpen(true);
+    if (!open && !noPopover) setOpen(true);
     // The option whose label equals the typed text becomes active (D60); a user edit only.
     const candidates: Iterable<ExactMatchCandidate> = registration
       ? Array.from(collected, ([value, label]) => ({ value, label }))
@@ -1000,6 +1063,9 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       options,
       warnsUnknownValues: !registration && !allowCreate,
       dataMode: !registration,
+      noPopover,
+      secondaryAction,
+      submitText,
       listbox,
       virtualWindow: activeWindow,
       listScrollRef,
@@ -1058,6 +1124,9 @@ export const TagPickerRoot = (props: TagPickerProps) => {
       options,
       registration,
       allowCreate,
+      noPopover,
+      secondaryAction,
+      submitText,
       listbox,
       activeWindow,
       listScrollRef,
@@ -1100,13 +1169,13 @@ export const TagPickerRoot = (props: TagPickerProps) => {
     children === undefined || children === null ? (
       <>
         <TagPickerControl />
-        <TagPickerList />
+        {!noPopover && <TagPickerList />}
       </>
     ) : (
       <>
         {children}
         {/* A parts form without a List still has its listbox, so aria-controls never dangles. */}
-        {listElement === undefined && <TagPickerList />}
+        {listElement === undefined && !noPopover && <TagPickerList />}
       </>
     );
 

@@ -14,7 +14,7 @@ import { warnOnce } from '../../lib/dev';
 import { getArrowIntent, getDirection } from '../../lib/direction';
 import { FOCUSABLE_SELECTOR, isFocusable } from '../../lib/focus';
 import { DismissIcon } from '../../lib/icons';
-import { slotRendersContent } from '../../lib/slot';
+import { renderSlot, slotRendersContent } from '../../lib/slot';
 import type { Slot, SlotObject } from '../../lib/slot';
 import { mergeSlotProps } from '../../lib/slotProps';
 import {
@@ -227,6 +227,11 @@ TagPickerClearButton.displayName = 'TagPickerClearButton';
 export interface TagPickerControlProps extends React.HTMLAttributes<HTMLDivElement> {
   /** As TagPicker's `expandIcon`; wins over it when it is not `undefined`. */
   expandIcon?: Slot<'span'>;
+  /**
+   * As TagPicker's `secondaryAction`: an action after the trigger, before the end buttons (stable
+   * class `wave-tag-picker__secondary-action`); wins over it when it is not `undefined`.
+   */
+  secondaryAction?: Slot<'span'>;
   /** @default `<TagPicker.Group /><TagPicker.Input />` */
   children?: React.ReactNode;
   ref?: React.Ref<HTMLDivElement>;
@@ -239,6 +244,7 @@ interface ControlImplProps extends TagPickerControlProps {
 function TagPickerControlImpl({
   ctx,
   expandIcon,
+  secondaryAction,
   children,
   className,
   onMouseDown,
@@ -254,7 +260,10 @@ function TagPickerControlImpl({
   const mergedRef = useMergedRefs<HTMLDivElement>(ref, controlElementRef, setReference);
 
   const glyph = expandIcon !== undefined ? expandIcon : ctx.expandIcon;
-  const showExpand = showsExpandButton(glyph);
+  // Without a popup there is nothing to open: no expand button.
+  const showExpand = !ctx.noPopover && showsExpandButton(glyph);
+  const secondary = secondaryAction !== undefined ? secondaryAction : ctx.secondaryAction;
+  const showSecondary = slotRendersContent(secondary);
   const showClear = ctx.clearable && ctx.selected.length > 0 && !ctx.readOnly;
   const buttons = (showExpand ? 1 : 0) + (showClear ? 1 : 0);
 
@@ -303,6 +312,15 @@ function TagPickerControlImpl({
             <TagPickerInput />
           </>
         )}
+        {showSecondary &&
+          renderSlot(
+            secondary,
+            'span',
+            wcn(
+              tagPickerClassNames.secondaryAction,
+              'wave:ms-auto wave:flex wave:shrink-0 wave:items-center',
+            ),
+          )}
         {showClear && <TagPickerClearButton ctx={ctx} position={showExpand ? 2 : 1} />}
         {showExpand && (
           <PickerExpandButton
@@ -661,6 +679,17 @@ function TagPickerInputImpl({
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     // Read-only: no listbox keys at all (they would open the list, add or remove tags).
     if (!ctx.interactive) return;
+    // Without a popup Enter adds the typed text; an Enter that adds nothing goes to the page.
+    if (ctx.noPopover && event.key === 'Enter' && !event.nativeEvent.isComposing) {
+      if (ctx.submitText(event.nativeEvent)) event.preventDefault();
+      return;
+    }
+    // Escape clears the typed text, as the list's Escape does.
+    if (ctx.noPopover && event.key === 'Escape' && ctx.query !== '') {
+      event.preventDefault();
+      ctx.editText('');
+      return;
+    }
     if (event.key === 'Escape' && ctx.open && !ctx.surfaceOpen && !event.nativeEvent.isComposing) {
       // Open with nothing shown (every option selected, no query): close, but leave Escape to an
       // enclosing layer (overlays#1) instead of consuming it for an invisible list.
@@ -685,7 +714,8 @@ function TagPickerInputImpl({
         return;
       }
     }
-    listbox.onKeyDown(event);
+    // No popup, no listbox keys.
+    if (!ctx.noPopover) listbox.onKeyDown(event);
   };
 
   const naming = triggerNaming(ctx, {
@@ -712,8 +742,9 @@ function TagPickerInputImpl({
       autoFocus={triggerProps.autoFocus}
       {...rest}
       {...naming}
-      {...listbox.getComboboxProps()}
-      aria-expanded={ctx.expanded}
+      // A picker without a popup is a plain text field: no combobox role, state or list wiring.
+      {...(ctx.noPopover ? undefined : listbox.getComboboxProps())}
+      aria-expanded={ctx.noPopover ? undefined : ctx.expanded}
       aria-describedby={joinIds(ariaDescribedBy, triggerProps['aria-describedby'], ctx.summaryId)}
       ref={mergedRef}
       disabled={ctx.disabled}
@@ -725,7 +756,7 @@ function TagPickerInputImpl({
       )}
       // A click opens a closed list and never closes it (Combobox's input rule, D66).
       onClick={composeEventHandlers(onClick, () => {
-        if (ctx.interactive && !ctx.open) ctx.setOpen(true);
+        if (ctx.interactive && !ctx.open && !ctx.noPopover) ctx.setOpen(true);
       })}
       onKeyDown={composeEventHandlers(
         onKeyDown,
@@ -984,6 +1015,7 @@ function TagPickerListImpl({
           label={item.label}
           media={entry?.media}
           secondaryContent={entry?.secondaryContent}
+          disabled={item.disabled}
           className={tagPickerClassNames.option}
           {...(optionPart &&
             mergeSlotProps(optionPart, {
@@ -1100,7 +1132,8 @@ TagPickerListImpl.displayName = 'TagPickerListImpl';
  */
 export const TagPickerList = (props: TagPickerListProps) => {
   const ctx = useTagPickerContext('TagPicker.List');
-  if (!ctx) return null;
+  // Without a popup (`noPopover`) there is no list.
+  if (!ctx || ctx.noPopover) return null;
   return <TagPickerListImpl {...props} ctx={ctx} />;
 };
 TagPickerList.displayName = 'TagPickerList';
