@@ -914,7 +914,9 @@ export const LightDismiss: Story = {
       <p>Page content</p>
     </div>
   ),
+};
 
+/**
  * `mountNode` renders an overlay drawer into an element of your choosing instead of the body (a
  * panel, a shadow root's container, a preview frame). The panel is fixed, so it is placed against
  * the viewport unless the node has a transform.
