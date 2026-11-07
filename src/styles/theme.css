@@ -144,6 +144,16 @@
   --color-palette-steel-tint: var(--wave-palette-steel-tint);
   --color-palette-steel-tint-foreground: var(--wave-palette-steel-tint-foreground);
   --color-palette-steel-border: var(--wave-palette-steel-border);
+  --color-chart-1: var(--wave-chart-1);
+  --color-chart-2: var(--wave-chart-2);
+  --color-chart-3: var(--wave-chart-3);
+  --color-chart-4: var(--wave-chart-4);
+  --color-chart-5: var(--wave-chart-5);
+  --color-chart-6: var(--wave-chart-6);
+  --color-chart-7: var(--wave-chart-7);
+  --color-chart-8: var(--wave-chart-8);
+  --color-chart-9: var(--wave-chart-9);
+  --color-chart-10: var(--wave-chart-10);
   --color-backdrop: var(--wave-backdrop);
 
   /* Brand ramp (for designers; components use the semantic colors) */

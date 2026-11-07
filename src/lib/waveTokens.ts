@@ -217,6 +217,17 @@ export const WAVE_TOKEN_NAMES = [
   'paletteSteelTint',
   'paletteSteelTintForeground',
   'paletteSteelBorder',
+  // Chart series: the categorical colours made for charts
+  'chart1',
+  'chart2',
+  'chart3',
+  'chart4',
+  'chart5',
+  'chart6',
+  'chart7',
+  'chart8',
+  'chart9',
+  'chart10',
   // Elevation
   'shadow2',
   'shadow4',
@@ -285,4 +296,36 @@ export const chartPalette: readonly WaveTokenName[] = /* @__PURE__ */ Object.fre
   'paletteLavender',
   'paletteForest',
   'paletteMagenta',
+]);
+
+/**
+ * The ten chart series colours as token names, in the order a categorical chart gives them to its
+ * series: `waveTokens[chartSeries[index]]`. Unlike `chartPalette`, which reuses the persona
+ * palette's fills, these ten (`chart1` to `chart10`) are made for charts and tested as a set in
+ * the light and dark themes: every colour is 3:1 or more on `background` and on `card`, and every
+ * pair of the ten differs by at least 7 (OKLab ΔE ×100) under simulated protanopia,
+ * deuteranopia, tritanopia and for full colour vision, where `chartPalette`'s worst pair is
+ * about 3.2. The first five differ by at least 9, so a chart with few series reads best. The hues
+ * run blue, olive, violet, red, green, orchid, orange, deep teal, raspberry and sage; the first
+ * six are the most distinct. Colour should still not be the only encoding (a pattern, a marker or
+ * a label), and in high contrast every series is white, so a second encoding is required there.
+ * Series beyond ten wrap: add a pattern or a marker to tell the second round apart. Read each
+ * colour through `waveTokens`, so the series follow the theme and the provider's `tokens`. Frozen
+ * and server-safe. Fluent's chart package has a palette of 40 colours (`DataVizPalette`) that is
+ * not made of theme tokens.
+ *
+ * @example
+ * const color = waveTokens[chartSeries[index % chartSeries.length]];
+ */
+export const chartSeries: readonly WaveTokenName[] = /* @__PURE__ */ Object.freeze([
+  'chart1',
+  'chart2',
+  'chart3',
+  'chart4',
+  'chart5',
+  'chart6',
+  'chart7',
+  'chart8',
+  'chart9',
+  'chart10',
 ]);

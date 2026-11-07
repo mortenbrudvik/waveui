@@ -11,7 +11,7 @@ import {
   Tooltip as ChartTooltip,
 } from 'chart.js';
 import type { ChartOptions } from 'chart.js';
-import { Switch, chartPalette, cn, useId, waveTokens } from '../src';
+import { Switch, chartSeries, cn, useId, waveTokens } from '../src';
 import type { WaveTokenName } from '../src';
 
 // Chart.js is tree-shakable: a bar chart registers its controller, element, scales and plugins.
@@ -54,26 +54,12 @@ const patterns: readonly SeriesPattern[] = [
   { d: 'M-2,6 l4,4 M0,0 l8,8 M6,-2 l4,4', paint: 'stroke' }, // back-diagonal lines
 ];
 
-/** Each region with its fill, in `chartPalette` order, and its pattern. */
+/** Each region with its fill, in `chartSeries` order, and its pattern. */
 const series = regions.map((region, index) => ({
   ...region,
-  fill: chartPalette[index],
+  fill: chartSeries[index],
   pattern: patterns[index],
 }));
-
-/** Whether `name` is a token name: `waveTokens` has a key for every one. */
-function isTokenName(name: string): name is WaveTokenName {
-  return name in waveTokens;
-}
-
-/**
- * The text colour of a palette fill (`paletteBlue` gives `paletteBlueForeground`). It inks the
- * patterns: it is readable on its fill in every theme, black on the white fills of high contrast.
- */
-function foregroundOf(fill: WaveTokenName): WaveTokenName {
-  const name = `${fill}Foreground`;
-  return isTokenName(name) ? name : 'foreground';
-}
 
 const CHART_TITLE = 'Units sold per quarter, by region';
 const CHART_LABEL = 'Bar chart of the units sold per quarter in each of six regions';
@@ -135,7 +121,9 @@ function chartColors(
       text: token('invertedForeground'),
       border: token('invertedBorder'),
     },
-    series: series.map(({ fill }) => ({ fill: token(fill), ink: token(foregroundOf(fill)) })),
+    // The patterns are inked in the page colour: every series colour is 3:1 or more on it, and in
+    // high contrast the white fills carry black patterns.
+    series: series.map(({ fill }) => ({ fill: token(fill), ink: token('background') })),
   };
 }
 
@@ -200,8 +188,9 @@ function SalesTable() {
 
 /**
  * A chart as an image with a name and a description, followed by its data table. The table is
- * always in the accessibility tree; the switch only makes it visible. In forced-colors mode the
- * chart keeps the system colours it chose (`chartColors`) instead of having them replaced.
+ * always in the accessibility tree; the switch only makes it visible. The chart's own markup (the
+ * SVG surface, the legend) is `aria-hidden` inside the frame. In forced-colors mode the chart keeps
+ * the system colours it chose (`chartColors`) instead of having them replaced.
  */
 function ChartFigure({ children }: { children: React.ReactNode }) {
   const descriptionId = useId('chart-description');
@@ -213,9 +202,14 @@ function ChartFigure({ children }: { children: React.ReactNode }) {
         role="img"
         aria-label={CHART_LABEL}
         aria-describedby={descriptionId}
-        className="flex flex-col gap-3 forced-colors:forced-color-adjust-none"
+        className="forced-colors:forced-color-adjust-none"
       >
-        {children}
+        {/* ARIA makes the children of an image presentational, but Chromium's accessibility tree
+            keeps the SVG surface and the legend list (their tick labels and items are text), so a
+            screen reader may read them after the image's name and description: hide them. */}
+        <div aria-hidden="true" className="flex flex-col gap-3">
+          {children}
+        </div>
       </div>
       <p id={descriptionId} className="text-wave-body-1 text-wave-muted-foreground">
         {CHART_DESCRIPTION}
@@ -378,7 +372,7 @@ function canDrawOnCanvas(): boolean {
   return typeof CanvasRenderingContext2D === 'function';
 }
 
-/** The custom property a token reads: `--wave-palette-blue` for `paletteBlue`. */
+/** The custom property a token reads: `--wave-chart-1` for `chart1`. */
 function tokenProperty(name: WaveTokenName): string {
   return waveTokens[name].slice('var('.length, -')'.length);
 }
@@ -543,7 +537,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'WaveUI ships no chart component: these two recipes draw charts from third-party libraries with the WaveUI tokens, so they follow the theme toolbar. Both use the first six colours of `chartPalette`, a fill pattern per series as a second encoding (colour is never the only one, and in high contrast every palette fill is white), text in the `foreground` colours, and an image name, a description and a data table. Recharts and Chart.js are development dependencies of these stories only; neither is part of the package.',
+          'WaveUI ships no chart component: these two recipes draw charts from third-party libraries with the WaveUI tokens, so they follow the theme toolbar. Both use the first six colours of `chartSeries`, a fill pattern per series as a second encoding (colour is never the only one, and in high contrast every series is white), text in the `foreground` colours, and an image name, a description and a data table. Recharts and Chart.js are development dependencies of these stories only; neither is part of the package.',
       },
     },
   },
@@ -553,10 +547,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * An SVG chart: each series takes `waveTokens[chartPalette[index]]` (`var(--wave-palette-blue)`, …)
+ * An SVG chart: each series takes `waveTokens[chartSeries[index]]` (`var(--wave-chart-1)`, …)
  * as its colour, so the bars, the patterns and the legend follow the theme with no code. The
- * patterns are SVG `<pattern>`s inked in each fill's `-foreground` token, which reads on its fill in
- * every theme. In forced-colors mode the chart draws with system colours.
+ * patterns are SVG `<pattern>`s inked in the `background` token, which reads on every series colour
+ * in every theme. In forced-colors mode the chart draws with system colours.
  */
 export const Recharts: Story = {
   render: () => <RechartsExample />,
@@ -564,7 +558,7 @@ export const Recharts: Story = {
 
 /**
  * A canvas chart. A canvas cannot read a CSS variable, so the story resolves each token with
- * `getComputedStyle(canvas).getPropertyValue('--wave-palette-blue')` and draws the patterns on
+ * `getComputedStyle(canvas).getPropertyValue('--wave-chart-1')` and draws the patterns on
  * canvas tiles. A `MutationObserver` on the closest `[data-wave-theme]` element (the provider
  * root) resolves them again and redraws when its theme class or its `tokens` style changes.
  */

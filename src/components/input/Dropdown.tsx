@@ -17,7 +17,12 @@ import {
   inputPaddingClasses,
   inputTextClasses,
 } from '../../lib/styles';
-import type { CoreSize, InputAppearance, PopupPositioningOptions } from '../../lib/types';
+import type {
+  CoreSize,
+  InputAppearance,
+  MotionSlot,
+  PopupPositioningOptions,
+} from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { useEventCallback } from '../../hooks/useEventCallback';
 import { fieldLocks, useFieldContext, useFieldControl } from '../../hooks/useFieldControl';
@@ -186,6 +191,19 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
    */
   positioning?: PopupPositioningOptions;
   /**
+   * The popup surface's motion. By default it fades in and slides 4px away from the dropdown button, on the
+   * side it opened on, over 200 ms with a decelerating curve, and fades out and slides back over
+   * 100 ms with an accelerating curve (the list stays in the surface while it exits); under
+   * reduced motion it appears and disappears at once. The list does not fade out when its options
+   * changed as it closed (a filter reset by the selection), nor does the "No matches" row. `null`
+   * turns the motion off (the surface still renders its `data-presence` phases, which then end at
+   * once); a class string or `{ className }` replaces the default classes with yours (see
+   * `MotionSlot`), also under a `WaveProvider` with `motion="none"`, which otherwise turns the
+   * default off. Fluent's popup `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
+  /**
    * Look of the field: `outline` (a full border), `underline` (a bottom stroke only),
    * `filled-darker` or `filled-lighter` (a fill without a visible stroke: give the field a visible
    * label). Default: `WaveProvider inputDefaults.appearance`, else `'outline'`.
@@ -341,8 +359,8 @@ export interface DropdownProps<M extends boolean = false> extends Omit<
     listbox?: SlotPart<'ul'>;
     /**
      * The popup `<div>` around the list, rendered in a portal while it shows (stable class
-     * `wave-dropdown__surface`). Locked: `data-side`, `data-align`, `role`, `id`, `hidden`,
-     * `inert` and `aria-hidden`; your `style` merges, but the position, the size limits and the
+     * `wave-dropdown__surface`). Locked: `data-side`, `data-align`, `data-state`,
+     * `data-presence`, `inert` while it exits, `role`, `id`, `hidden` and `aria-hidden`; your `style` merges, but the position, the size limits and the
      * visibility the positioning sets win.
      */
     surface?: SlotPart<'div'>;
@@ -380,6 +398,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
     disabled = false,
     size: sizeProp,
     positioning,
+    motion,
     appearance: appearanceProp,
     name,
     form,
@@ -787,6 +806,7 @@ const DropdownRoot = (props: DropdownProps<boolean>) => {
           activeWindow && 'wave:[overflow-anchor:none]',
         )}
         surfaceClassName={dropdownClassNames.surface}
+        motion={motion}
         aria-label={fieldProps['aria-label']}
         aria-labelledby={listLabelledBy}
         listProps={activeWindow ? { ref: listScrollRef } : undefined}

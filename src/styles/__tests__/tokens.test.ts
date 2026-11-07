@@ -194,6 +194,17 @@ const TOKENS: Record<string, [string, string, string]> = {
   'palette-steel-tint': ['#cad5de', '#2f4557', '#000000'],
   'palette-steel-tint-foreground': ['#405d76', '#9fb8cc', '#ffffff'],
   'palette-steel-border': ['#4f7391', '#9fb8cc', '#ffffff'],
+  // Chart series (1.1): ten categorical colours made for charts, white in high contrast.
+  'chart-1': ['#0183fc', '#8abdfe', '#ffffff'],
+  'chart-2': ['#958506', '#ead32e', '#ffffff'],
+  'chart-3': ['#5e0ebc', '#9c72ff', '#ffffff'],
+  'chart-4': ['#a1000a', '#fe584d', '#ffffff'],
+  'chart-5': ['#047c5b', '#3ba882', '#ffffff'],
+  'chart-6': ['#904f9b', '#bf7bc9', '#ffffff'],
+  'chart-7': ['#a05402', '#ff902c', '#ffffff'],
+  'chart-8': ['#00556f', '#8edeff', '#ffffff'],
+  'chart-9': ['#872550', '#ffa8c5', '#ffffff'],
+  'chart-10': ['#729066', '#9dbc90', '#ffffff'],
   backdrop: ['rgb(0 0 0 / 0.4)', 'rgb(0 0 0 / 0.5)', 'rgb(0 0 0 / 0.8)'],
 };
 

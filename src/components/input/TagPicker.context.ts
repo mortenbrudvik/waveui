@@ -1,6 +1,12 @@
 import * as React from 'react';
 import { reportMissingContext } from '../../lib/dev';
-import type { CoreSize, InputAppearance, TagAppearance, TagSize } from '../../lib/types';
+import type {
+  CoreSize,
+  InputAppearance,
+  MotionSlot,
+  TagAppearance,
+  TagSize,
+} from '../../lib/types';
 import type { UseListboxPopupResult } from './Option';
 import type { UseListboxResult } from '../../hooks/useListbox';
 import type { Slot } from '../../lib/slot';
@@ -105,6 +111,8 @@ export interface TagPickerContextValue {
   createValue: string;
   /** The "No matches" row of the popup, while the open list has text and nothing to show. */
   emptyContent: boolean;
+  /** TagPicker's `motion`, the popup surface's motion. */
+  motion?: MotionSlot | null;
   layerId: string;
   surfaceRef: UseListboxPopupResult['surfaceRef'];
   floatingProps: UseListboxPopupResult['floatingProps'];

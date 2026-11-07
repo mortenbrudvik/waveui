@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { SlotPart } from '../../lib/slotProps';
+import type { MotionSlot } from '../../lib/types';
 import type { AvatarGroupLayout } from './AvatarGroup.partition';
 import type { AvatarSize } from './Avatar.sizes';
 
@@ -24,6 +25,8 @@ export interface AvatarGroupContextValue {
   list?: SlotPart<'ul'>;
   /** The group's `slotProps.listItem`, each item of the popup's list. */
   listItem?: SlotPart<'li'>;
+  /** The group's `motion`, the popup's motion unless the popover has its own. */
+  motion?: MotionSlot | null;
 }
 
 /** Internal: provided by AvatarGroup around its members; `null` elsewhere. */

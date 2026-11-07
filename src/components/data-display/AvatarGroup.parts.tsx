@@ -8,16 +8,20 @@ import {
 } from '../../lib/classNames';
 import { warnOnce } from '../../lib/dev';
 import { getTabbableElements } from '../../lib/focus';
+import { popupMotion } from '../../lib/motion';
 import { isInsideLayerTree } from '../../lib/layers';
 import { lockPositionStyle, mergeSlotProps, type SlotPart } from '../../lib/slotProps';
 import { focusRing } from '../../lib/styles';
-import type { OpenChangeDetails } from '../../lib/types';
+import type { MotionSlot, OpenChangeDetails } from '../../lib/types';
 import { useControllable } from '../../hooks/useControllable';
 import { DismissLayerContext, useDismiss, type DismissReason } from '../../hooks/useDismiss';
 import { useEventCallback } from '../../hooks/useEventCallback';
+import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
+import { useMotionClasses } from '../../hooks/useMotion';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
+import { usePresence } from '../../hooks/usePresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
 import { Avatar } from './Avatar';
@@ -206,6 +210,18 @@ export interface AvatarGroupPopoverProps {
    * event in `details`, which WaveUI always passes.
    */
   onOpenChange?: (open: boolean, details: AvatarGroupOpenChangeDetails) => void;
+  /**
+   * The popup's motion (an `AvatarGroup`'s `motion` when this has none). By default it fades in and slides 4px away from the overflow
+   * button, on the side it opened on, over 200 ms with a decelerating curve, and fades out and
+   * slides back over 100 ms with an accelerating curve (focus has moved back to the button by
+   * then); under reduced motion it appears and disappears at once. `null` turns the motion off
+   * (the popup still renders its `data-presence` phases, which then end at once); a class string
+   * or `{ className }` replaces the default classes with yours (see `MotionSlot`), also under a
+   * `WaveProvider` with `motion="none"`, which otherwise turns the default off. Fluent's popup
+   * `surfaceMotion`.
+   * @default the fade and slide above
+   */
+  motion?: MotionSlot | null;
   /** Extra classes for the overflow button. */
   className?: string;
   /** Ref to the overflow `<button>`. */
@@ -236,6 +252,7 @@ const AvatarGroupPopoverImpl = ({
   open: openProp,
   defaultOpen = false,
   onOpenChange,
+  motion: motionProp,
   className,
   ref,
 }: AvatarGroupPopoverProps) => {
@@ -280,6 +297,20 @@ const AvatarGroupPopoverImpl = ({
     focusOutside: true,
   });
   useRestoreFocus({ enabled: isOpen, container: surface, triggerRef, onlyIfFocusInside: true });
+  // The popup mounts and unmounts through the presence core; the layer, the position and the
+  // focus return key on `isOpen`, so focus leaves the popup in the closing commit, to the button,
+  // while the exiting popup stays mounted, inert.
+  const { isMounted, ref: presenceRef, presenceProps } = usePresence(isOpen, { appear: true });
+  const motionClassName = useMotionClasses(
+    motionProp !== undefined ? motionProp : group?.motion,
+    popupMotion,
+  );
+  useFocusBeforeClose({
+    open: isOpen,
+    surfaceRef,
+    captureOpener: () => triggerRef.current,
+    candidates: () => [triggerRef.current],
+  });
   const triggerRefs = useMergedRefs<HTMLButtonElement>(triggerRef, setReference, ref);
   // A surface part's ref beside the popup's own, so an inline one never detaches them.
   const surfaceRefs = useMergedRefs<HTMLDivElement>(
@@ -287,6 +318,7 @@ const AvatarGroupPopoverImpl = ({
     setFloating,
     setSurface,
     group?.surface?.ref,
+    presenceRef,
   );
 
   // Move focus into the popup once it is mounted, so its list is read next.
@@ -363,9 +395,10 @@ const AvatarGroupPopoverImpl = ({
     avatarGroupClassNames.surface,
     'wave:min-w-32 wave:max-w-xs wave:rounded-md wave:border wave:border-border wave:bg-background wave:p-2 wave:text-body-1 wave:text-foreground wave:shadow-16',
     focusRing,
+    motionClassName,
   );
   const surfaceProps =
-    isOpen && group?.surface
+    isMounted && group?.surface
       ? mergeSlotProps(group.surface, {
           className: surfaceClassName,
           locked: {
@@ -374,11 +407,13 @@ const AvatarGroupPopoverImpl = ({
             'aria-label': label,
             'aria-modal': undefined,
             tabIndex: -1,
-            'data-state': 'open',
+            'data-state': isOpen ? 'open' : 'closed',
+            // The presence phase, and `inert` while the popup exits (a part cannot pretend otherwise).
+            'data-presence': presenceProps['data-presence'],
             'data-side': floatingProps['data-side'],
             'data-align': floatingProps['data-align'],
             hidden: undefined,
-            inert: undefined,
+            inert: presenceProps.inert,
             'aria-hidden': undefined,
             onKeyDown: handleSurfaceKeyDown,
           },
@@ -414,14 +449,15 @@ const AvatarGroupPopoverImpl = ({
       >
         {indicator === 'icon' ? <MoreIcon /> : countText(overflow)}
       </button>
-      {isOpen && (
+      {isMounted && (
         <Portal layerId={layerId}>
           <div
             id={popupId}
             role="dialog"
             aria-label={label}
             tabIndex={-1}
-            data-state="open"
+            data-state={isOpen ? 'open' : 'closed'}
+            {...presenceProps}
             {...floatingProps}
             className={surfaceClassName}
             onKeyDown={handleSurfaceKeyDown}

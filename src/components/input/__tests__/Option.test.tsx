@@ -26,12 +26,14 @@ import {
   optionGroupClassNames,
 } from '../../../lib/classNames';
 import type { Slot } from '../../../lib/slot';
+import { popupMotion } from '../../../lib/motion';
 import {
   asClientReference,
   expectInertSlotProps,
   expectNoA11yViolations,
   findDanglingIdRefsInHtml,
   mockRect,
+  motionClasses,
   openingTags,
   testDisplayName,
   expectThrows,
@@ -1141,7 +1143,7 @@ describe('Option parts for custom pickers (option-2, option-3, listbox-2)', () =
         `${listboxSurfaceClassNames.list} wave:min-h-0 wave:max-h-60 wave:overflow-auto`,
       );
       expect(fontSurface()?.className).toBe(
-        `${listboxSurfaceClassNames.root} wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4`,
+        `${listboxSurfaceClassNames.root} wave:flex wave:flex-col wave:overflow-hidden wave:rounded wave:border wave:border-border wave:bg-background wave:py-1 wave:text-foreground wave:shadow-4 ${motionClasses(popupMotion).join(' ')}`,
       );
     });
 

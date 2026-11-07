@@ -133,7 +133,7 @@ const DTS =
   "export declare const buttonClassNames: { readonly root: 'wave-button'; readonly icon: 'wave-button__icon' };\n" +
   '\nexport { }\n';
 
-/** What vite-plugin-dts rolls up when TypeScript writes the declarations elsewhere. */
+/** What the declaration plugin rolls up when TypeScript writes the declarations elsewhere. */
 const EMPTY_ROLL_UP = 'export { }\n';
 
 /**

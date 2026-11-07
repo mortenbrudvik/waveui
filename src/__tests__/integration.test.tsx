@@ -681,7 +681,13 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
   });
 
   it('exports the 0.17 token helpers from their server-safe modules, and keeps the seams of those modules out', () => {
-    const helpers = ['getTokenStyle', 'createBrandTokens', 'waveTokens', 'chartPalette'];
+    const helpers = [
+      'getTokenStyle',
+      'createBrandTokens',
+      'waveTokens',
+      'chartPalette',
+      'chartSeries',
+    ];
     for (const name of ['getTokenStyle', 'createBrandTokens']) {
       expect(barrel[name], name).toBeTypeOf('function');
     }
@@ -689,8 +695,10 @@ describe('public barrel (spec §5.11, C-COMPOUND)', () => {
     expect(Wave.createBrandTokens).toBe(brandModule.createBrandTokens);
     expect(Wave.waveTokens).toBe(waveTokensModule.waveTokens);
     expect(Wave.chartPalette).toBe(waveTokensModule.chartPalette);
+    expect(Wave.chartSeries).toBe(waveTokensModule.chartSeries);
     expect(Object.isFrozen(Wave.waveTokens)).toBe(true);
     expect(Object.isFrozen(Wave.chartPalette)).toBe(true);
+    expect(Object.isFrozen(Wave.chartSeries)).toBe(true);
     // Every other value of the three modules is a seam (MODULE_ONLY_NAMES of verify-dist).
     const internal = [
       ...Object.keys(tokensCore),

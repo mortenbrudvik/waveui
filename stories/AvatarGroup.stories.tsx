@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { AvatarGroup, Avatar, partitionAvatarGroupItems } from '../src';
 import { sizeArgType } from './_helpers';
+import { motionCases } from './_motion';
 
 const PEOPLE = ['Alice Smith', 'Bob Jones', 'Carol White', 'Dave Brown', 'Eve Davis'];
 
@@ -113,6 +114,31 @@ export const CompoundForm: Story = {
           </AvatarGroup.Popover>
         )}
       </AvatarGroup>
+    );
+  },
+};
+
+/** The Motion story's popup: it zooms in from 95% as it fades in, and back out as it fades. */
+const fadeAndZoom =
+  'transition-[opacity,scale] duration-wave-slow ease-wave-decelerate-max data-[presence=exiting]:duration-wave-fast data-[presence=exiting]:ease-wave-accelerate-mid motion-reduce:transition-none data-[presence=entering]:starting:scale-95 data-[presence=entering]:starting:opacity-0 data-[presence=exiting]:scale-95 data-[presence=exiting]:opacity-0';
+
+/**
+ * `AvatarGroup motion`. By default the overflow popup fades in and slides 4px away from the "+N" button, on the side it opened on, over 200ms, and fades out and slides back over 100ms (focus has moved back to the button by then). `null` turns it off; a class string replaces it (here a zoom).
+ * The popup stays in place, `inert`, while it exits; focus is already back where it was. Under
+ * reduced motion every popup appears and disappears at once.
+ */
+export const Motion: Story = {
+  render: function MotionPopups(args) {
+    return (
+      <div className="flex flex-wrap gap-4">
+        {motionCases(fadeAndZoom).map(({ label, motion }) => (
+          <AvatarGroup key={label} {...args} aria-label={label} max={2} motion={motion}>
+            {PEOPLE.map((name) => (
+              <Avatar key={name} name={name} size={args.size} />
+            ))}
+          </AvatarGroup>
+        ))}
+      </div>
     );
   },
 };

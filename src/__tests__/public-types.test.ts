@@ -2246,6 +2246,7 @@ describe('0.17 theming from the package entry', () => {
     expectTypeOf<Entry['waveTokens']>().toExtend<WaveTokens>();
     expectTypeOf<Entry['waveTokens']['brand80']>().toEqualTypeOf<'var(--wave-brand-80)'>();
     expectTypeOf<Entry['chartPalette']>().toEqualTypeOf<readonly WaveTokenName[]>();
+    expectTypeOf<Entry['chartSeries']>().toEqualTypeOf<readonly WaveTokenName[]>();
 
     // @ts-expect-error a misspelled token name
     const typo: WaveTokenOverrides = { primry: '#c43e00' };

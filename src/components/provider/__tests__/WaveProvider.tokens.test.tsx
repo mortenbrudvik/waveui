@@ -741,6 +741,19 @@ describe('WaveProvider tokens: development warnings', () => {
     });
   });
 
+  // An unbundled import in a browser has no `process`: the mode read throws and development is
+  // assumed, as `lib/dev` assumes it.
+  it('warns without a `process` global, as every other development warning does', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('process', undefined);
+    try {
+      render(<WaveProvider tokens={untyped({ 'brand-80': '#c43e00' })}>Content</WaveProvider>);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(warn.mock.calls).toEqual([[NAME_WARNING('brand-80')]]);
+  });
+
   it('logs nothing while rendering on the server', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const html = renderToString(

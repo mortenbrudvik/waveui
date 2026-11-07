@@ -1571,7 +1571,7 @@ const COMPONENT_NAME = /^[A-Z](?=[A-Za-z0-9]*[a-z])[A-Za-z0-9]*$/;
 /**
  * Public names that `dist/index.d.ts` must declare and export: a utility, a component, a props
  * type, a compound, a hook and a class-name constant. The build passes with
- * an empty roll-up: vite-plugin-dts 4 rolls up only `export { }` when TypeScript writes the
+ * an empty roll-up: the declaration plugin rolls up only `export { }` when TypeScript writes the
  * declarations somewhere else than it expects (TypeScript 6 without `rootDir` in tsconfig.json).
  * Without this list, only `npm run test:pack`, which type-checks the packed tarball, would notice.
  */
