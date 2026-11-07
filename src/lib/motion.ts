@@ -62,7 +62,14 @@ import type { MotionPreference, MotionSlot, SurfaceSize } from './types';
  *   decelerating curve, and exits back there over the faster duration (100 ms) with the min
  *   accelerating curve. It lists the properties it moves and never the one floating-ui places the
  *   popup with, so the popup never glides from its last position; a popup that renders no side (a
- *   TeachingPopover rendered in place, without a target) only fades.
+ *   TeachingPopover rendered in place, without a target) only fades. A popup that waits for its
+ *   position (Popover, Menu.Popover, the InfoButton note, the TeachingPopover surface, the
+ *   DatePicker calendar and the AvatarGroup popup, through `usePlacedPresence`) is mounted in the
+ *   exited phase until floating-ui has placed it: it holds the start of the enter (transparent and
+ *   moved 4px toward its anchor, with no transition, so a flip that changes its side moves
+ *   nothing) and enters from there in the commit after the resolved side is known, so a popup that
+ *   flips slides away from its anchor too. The start of the enter of the other popups is the
+ *   starting style of the entering phase.
  * - `tooltipMotion`, the Tooltip surface: opacity only. It fades in from transparent and back out
  *   over the faster duration (100 ms) with the easy-ease curve, both ways, and does not slide. Like
  *   the popups, it never lists the property floating-ui places the surface with.
@@ -244,7 +251,7 @@ export const inlineDrawerMotion: Readonly<Record<'width' | 'height', string>> = 
  * by the side it opened on, 200 ms in and 100 ms out; only the fade without a side.
  */
 export const popupMotion =
-  'wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1'; // wave-allow-physical: data-side is the resolved physical side
+  'wave:transition-[opacity,translate] wave:duration-wave-normal wave:ease-wave-decelerate-mid wave:data-[presence=exiting]:duration-wave-faster wave:data-[presence=exiting]:ease-wave-accelerate-min wave:motion-reduce:transition-none wave:data-[presence=entering]:starting:opacity-0 wave:data-[presence=exiting]:opacity-0 wave:data-[side=top]:data-[presence=entering]:starting:translate-y-1 wave:data-[side=top]:data-[presence=exiting]:translate-y-1 wave:data-[side=bottom]:data-[presence=entering]:starting:-translate-y-1 wave:data-[side=bottom]:data-[presence=exiting]:-translate-y-1 wave:data-[side=left]:data-[presence=entering]:starting:translate-x-1 wave:data-[side=left]:data-[presence=exiting]:translate-x-1 wave:data-[side=right]:data-[presence=entering]:starting:-translate-x-1 wave:data-[side=right]:data-[presence=exiting]:-translate-x-1 wave:data-[presence=exited]:opacity-0 wave:data-[presence=exited]:transition-none wave:data-[side=top]:data-[presence=exited]:translate-y-1 wave:data-[side=bottom]:data-[presence=exited]:-translate-y-1 wave:data-[side=left]:data-[presence=exited]:translate-x-1 wave:data-[side=right]:data-[presence=exited]:-translate-x-1'; // wave-allow-physical: data-side is the resolved physical side
 
 /** The Tooltip surface's default motion: a fade, 100 ms both ways, without a slide. */
 export const tooltipMotion =

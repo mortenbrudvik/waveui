@@ -26,7 +26,7 @@ import { useFocusBeforeClose } from '../../hooks/useFocusBeforeClose';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useHoverIntent, type HoverIntent } from '../../hooks/useHoverIntent';
 import { useMotionClasses } from '../../hooks/useMotion';
-import { usePresence } from '../../hooks/usePresence';
+import { usePlacedPresence } from '../../hooks/usePlacedPresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
@@ -374,6 +374,8 @@ interface PopoverContextValue {
   floatingProps: { 'data-side': string; 'data-align': string; style: React.CSSProperties };
   arrowStyles: React.CSSProperties;
   placedSide: PopoverPhysicalSide;
+  /** Whether the content has its position (floating-ui has placed it, and a `target` ref has an element). */
+  placed: boolean;
   /** `positioning.fitViewport`: the content scrolls inside the border when it is limited. */
   fitViewport: boolean;
   /** `withArrow`: whether the beak is drawn. */
@@ -423,6 +425,7 @@ function getInertContext(): PopoverContextValue {
     floatingProps: { 'data-side': 'bottom', 'data-align': 'start', style: {} },
     arrowStyles: {},
     placedSide: 'bottom',
+    placed: true,
     fitViewport: false,
     withArrow: true,
     inline: false,
@@ -624,6 +627,7 @@ const PopoverRoot = ({
     floatingProps: positionedProps,
     arrowStyles,
     side: placedSide,
+    isPositioned,
   } = usePopupPosition({
     open,
     side,
@@ -913,6 +917,7 @@ const PopoverRoot = ({
       floatingProps,
       arrowStyles,
       placedSide,
+      placed: isPositioned && !targetPending,
       fitViewport: positioning?.fitViewport === true,
       withArrow,
       inline,
@@ -945,6 +950,8 @@ const PopoverRoot = ({
       floatingProps,
       arrowStyles,
       placedSide,
+      isPositioned,
+      targetPending,
       positioning?.fitViewport,
       withArrow,
       inline,
@@ -1088,12 +1095,13 @@ PopoverTrigger.displayName = 'PopoverTrigger';
  * keyboard order.
  *
  * It moves in and out: the surface fades in and slides 4px away from its trigger over 200 ms, and
- * fades out and slides back over 100 ms, on the side it opened on (`data-side`); a popover open by
- * default animates in when it mounts in the browser. Under reduced motion it appears and
+ * fades out and slides back over 100 ms, on the side it is placed on (`data-side`, after a flip: it
+ * enters once it has its position, so a popover that flips slides away from its trigger too); a
+ * popover open by default animates in when it mounts in the browser. Under reduced motion it appears and
  * disappears at once. `motion` turns the motion off (`null`) or replaces its classes, and a
  * `WaveProvider` with `motion="none"` turns the default off. The surface mounts through the
- * presence core (`usePresence`): it carries `data-presence="entering" | "entered" | "exiting"` and
- * `data-state="open"`, and while it closes `data-state="closed"` and `inert`, so it stays on
+ * presence core: it carries `data-presence="exited" | "entering" | "entered" | "exiting"` (`exited`
+ * only for the moment before it has its position, transparent) and `data-state="open"`, and while it closes `data-state="closed"` and `inert`, so it stays on
  * screen, where it was, until its exit motion ends. Focus, the dismiss layer, the trigger's
  * `aria-expanded` and `aria-controls`, and positioning follow the open state, not the exit: focus
  * inside a closing popover moves, in the commit that closes it, to where the popover returns
@@ -1143,6 +1151,7 @@ export const PopoverContent = ({
     floatingProps,
     arrowStyles,
     placedSide,
+    placed,
     fitViewport,
     onContentKeyDown,
     hoverSurfaceHandlers: hover,
@@ -1154,8 +1163,12 @@ export const PopoverContent = ({
   // The surface mounts and unmounts through the presence core, and enters also when it mounts open
   // (a popover open by default animates in on a client render as after hydration); the root keys
   // everything else on `open`, so focus moves out and the layer goes on close, not after the exit.
-  const { isMounted, ref: presenceRef, presenceProps } = usePresence(open, { appear: true });
   const motionClassName = useMotionClasses(motion, popupMotion);
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePlacedPresence(open, placed, motionClassName === popupMotion);
   const elementRef = useMergedRefs<HTMLDivElement>(ref, surfaceElementRef, presenceRef);
   // The positioning measures the beak: a part's ref goes beside its ref, never in its place.
   const beakRef = useMergedRefs<HTMLDivElement>(arrowRef, slotProps?.beak?.ref);

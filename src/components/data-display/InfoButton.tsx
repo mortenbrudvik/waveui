@@ -17,7 +17,7 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useMotionClasses } from '../../hooks/useMotion';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
-import { usePresence } from '../../hooks/usePresence';
+import { usePlacedPresence } from '../../hooks/usePlacedPresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { isFocusInSurfaceTree, PopoverBeak, usePopoverTabOrder } from '../overlays/Popover.shared';
 import { Portal } from '../portal/Portal';
@@ -173,8 +173,9 @@ InfoNoteClassContext.displayName = 'InfoNoteClassContext';
  *   to it, never inside it. Its box is 24×24px at every `size` and renders `data-size`. The note
  *   mounts through the presence core: it carries `data-presence`, `data-state` (`open`, and
  *   `closed` while it exits, `inert`) and the `data-wave-infolabel-surface` marker.
- * - **Motion.** The note fades in and slides toward the button from the side it opened on, and
- *   fades out and slides back as it closes (see `motion`); it stays in the document, `inert`,
+ * - **Motion.** The note fades in and slides toward the button from the side it is placed on
+ *   (`data-side`, after a flip: it enters once it has its position, `data-presence="exited"`
+ *   and transparent until then), and fades out and slides back as it closes (see `motion`); it stays in the document, `inert`,
  *   until the exit ends, with `info` still inside it (never twice in the document), while the
  *   dismiss layer, the focus restore and the button's `aria-expanded` follow the open state at
  *   once. Focus inside a closing note moves to the button in the closing commit. Without motion
@@ -263,20 +264,21 @@ export const InfoButton = ({
   // The note mounts and unmounts through the presence core; the dismiss layer, the focus restore
   // and the positioning below key on `open`, so they go on close, not after an exit motion.
   // Destructured: react-hooks/refs treats an object whose member is passed to `ref` as a ref.
+  const { setReference, setFloating, floatingProps, arrowStyles, side, isPositioned } =
+    usePopupPosition({
+      open,
+      side: 'top',
+      align: 'center',
+      offset: 8,
+      arrowRef,
+    });
+  // The note enters once it has its position, so a note that flips slides away from its button.
+  const motionClassName = useMotionClasses(motion, popupMotion);
   const {
     isMounted,
     ref: presenceRef,
     presenceProps,
-  } = usePresence(open, {
-    appear: true,
-  });
-  const { setReference, setFloating, floatingProps, arrowStyles, side } = usePopupPosition({
-    open,
-    side: 'top',
-    align: 'center',
-    offset: 8,
-    arrowRef,
-  });
+  } = usePlacedPresence(open, isPositioned, motionClassName === popupMotion);
   const { layerId } = useDismiss({
     open,
     onDismiss: (dismissReason) => {
@@ -311,7 +313,6 @@ export const InfoButton = ({
     captureOpener: () => buttonRef.current,
     candidates: () => [buttonRef.current],
   });
-  const motionClassName = useMotionClasses(motion, popupMotion);
 
   const {
     triggerHandlers: hoverTriggerHandlers,

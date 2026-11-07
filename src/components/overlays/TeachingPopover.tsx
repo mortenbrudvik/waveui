@@ -70,8 +70,8 @@ export type {
  *   end of the page: Tab from the page's last control and Shift+Tab from outside the page enter
  *   it.
  * - **Motion.** The surface fades in over 200 ms and out over 100 ms as it closes; pointed at a
- *   target (or the Trigger) it also slides 4px away from it on the side it opened on
- *   (`data-side`), and back. Under reduced motion it appears and disappears at once. `motion` (on
+ *   target (or the Trigger) it also slides 4px away from it on the side it is placed on
+ *   (`data-side`, after a flip: it enters once it has its position), and back. Under reduced motion it appears and disappears at once. `motion` (on
  *   TeachingPopover for the surface it renders, or on `TeachingPopover.Surface`) turns it off
  *   (`null`) or replaces its classes, and a `WaveProvider` with `motion="none"` turns the default
  *   off. The surface mounts through the presence core: it carries `data-presence` and

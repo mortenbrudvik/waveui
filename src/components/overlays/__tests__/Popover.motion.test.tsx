@@ -262,7 +262,9 @@ describe('Popover.Content presence (D7, D9, D22)', () => {
     const motion = mockAnimations({ animated: isPopover });
     render(<DetailsPopover root={{ defaultOpen: true }} />);
     const popover = surface()!;
-    expect(popover).toHaveAttribute('data-presence', 'entering');
+    // Mounted open but held (exited, transparent) until floating-ui has placed it, then it enters.
+    expect(popover).toHaveAttribute('data-presence', 'exited');
+    await waitFor(() => expect(popover).toHaveAttribute('data-presence', 'entering'));
     expect(popover).not.toHaveAttribute('inert');
     await finish(motion);
     expect(popover).toHaveAttribute('data-presence', 'entered');

@@ -40,7 +40,7 @@ import { useIsClient } from '../../hooks/useIsClient';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useMotionClasses } from '../../hooks/useMotion';
 import { resolvePositioning, usePopupPosition } from '../../hooks/usePopupPosition';
-import { usePresence } from '../../hooks/usePresence';
+import { usePlacedPresence } from '../../hooks/usePlacedPresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { useTriggerElement, useTriggerFocusRef } from '../../hooks/useTriggerElement';
 import { Button } from '../button/Button';
@@ -305,14 +305,6 @@ export const TeachingSurface = ({
   if (shown && context !== shownContext) setShownContext(context);
   const content = shown ? context : shownContext;
 
-  // The surface mounts and unmounts through the presence core, and enters also when it mounts
-  // open (a tour open on page load animates in on a client render as after hydration). The
-  // positioning keys on `shown`, and the Escape layer, the focus restore, the keyboard order and
-  // the initial focus below on `visible`, so they go on close, not after the exit.
-  // Destructured: react-hooks/refs treats an object whose member is passed to `ref` as a ref.
-  const { isMounted, ref: presenceRef, presenceProps } = usePresence(shown, { appear: true });
-  const motionClassName = useMotionClasses(motion, popupMotion);
-
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
   // Whether `target` pointed at an element when it was last read. An element (or `null`) is known
   // during render and is mirrored here right away (C-HOOKS: adjust state during render). A ref
@@ -364,6 +356,18 @@ export const TeachingSurface = ({
   const [shownAnchorReady, setShownAnchorReady] = React.useState(anchorReady);
   if (shown && anchorReady !== shownAnchorReady) setShownAnchorReady(anchorReady);
   const drawn = shown ? anchorReady : shownAnchorReady;
+  // The surface mounts and unmounts through the presence core, and enters also when it mounts
+  // open (a tour open on page load animates in on a client render as after hydration), once it
+  // has its position, so a surface that flips slides away from its target. The positioning keys on
+  // `shown`, and the Escape layer, the focus restore, the keyboard order and the initial focus
+  // below on `visible`, so they go on close, not after the exit.
+  // Destructured: react-hooks/refs treats an object whose member is passed to `ref` as a ref.
+  const motionClassName = useMotionClasses(motion, popupMotion);
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePlacedPresence(shown, anchorReady, motionClassName === popupMotion);
   const elementRef = useMergedRefs<HTMLDivElement>(
     ref,
     surfaceRef,

@@ -21,7 +21,7 @@ import { useId } from '../../hooks/useId';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useMotionClasses } from '../../hooks/useMotion';
 import { usePopupPosition } from '../../hooks/usePopupPosition';
-import { usePresence } from '../../hooks/usePresence';
+import { usePlacedPresence } from '../../hooks/usePlacedPresence';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus';
 import { Portal } from '../portal/Portal';
 import { Avatar } from './Avatar';
@@ -291,7 +291,7 @@ const AvatarGroupPopoverImpl = ({
   const surfaceRef = React.useRef<HTMLDivElement | null>(null);
   const [surface, setSurface] = React.useState<HTMLDivElement | null>(null);
 
-  const { setReference, setFloating, floatingProps } = usePopupPosition({
+  const { setReference, setFloating, floatingProps, isPositioned } = usePopupPosition({
     open: isOpen,
     side: 'bottom',
     align: 'start',
@@ -307,11 +307,16 @@ const AvatarGroupPopoverImpl = ({
   // The popup mounts and unmounts through the presence core; the layer, the position and the
   // focus return key on `isOpen`, so focus leaves the popup in the closing commit, to the button,
   // while the exiting popup stays mounted, inert.
-  const { isMounted, ref: presenceRef, presenceProps } = usePresence(isOpen, { appear: true });
+  // The popup enters once it has its position.
   const motionClassName = useMotionClasses(
     motionProp !== undefined ? motionProp : group?.motion,
     popupMotion,
   );
+  const {
+    isMounted,
+    ref: presenceRef,
+    presenceProps,
+  } = usePlacedPresence(isOpen, isPositioned, motionClassName === popupMotion);
   useFocusBeforeClose({
     open: isOpen,
     surfaceRef,
