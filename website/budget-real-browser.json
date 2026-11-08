@@ -1,0 +1,14 @@
+[
+  {
+    "page": "components/breadcrumb",
+    "viewport": "desktop",
+    "firstLoadGzip": 156147,
+    "reason": "its first example is in the first viewport, and the page's examples share one module (the story file), so all of them load at once: the collapse menu (Menu 10,385 B, positioning 9,189 B), Overflow and roving focus; see BUDGET.md, Real browser"
+  },
+  {
+    "page": "components/breadcrumb",
+    "viewport": "phone",
+    "firstLoadGzip": 156147,
+    "reason": "its first example is in the first viewport, and the page's examples share one module (the story file), so all of them load at once: the collapse menu (Menu 10,385 B, positioning 9,189 B), Overflow and roving focus; see BUDGET.md, Real browser"
+  }
+]

@@ -6,9 +6,14 @@ import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
+import { VIEWPORTS } from '../scripts/real-browser-budget.mjs';
 
 export const SITE_ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const DIST = join(SITE_ROOT, 'dist');
+
+/** Where the real-browser budget writes its rows (per viewport) and the joined table. */
+export const BUDGET_ROWS_DIR = join(SITE_ROOT, '.cache', 'real-browser-budget');
+export const BUDGET_TABLE = join(SITE_ROOT, '.cache', 'real-browser-budget.json');
 
 /** The app's prefix: every page and asset is under it. */
 export const DOCS = '/waveui/docs';
@@ -34,16 +39,11 @@ export function sitePages(directory = DIST): SitePage[] {
   return pages.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** The desktop viewport of the budget and the page checks. */
-export const DESKTOP_VIEWPORT = { width: 1280, height: 800 };
-
-/** A phone: 390×844 CSS pixels, touch, a mobile viewport. */
-export const PHONE = {
-  viewport: { width: 390, height: 844 },
-  isMobile: true,
-  hasTouch: true,
-  deviceScaleFactor: 3,
-};
+/**
+ * A phone: 390×844 CSS pixels, touch, a mobile viewport (the budget's `phone`; its `desktop`,
+ * 1280×800, is the project's default viewport).
+ */
+export const PHONE = VIEWPORTS.phone;
 
 /** Waits until the shell island has hydrated: its controls are enabled. */
 export async function waitForShell(page: Page): Promise<void> {

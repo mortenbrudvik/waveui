@@ -107,7 +107,7 @@ address outside `/waveui/docs/` (but the one Close link, and GitHub/npm links in
 `<iframe>`, a web font, a page without `lang` and `dir`, not exactly one `<main>`, a script outside
 `/waveui/docs/_assets/` and any reference to `i.pravatar.cc`.
 
-The metric is an upper bound: a real browser loads less before scrolling (Task 13 measures that).
+The metric is an upper bound: a real browser loads less before scrolling (see "Real browser" below).
 12 pages are over the first-load limit today, all recorded: the 11 below, and `presence`
 (150,876 B), which the search palette's shell code (+984 B) pushed over from 149,878 B. The numbers
 of the table that follows are the build before the palette; the file holds the current ones.
@@ -283,3 +283,57 @@ JavaScript plus 2 KB") fails when `components.html` loads more than 97,774 + 2,0
 was 96,790 B until the search palette's listener and preload list added 809 B, and its fix round
 175 B more (Task 11, above). It
 fails without the `base` chunk and the split (105,129 B), as checked when it was written.
+
+## Real browser (Task 13)
+
+Measured 2026-11-08 by `npm run site:e2e` (`e2e/budget.spec.ts`, Chromium through
+`e2e/server.mjs`, which serves the build as `vercel.json` and the homepage's rewrite do), on all 85
+pages (80 component pages, the components index, the placeholder index and the three guides), at
+**1280×800** (`desktop`) and **390×844** (`phone`: touch, a mobile viewport, device scale 3).
+
+Method: a fresh browser context per page and viewport (cold cache); the page loaded with no
+scrolling or interaction; then the shell island's hydration (`client:idle`, so part of the first
+load), `networkidle` and a further 500 ms with no request in flight. Every response with a
+JavaScript content type (or a `.js` address) counts once, by the gzip size of its body at zlib's
+default level (Node's `gzipSync`, as `scripts/verify-dist.mjs` and the static gate measure, not the
+transfer size the server sent), plus the page's inline scripts (2,849 B on every page; the static
+metric counts them too, so the two compare). The rules are those of the static gate:
+`scripts/real-browser-budget.mjs` fails a page above 150,000 B unless
+`website/budget-real-browser.json` lists it (`page`, `viewport`, `firstLoadGzip`, `reason`), and
+only while it is not above its recorded number; a stale entry fails. The full table (page,
+viewport, real first load, static worst case, difference) is written to
+`website/.cache/real-browser-budget.json`. Two runs gave the same number for every page and
+viewport.
+
+| Viewport | Pages over 150,000 B | Pages that load an example | Shell only | Median component page | Largest |
+| -------- | -------------------: | -------------------------: | ---------: | --------------------: | ------: |
+| desktop  |     1 (`breadcrumb`) |                         38 |         47 |                98,072 | 156,147 |
+| phone    |     1 (`breadcrumb`) |                         31 |         54 |                98,072 | 156,147 |
+
+A page either loads only the shell (98,072 B on a component page, 97,809 B on the index and guide
+pages) or, when an example is in the first viewport, all of its examples' code at once, since they
+share one module (the page's story file): then the real number equals the static worst case. So 11
+of the 12 pages over the limit on the static metric are under it in a real browser, at both
+viewports (their first example is below the fold: `wave-provider` 182,801 static, 98,072 real),
+and the static metric overstates a page by up to 84,729 B.
+
+Worst five (gzip, B; the static worst case is the same number for each):
+
+| desktop      | Real first load | phone        | Real first load |
+| ------------ | --------------: | ------------ | --------------: |
+| breadcrumb   |         156,147 | breadcrumb   |         156,147 |
+| popover      |         145,567 | split-button |         144,036 |
+| split-button |         144,036 | menu-button  |         143,796 |
+| menu-button  |         143,796 | hamburger    |         139,849 |
+| hamburger    |         139,849 | info-label   |         131,529 |
+
+Still over the limit in a real browser, recorded in `budget-real-browser.json` for the owner's
+decision (nothing about hydration was changed: examples stay `client:visible`, the controls lazy,
+the shell island `client:idle`):
+
+- **components/breadcrumb, desktop and phone: 156,147 B** (6,147 B over). Its first example is in
+  the first viewport at both sizes, so the whole story file loads: the collapse menu (Menu
+  10,385 B, the positioning stack 9,189 B), Overflow and roving focus. One island module per
+  story would not be enough by itself: its first story alone measured 152,160 B on the static
+  metric (Task 10b). It needs a lighter first viewport as well (a story without the collapse menu
+  first, or the examples further down the page), or a different reading of the limit.

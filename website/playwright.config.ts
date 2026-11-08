@@ -11,11 +11,13 @@
  *   scroll lock or `inert` left behind) and at phone width (no horizontal scroll).
  * - `e2e/budget.spec.ts`: the first-load JavaScript of every page in a real browser, at
  *   1280×800 and 390×844, against 150,000 B gzipped (`budget-real-browser.json` lists the
- *   exceptions); the table goes to `.cache/real-browser-budget.json`.
+ *   exceptions); `e2e/budget-teardown.ts` joins the two viewports' rows into
+ *   `.cache/real-browser-budget.json`.
  *
  * Results, traces and screenshots of failures go to `.cache/playwright/` (git-ignored).
  */
 import { defineConfig, devices } from '@playwright/test';
+import { VIEWPORTS } from './scripts/real-browser-budget.mjs';
 
 const PORT = 4400;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -29,6 +31,7 @@ export default defineConfig({
   workers: process.env.CI ? 2 : 4,
   timeout: 60_000,
   reporter: process.env.CI ? [['github'], ['list']] : [['list']],
+  globalTeardown: './e2e/budget-teardown.ts',
   use: {
     baseURL: ORIGIN,
     trace: 'retain-on-failure',
@@ -37,7 +40,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
+      use: { ...devices['Desktop Chrome'], ...VIEWPORTS.desktop },
     },
   ],
   webServer: {
