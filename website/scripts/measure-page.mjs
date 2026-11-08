@@ -126,18 +126,21 @@ export function pageJsReport(html, readAsset, { foreign = 'throw' } = {}) {
   };
 }
 
-/** {@link pageJsReport} of a built page of `dist`, with the chunks that hold React's copies. */
-export function measurePage(pageFile) {
+/**
+ * {@link pageJsReport} of a built page of `distDir` (default: the site's `dist`), with the chunks
+ * that hold React's copies.
+ */
+export function measurePage(pageFile, distDir = dist) {
   const html = readFileSync(pageFile, 'utf8');
-  const report = pageJsReport(html, (path) => readFileSync(join(dist, path)));
+  const report = pageJsReport(html, (path) => readFileSync(join(distDir, path)));
 
-  const assets = join(dist, '_assets');
+  const assets = join(distDir, '_assets');
   const chunks = readdirSync(assets).filter((name) => name.endsWith('.js'));
   const holding = (marker) =>
     chunks.filter((name) => readFileSync(join(assets, name), 'utf8').includes(marker));
 
   return {
-    page: relative(dist, pageFile).replaceAll('\\', '/'),
+    page: relative(distDir, pageFile).replaceAll('\\', '/'),
     ...report,
     reactCoreChunks: holding('__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE='),
     reactDomClientChunks: holding('rendererPackageName'),
