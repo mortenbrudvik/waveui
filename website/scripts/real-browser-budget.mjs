@@ -37,7 +37,7 @@ export function readRealBrowserExceptions(file) {
   try {
     parsed = JSON.parse(readFileSync(file, 'utf8'));
   } catch (error) {
-    throw new Error(`${FILE} is not valid JSON: ${error.message}`);
+    throw new Error(`${FILE} is not valid JSON: ${error.message}`, { cause: error });
   }
   if (!Array.isArray(parsed)) {
     throw new Error(`${FILE} must be an array of { page, viewport, firstLoadGzip, reason }`);

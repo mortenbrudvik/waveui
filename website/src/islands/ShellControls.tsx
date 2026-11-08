@@ -170,6 +170,9 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
   }, [openSearch, closeSearch]);
 
   React.useEffect(() => {
+    // The first render matches the server markup; the platform, the choice and the shell elements
+    // are read once after hydration, so the effect sets state on purpose.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe read of the document (website/src/islands)
     setApple(isApplePlatform());
     setChoice(readDocumentChoice());
     setMaximized(byId(SHELL_IDS.window)?.hasAttribute('data-maximized') ?? false);

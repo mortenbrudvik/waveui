@@ -193,7 +193,7 @@ export function checkPage(html, readAsset, exception) {
   let dataGzip = 0;
   const dataFiles = new Set();
   for (const file of scriptFiles) {
-    let code = '';
+    let code;
     try {
       code = String(readAsset(file));
     } catch {

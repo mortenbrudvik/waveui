@@ -3,3 +3,6 @@ node_modules/
 storybook-static/
 package-lock.json
 coverage/
+website/.astro/
+website/.cache/
+website/src/generated/

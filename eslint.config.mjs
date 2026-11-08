@@ -96,7 +96,20 @@ const commonJsGlobals = {
 
 export default defineConfig(
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/', 'storybook-static/', '*.config.*'],
+    // website/: the documentation app's build output, Astro's generated types, the example
+    // islands the config writes (git-ignored) and the caches of its gates. Its `.astro` files are
+    // outside ESLint's default file types; only the TypeScript and module files are linted.
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'coverage/',
+      'storybook-static/',
+      '*.config.*',
+      'website/dist/',
+      'website/.astro/',
+      'website/.cache/',
+      'website/src/generated/',
+    ],
   },
   js.configs.recommended,
   tseslint.configs.recommended,
@@ -127,8 +140,9 @@ export default defineConfig(
     // as a pack fixture) makes its `.js` files CommonJS. So CommonJS files — e.g. a require()-based
     // smoke file in a fixture — use the `.cjs` extension: Node treats `.cjs` as CommonJS whatever
     // package.json says, and the next block lints it as CommonJS. The shipped migration codemod
-    // (codemod/) is a Node ES module too.
-    files: ['scripts/**/*.{js,mjs}', 'codemod/**/*.{js,mjs}'],
+    // (codemod/) is a Node ES module too, and so are the website's build scripts, plugins and
+    // end-to-end server (website/package.json says "type": "module").
+    files: ['scripts/**/*.{js,mjs}', 'codemod/**/*.{js,mjs}', 'website/**/*.{js,mjs}'],
     languageOptions: {
       sourceType: 'module',
       globals: nodeGlobals,

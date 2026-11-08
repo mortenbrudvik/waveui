@@ -171,6 +171,9 @@ function Example({
   const controlsId = React.useId();
 
   React.useEffect(() => {
+    // The first render matches the server markup (the defaults); the document's choice and the
+    // hydrated flag are read once after hydration, so the effect sets state on purpose.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe read of the document (website/src/islands)
     setChoice(readDocumentChoice());
     setHydrated(true);
     const follow = () => setChoice(readDocumentChoice());

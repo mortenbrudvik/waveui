@@ -35,7 +35,7 @@ function readStories(path: string, storyFile: string): ReadonlyMap<string, strin
   try {
     text = readFileSync(path, 'utf8');
   } catch (error) {
-    throw new Error(`${storyFile} cannot be read: ${(error as Error).message}`);
+    throw new Error(`${storyFile} cannot be read: ${(error as Error).message}`, { cause: error });
   }
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const stories = new Map<string, string>();
