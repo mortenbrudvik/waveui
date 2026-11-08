@@ -455,6 +455,18 @@ describe('ShellControls (the island)', () => {
     }
   });
 
+  it('a link to the navigation stands in for the hamburger until the island has hydrated', async () => {
+    load(await renderLayout({ title: 'Button', current: 'button' }));
+    const link = document.querySelector<HTMLAnchorElement>('main a[href="#components-nav"]')!;
+    expect(link.getAttribute('aria-label')).toBe('Navigation');
+    // site.css shows its wrapper only below 48rem with scripts, while the window is not ready.
+    expect(link.closest('.shell-nav-fallback')).not.toBeNull();
+    expect(document.getElementById(link.hash.slice(1))?.tagName).toBe('NAV');
+    expect(shellWindow().hasAttribute('data-shell-ready')).toBe(false);
+    await hydrateIsland();
+    expect(shellWindow().hasAttribute('data-shell-ready')).toBe(true);
+  });
+
   it('maximize toggles data-maximized on the window and its label changes between "Maximize" and "Restore"', async () => {
     await mount();
     const user = userEvent.setup();

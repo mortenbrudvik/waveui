@@ -19,7 +19,9 @@
  *   command bar says so for a few seconds and the next request tries again.
  *
  * Its first render equals the server's (light, left to right, controls disabled), so hydration
- * matches; an effect then reads what the inline scripts applied before paint.
+ * matches; an effect then reads what the inline scripts applied before paint and sets
+ * `data-shell-ready` on the window, which retires the navigation's fallback link
+ * (`shell/NavFallbackLink.tsx`).
  */
 import * as React from 'react';
 import { createPortal } from 'react-dom';
@@ -173,6 +175,8 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
     setMaximized(byId(SHELL_IDS.window)?.hasAttribute('data-maximized') ?? false);
     setMaximizeSlot(byId(SHELL_IDS.maximizeSlot));
     setReady(true);
+    // The hamburger works now: site.css hides the navigation's fallback link.
+    byId(SHELL_IDS.window)?.setAttribute('data-shell-ready', '');
   }, []);
 
   const closeNav = React.useCallback((returnFocus: boolean) => {

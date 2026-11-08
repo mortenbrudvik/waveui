@@ -13,7 +13,8 @@
  *   and the content (the command bar first).
  * - No web fonts: `.wave-root` sets WaveUI's system font stack.
  * - Below 48rem (768px) the window fills the screen, the navigation is a drawer (site.css) and the
- *   page scrolls; from 48rem the window is centered, at most 1200px wide, or fills the screen while
+ *   page scrolls; until the island has hydrated (or when its script fails), a plain link over its
+ *   hamburger reaches the navigation (`shell/NavFallbackLink.tsx`); from 48rem the window is centered, at most 1200px wide, or fills the screen while
  *   maximized, and its panes scroll on their own.
  *
  * Props: `title` (the page title), `current` (the page's navigation value, marked current: a
@@ -26,6 +27,7 @@ import '../styles/site.css';
 import { getCatalog } from '../catalog/catalog';
 import ShellControls from '../islands/ShellControls';
 import { SHELL_IDS } from '../shell/ids';
+import { NavFallbackLink } from '../shell/NavFallbackLink';
 import { NavPane } from '../shell/NavPane';
 import { StatusBar, type ShellStatus } from '../shell/StatusBar';
 import { TitleBar } from '../shell/TitleBar';
@@ -66,6 +68,7 @@ const entries = getCatalog().map(({ slug, name, category }) => ({ slug, name, ca
       <div class="flex min-h-0 flex-1 flex-col md:flex-row">
         <NavPane entries={entries} current={current} />
         <main id={SHELL_IDS.main} tabindex="-1" class="flex min-w-0 flex-1 flex-col md:overflow-y-auto">
+          <NavFallbackLink />
           <ShellControls client:idle copyText={copyText} />
           <slot />
         </main>
