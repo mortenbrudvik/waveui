@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 /**
  * The site's tests run with the site's Vite configuration (astro.config.mjs through Astro's
- * `getViteConfig`: the React integration, Tailwind and the `storybook/test` stub), in two projects:
+ * `getViteConfig`: the React integration, Tailwind and the `storybook/test` stub), in three projects:
  *
  * - `site`: Node, or jsdom where a file asks for it (`// @vitest-environment jsdom`).
  * - `shell`: the tests that render `.astro` files with Astro's container API and then hydrate an
