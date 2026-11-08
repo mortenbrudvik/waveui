@@ -1,6 +1,6 @@
 /**
  * The rules of the real-browser budget (`e2e/budget.spec.ts` measures, this module judges): the
- * first-load JavaScript of every page in Chromium, at the two viewports of {@link VIEWPORTS}, cold
+ * first-load JavaScript of every page in Chromium, at the three viewports of {@link VIEWPORTS}, cold
  * cache, no scrolling or interaction, gzipped as `scripts/verify-dist.mjs` gzips. The limit is the
  * static gate's (`check-budget.mjs`, 150,000 B), and the exceptions work the same way:
  * `website/budget-real-browser.json` lists `{ page, viewport, firstLoadGzip, reason }`, and a page
@@ -16,9 +16,13 @@ import { BUDGET_MARGIN, LIMITS } from './check-budget.mjs';
 /** The first-load limit, in bytes gzipped: the static gate's. */
 export const REAL_BROWSER_LIMIT = LIMITS.firstLoadGzip;
 
-/** The viewports the budget is measured at, by the names the exceptions use. */
+/**
+ * The viewports the budget is measured at, by the names the exceptions use: a laptop-size desktop,
+ * a large desktop (more of the page is in view, so more examples hydrate at once) and a phone.
+ */
 export const VIEWPORTS = {
   desktop: { viewport: { width: 1280, height: 800 } },
+  'desktop-large': { viewport: { width: 1920, height: 1080 } },
   phone: {
     viewport: { width: 390, height: 844 },
     isMobile: true,

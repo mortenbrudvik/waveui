@@ -1,7 +1,7 @@
 /**
  * The first-load JavaScript of every page in a real browser (the spec's "Performance": every
  * script a page requests on a cold cache without scrolling or interacting, the shell included),
- * against 150,000 B gzipped, at 1280×800 and at 390×844.
+ * against 150,000 B gzipped, at 1280×800, 1920×1080 and 390×844.
  *
  * Per page and viewport: a fresh browser context (cold cache), the page loaded with no scrolling
  * or interaction; then the shell island's hydration (`client:idle`, so part of the first load),
@@ -14,7 +14,7 @@
  *
  * The rules are `scripts/real-browser-budget.mjs`'s (exceptions in `budget-real-browser.json`).
  * Each viewport is one test that measures the pages one after another (a step per page names it),
- * so the two viewports run side by side and each measurement is alone in its context. Each test
+ * so the viewports run side by side and each measurement is alone in its context. Each test
  * writes its rows to `.cache/real-browser-budget/<viewport>.json`; `budget-teardown.ts` joins them
  * into `.cache/real-browser-budget.json`.
  */

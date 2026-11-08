@@ -295,7 +295,9 @@ fails without the `base` chunk and the split (105,129 B), as checked when it was
 Measured 2026-11-08 by `npm run site:e2e` (`e2e/budget.spec.ts`, Chromium through
 `e2e/server.mjs`, which serves the build as `vercel.json` and the homepage's rewrite do), on all 85
 pages (80 component pages, the components index, the placeholder index and the three guides), at
-**1280×800** (`desktop`) and **390×844** (`phone`: touch, a mobile viewport, device scale 3).
+three viewports: **1280×800** (`desktop`), **1920×1080** (`desktop-large`: a common large
+monitor, where more of a page is in view) and **390×844** (`phone`: touch, a mobile viewport,
+device scale 3).
 
 Method: a fresh browser context per page and viewport (cold cache); the page loaded with no
 scrolling or interaction; then the shell island's hydration (`client:idle`, so part of the first
@@ -306,40 +308,53 @@ transfer size the server sent), plus the page's inline scripts (2,849 B on every
 metric counts them too, so the two compare). The rules are those of the static gate:
 `scripts/real-browser-budget.mjs` fails a page above 150,000 B unless
 `website/budget-real-browser.json` lists it (`page`, `viewport`, `firstLoadGzip`, `reason`), and
-only while it is not above its recorded number; a stale entry fails. The full table (page,
-viewport, real first load, static worst case, difference) is written to
-`website/.cache/real-browser-budget.json`. Two runs gave the same number for every page and
+only while it measures at most its recorded number plus the 1,024 B margin; a stale entry fails.
+The full table (page, viewport, real first load, static worst case, difference) is written to
+`website/.cache/real-browser-budget.json`. Repeated runs gave the same number for every page and
 viewport.
 
-| Viewport | Pages over 150,000 B | Pages that load an example | Shell only | Median component page | Largest |
-| -------- | -------------------: | -------------------------: | ---------: | --------------------: | ------: |
-| desktop  |     1 (`breadcrumb`) |                         38 |         47 |                98,072 | 156,147 |
-| phone    |     1 (`breadcrumb`) |                         31 |         54 |                98,072 | 156,147 |
+| Viewport                 | Pages over 150,000 B                                  | Pages that load an example | Shell only | Median component page | Largest |
+| ------------------------ | ----------------------------------------------------- | -------------------------: | ---------: | --------------------: | ------: |
+| desktop, 1280×800        | 1 (`breadcrumb`)                                      |                         38 |         47 |                98,072 | 156,147 |
+| desktop-large, 1920×1080 | 4 (`color-picker`, `breadcrumb`, `toast`, `presence`) |                         52 |         33 |               100,424 | 165,018 |
+| phone, 390×844           | 1 (`breadcrumb`)                                      |                         31 |         54 |                98,072 | 156,147 |
 
 A page either loads only the shell (98,072 B on a component page, 97,809 B on the index and guide
 pages) or, when an example is in the first viewport, all of its examples' code at once, since they
-share one module (the page's story file): then the real number equals the static worst case. So 11
-of the 12 pages over the limit on the static metric are under it in a real browser, at both
-viewports (their first example is below the fold: `wave-provider` 182,801 static, 98,072 real),
-and the static metric overstates a page by up to 84,729 B.
+share one module (the page's story file): then the real number equals the static worst case. At
+1280×800 and on a phone, 11 of the 12 pages over the limit on the static metric are under it in a
+real browser (their first example is below the fold: `wave-provider` 182,801 static, 98,072 real);
+at 1920×1080 three more of them have their first example in view and are over. The static metric
+overstates a page by up to 84,729 B.
 
 Worst five (gzip, B; the static worst case is the same number for each):
 
-| desktop      | Real first load | phone        | Real first load |
-| ------------ | --------------: | ------------ | --------------: |
-| breadcrumb   |         156,147 | breadcrumb   |         156,147 |
-| popover      |         145,567 | split-button |         144,036 |
-| split-button |         144,036 | menu-button  |         143,796 |
-| menu-button  |         143,796 | hamburger    |         139,849 |
-| hamburger    |         139,849 | info-label   |         131,529 |
+| desktop, 1280×800 | Real first load | desktop-large, 1920×1080 | Real first load | phone, 390×844 | Real first load |
+| ----------------- | --------------: | ------------------------ | --------------: | -------------- | --------------: |
+| breadcrumb        |         156,147 | color-picker             |         165,018 | breadcrumb     |         156,147 |
+| popover           |         145,567 | breadcrumb               |         156,147 | split-button   |         144,036 |
+| split-button      |         144,036 | toast                    |         154,310 | menu-button    |         143,796 |
+| menu-button       |         143,796 | presence                 |         150,868 | hamburger      |         139,849 |
+| hamburger         |         139,849 | interaction-tag          |         148,769 | info-label     |         131,529 |
 
 Still over the limit in a real browser, recorded in `budget-real-browser.json` for the owner's
 decision (nothing about hydration was changed: examples stay `client:visible`, the controls lazy,
 the shell island `client:idle`):
 
-- **components/breadcrumb, desktop and phone: 156,147 B** (6,147 B over). Its first example is in
-  the first viewport at both sizes, so the whole story file loads: the collapse menu (Menu
+- **components/breadcrumb, all three viewports: 156,147 B** (6,147 B over). Its first example is
+  in the first viewport at every size, so the whole story file loads: the collapse menu (Menu
   10,385 B, the positioning stack 9,189 B), Overflow and roving focus. One island module per
   story would not be enough by itself: its first story alone measured 152,160 B on the static
   metric (Task 10b). It needs a lighter first viewport as well (a story without the collapse menu
   first, or the examples further down the page), or a different reading of the limit.
+- **components/color-picker, 1920×1080: 165,018 B** (15,018 B over): a Popover picker story
+  (positioning, Popover, Portal), SwatchPicker, roving focus and SpinButton.
+- **components/toast, 1920×1080: 154,310 B** (4,310 B over): the Toaster, a Drawer story, Portal
+  and focus restore.
+- **components/presence, 1920×1080: 150,868 B** (868 B over): the Popover, Dialog and Accordion
+  transitions.
+
+The three 1920×1080 pages are under the limit at 1280×800 and on a phone; their first example
+starts between 800 and 1080 px down the window. The same levers as for breadcrumb apply (a lighter
+story first, the examples lower, one module per story), or a decision on which viewport the limit
+is read at.

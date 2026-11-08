@@ -1,5 +1,5 @@
 /**
- * What the end-to-end specs share: the built pages, the two viewports and the waits for the
+ * What the end-to-end specs share: the built pages, the phone viewport and the waits for the
  * islands.
  */
 import { readdirSync } from 'node:fs';

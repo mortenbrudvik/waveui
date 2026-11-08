@@ -36,7 +36,7 @@ All from the repository root.
 Limits (spec "Performance"): at most **150,000 B gzipped** of JavaScript on first load of a page, and 250,000 B for everything a page can ever request. `website/BUDGET.md` has the method, the levers applied and the tables.
 
 - **Static gate** (`npm run site:check`): counts every island on a page as first load, so it is an upper bound. A page over the limit passes only through `budget-exceptions.json` (`page`, `firstLoadGzip` as measured, `reason`) and only while it measures at most the recorded number plus `BUDGET_MARGIN`, 1,024 B (`scripts/check-budget.mjs`; room for byte differences between platforms and for small growth of shared code); an entry for a page that is under the limit again fails, and a page over the limit that is not listed fails whatever the margin.
-- **Real browser** (`site:e2e`, `e2e/budget.spec.ts`): the JavaScript a cold load requests before any scroll, at 1280x800 and 390x844, against the same 150,000 B. Exceptions are in `budget-real-browser.json` (`page`, `viewport`, `firstLoadGzip`, `reason`), with the same margin.
+- **Real browser** (`site:e2e`, `e2e/budget.spec.ts`): the JavaScript a cold load requests before any scroll, at 1280x800, 1920x1080 and 390x844, against the same 150,000 B. Exceptions are in `budget-real-browser.json` (`page`, `viewport`, `firstLoadGzip`, `reason`), with the same margin.
 - **Raising a number is a decision**: edit the entry in the file, with the measured number and the reason, in the commit that causes it, and update BUDGET.md. Never raise one to make a failure go away unexplained; trimming the page (fewer stories, a smaller dependency) comes first.
 
 ### Re-recording the budget

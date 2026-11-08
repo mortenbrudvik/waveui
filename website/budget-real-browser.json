@@ -7,8 +7,32 @@
   },
   {
     "page": "components/breadcrumb",
+    "viewport": "desktop-large",
+    "firstLoadGzip": 156147,
+    "reason": "as at desktop: its first example is in the first viewport, and the shared story module loads the collapse menu (Menu, positioning), Overflow and roving focus; see BUDGET.md, Real browser"
+  },
+  {
+    "page": "components/breadcrumb",
     "viewport": "phone",
     "firstLoadGzip": 156147,
     "reason": "its first example is in the first viewport, and the page's examples share one module (the story file), so all of them load at once: the collapse menu (Menu 10,385 B, positioning 9,189 B), Overflow and roving focus; see BUDGET.md, Real browser"
+  },
+  {
+    "page": "components/color-picker",
+    "viewport": "desktop-large",
+    "firstLoadGzip": 165018,
+    "reason": "at 1080 px its first example is in view, and the shared story module brings its Popover picker story (positioning 9,189 B, Popover 4,470 B, Portal 3,022 B), SwatchPicker, roving focus and SpinButton; under the limit at 1280x800 and on a phone; see BUDGET.md, Real browser"
+  },
+  {
+    "page": "components/presence",
+    "viewport": "desktop-large",
+    "firstLoadGzip": 150868,
+    "reason": "at 1080 px its first example is in view, and the shared story module brings the Popover, Dialog and Accordion transitions (positioning 9,189 B, Popover 4,470 B, Dialog 3,441 B, Accordion 3,278 B); 868 B over; under the limit at 1280x800 and on a phone; see BUDGET.md, Real browser"
+  },
+  {
+    "page": "components/toast",
+    "viewport": "desktop-large",
+    "firstLoadGzip": 154310,
+    "reason": "at 1080 px its first example is in view, and the shared story module brings the Toaster (10,272 B), a Drawer story, Portal and focus restore; under the limit at 1280x800 and on a phone; see BUDGET.md, Real browser"
   }
 ]

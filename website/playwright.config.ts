@@ -10,8 +10,8 @@
  * - `e2e/pages.spec.ts`: every page, at desktop width with every example hydrated (no focus trap,
  *   scroll lock or `inert` left behind) and at phone width (no horizontal scroll).
  * - `e2e/budget.spec.ts`: the first-load JavaScript of every page in a real browser, at
- *   1280×800 and 390×844, against 150,000 B gzipped (`budget-real-browser.json` lists the
- *   exceptions); `e2e/budget-teardown.ts` joins the two viewports' rows into
+ *   1280×800, 1920×1080 and 390×844, against 150,000 B gzipped (`budget-real-browser.json`
+ *   lists the exceptions); `e2e/budget-teardown.ts` joins the viewports' rows into
  *   `.cache/real-browser-budget.json`.
  *
  * Results, traces and screenshots of failures go to `.cache/playwright/` (git-ignored).
