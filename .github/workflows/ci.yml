@@ -142,14 +142,16 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run site:build
       # Runs after the site build: the tests of the built pages read website/dist, and
-      # WAVEUI_REQUIRE_PAGES makes a missing or stale build fail them rather than skip them.
+      # WAVEUI_REQUIRE_PAGES makes a missing or stale build fail them rather than skip them. It
+      # needs the library build (the size tests read dist), so it waits for that one; the steps
+      # that read the site's own build (the check, the end-to-end tests) wait for the site build.
       - name: Test the site
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
           WAVEUI_REQUIRE_PAGES: '1'
         run: npm run site:test
       - name: Check the site
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.site.outcome == 'success' }}
         run: npm run site:check
       # The end-to-end tests drive the built site in Chromium, behind a server that implements
       # website/vercel.json and the homepage's rewrite (website/e2e/server.mjs).
