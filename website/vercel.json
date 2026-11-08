@@ -1,5 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "cd .. && npm ci",
+  "buildCommand": "cd .. && npm run site:build",
+  "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [{ "source": "/waveui/docs/:path*", "destination": "/:path*" }],

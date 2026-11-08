@@ -13,7 +13,8 @@
  *   the incoming path; then the first matching `rewrites` rule and the file at its destination.
  *   With `cleanUrls` a path `/x` is served from `x.html`; a directory from its `index.html`.
  *   Anything else is a 404. A key of `vercel.json` it does not implement stops it, so the file
- *   cannot grow a rule the tests silently ignore.
+ *   cannot grow a rule the tests silently ignore (the build settings, which no response depends
+ *   on, are the exception: {@link BUILD_KEYS}).
  * - **The front server** stands for the homepage's project at brudvik.com
  *   ({@link HOMEPAGE_ROUTING}): first its own redirects, `cleanUrls` and `trailingSlash: false`
  *   (Vercel runs redirects before rewrites, so `/waveui/docs/components/button/` gets a 308 to
@@ -47,6 +48,14 @@ export const INTRO_PATH = '/waveui';
 export const INTRO_STUB_MARKER = 'data-e2e-intro-stub';
 
 const IMPLEMENTED_KEYS = new Set(['$schema', 'cleanUrls', 'trailingSlash', 'rewrites', 'headers']);
+
+/**
+ * The keys of `vercel.json` that configure the build and no response (Vercel's project settings,
+ * overridden per deployment): where the commands run, what they run and where the output is. The
+ * tests serve a finished build, so they are accepted and ignored; `server.spec.ts` pins the
+ * committed values.
+ */
+const BUILD_KEYS = new Set(['framework', 'installCommand', 'buildCommand', 'outputDirectory']);
 
 /** The keys this server implements in a rule of `rewrites`, of `headers`, and in a header. */
 const RULE_KEYS = {
@@ -189,7 +198,7 @@ function checkRuleKeys(file, where, item, allowed) {
 export function loadVercelConfig(file) {
   const raw = JSON.parse(readFileSync(file, 'utf8'));
   for (const key of Object.keys(raw)) {
-    if (!IMPLEMENTED_KEYS.has(key)) {
+    if (!IMPLEMENTED_KEYS.has(key) && !BUILD_KEYS.has(key)) {
       throw new Error(
         `${file}: the end-to-end server does not implement "${key}"; teach website/e2e/server.mjs what Vercel does with it`,
       );

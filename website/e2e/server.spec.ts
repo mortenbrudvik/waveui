@@ -18,9 +18,10 @@
  *   The site's own links never end in `/` or `.html`; the crawl below requires every address to
  *   answer 200 without a redirect.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   expect,
   request as playwrightRequest,
@@ -134,6 +135,43 @@ test.describe('routing behind the homepage rewrite', () => {
     );
     const index = await request.get(`${DOCS}/_assets/search-index.json`);
     expect(index.headers()['cache-control']).not.toContain('immutable');
+  });
+
+  test('the build settings of vercel.json are accepted and change no response', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'waveui-e2e-'));
+    const file = join(directory, 'vercel.json');
+    const routing = { cleanUrls: true, rewrites: [{ source: '/a', destination: '/b' }] };
+    try {
+      writeFileSync(file, JSON.stringify(routing));
+      const without = loadVercelConfig(file);
+      writeFileSync(
+        file,
+        JSON.stringify({
+          ...routing,
+          framework: null,
+          installCommand: 'cd .. && npm ci',
+          buildCommand: 'cd .. && npm run site:build',
+          outputDirectory: 'dist',
+        }),
+      );
+      expect(loadVercelConfig(file)).toEqual(without);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('the committed vercel.json builds the workspace from the repository root into dist', () => {
+    // Vercel runs the commands in the Root Directory (website); the library and the site are
+    // built by the root's scripts, so both commands go up one level first.
+    const file = fileURLToPath(new URL('../vercel.json', import.meta.url));
+    const config = JSON.parse(readFileSync(file, 'utf8'));
+    expect(config).toMatchObject({
+      framework: null,
+      installCommand: 'cd .. && npm ci',
+      buildCommand: 'cd .. && npm run site:build',
+      outputDirectory: 'dist',
+    });
+    expect(() => loadVercelConfig(file)).not.toThrow();
   });
 
   test('the server refuses a vercel.json key it does not implement, at the top or in a rule', () => {
