@@ -1,8 +1,8 @@
 /*
  * The library's stylesheet, as Storybook's .storybook/preview.css loads it (website/SPIKE.md): the
- * precompiled entry consumers get from `@mortenbrudvik/waveui/styles`, compiled here by
- * @tailwindcss/vite with Wave's `wave:` prefix, its tokens and theme classes and the `.wave-root`
- * base, without Preflight. It compiles none of the site's own classes: site.css does (one Tailwind
+ * source of the entry consumers get from `@mortenbrudvik/waveui/styles` (`src/styles/styles.css`,
+ * not the built `dist/styles.css`), compiled here by @tailwindcss/vite with Wave's `wave:`
+ * prefix, its tokens and theme classes and the `.wave-root` base, without Preflight. It compiles none of the site's own classes: site.css does (one Tailwind
  * build has one prefix). The layout imports it first.
  */
 @import '../../../src/styles/styles.css';

@@ -123,3 +123,8 @@ Follows the homepage spec (`docs/superpowers/specs/2026-10-26-bergen-redesign-de
 ## Left to the builder
 
 Extraction method for props and examples, exact Vercel project and rewrite configuration, whether `website/` is an npm workspace, the visual design of each region within the description above, the prop-control components, the search index format, how a skipped story is reported.
+
+## Implementation notes
+
+- **The site compiles the library from `src`, not from `dist` (a deliberate deviation from "builds against `dist`").** The examples are the stories, which import `../src`; Vite compiles them with the library's code through the site's plugins, which split the class-name, icon and motion registries per export and drop the development warnings from production code, so a page ships only what its stories use and stays inside the budget (`website/BUDGET.md`). The stylesheet compiles from `src/styles/styles.css`, and props and descriptions are read from `src/`. Only the status bar's import sizes are measured from `dist`, by the method of `scripts/verify-dist.mjs`, as decided above. A deployment is a fresh checkout, and the site build builds `dist` there first, so `src` and `dist` come from the same commit (`website/README.md`).
+- **Budget exceptions** are recorded in `website/budget-exceptions.json` and `website/budget-real-browser.json` with their measured numbers and reasons, explained in `website/BUDGET.md`, rather than in this file's notes. Both gates allow a recorded page its number plus a fixed 1,024 B margin.

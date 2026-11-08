@@ -1,5 +1,7 @@
-// `npm run site:build`: the site reads the library's built `dist` (its sheets and the import-size
-// facts), so the library is built first when `dist/index.mjs` is absent, then the site.
+// `npm run site:build`: the site compiles its examples, the library's stylesheet and its docs from
+// the library's source (`src/`, `stories/`); only the import sizes of the status bar are measured
+// from the built `dist`. So the library is built first when `dist/index.mjs` is absent (a fresh
+// checkout), then the site. A stale `dist` is not rebuilt: it changes only the sizes.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
