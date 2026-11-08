@@ -119,7 +119,9 @@ export default defineConfig(
       // react-hooks v7 recommended rules at their recommended severity: errors, except
       // exhaustive-deps, incompatible-library and unsupported-syntax, which are warnings. `npm run
       // lint` fails on any warning (--max-warnings 0), so a missing dependency fails it too. Spec
-      // C-HOOKS lists the lint-compatible patterns and the only sites allowed to disable a rule.
+      // C-HOOKS lists the lint-compatible patterns and the only sites of the library (src/) allowed
+      // to disable a rule; website/ disables `react-hooks/set-state-in-effect` at two post-hydration
+      // effects only (website/src/islands/Example.tsx and ShellControls.tsx).
       ...reactHooks.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [

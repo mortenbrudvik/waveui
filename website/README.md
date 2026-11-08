@@ -2,7 +2,7 @@
 
 The documentation app of `@mortenbrudvik/waveui`, served at `brudvik.com/waveui/docs`: 80 component pages (one per `Components/...` story title), a components index, and the guides (getting started, theming, changelog). It is an Astro 7 app with React islands, pre-rendered to static HTML, under `/waveui/docs`. The page text, navigation, code and a static preview of each example work with scripts off; the examples are the library's own stories, hydrated when scrolled into view.
 
-`website/` is an npm workspace of the repository. It is private and never published: it must not change the library's tarball, `check:package`, `test:pack` or the `verify-dist` budgets (the tarball differs from `main`'s only by the root `package.json` `workspaces` field).
+`website/` is an npm workspace of the repository. It is private and never published: it must not change the library's tarball, `check:package`, `test:pack` or the `verify-dist` budgets (the shipped files and `dist` are unchanged: `npm pack --dry-run` lists no `website/` file; the packed `package.json` differs from `main`'s by the `workspaces` field and by scripts, the lint and format scripts that now include `website/` and the `site:*` scripts, which are harmless in a published package).
 
 ## Commands
 
@@ -18,7 +18,7 @@ All from the repository root.
 | `npm run site:e2e`      | Playwright in Chromium against the build, served the way production serves it (`npx playwright install chromium` once, from `website/`)                         |
 | `npm run site:typecheck` | `tsc -p website/tsconfig.json`                                                                                                                                |
 
-`npm run lint` and `npm run format:check` of the root cover `website/` (TypeScript, modules, CSS and JSON; `.astro` files are covered by neither tool). CI runs all of the above in the `website` job.
+`npm run lint` and `npm run format:check` of the root cover `website/` (TypeScript, modules, CSS and JSON; `.astro` files are covered by neither tool). The `website` job of CI runs `site:typecheck`, `site:build`, `site:test`, `site:check` and `site:e2e`; `site:dev` and `site:test:pages` are for local use (`site:test:pages` rebuilds and runs the built-page tests, which `site:test` already runs in CI after `site:build`). Lint and format run in the `Gate` job.
 
 **The build needs the library's `dist`** (its stylesheets, and the import sizes shown in the status bar are measured from it). `site:build` builds it when it is absent, and only then: a stale `dist` is not rebuilt, so run `npm run build` after changing anything under `src/`, `stories/` or the library's `package.json`.
 
