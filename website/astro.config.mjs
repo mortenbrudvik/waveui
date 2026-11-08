@@ -38,7 +38,11 @@ const siteRoot = fileURLToPath(new URL('.', import.meta.url));
 /** The modules whose static closure is the `base` chunk: the shell island and the example runtime. */
 const BASE_ROOTS = ['website/src/islands/ShellControls.tsx', 'website/src/islands/Example.tsx'];
 
-/** Loads a TypeScript module of the site with Vite's module runner (build-time code). */
+/**
+ * Loads a TypeScript module of the site with Vite's module runner (build-time code).
+ *
+ * @param {string} path the module's path, relative to this file
+ */
 async function loadSiteModule(path) {
   const { module } = await runnerImport(fileURLToPath(new URL(path, import.meta.url)), {
     configFile: false,
