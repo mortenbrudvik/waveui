@@ -141,7 +141,8 @@ export function matchSource({ regex, names }, path) {
 /** A rewrite's `destination` with its `:name` parameters filled; an empty result is `/`. */
 export function fillDestination(destination, params) {
   const filled = destination.replace(/:([A-Za-z0-9_]+)[?*+]?/g, (_, name) => {
-    if (!(name in params)) throw new Error(`the destination ${destination} names :${name}, which its source does not`);
+    if (!(name in params))
+      throw new Error(`the destination ${destination} names :${name}, which its source does not`);
     return params[name] ?? '';
   });
   return filled === '' ? '/' : filled.replace(/\/{2,}/g, '/');
@@ -261,7 +262,13 @@ export function createAppHandler({ dist, config }) {
       }
     }
     if (!file) {
-      send(res, method, 404, { ...headers, 'content-type': 'text/plain; charset=utf-8' }, 'Not found');
+      send(
+        res,
+        method,
+        404,
+        { ...headers, 'content-type': 'text/plain; charset=utf-8' },
+        'Not found',
+      );
       return;
     }
     const type = CONTENT_TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
@@ -310,10 +317,22 @@ export function createFrontHandler({ appOrigin }) {
       return;
     }
     if (path === INTRO_PATH) {
-      send(res, req.method ?? 'GET', 200, { 'content-type': 'text/html; charset=utf-8' }, INTRO_STUB);
+      send(
+        res,
+        req.method ?? 'GET',
+        200,
+        { 'content-type': 'text/html; charset=utf-8' },
+        INTRO_STUB,
+      );
       return;
     }
-    send(res, req.method ?? 'GET', 404, { 'content-type': 'text/plain; charset=utf-8' }, 'Not found');
+    send(
+      res,
+      req.method ?? 'GET',
+      404,
+      { 'content-type': 'text/plain; charset=utf-8' },
+      'Not found',
+    );
   };
 }
 

@@ -18,7 +18,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, request as playwrightRequest, test, type APIRequestContext } from '@playwright/test';
+import {
+  expect,
+  request as playwrightRequest,
+  test,
+  type APIRequestContext,
+} from '@playwright/test';
 import { JSDOM } from 'jsdom';
 import { INTRO_STUB_MARKER, loadVercelConfig, startServers } from './server.mjs';
 import { DOCS, sitePages } from './site';
@@ -96,7 +101,12 @@ test.describe('routing behind the homepage rewrite', () => {
     const js = /component-url="(\/waveui\/docs\/_assets\/[^"]+\.js)"/.exec(html)?.[1];
     expect(css && js).toBeTruthy();
 
-    for (const path of [`${DOCS}/components/button`, css!, js!, `${DOCS}/_assets/search-index.json`]) {
+    for (const path of [
+      `${DOCS}/components/button`,
+      css!,
+      js!,
+      `${DOCS}/_assets/search-index.json`,
+    ]) {
       const response = await request.get(path);
       expect(response.status(), path).toBe(200);
       for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
@@ -106,7 +116,9 @@ test.describe('routing behind the homepage rewrite', () => {
     expect(page.headers()['cache-control']).not.toContain('immutable');
     expect((await request.get(css!)).headers()['cache-control']).toBe(IMMUTABLE);
     expect((await request.get(js!)).headers()['cache-control']).toBe(IMMUTABLE);
-    expect((await request.get(js!)).headers()['content-type']).toBe('text/javascript; charset=utf-8');
+    expect((await request.get(js!)).headers()['content-type']).toBe(
+      'text/javascript; charset=utf-8',
+    );
     const index = await request.get(`${DOCS}/_assets/search-index.json`);
     expect(index.headers()['cache-control']).not.toContain('immutable');
   });
@@ -124,36 +136,48 @@ test.describe('routing behind the homepage rewrite', () => {
 });
 
 /** Static and dynamic relative imports of a chunk, and Vite's preload list (`"_assets/x.js"`). */
-const RELATIVE_IMPORT = /\b(?:import|export)\s*(?:[\w$*{}\s,]*?\bfrom\s*)?["'`](\.{1,2}\/[^"'`]+?)["'`]/g;
+const RELATIVE_IMPORT =
+  /\b(?:import|export)\s*(?:[\w$*{}\s,]*?\bfrom\s*)?["'`](\.{1,2}\/[^"'`]+?)["'`]/g;
 const DYNAMIC_IMPORT = /\bimport\(\s*["'`](\.{1,2}\/[^"'`]+?)["'`]\s*\)/g;
 const PRELOAD_DEP = /["'`](_assets\/[^"'`\s]+\.(?:js|css|json))["'`]/g;
 const CSS_URL = /url\(\s*(['"]?)([^'")]+)\1\s*\)|@import\s+(['"])([^'"]+)\3/g;
 
-/** The URLs every crawl has already fetched in this worker, with what they answered. */
-const fetched = new Map<string, Promise<string | null>>();
+/** What the addresses an earlier crawl of this worker fetched answered: a problem, or `null`. */
+const answered = new Map<string, string | null>();
 
 /**
- * Fetches `url` once per worker and returns a problem, or `null` when it answered as it should:
+ * Fetches `url` (once per worker) and returns a problem, or `null` when it answered as it should:
  * 200 with no redirect, or the intro stub for `/waveui`. Scripts and stylesheets are followed.
+ * `inFlight` holds this crawl's requests, so an address the page names twice is fetched once.
  */
-function check(request: APIRequestContext, url: URL, follow: (url: URL, body: string) => void) {
+function check(
+  request: APIRequestContext,
+  url: URL,
+  follow: (url: URL, body: string) => void,
+  inFlight: Map<string, Promise<string | null>>,
+): Promise<string | null> {
   const key = url.pathname + url.search;
-  let result = fetched.get(key);
+  if (answered.has(key)) return Promise.resolve(answered.get(key) ?? null);
+  let result = inFlight.get(key);
   if (!result) {
     result = (async () => {
       const response = await request.get(key, { maxRedirects: 0 });
       const status = response.status();
       const body = await response.text();
+      let problem: string | null = null;
       if (url.pathname === '/waveui') {
-        return status === 200 && body.includes(INTRO_STUB_MARKER)
-          ? null
-          : `${key} answered ${status}, not the intro page`;
+        if (status !== 200 || !body.includes(INTRO_STUB_MARKER)) {
+          problem = `${key} answered ${status}, not the intro page`;
+        }
+      } else if (status !== 200) {
+        problem = `${key} answered ${status}`;
+      } else {
+        follow(url, body);
       }
-      if (status !== 200) return `${key} answered ${status}`;
-      follow(url, body);
-      return null;
+      answered.set(key, problem);
+      return problem;
     })();
-    fetched.set(key, result);
+    inFlight.set(key, result);
   }
   return result;
 }
@@ -168,6 +192,7 @@ test.describe('every address of every page answers through the homepage rewrite'
       const { document } = new JSDOM(html, { url: pageUrl.href }).window;
 
       const pending: Promise<string | null>[] = [];
+      const inFlight = new Map<string, Promise<string | null>>();
       const external = new Set<string>();
       const visit = (value: string | null | undefined, base: URL) => {
         if (!value || value.startsWith('#') || /^(data|mailto|tel|blob):/i.test(value)) return;
@@ -177,7 +202,7 @@ test.describe('every address of every page answers through the homepage rewrite'
           return;
         }
         url.hash = '';
-        pending.push(check(request, url, follow));
+        pending.push(check(request, url, follow, inFlight));
       };
       const scanCss = (text: string, base: URL) => {
         for (const match of text.matchAll(CSS_URL)) visit(match[2] ?? match[4], base);
@@ -192,7 +217,8 @@ test.describe('every address of every page answers through the homepage rewrite'
       };
 
       for (const element of document.querySelectorAll('*')) {
-        for (const name of ['href', 'src', 'action', 'poster']) visit(element.getAttribute(name), pageUrl);
+        for (const name of ['href', 'src', 'action', 'poster'])
+          visit(element.getAttribute(name), pageUrl);
         for (const name of ['component-url', 'renderer-url', 'before-hydration-url']) {
           visit(element.getAttribute(name), pageUrl);
         }
@@ -204,18 +230,24 @@ test.describe('every address of every page answers through the homepage rewrite'
         const style = element.getAttribute('style');
         if (style) scanCss(style, pageUrl);
       }
-      for (const style of document.querySelectorAll('style')) scanCss(style.textContent ?? '', pageUrl);
+      for (const style of document.querySelectorAll('style'))
+        scanCss(style.textContent ?? '', pageUrl);
 
       // The crawl reached at least every link of the navigation (a guard against a scan that
       // silently finds nothing).
-      expect(pending.length).toBeGreaterThan(document.querySelectorAll('nav a[href]').length);
+      expect(pending.length).toBeGreaterThan(
+        document.querySelectorAll('#components-nav a[href]').length,
+      );
       // Followed scripts and stylesheets add to `pending` while it settles.
       const problems: string[] = [];
       for (let index = 0; index < pending.length; index += 1) {
         const problem = await pending[index];
         if (problem) problems.push(problem);
       }
-      expect(problems, `${sitePage.name}: addresses that fail through the homepage rewrite`).toEqual([]);
+      expect(
+        problems,
+        `${sitePage.name}: addresses that fail through the homepage rewrite`,
+      ).toEqual([]);
       for (const url of external) {
         // External links are never fetched; the build's gate allows only GitHub and npm in guides.
         expect(new URL(url).protocol, `${sitePage.name}: ${url}`).toBe('https:');

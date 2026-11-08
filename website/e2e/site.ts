@@ -26,7 +26,9 @@ export function sitePages(directory = DIST): SitePage[] {
     const file = join(directory, item.name);
     if (item.isDirectory()) return item.name === '_assets' ? [] : sitePages(file);
     if (!item.name.endsWith('.html')) return [];
-    const name = relative(DIST, file).replaceAll('\\', '/').replace(/\.html$/, '');
+    const name = relative(DIST, file)
+      .replaceAll('\\', '/')
+      .replace(/\.html$/, '');
     return [{ name, path: name === 'index' ? DOCS : `${DOCS}/${name}` }];
   });
   return pages.sort((a, b) => a.name.localeCompare(b.name));
@@ -45,7 +47,11 @@ export const PHONE = {
 
 /** Waits until the shell island has hydrated: its controls are enabled. */
 export async function waitForShell(page: Page): Promise<void> {
-  await expect(page.getByRole('button', { name: 'Search' })).toBeEnabled({ timeout: 15_000 });
+  await expect(
+    page
+      .getByRole('group', { name: 'Page commands' })
+      .getByRole('button', { name: 'Search', exact: true }),
+  ).toBeEnabled({ timeout: 15_000 });
 }
 
 /**
