@@ -35,9 +35,18 @@ All from the repository root.
 
 Limits (spec "Performance"): at most **150,000 B gzipped** of JavaScript on first load of a page, and 250,000 B for everything a page can ever request. `website/BUDGET.md` has the method, the levers applied and the tables.
 
-- **Static gate** (`npm run site:check`): counts every island on a page as first load, so it is an upper bound. A page over the limit passes only through `budget-exceptions.json` (`page`, `firstLoadGzip` as measured, `reason`) and only while it is not above the recorded number; an entry for a page that is under the limit again fails.
-- **Real browser** (`site:e2e`, `e2e/budget.spec.ts`): the JavaScript a cold load requests before any scroll, at 1280x800 and 390x844, against the same 150,000 B. Exceptions are in `budget-real-browser.json` (`page`, `viewport`, `firstLoadGzip`, `reason`).
+- **Static gate** (`npm run site:check`): counts every island on a page as first load, so it is an upper bound. A page over the limit passes only through `budget-exceptions.json` (`page`, `firstLoadGzip` as measured, `reason`) and only while it measures at most the recorded number plus `BUDGET_MARGIN`, 1,024 B (`scripts/check-budget.mjs`; room for byte differences between platforms and for small growth of shared code); an entry for a page that is under the limit again fails, and a page over the limit that is not listed fails whatever the margin.
+- **Real browser** (`site:e2e`, `e2e/budget.spec.ts`): the JavaScript a cold load requests before any scroll, at 1280x800 and 390x844, against the same 150,000 B. Exceptions are in `budget-real-browser.json` (`page`, `viewport`, `firstLoadGzip`, `reason`), with the same margin.
 - **Raising a number is a decision**: edit the entry in the file, with the measured number and the reason, in the commit that causes it, and update BUDGET.md. Never raise one to make a failure go away unexplained; trimming the page (fewer stories, a smaller dependency) comes first.
+
+### Re-recording the budget
+
+A change to the library (`src/`) or to `stories/` can grow the code that many pages share, so the `Website` CI job can fail on a pull request that never touched `website/` (the repository's `/gate` does not run the site checks). When the growth is accepted:
+
+1. `npm run site:build`, then `npm run site:check`: it prints each exception's recorded, allowed and measured number, and names a page that is now over the limit or no longer over it.
+2. `npm run site:e2e`: the real-browser budget prints the same for `budget-real-browser.json`; the full table is in `website/.cache/real-browser-budget.json`.
+3. Copy the **measured** numbers into `budget-exceptions.json` and `budget-real-browser.json` (add an entry, with its reason, for a page newly over; remove the entry of a page now under), in the commit that causes the change, and update the tables of `BUDGET.md`.
+4. Never raise a number by hand without a reason, and never above what the gates measured.
 
 ## Adding a component
 

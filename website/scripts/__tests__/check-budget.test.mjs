@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { requireBuiltSiteUnlessOptional, SITE_DIST } from '../../test/builtSite';
-import { checkPage, checkSite, LIMITS } from '../check-budget.mjs';
+import { BUDGET_MARGIN, checkPage, checkSite, LIMITS } from '../check-budget.mjs';
 
 const SITE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCRIPT = join(SITE_ROOT, 'scripts', 'check-budget.mjs');
@@ -334,16 +334,23 @@ describe('checkPage', () => {
     };
     const measured = check(pageHtml(), heavy).firstLoadGzip;
 
-    it('passes only when the measured number is not above the recorded one', () => {
+    it('passes while the measured number is at most the recorded one plus the margin', () => {
+      expect(BUDGET_MARGIN).toBe(1_024);
       const exception = { firstLoadGzip: measured, reason: 'the page shows many components' };
       const same = check(pageHtml(), heavy, exception);
       expect(same.problems).toEqual([]);
       expect(same.excepted).toBe(true);
       const roomy = check(pageHtml(), heavy, { ...exception, firstLoadGzip: measured + 500 });
       expect(roomy.problems).toEqual([]);
-      const regressed = check(pageHtml(), heavy, { ...exception, firstLoadGzip: measured - 1 });
+      // Measured = recorded + 1,024: still within the margin.
+      const atMargin = check(pageHtml(), heavy, { ...exception, firstLoadGzip: measured - 1_024 });
+      expect(atMargin.problems).toEqual([]);
+      expect(atMargin.excepted).toBe(true);
+      // Measured = recorded + 1,025: a regression.
+      const regressed = check(pageHtml(), heavy, { ...exception, firstLoadGzip: measured - 1_025 });
       expect(regressed.problems).toHaveLength(1);
       expect(regressed.problems[0]).toContain('above its recorded');
+      expect(regressed.problems[0]).toContain('plus the 1,024 B margin');
       expect(regressed.problems[0]).toContain('budget-exceptions.json');
     });
 
@@ -418,7 +425,7 @@ describe('checkSite and budget-exceptions.json', () => {
     expect(result.problems[0]).toContain('first-load JavaScript');
   });
 
-  it('a documented exception passes only when the measured number is not above the recorded one', () => {
+  it('a documented exception passes only while the measured number is at most the recorded one plus the margin', () => {
     const entry = (firstLoadGzip) => [
       { page: 'components/heavy', firstLoadGzip, reason: 'many components' },
     ];
@@ -434,18 +441,24 @@ describe('checkSite and budget-exceptions.json', () => {
     const ok = site(all(heavyMeasured));
     const passes = checkSite(ok.dist, ok.file);
     expect(passes.problems).toEqual([]);
+    // Headroom is measured against the ceiling, the recorded number plus the margin.
     expect(passes.exceptions).toEqual([
       {
         page: 'components/heavy',
         recorded: heavyMeasured,
+        ceiling: heavyMeasured + 1_024,
         measured: heavyMeasured,
-        headroom: 0,
+        headroom: 1_024,
         reason: 'many components',
       },
     ]);
     const roomy = site(all(heavyMeasured + 700));
-    expect(checkSite(roomy.dist, roomy.file).exceptions[0].headroom).toBe(700);
-    const regressed = site(all(heavyMeasured - 1));
+    expect(checkSite(roomy.dist, roomy.file).exceptions[0].headroom).toBe(1_724);
+    const atMargin = site(all(heavyMeasured - 1_024));
+    const atMarginResult = checkSite(atMargin.dist, atMargin.file);
+    expect(atMarginResult.problems).toEqual([]);
+    expect(atMarginResult.exceptions[0].headroom).toBe(0);
+    const regressed = site(all(heavyMeasured - 1_025));
     const failing = checkSite(regressed.dist, regressed.file);
     expect(failing.problems).toHaveLength(1);
     expect(failing.problems[0]).toContain('above its recorded');

@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { BUDGET_MARGIN } from '../check-budget.mjs';
 import {
   checkRealBrowserBudget,
   readRealBrowserExceptions,
@@ -45,7 +46,11 @@ describe('checkRealBrowserBudget', () => {
     ]);
   });
 
-  it('passes a listed page while it is not above its recorded number, and reports its headroom', () => {
+  it('uses the margin of the static gate', () => {
+    expect(BUDGET_MARGIN).toBe(1_024);
+  });
+
+  it('passes a listed page under its recorded number, with its headroom against recorded + margin', () => {
     const result = checkRealBrowserBudget(
       [row('components/data-grid', 'desktop', 160_000)],
       [entry('components/data-grid', 'desktop', 160_500)],
@@ -56,17 +61,24 @@ describe('checkRealBrowserBudget', () => {
         page: 'components/data-grid',
         viewport: 'desktop',
         recorded: 160_500,
+        ceiling: 161_524,
         measured: 160_000,
-        headroom: 500,
+        headroom: 1_524,
         reason: 'its stories load the popup stack',
       },
     ]);
   });
 
-  it('passes a listed page that measures exactly its recorded number, with headroom 0', () => {
+  it('passes a listed page that measures exactly its recorded number, and one at recorded + margin', () => {
     const result = checkRealBrowserBudget(
-      [row('components/breadcrumb', 'phone', 156_147)],
-      [entry('components/breadcrumb', 'phone', 156_147)],
+      [
+        row('components/breadcrumb', 'phone', 156_147),
+        row('components/breadcrumb', 'desktop', 156_147 + 1_024),
+      ],
+      [
+        entry('components/breadcrumb', 'phone', 156_147),
+        entry('components/breadcrumb', 'desktop', 156_147),
+      ],
     );
     expect(result.problems).toEqual([]);
     expect(result.excepted).toEqual([
@@ -74,20 +86,30 @@ describe('checkRealBrowserBudget', () => {
         page: 'components/breadcrumb',
         viewport: 'phone',
         recorded: 156_147,
+        ceiling: 157_171,
         measured: 156_147,
+        headroom: 1_024,
+        reason: 'its stories load the popup stack',
+      },
+      {
+        page: 'components/breadcrumb',
+        viewport: 'desktop',
+        recorded: 156_147,
+        ceiling: 157_171,
+        measured: 157_171,
         headroom: 0,
         reason: 'its stories load the popup stack',
       },
     ]);
   });
 
-  it('fails a listed page above its recorded number (a regression)', () => {
+  it('fails a listed page above its recorded number plus the margin (a regression)', () => {
     const { problems } = checkRealBrowserBudget(
-      [row('components/data-grid', 'desktop', 160_001)],
+      [row('components/data-grid', 'desktop', 161_025)],
       [entry('components/data-grid', 'desktop', 160_000)],
     );
     expect(problems).toEqual([
-      'components/data-grid @ desktop: 160,001 B of first-load JavaScript in a real browser, above its recorded 160,000 B in budget-real-browser.json (a regression: bring it down, or raise the record deliberately with its reason)',
+      'components/data-grid @ desktop: 161,025 B of first-load JavaScript in a real browser, above its recorded 160,000 B plus the 1,024 B margin in budget-real-browser.json (a regression: bring it down, or re-record it deliberately with its reason)',
     ]);
   });
 

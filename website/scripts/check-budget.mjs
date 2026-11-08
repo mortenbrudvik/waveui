@@ -16,9 +16,12 @@
  *
  * A page over the first-load limit is allowed only through `website/budget-exceptions.json`, a
  * documented decision: `{ page, firstLoadGzip, reason }` per page, the measured number the day it
- * was recorded. The page passes while its measured first load is not above that number; above it
- * (a regression), or for a page that is under the limit again, the gate fails. An entry is never
- * raised silently: the report prints each exception with its headroom.
+ * was recorded. The page passes while its measured first load is at most that number plus
+ * {@link BUDGET_MARGIN} (1,024 B: room for byte differences of the bundler and zlib between
+ * platforms, and for a library change that grows shared code a little, without re-recording);
+ * above that (a regression), or for a page that is under the limit again, the gate fails. An entry
+ * is never raised silently: the report prints each exception with its headroom against the
+ * recorded number plus the margin. `website/README.md` has the procedure to re-record.
  *
  * Rules of the page itself (the build-time twin of `tests/pages.test.ts`, which stays):
  *
@@ -46,6 +49,13 @@ const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The limits, in bytes gzipped (150 KB is read as 150,000 B, the spec's number as in BUDGET.md). */
 export const LIMITS = { firstLoadGzip: 150_000, totalGzip: 250_000 };
+
+/**
+ * How far above its recorded number a documented exception may measure before it fails, in bytes
+ * gzipped: the same for this gate and the real-browser one (`real-browser-budget.mjs`). It never
+ * lets a page that is not listed go over the limit.
+ */
+export const BUDGET_MARGIN = 1_024;
 
 /** The app's address prefix, without the trailing slash, and the one address outside it. */
 const DOCS_BASE = BASE.slice(0, -1);
@@ -221,9 +231,9 @@ export function checkPage(html, readAsset, exception) {
     const message = `first-load JavaScript is ${kb(firstLoadGzip)} B gzipped, above the ${kb(LIMITS.firstLoadGzip)} B limit (largest scripts: ${largest})`;
     if (!exception) {
       problems.push(message);
-    } else if (firstLoadGzip > exception.firstLoadGzip) {
+    } else if (firstLoadGzip > exception.firstLoadGzip + BUDGET_MARGIN) {
       problems.push(
-        `${message}, and above its recorded ${kb(exception.firstLoadGzip)} B in budget-exceptions.json (a regression: fix the page, or record the new number deliberately with the reason)`,
+        `${message}, and above its recorded ${kb(exception.firstLoadGzip)} B plus the ${kb(BUDGET_MARGIN)} B margin in budget-exceptions.json (a regression: fix the page, or re-record the number deliberately with the reason)`,
       );
     } else {
       excepted = true;
@@ -454,8 +464,9 @@ export function checkSite(dist, exceptionsFile) {
       exceptions.push({
         page: name,
         recorded: entry.firstLoadGzip,
+        ceiling: entry.firstLoadGzip + BUDGET_MARGIN,
         measured: result.firstLoadGzip,
-        headroom: entry.firstLoadGzip - result.firstLoadGzip,
+        headroom: entry.firstLoadGzip + BUDGET_MARGIN - result.firstLoadGzip,
         reason: entry.reason,
       });
     }
@@ -507,12 +518,15 @@ function printReport(result, exceptionsFile) {
     `pages over the first-load limit: ${result.over} (${result.exceptions.length} documented in ${exceptionsFile ? relative(process.cwd(), exceptionsFile).replaceAll('\\', '/') : 'budget-exceptions.json'})`,
   );
   if (result.exceptions.length > 0) {
-    console.log('documented exceptions (recorded -> measured, headroom):');
+    console.log(
+      `documented exceptions (allowed up to recorded + ${kb(BUDGET_MARGIN)} B; headroom against that):`,
+    );
     table([
-      ['page', 'recorded', 'measured', 'headroom'],
+      ['page', 'recorded', 'allowed', 'measured', 'headroom'],
       ...result.exceptions.map((item) => [
         item.page,
         kb(item.recorded),
+        kb(item.ceiling),
         kb(item.measured),
         kb(item.headroom),
       ]),

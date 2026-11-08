@@ -100,9 +100,15 @@ and fails above 150,000 B gzipped of first-load JavaScript, or above 250,000 B f
 page can request (first load, scripts only dynamic imports add, and the data files the scripts name,
 the search index). A page over the first-load limit passes only through
 `website/budget-exceptions.json` (`page`, `firstLoadGzip` as measured, `reason`) and only while its
-measured number is not above the recorded one; an entry for a page that is under the limit fails
-("remove it"). The command prints each exception with its headroom. Raising a number is a
-deliberate edit of that file with its reason, never a silent change. The same run also fails an
+measured number is at most the recorded one plus a fixed margin, `BUDGET_MARGIN` = **1,024 B**
+(exported by `check-budget.mjs`, used by the real-browser gate too): room for byte differences of
+the bundler and zlib between Windows, where the numbers were recorded, and Linux CI, and for a
+library change that grows shared code a little, without re-recording. The margin never lets a page
+that is not listed go over the limit, and an entry for a page that is under the limit fails
+("remove it"). The command prints each exception with the recorded number, the allowed ceiling
+(recorded + margin), the measured number and the headroom against the ceiling. Raising a number is
+a deliberate edit of that file with its reason, never a silent change (`website/README.md`,
+"Re-recording the budget"). The same run also fails an
 address outside `/waveui/docs/` (but the one Close link, and GitHub/npm links in guide content), an
 `<iframe>`, a web font, a page without `lang` and `dir`, not exactly one `<main>`, a script outside
 `/waveui/docs/_assets/` and any reference to `i.pravatar.cc`.

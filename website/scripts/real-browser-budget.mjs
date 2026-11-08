@@ -4,13 +4,14 @@
  * cache, no scrolling or interaction, gzipped as `scripts/verify-dist.mjs` gzips. The limit is the
  * static gate's (`check-budget.mjs`, 150,000 B), and the exceptions work the same way:
  * `website/budget-real-browser.json` lists `{ page, viewport, firstLoadGzip, reason }`, and a page
- * over the limit passes only while it is listed and not above its recorded number. An entry for a
- * page that is under the limit now, or that the build no longer has, fails ("remove it"). Raising
- * a number is a deliberate edit with its reason. `website/BUDGET.md` ("Real browser") has the
+ * over the limit passes only while it is listed and measures at most its recorded number plus
+ * `BUDGET_MARGIN` (1,024 B, the static gate's margin). An entry for a page that is under the
+ * limit now, or that the build no longer has, fails ("remove it"). Re-recording a number is a
+ * deliberate edit with its reason (`website/README.md` has the procedure). `website/BUDGET.md` ("Real browser") has the
  * method and the numbers.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { LIMITS } from './check-budget.mjs';
+import { BUDGET_MARGIN, LIMITS } from './check-budget.mjs';
 
 /** The first-load limit, in bytes gzipped: the static gate's. */
 export const REAL_BROWSER_LIMIT = LIMITS.firstLoadGzip;
@@ -100,17 +101,18 @@ export function checkRealBrowserBudget(rows, exceptions) {
       problems.push(
         `${name}: ${bytes(firstLoadGzip)} of first-load JavaScript in a real browser, above the ${bytes(REAL_BROWSER_LIMIT)} limit; bring it down, or record it in ${FILE} with its reason`,
       );
-    } else if (firstLoadGzip > entry.firstLoadGzip) {
+    } else if (firstLoadGzip > entry.firstLoadGzip + BUDGET_MARGIN) {
       problems.push(
-        `${name}: ${bytes(firstLoadGzip)} of first-load JavaScript in a real browser, above its recorded ${bytes(entry.firstLoadGzip)} in ${FILE} (a regression: bring it down, or raise the record deliberately with its reason)`,
+        `${name}: ${bytes(firstLoadGzip)} of first-load JavaScript in a real browser, above its recorded ${bytes(entry.firstLoadGzip)} plus the ${bytes(BUDGET_MARGIN)} margin in ${FILE} (a regression: bring it down, or re-record it deliberately with its reason)`,
       );
     } else {
       excepted.push({
         page,
         viewport,
         recorded: entry.firstLoadGzip,
+        ceiling: entry.firstLoadGzip + BUDGET_MARGIN,
         measured: firstLoadGzip,
-        headroom: entry.firstLoadGzip - firstLoadGzip,
+        headroom: entry.firstLoadGzip + BUDGET_MARGIN - firstLoadGzip,
         reason: entry.reason,
       });
     }
