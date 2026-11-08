@@ -8,11 +8,12 @@
  * Why a file per page written by the page, and not a registry read at the end of the build:
  * the check runs in a later process, and a page's own file needs no shared state between the
  * build's bundles (the config, the prerender chunks) nor a hook order. The check compares the
- * files with the pages of `dist`, so a file left from a removed catalog entry is caught.
+ * files with the pages of `dist`; the build clears the directory when it starts
+ * ({@link clearStoryReports}), so a file left from a removed catalog entry cannot outlive it.
  *
  * Build-time code; never sent to the browser.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ComponentEntry } from '../catalog/catalog';
 import { REPO_ROOT } from '../repoRoot';
@@ -61,4 +62,9 @@ export function writePageStoryReport(
 ): void {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, `${report.slug}.json`), `${JSON.stringify(report, null, 2)}\n`);
+}
+
+/** Removes the reports directory (and every report in it); nothing happens when it is absent. */
+export function clearStoryReports(dir: string = join(REPO_ROOT, STORY_REPORT_DIR)): void {
+  rmSync(dir, { recursive: true, force: true });
 }

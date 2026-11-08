@@ -8,10 +8,14 @@
  *
  * Rules:
  * - The result is keyed by `ComponentEntry.exportName` and holds the minified and gzip bytes.
- * - **Cache**: `website/.cache/import-sizes.json`, keyed by a hash of `dist/index.mjs` plus the
- *   sorted list of the dist files with their sizes. An unchanged dist measures nothing; a changed
- *   one discards the whole cache. A cache that is missing, unreadable or of another key is a miss,
- *   never an error.
+ * - **Cache**: `website/.cache/import-sizes.json`, keyed by a hash of the path and the content of
+ *   every file in `dist` (an edit that keeps a file's length changes the key). An unchanged dist
+ *   measures nothing; a changed one discards the whole cache. A cache that is missing, unreadable
+ *   or of another key is a miss, never an error, and so is an entry whose `minified` and `gzip`
+ *   are not finite positive numbers (that name is measured again). The file is written to a
+ *   temporary file and renamed over the cache, so an interrupted build leaves no half-written one.
+ * - **Absent dist**: a `dist` without `index.mjs` is one error that tells to run the library build
+ *   (`npm run build`) first.
  * - **Missing exports**: a name that `dist/index.mjs` does not export is reported in one error that
  *   lists every missing name, before anything is measured.
  * - `getLibraryVersion()` reads the `version` of the repository's root `package.json`
@@ -20,7 +24,15 @@
  * Build-time code: it runs in Node and is never sent to the browser.
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { measureImport } from '../../../scripts/verify-dist.mjs';
 import { getCatalog } from '../catalog/catalog';
@@ -63,34 +75,62 @@ function listFiles(root: string, directory = root): string[] {
   return files;
 }
 
-/** A hash of `dist/index.mjs` and of the sorted `path:size` list of every file in `dist`. */
+/**
+ * A hash of every file in `dist`: its path (relative, with `/`), the length of its content and the
+ * content itself, in path order, so an edit that keeps a length and a rename both change it.
+ */
 function distKey(distDir: string): string {
   const hash = createHash('sha256');
-  hash.update(readFileSync(join(distDir, 'index.mjs')));
-  const listing = listFiles(distDir)
-    .map((path) => `${relative(distDir, path).split('\\').join('/')}:${statSync(path).size}`)
-    .sort();
-  hash.update('\n');
-  hash.update(listing.join('\n'));
+  const files = listFiles(distDir)
+    .map((path) => ({ path, name: relative(distDir, path).split('\\').join('/') }))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  for (const { path, name } of files) {
+    const content = readFileSync(path);
+    hash.update(`${name}\0${content.length}\0`);
+    hash.update(content);
+  }
   return hash.digest('hex');
 }
 
+const isPositiveNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0;
+
+/** The entries of the cache that hold finite positive `minified` and `gzip`; the rest are misses. */
 function readCache(cacheFile: string, key: string): Record<string, ImportSize> {
+  const valid: Record<string, ImportSize> = {};
   try {
-    const parsed = JSON.parse(readFileSync(cacheFile, 'utf8')) as Partial<CacheContents>;
-    if (parsed.key === key && parsed.sizes && typeof parsed.sizes === 'object') return parsed.sizes;
+    const parsed = JSON.parse(readFileSync(cacheFile, 'utf8')) as Partial<CacheContents> | null;
+    if (
+      parsed?.key === key &&
+      parsed.sizes &&
+      typeof parsed.sizes === 'object' &&
+      !Array.isArray(parsed.sizes)
+    ) {
+      for (const [name, entry] of Object.entries(parsed.sizes) as [string, unknown][]) {
+        const { minified, gzip } = (entry ?? {}) as Partial<ImportSize>;
+        if (isPositiveNumber(minified) && isPositiveNumber(gzip)) valid[name] = { minified, gzip };
+      }
+    }
   } catch {
     // A missing or damaged cache is a miss.
   }
-  return {};
+  return valid;
 }
 
+/** Writes to a temporary file in the same directory and renames it over the cache. */
 function writeCache(cacheFile: string, contents: CacheContents): void {
+  const temporary = `${cacheFile}.${process.pid}.tmp`;
   try {
     mkdirSync(dirname(cacheFile), { recursive: true });
-    writeFileSync(cacheFile, `${JSON.stringify(contents, null, 2)}\n`);
+    writeFileSync(temporary, `${JSON.stringify(contents, null, 2)}\n`);
+    renameSync(temporary, cacheFile);
   } catch {
     // The cache is an optimisation: a read-only checkout still builds.
+    try {
+      rmSync(temporary, { force: true });
+    } catch {
+      // Nothing left to clean.
+    }
   }
 }
 
@@ -141,6 +181,11 @@ export async function getImportSizes(
     ...new Set(options.names ?? getCatalog().map((entry) => entry.exportName)),
   ].sort();
 
+  if (!existsSync(join(distDir, 'index.mjs'))) {
+    throw new Error(
+      `${join(distDir, 'index.mjs')} is absent: the library is not built. Run the library build first (npm run build at the repository root), then the site build.`,
+    );
+  }
   const exported = exportedNames(distDir);
   const missing = wanted.filter((name) => !exported.has(name));
   if (missing.length > 0) {

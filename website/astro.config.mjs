@@ -11,6 +11,8 @@
  * `src/generated/examples/` (git-ignored) whenever the configuration loads, so `astro build`,
  * `astro dev` and the Vitest projects all find them (`src/examples/islands.ts` says why they are
  * generated). The generator is TypeScript and reads the catalog, so Vite's module runner loads it.
+ * The same integration clears `.cache/story-report` when a build starts (`astro:build:start`), so
+ * the report the pages then write holds exactly the pages of this build.
  *
  * The plugins of `plugins/` (website/BUDGET.md has the measurements):
  *
@@ -36,19 +38,30 @@ const siteRoot = fileURLToPath(new URL('.', import.meta.url));
 /** The modules whose static closure is the `base` chunk: the shell island and the example runtime. */
 const BASE_ROOTS = ['website/src/islands/ShellControls.tsx', 'website/src/islands/Example.tsx'];
 
+/** Loads a TypeScript module of the site with Vite's module runner (build-time code). */
+async function loadSiteModule(path) {
+  const { module } = await runnerImport(fileURLToPath(new URL(path, import.meta.url)), {
+    configFile: false,
+    root: siteRoot,
+    logLevel: 'silent',
+  });
+  return module;
+}
+
 /** @returns {import('astro').AstroIntegration} */
 function exampleIslands() {
   return {
     name: 'waveui-example-islands',
     hooks: {
       'astro:config:setup': async () => {
-        const generator = fileURLToPath(new URL('./src/examples/islands.ts', import.meta.url));
-        const { module } = await runnerImport(generator, {
-          configFile: false,
-          root: siteRoot,
-          logLevel: 'silent',
-        });
-        /** @type {{ writeExampleIslands: () => unknown }} */ (module).writeExampleIslands();
+        /** @type {{ writeExampleIslands: () => unknown }} */
+        const { writeExampleIslands } = await loadSiteModule('./src/examples/islands.ts');
+        writeExampleIslands();
+      },
+      'astro:build:start': async () => {
+        /** @type {{ clearStoryReports: () => unknown }} */
+        const { clearStoryReports } = await loadSiteModule('./src/examples/storyReport.ts');
+        clearStoryReports();
       },
     },
   };

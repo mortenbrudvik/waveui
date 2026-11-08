@@ -1,8 +1,16 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildPageStoryReport, writePageStoryReport } from './storyReport';
+import { buildPageStoryReport, clearStoryReports, writePageStoryReport } from './storyReport';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -42,5 +50,34 @@ describe('the story report', () => {
     const report = await buildPageStoryReport(entry, async () => ({ mode: 'inline' }));
     writePageStoryReport(report, join(dir, 'nested'));
     expect(JSON.parse(readFileSync(join(dir, 'nested', 'button.json'), 'utf8'))).toEqual(report);
+  });
+
+  it('clearStoryReports removes the directory with every report in it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'waveui-report-'));
+    dirs.push(dir);
+    const reports = join(dir, 'story-report');
+    mkdirSync(reports);
+    writeFileSync(join(reports, 'removed-component.json'), '{}');
+    writeFileSync(join(reports, 'button.json'), '{}');
+    clearStoryReports(reports);
+    expect(existsSync(reports)).toBe(false);
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it('clearStoryReports does nothing when there is no directory', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'waveui-report-'));
+    dirs.push(dir);
+    expect(() => clearStoryReports(join(dir, 'never-written'))).not.toThrow();
+  });
+
+  it('the Astro configuration clears the reports when a build starts', async () => {
+    // The wiring: a stale report of a removed catalog entry must not outlive the next build.
+    const { default: config } = (await import('../../astro.config.mjs')) as unknown as {
+      default: { integrations: { name: string; hooks: Record<string, unknown> }[] };
+    };
+    const hooked = config.integrations.filter(
+      (integration) => typeof integration.hooks['astro:build:start'] === 'function',
+    );
+    expect(hooked.map((integration) => integration.name)).toEqual(['waveui-example-islands']);
   });
 });
