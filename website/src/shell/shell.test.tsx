@@ -611,6 +611,8 @@ describe('ShellControls (the island)', () => {
     await user.click(backdrop);
     expect(win.hasAttribute('data-nav-open')).toBe(false);
     expect(document.querySelector('[data-shell-backdrop]')).toBeNull();
+    // As with Escape, focus goes back to the hamburger rather than dropping to the body.
+    expect(document.activeElement).toBe(hamburger);
   });
 });
 

@@ -8,7 +8,7 @@
  *   `CHOICE_EVENT` for other islands;
  * - the navigation drawer below 48rem: the hamburger sets `data-nav-open` on the window (site.css
  *   shows the pane as a drawer), focus moves to the current link, and Escape, a click on the
- *   backdrop or focus moving elsewhere closes it;
+ *   backdrop (both return focus to the hamburger) or focus moving elsewhere closes it;
  * - Copy code, which copies `copyText`, with a polite announcement;
  * - Search, which dispatches `SEARCH_EVENT`;
  * - the search palette: Cmd+K on Apple platforms, Ctrl+K elsewhere, anywhere in the page (a text
@@ -270,7 +270,10 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
           data-shell-backdrop
           aria-hidden="true"
           className="fixed inset-0 z-30 bg-wave-backdrop md:hidden"
-          onClick={() => closeNav(false)}
+          // A press would move focus to `<main>` (it has a tabindex), whose focus closes the drawer
+          // before the click: keep focus where it is, and let the click return it to the hamburger.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => closeNav(true)}
         />
       ) : null}
       {ready && maximizeSlot
