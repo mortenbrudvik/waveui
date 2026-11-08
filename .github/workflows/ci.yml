@@ -138,6 +138,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run site:typecheck
       - name: Build the site
+        id: site
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run site:build
       # Runs after the site build: the tests of the built pages read website/dist, and
@@ -150,3 +151,20 @@ jobs:
       - name: Check the site
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run site:check
+      # The end-to-end tests drive the built site in Chromium, behind a server that implements
+      # website/vercel.json and the homepage's rewrite (website/e2e/server.mjs).
+      - name: Install Chromium for the end-to-end tests
+        id: chromium
+        if: ${{ !cancelled() && steps.site.outcome == 'success' }}
+        working-directory: website
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end tests of the site
+        if: ${{ !cancelled() && steps.chromium.outcome == 'success' }}
+        run: npm run site:e2e
+      - name: Keep the end-to-end results of a failure
+        if: ${{ failure() && steps.chromium.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site-e2e-results
+          path: website/.cache/playwright/results
+          retention-days: 7

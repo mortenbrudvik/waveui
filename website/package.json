@@ -9,10 +9,12 @@
     "build": "astro build",
     "preview": "astro preview",
     "test": "vitest run",
-    "check": "node scripts/site-check.mjs"
+    "check": "node scripts/site-check.mjs",
+    "e2e": "playwright test"
   },
   "devDependencies": {
     "@astrojs/react": "7.0.1",
+    "@playwright/test": "1.64.1",
     "@storybook/react": "^10.6.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",

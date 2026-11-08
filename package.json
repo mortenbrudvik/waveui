@@ -93,6 +93,7 @@
     "site:test:pages": "node website/scripts/test-pages.mjs",
     "site:typecheck": "tsc -p website/tsconfig.json --noEmit",
     "site:check": "node website/scripts/site-check.mjs",
+    "site:e2e": "npm run e2e -w website",
     "prepublishOnly": "npm run typecheck && npm run build && node scripts/verify-dist.mjs --final && npm test && npm run check:package && npm run test:pack"
   },
   "peerDependencies": {
