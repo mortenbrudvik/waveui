@@ -53,7 +53,7 @@ A change to the library (`src/`) or to `stories/` can grow the code that many pa
 1. Give its story file a `Components/<Category>/<Name>` title (the stories are in `stories/`, the library's rule C-STORIES). Nothing else registers it: the catalog, the page, the island, the navigation and the search index follow.
 2. Export the component from the library entry; `meta.component` must name that export.
 3. `npm run build` (the library), then `npm run site:build`, and open the page.
-4. Then the gates decide: a story that cannot render on the server and in the browser must be listed with a reason in `skipped-stories.json` (the build fails for an unlisted one); the page must stay under the budget or get an exception; the tests pin the number of components (`80` in `src/catalog/catalog.test.ts`, `props.test.ts`, `sizes.test.ts`, `searchIndex.test.ts`, `shell.test.tsx`, `tests/pages.test.ts` and the index page's text): update them in the same change.
+4. Then the gates decide: a story that cannot render on the server and in the browser must be listed with a reason in `skipped-stories.json` (the build fails for an unlisted one); the page must stay under the budget or get an exception; the tests pin the number of components (`80` in `src/catalog/catalog.test.ts`, `props.test.ts`, `sizes.test.ts`, `searchIndex.test.ts`, `shell.test.tsx` and `tests/pages.test.ts`; the index page counts the catalog itself): update them in the same change.
 
 ## Deploying (Vercel)
 
@@ -70,7 +70,7 @@ Vercel does not run the end-to-end suite or the real-browser budget (`site:e2e`,
 **One-time setup** (for the owner):
 
 1. In Vercel: Add New, Project, import `mortenbrudvik/waveui` (Git integration; the production branch is `main`, so every push to `main` deploys and pull requests get previews).
-2. Set **Root Directory** to `website` and keep "Include source files outside of the Root Directory in the Build Step" enabled.
+2. Set **Root Directory** to `website` and keep "Include source files outside of the Root Directory in the Build Step" enabled. Turn **off** "Skip deployments for unaffected projects" (a monorepo setting): the workspace declares no dependency on the library's code, which it compiles from `../src` and `../stories`, so Vercel would skip a deployment for a change that only touches the library.
 3. Leave the **Framework Preset** as detected or Other, and the Install, Build and Output fields empty or default: `vercel.json` overrides them (the dashboard shows them as overridden).
 4. Under Build and Deployment, check **Node.js Version** is 24.x (Vercel's default; the repository's `devEngines` asks for `^22.22.2 || ^24.15.0 || >=26`). npm 11 comes with it; the repository asks for npm 11.11 or later and only warns.
 5. Under Deployment Protection, use **Standard Protection** (the production domain stays public) and not "All Deployments": the homepage reads the project's production domain, `<project>.vercel.app`, without credentials.

@@ -1,5 +1,11 @@
 # Stack spike (Task 1): Astro with React islands
 
+> **A dated, historical record** of the Task 1 spike (2026-11-07), kept as written. Some of its
+> statements no longer hold: `website/node_modules` is no longer empty (it holds the workspace's
+> own `marked`, whose version differs from the one hoisted at the root), the spike page and its
+> island were removed in Task 4, and `typescript` is now declared by the workspace, not only by the
+> root. `website/README.md` and `website/BUDGET.md` describe the site as it is.
+
 Date: 2026-11-07. Machine: Windows 11, Node.js 24.21.0, npm 12.2.2. Plan:
 `docs/superpowers/plans/2026-11-07-docs-site-app.md`, Task 1. Spec:
 `docs/superpowers/specs/2026-11-07-docs-site-design.md`.

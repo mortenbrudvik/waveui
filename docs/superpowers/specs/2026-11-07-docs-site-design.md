@@ -1,7 +1,7 @@
 # WaveUI documentation site at brudvik.com/waveui
 
 Date: 2026-11-07
-Status: draft, awaiting Morten's approval (reviewed once by a fresh engineer; its questions are settled below)
+Status: approved by Morten 2026-11-07; implemented on branch feat/docs-site. Budget exceptions (the spec's "notes" for a page over a limit) are recorded in `website/BUDGET.md`, `website/budget-exceptions.json` (static worst case) and `website/budget-real-browser.json` (real browser, per viewport).
 
 ## Intent
 

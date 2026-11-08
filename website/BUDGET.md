@@ -114,11 +114,38 @@ address outside `/waveui/docs/` (but the one Close link, and GitHub/npm links in
 `/waveui/docs/_assets/` and any reference to `i.pravatar.cc`.
 
 The metric is an upper bound: a real browser loads less before scrolling (see "Real browser" below).
-12 pages are over the first-load limit today, all recorded: the 11 below, and `presence`
-(150,876 B), which the search palette's shell code (+984 B) pushed over from 149,878 B. The numbers
-of the table that follows are the build before the palette; the file holds the current ones.
+Two metrics appear in this file and in the two exception files: the **static worst case** (this
+gate, `budget-exceptions.json`, every island counted) and the **real browser** (`site:e2e`,
+`budget-real-browser.json`, what a cold load requests before any scroll, per viewport). Where an
+example of a page is in the first viewport the two are the same number, since its examples share
+one module.
 
-## Pages over 150,000 B after every neutral lever
+On the current build (2026-11-08, what `npm run site:check` and `npm run site:e2e` print), 12 pages
+are over the first-load limit on the static metric, all recorded in `budget-exceptions.json` at
+these numbers; the last three columns are the real browser at each viewport ("shell" is the shell
+alone, 98,072 B: the page's first example is below the fold):
+
+| Page            | Static first load | Static everything | Real, 1280×800 | Real, 1920×1080 | Real, 390×844 |
+| --------------- | ----------------: | ----------------: | -------------: | --------------: | ------------: |
+| wave-provider   |           182,801 |           193,763 |          shell |           shell |         shell |
+| nav-drawer      |           178,054 |           192,454 |          shell |           shell |         shell |
+| tag-picker      |           169,343 |           198,545 |          shell |           shell |         shell |
+| data-grid       |           168,332 |           194,202 |          shell |           shell |         shell |
+| color-picker    |           165,018 |           184,001 |          shell |     **165,018** |         shell |
+| custom-overlays |           164,564 |           175,526 |          shell |           shell |         shell |
+| nav             |           161,175 |           184,733 |          shell |           shell |         shell |
+| breadcrumb      |           156,147 |           179,705 |    **156,147** |     **156,147** |   **156,147** |
+| overflow        |           154,639 |           180,509 |          shell |           shell |         shell |
+| toast           |           154,310 |           168,710 |          shell |     **154,310** |         shell |
+| drawer          |           151,084 |           165,484 |          shell |           shell |         shell |
+| presence        |           150,868 |           161,830 |          shell |     **150,868** |         shell |
+
+The index and guide pages measure 97,809 B (static and real), 135,890 B everything. The table
+below, and "All pages, before and after", are the Task 10b build (2026-11-07), kept as the record
+of that pass; their numbers predate the search palette (Task 11) and are not what the gates print
+today.
+
+## Pages over 150,000 B after every neutral lever (Task 10b build, 2026-11-07)
 
 | Page            | First load (gzip) | Over 150,000 B by | Everything (gzip) | Own code beyond the `react` and `base` chunks: its largest chunks (gzip)                                                                                                                                    |
 | --------------- | ----------------: | ----------------: | ----------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -160,7 +187,7 @@ Options, measured but not implemented (each is the owner's call):
 4. **Documented exceptions** with the numbers above, as the spec allows ("If a page truly cannot
    meet it … the builder documents the exception").
 
-## All pages, before and after
+## All pages, before and after (Task 10b, 2026-11-07)
 
 "Before" is the build at commit 1583dfd (Task 10's numbers); "after" is this pass. "over" marks a
 first load above 150,000 B.
