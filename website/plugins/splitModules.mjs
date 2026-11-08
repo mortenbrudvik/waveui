@@ -407,7 +407,7 @@ export function splitModules({ files, readFile = (file) => readFileSync(file, 'u
     let result = cache.get(key);
     if (!result) {
       const file = /** @type {string} */ (targets.get(key));
-      result = splitModule(readFile(file), basename(file));
+      result = splitModule(readFile(file), basename(normalise(file)));
       cache.set(key, result);
     }
     return result;
