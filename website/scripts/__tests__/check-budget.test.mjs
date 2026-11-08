@@ -104,6 +104,39 @@ describe('checkPage', () => {
     expect(missing.problems.join('\n')).toContain('_assets/gone.json');
   });
 
+  describe('the script addresses the measurement counted and the HTML parse found', () => {
+    it('are equal for single quotes and for href before rel', () => {
+      const result = check(
+        pageHtml({
+          scripts: [
+            `<script type='module' src='${A}/a.js'></script>`,
+            `<link href='${A}/b.js' rel='modulepreload'>`,
+          ],
+        }),
+        { '_assets/b.js': 'export const b = 2;' },
+      );
+      expect(result.problems).toEqual([]);
+      expect(result.firstLoadGzip).toBeGreaterThan(check(pageHtml(), SMALL).firstLoadGzip);
+    });
+
+    it('differ for a script the measurement cannot read: an undercount is a problem', () => {
+      // An unquoted src is a script to the HTML parse, and not one to the measurement.
+      const result = check(
+        pageHtml({
+          scripts: [
+            `<script type="module" src="${A}/a.js"></script>`,
+            `<script src=${A}/b.js></script>`,
+          ],
+        }),
+        { '_assets/b.js': filler(160_000) },
+      );
+      expect(result.problems).toHaveLength(1);
+      expect(result.problems[0]).toContain(
+        'counted 1 script or modulepreload address but the HTML has 2',
+      );
+    });
+  });
+
   it('a script that the page requests but the build lacks fails', () => {
     const result = check(
       pageHtml({ scripts: [`<script type="module" src="${A}/missing.js"></script>`] }),

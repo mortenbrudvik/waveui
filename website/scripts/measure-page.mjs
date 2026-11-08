@@ -62,6 +62,42 @@ function staticClosure(entries, readAsset, loaded = new Set()) {
   return { loaded, dynamic };
 }
 
+/** A `src` attribute of any quoting (the lead whitespace keeps `data-src` out). */
+const SRC_ATTRIBUTE = /(?<=\s)src\s*=/;
+
+/** The value of the attribute `name` in an opening tag's attribute text, double or single quoted. */
+function attributeValue(attributes, name) {
+  const match = new RegExp(`(?<=\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(attributes);
+  return match ? (match[1] ?? match[2]) : undefined;
+}
+
+/**
+ * The addresses of the scripts a page loads before any island code: the `src` of its scripts, then
+ * its module preloads (`rel` has the token `modulepreload`, `href` in either order), then the
+ * `component-url`, `renderer-url` and `before-hydration-url` of its islands; each address once, in
+ * that order. Attribute values may use double or single quotes (an unquoted one is not read:
+ * `scripts/check-budget.mjs` compares this count with its own HTML parse and reports the gap).
+ */
+export function pageScriptAddresses(html) {
+  const urls = new Set();
+  for (const [, attributes] of html.matchAll(/<script\b([^>]*)>/g)) {
+    const src = attributeValue(attributes, 'src');
+    if (src !== undefined) urls.add(src);
+  }
+  for (const [, attributes] of html.matchAll(/<link\b([^>]*)>/g)) {
+    const rel = attributeValue(attributes, 'rel') ?? '';
+    const href = attributeValue(attributes, 'href');
+    if (href !== undefined && rel.split(/\s+/).includes('modulepreload')) urls.add(href);
+  }
+  for (const [, attributes] of html.matchAll(/<[a-z][\w-]*\b([^>]*)>/gi)) {
+    for (const name of ['component-url', 'renderer-url', 'before-hydration-url']) {
+      const value = attributeValue(attributes, name);
+      if (value !== undefined) urls.add(value);
+    }
+  }
+  return [...urls];
+}
+
 /**
  * The JavaScript a page requests, from its HTML and a reader of its assets (`readAsset(path)`
  * gives the file at `path` under the base, `_assets/x.js`, as a string or a Buffer): the rows of
@@ -71,21 +107,11 @@ function staticClosure(entries, readAsset, loaded = new Set()) {
  * problem of its own). `measurePage` and `scripts/check-budget.mjs` share this measuring.
  */
 export function pageJsReport(html, readAsset, { foreign = 'throw' } = {}) {
-  const inline = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
-    .map(([, body]) => body)
+  const inline = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
+    .filter(([, attributes]) => !SRC_ATTRIBUTE.test(attributes))
+    .map(([, , body]) => body)
     .filter((body) => body.trim() !== '');
-  const entryUrls = new Set();
-  for (const [, url] of html.matchAll(/<script[^>]*\bsrc="([^"]+)"/g)) entryUrls.add(url);
-  for (const [, url] of html.matchAll(/<link[^>]*\brel="modulepreload"[^>]*\bhref="([^"]+)"/g)) {
-    entryUrls.add(url);
-  }
-  for (const [, url] of html.matchAll(
-    /\b(?:component-url|renderer-url|before-hydration-url)="([^"]+)"/g,
-  )) {
-    entryUrls.add(url);
-  }
-
-  const entries = [...entryUrls]
+  const entries = pageScriptAddresses(html)
     .filter((url) => foreign === 'throw' || url.startsWith(BASE))
     .map(pathOfUrl);
 

@@ -40,7 +40,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { BASE, pageJsReport } from './measure-page.mjs';
+import { BASE, pageJsReport, pageScriptAddresses } from './measure-page.mjs';
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -241,6 +241,30 @@ export function checkPage(html, readAsset, exception) {
 
   // The markup.
   const { elements, scriptBodies, styleBodies } = parseHtml(html);
+
+  // The measurement reads script addresses with patterns of its own; this parse reads the same
+  // addresses by element. If the two counts differ, the measurement missed (or invented) a script
+  // and the first-load number is not to be trusted: an undercount is a problem, never silent.
+  const parsedAddresses = new Set();
+  for (const { name, attributes } of elements) {
+    if (name === 'script' && attributes.has('src')) parsedAddresses.add(attributes.get('src'));
+    if (
+      name === 'link' &&
+      (attributes.get('rel') ?? '').split(/\s+/).includes('modulepreload') &&
+      attributes.has('href')
+    ) {
+      parsedAddresses.add(attributes.get('href'));
+    }
+    for (const key of ['component-url', 'renderer-url', 'before-hydration-url']) {
+      if (attributes.has(key)) parsedAddresses.add(attributes.get(key));
+    }
+  }
+  const measuredAddresses = pageScriptAddresses(html).length;
+  if (measuredAddresses !== parsedAddresses.size) {
+    problems.push(
+      `the measurement counted ${measuredAddresses} script or modulepreload address${measuredAddresses === 1 ? '' : 'es'} but the HTML has ${parsedAddresses.size}: the first-load number leaves a script out (an attribute the measurement does not read, such as an unquoted value)`,
+    );
+  }
   const outside = (value, where) => problems.push(`${where} names "${value}", outside ${BASE}`);
   const isFont = (value) => FONT_FILE.test(value.split(/[?#]/)[0]) || FONT_HOST.test(value);
   const fontProblem = (value, where) =>

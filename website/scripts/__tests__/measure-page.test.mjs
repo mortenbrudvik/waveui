@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { measurePage, pageJsReport } from '../measure-page.mjs';
+import { measurePage, pageJsReport, pageScriptAddresses } from '../measure-page.mjs';
 
 const A = '/waveui/docs/_assets';
 
@@ -16,7 +16,8 @@ let dist;
 
 const FILES = {
   // Static import of dep.js and a dynamic import of lazy.js.
-  'entry.js': 'import { dep } from "./dep.js";\nexport const entry = dep + 1;\nimport("./lazy.js");\n',
+  'entry.js':
+    'import { dep } from "./dep.js";\nexport const entry = dep + 1;\nimport("./lazy.js");\n',
   'dep.js': 'export const dep = 41;\n',
   'lazy.js': 'export const lazy = "only when asked";\n',
   'island.js': 'export default function Island() { return null; }\n',
@@ -30,7 +31,8 @@ const FILES = {
 beforeEach(() => {
   dist = mkdtempSync(join(tmpdir(), 'wave-measure-'));
   mkdirSync(join(dist, '_assets'));
-  for (const [name, code] of Object.entries(FILES)) writeFileSync(join(dist, '_assets', name), code);
+  for (const [name, code] of Object.entries(FILES))
+    writeFileSync(join(dist, '_assets', name), code);
 });
 
 afterEach(() => {
@@ -82,3 +84,41 @@ const EXPECTED = {
   reactCoreChunks: ['react.js'],
   reactDomClientChunks: ['dom.js'],
 };
+
+describe('the script and modulepreload addresses of a page', () => {
+  const read = (path) => FILES[path.replace('_assets/', '')] ?? '';
+  const files = (html) => pageJsReport(html, read).firstLoad.map((row) => row.file);
+
+  it('are read from single-quoted attributes', () => {
+    const html = `<script type='module' src='${A}/entry.js'></script><link rel='modulepreload' href='${A}/island.js'><astro-island component-url='${A}/renderer.js' renderer-url='${A}/dom.js'></astro-island>`;
+    expect(files(html)).toEqual([
+      '_assets/entry.js',
+      '_assets/dep.js',
+      '_assets/island.js',
+      '_assets/renderer.js',
+      '_assets/dom.js',
+    ]);
+  });
+
+  it('are read with href before rel, and src before type', () => {
+    const html = `<link href="${A}/island.js" as="script" rel="modulepreload"><script src="${A}/entry.js" type="module" async></script>`;
+    expect(files(html)).toEqual(['_assets/entry.js', '_assets/dep.js', '_assets/island.js']);
+  });
+
+  it('count a modulepreload among several rel tokens, and no other link', () => {
+    const html = `<link rel="stylesheet" href="${A}/a.css"><link rel="preload modulepreload" href="${A}/island.js"><link rel="prefetch" href="${A}/renderer.js">`;
+    expect(pageScriptAddresses(html)).toEqual([`${A}/island.js`]);
+  });
+
+  it('ignore data-src and an unrelated attribute that ends in src', () => {
+    const html = `<script data-src="${A}/island.js">var a = 1;</script><script src="${A}/entry.js"></script>`;
+    expect(pageScriptAddresses(html)).toEqual([`${A}/entry.js`]);
+    // The first is an inline script; the second, with a src, is not.
+    expect(pageJsReport(html, read).inline).toHaveLength(1);
+  });
+
+  it('are listed once each, scripts first, then preloads, then islands', () => {
+    const html = `<astro-island component-url="${A}/island.js"></astro-island><link rel="modulepreload" href="${A}/dep.js"><script src="${A}/entry.js"></script><script src="${A}/entry.js"></script>`;
+    expect(pageScriptAddresses(html)).toEqual([`${A}/entry.js`, `${A}/dep.js`, `${A}/island.js`]);
+  });
+});
