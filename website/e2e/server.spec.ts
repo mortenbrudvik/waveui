@@ -150,7 +150,7 @@ test.describe('routing behind the homepage rewrite', () => {
           ...routing,
           framework: null,
           installCommand: 'cd .. && npm ci',
-          buildCommand: 'cd .. && npm run site:build',
+          buildCommand: 'cd .. && npm run site:build && npm run site:check',
           outputDirectory: 'dist',
         }),
       );
@@ -160,15 +160,18 @@ test.describe('routing behind the homepage rewrite', () => {
     }
   });
 
-  test('the committed vercel.json builds the workspace from the repository root into dist', () => {
+  test('the committed vercel.json builds the workspace from the repository root into dist and runs the static gates', () => {
     // Vercel runs the commands in the Root Directory (website); the library and the site are
-    // built by the root's scripts, so both commands go up one level first.
+    // built by the root's scripts, so both commands go up one level first. The build then runs
+    // site:check (the static budget and base-path gate and the skipped-stories gate), so a page
+    // CI would reject is never deployed; the end-to-end suite and the real-browser budget run in
+    // CI only.
     const file = fileURLToPath(new URL('../vercel.json', import.meta.url));
     const config = JSON.parse(readFileSync(file, 'utf8'));
     expect(config).toMatchObject({
       framework: null,
       installCommand: 'cd .. && npm ci',
-      buildCommand: 'cd .. && npm run site:build',
+      buildCommand: 'cd .. && npm run site:build && npm run site:check',
       outputDirectory: 'dist',
     });
     expect(() => loadVercelConfig(file)).not.toThrow();

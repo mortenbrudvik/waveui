@@ -53,10 +53,10 @@ The site is its own Vercel project, reached through a rewrite of the homepage's 
 **Build settings and why** (from Vercel's documentation: Configure a Build, Monorepos, `vercel.json` reference, Node.js versions): with Root Directory `website`, Vercel runs the commands in `website/`, and with "Include source files outside of the Root Directory in the Build Step" on (the default) the build can read the repository root. This site needs the root: it compiles `src/` and `stories/` and reads the root `package.json` and `dist`. So `vercel.json` sets
 
 - `installCommand`: `cd .. && npm ci` (the workspace is installed from the root lockfile, which also installs the library's dependencies),
-- `buildCommand`: `cd .. && npm run site:build` (builds the library, since a fresh checkout has no `dist`, then the site),
+- `buildCommand`: `cd .. && npm run site:build && npm run site:check` (builds the library, since a fresh checkout has no `dist`, then the site, then runs the static gates: the JavaScript budget and base-path rules and the skipped-stories gate, a few seconds; a page that breaks them fails the deployment, so it is never deployed),
 - `outputDirectory`: `dist` (relative to `website/`), and `framework`: `null` ("Other"; the pages are static HTML, no adapter).
 
-These overrides are in `vercel.json`, not in the dashboard's fields, because they are versioned with the code and the end-to-end suite pins them (`e2e/server.spec.ts`). Vercel's documentation shows the same `cd ..` form for a monorepo build command and `installCommand` overridden in `vercel.json`. No deployment has run these commands yet: the first deploy is the check.
+Vercel does not run the end-to-end suite or the real-browser budget (`site:e2e`, Playwright): those run in CI only. These overrides are in `vercel.json`, not in the dashboard's fields, because they are versioned with the code and the end-to-end suite pins them (`e2e/server.spec.ts`). Vercel's documentation shows the same `cd ..` form for a monorepo build command and `installCommand` overridden in `vercel.json`. No deployment has run these commands yet: the first deploy is the check.
 
 **One-time setup** (for the owner):
 

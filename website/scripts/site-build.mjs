@@ -15,6 +15,8 @@ if (!npmCli) {
 
 function run(args) {
   const result = spawnSync(process.execPath, [npmCli, ...args], { cwd: root, stdio: 'inherit' });
+  // A spawn that fails itself (no status) says why only in `result.error`.
+  if (result.error) console.error(result.error);
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
