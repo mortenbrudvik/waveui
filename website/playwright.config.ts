@@ -15,6 +15,11 @@
  *   `.cache/real-browser-budget.json`.
  *
  * Results, traces and screenshots of failures go to `.cache/playwright/` (git-ignored).
+ *
+ * Browsers: `npx playwright install chromium`. That command also prunes the browser builds of
+ * other Playwright versions from the shared cache (`%LOCALAPPDATA%\ms-playwright` on Windows,
+ * `~/.cache/ms-playwright` elsewhere); set `PLAYWRIGHT_BROWSERS_PATH` to keep this project's
+ * browsers apart.
  */
 import { defineConfig, devices } from '@playwright/test';
 import { VIEWPORTS } from './scripts/real-browser-budget.mjs';

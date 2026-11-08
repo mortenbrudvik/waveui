@@ -14,9 +14,14 @@
  *   With `cleanUrls` a path `/x` is served from `x.html`; a directory from its `index.html`.
  *   Anything else is a 404. A key of `vercel.json` it does not implement stops it, so the file
  *   cannot grow a rule the tests silently ignore.
- * - **The front server** stands for the homepage's project at brudvik.com: its one rewrite sends
- *   `/waveui/docs/:path*` to the app, path unchanged; `/waveui` answers with a stub of the intro
- *   page (the title bar's Close goes there); every other path is a 404. The tests talk to it only.
+ * - **The front server** stands for the homepage's project at brudvik.com
+ *   ({@link HOMEPAGE_ROUTING}): first its own redirects, `cleanUrls` and `trailingSlash: false`
+ *   (Vercel runs redirects before rewrites, so `/waveui/docs/components/button/` gets a 308 to
+ *   `/waveui/docs/components/button` from the homepage before its rewrite is tried); then its one
+ *   rewrite, which sends `/waveui/docs/:path*` to the app, path unchanged; `/waveui` answers with
+ *   a stub of the intro page (the title bar's Close goes there); every other path is a 404. It
+ *   does not emulate the homepage's own `headers` (its global security headers equal the app's,
+ *   and the tests check the app's). The tests talk to the front server only.
  *
  * Source patterns are the subset of path-to-regexp that `vercel.json` uses: literal text, named
  * parameters `:name` with an optional `(regex)` and modifier `?`, `*` or `+` (a `/` before a `?` or
@@ -43,10 +48,27 @@ export const INTRO_STUB_MARKER = 'data-e2e-intro-stub';
 
 const IMPLEMENTED_KEYS = new Set(['$schema', 'cleanUrls', 'trailingSlash', 'rewrites', 'headers']);
 
+/** The keys this server implements in a rule of `rewrites`, of `headers`, and in a header. */
+const RULE_KEYS = {
+  rewrites: new Set(['source', 'destination']),
+  headers: new Set(['source', 'headers']),
+  header: new Set(['key', 'value']),
+};
+
+/**
+ * The homepage's routing settings that touch the app's addresses, copied from the homepage
+ * repository's `vercel.json` (`homepage-brudvik-com/vercel.json`: `"cleanUrls": true,
+ * "trailingSlash": false`, read 2026-11-08). They are a copy because CI has no checkout of that
+ * repository; the spec has the two projects' trailing-slash and clean-URL settings agree, so a
+ * change there must be made here too (and in `website/vercel.json`).
+ */
+export const HOMEPAGE_ROUTING = { cleanUrls: true, trailingSlash: false };
+
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
+  // Vercel's types for static files: scripts are `application/javascript`.
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
@@ -148,9 +170,21 @@ export function fillDestination(destination, params) {
   return filled === '' ? '/' : filled.replace(/\/{2,}/g, '/');
 }
 
+/** Throws when `item` (a rule of `vercel.json`) has a key this server does not implement. */
+function checkRuleKeys(file, where, item, allowed) {
+  for (const key of Object.keys(item ?? {})) {
+    if (!allowed.has(key)) {
+      throw new Error(
+        `${file}: the end-to-end server does not implement "${key}" in ${where}; teach website/e2e/server.mjs what Vercel does with it`,
+      );
+    }
+  }
+}
+
 /**
- * Reads and checks `vercel.json`: every key must be one this server implements, and each rule's
- * pattern compiles.
+ * Reads and checks `vercel.json`: every key, at the top and in each rule (`has`, `missing`,
+ * `statusCode`, … are refused), must be one this server implements, and each rule's pattern
+ * compiles.
  */
 export function loadVercelConfig(file) {
   const raw = JSON.parse(readFileSync(file, 'utf8'));
@@ -159,6 +193,13 @@ export function loadVercelConfig(file) {
       throw new Error(
         `${file}: the end-to-end server does not implement "${key}"; teach website/e2e/server.mjs what Vercel does with it`,
       );
+    }
+  }
+  for (const rule of raw.rewrites ?? []) checkRuleKeys(file, 'a rewrite', rule, RULE_KEYS.rewrites);
+  for (const rule of raw.headers ?? []) {
+    checkRuleKeys(file, 'a headers rule', rule, RULE_KEYS.headers);
+    for (const header of rule.headers ?? []) {
+      checkRuleKeys(file, 'a header', header, RULE_KEYS.header);
     }
   }
   const rewrites = (raw.rewrites ?? []).map((rule) => ({
@@ -183,7 +224,7 @@ export function loadVercelConfig(file) {
 }
 
 /** The redirect Vercel's `cleanUrls` gives a path (`/x.html`, `/x/index`, `/x/index.html`). */
-function cleanUrlRedirect(path) {
+export function cleanUrlRedirect(path) {
   const index = /^\/(?:(.+)\/)?index(?:\.html)?\/?$/.exec(path);
   if (index) return `/${index[1] ?? ''}`;
   const html = /^\/(.*)\.html\/?$/.exec(path);
@@ -191,9 +232,17 @@ function cleanUrlRedirect(path) {
 }
 
 /** The redirect of `trailingSlash: false`: a path that ends in `/` (but `/` itself). */
-function trailingSlashRedirect(path) {
+export function trailingSlashRedirect(path) {
   const match = /^\/(.*)\/$/.exec(path);
   return match ? `/${match[1]}` : null;
+}
+
+/** The 308 target the redirects of `cleanUrls` and `trailingSlash: false` give `path`, or `null`. */
+function routingRedirect({ cleanUrls, trailingSlash }, path) {
+  return (
+    (cleanUrls ? cleanUrlRedirect(path) : null) ??
+    (trailingSlash === false ? trailingSlashRedirect(path) : null)
+  );
 }
 
 /** The file of `dist` that serves `path`, or `null`. */
@@ -232,9 +281,7 @@ export function createAppHandler({ dist, config }) {
     const url = new URL(req.url ?? '/', 'http://app');
     const path = url.pathname;
     const method = req.method ?? 'GET';
-    const redirect =
-      (config.cleanUrls ? cleanUrlRedirect(path) : null) ??
-      (config.trailingSlash === false ? trailingSlashRedirect(path) : null);
+    const redirect = routingRedirect(config, path);
     if (redirect !== null) {
       send(res, method, 308, { location: `${redirect}${url.search}` }, '');
       return;
@@ -285,7 +332,10 @@ function withoutHopHeaders(headers) {
   return rest;
 }
 
-/** The front server's handler: the homepage's one rewrite to the app at `appOrigin`, and the stub. */
+/**
+ * The front server's handler: the homepage's redirects ({@link HOMEPAGE_ROUTING}), then its one
+ * rewrite to the app at `appOrigin`, and the stub of the intro page.
+ */
 export function createFrontHandler({ appOrigin }) {
   const rewrite = compileSource(`${DOCS_PREFIX}/:path*`);
   const app = new URL(appOrigin);
@@ -293,7 +343,13 @@ export function createFrontHandler({ appOrigin }) {
   // requests) overflows the app server's accept queue on Windows (ECONNREFUSED).
   const agent = new Agent({ keepAlive: true, maxSockets: 16 });
   return (req, res) => {
-    const path = new URL(req.url ?? '/', 'http://front').pathname;
+    const url = new URL(req.url ?? '/', 'http://front');
+    const path = url.pathname;
+    const redirect = routingRedirect(HOMEPAGE_ROUTING, path);
+    if (redirect !== null) {
+      send(res, req.method ?? 'GET', 308, { location: `${redirect}${url.search}` }, '');
+      return;
+    }
     if (matchSource(rewrite, path)) {
       const upstream = request(
         {

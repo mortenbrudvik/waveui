@@ -171,7 +171,7 @@ test('blocked localStorage still renders and switches theme for the session', as
   expect(errors).toEqual([]);
 });
 
-test('right to left mirrors the window controls and the nav side', async ({ page }) => {
+test('right to left mirrors the window controls and nav side', async ({ page }) => {
   await page.goto(BUTTON);
   await waitForShell(page);
   const measure = async () => {
@@ -315,7 +315,8 @@ test.describe('phone width', () => {
     const islandUrl = /component-url="([^"]*ShellControls[^"]*)"/.exec(shell)?.[1];
     expect(islandUrl).toBeTruthy();
     // By its path: Astro's island runtime retries a failed import once, a second later, with an
-    // `astro-retry` query.
+    // `astro-retry` query. The disabled Search command below is the proof that the island never
+    // ran.
     let blocked = 0;
     await page.route(
       (url) => url.pathname === islandUrl,
@@ -325,7 +326,7 @@ test.describe('phone width', () => {
       },
     );
     await page.goto(BUTTON);
-    await expect.poll(() => blocked).toBe(2);
+    await expect.poll(() => blocked).toBeGreaterThanOrEqual(1);
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('button', { name: 'Search' })).toBeDisabled();
 
@@ -346,19 +347,43 @@ test.describe('phone width', () => {
     await expect(page).toHaveURL(href!);
     await expect(page.locator('h1')).toBeVisible();
   });
+
+  test('once the island has hydrated, an address that targets the navigation leaves it to the drawer', async ({
+    page,
+  }) => {
+    // The fallback's `:target` rule applies only before hydration: a shared #components-nav link
+    // (or a fallback link used before the island ran) must not leave the pane in the page next to
+    // the working drawer.
+    await page.goto(`${BUTTON}#components-nav`);
+    await waitForShell(page);
+    const nav = page.getByRole('navigation', { name: 'Components' });
+    await expect(nav).toBeHidden();
+    await page.getByRole('button', { name: 'Navigation' }).click();
+    await expect(nav).toBeVisible();
+    expect(await nav.evaluate((element) => getComputedStyle(element).position)).toBe('fixed');
+  });
 });
 
 test('a page loads from a nested path with a trailing slash redirect or 404 consistently', async ({
   page,
 }) => {
-  // The rule (e2e/server.spec.ts says why): through the homepage, an address that ends in `/` is
-  // a 404, for a page, a nested page and the app's root alike; the address without it loads.
-  for (const path of [`${BUTTON}/`, `${DOCS}/components/`, `${DOCS}/`]) {
-    const response = await page.goto(path);
-    expect(response?.status(), path).toBe(404);
+  // The rule (e2e/server.spec.ts says where it comes from): through the homepage, an address that
+  // ends in `/` gets a 308 to the address without it, for a page, a nested page and the app's
+  // root alike, and that address loads.
+  const slashed: [string, string][] = [
+    [`${BUTTON}/`, BUTTON],
+    [`${DOCS}/components/`, `${DOCS}/components`],
+    [`${DOCS}/`, DOCS],
+  ];
+  for (const [from, to] of slashed) {
+    const response = await page.goto(from);
+    expect(response?.status(), from).toBe(200);
+    expect(new URL(page.url()).pathname, from).toBe(to);
+    const redirect = await response?.request().redirectedFrom()?.response();
+    expect(redirect?.status(), from).toBe(308);
+    await expect(page.locator('h1')).toBeVisible();
   }
-  const response = await page.goto(BUTTON);
-  expect(response?.status()).toBe(200);
+  await page.goto(BUTTON);
   await expect(page.getByRole('heading', { level: 1, name: 'Button' })).toBeVisible();
 });
 

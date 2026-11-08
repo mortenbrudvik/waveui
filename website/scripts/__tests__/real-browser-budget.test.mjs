@@ -63,6 +63,24 @@ describe('checkRealBrowserBudget', () => {
     ]);
   });
 
+  it('passes a listed page that measures exactly its recorded number, with headroom 0', () => {
+    const result = checkRealBrowserBudget(
+      [row('components/breadcrumb', 'phone', 156_147)],
+      [entry('components/breadcrumb', 'phone', 156_147)],
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.excepted).toEqual([
+      {
+        page: 'components/breadcrumb',
+        viewport: 'phone',
+        recorded: 156_147,
+        measured: 156_147,
+        headroom: 0,
+        reason: 'its stories load the popup stack',
+      },
+    ]);
+  });
+
   it('fails a listed page above its recorded number (a regression)', () => {
     const { problems } = checkRealBrowserBudget(
       [row('components/data-grid', 'desktop', 160_001)],

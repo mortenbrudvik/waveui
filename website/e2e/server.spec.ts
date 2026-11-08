@@ -1,19 +1,22 @@
 /**
- * The deployment's routing, through `e2e/server.mjs`: the homepage's one rewrite in front of the
- * app's `vercel.json`. A page, link or asset that works on `astro preview` but not behind this
- * chain fails here (Review Focus #1 of the plan).
+ * The deployment's routing, through `e2e/server.mjs`: the homepage (its `cleanUrls` and
+ * `trailingSlash: false` redirects, copied in `HOMEPAGE_ROUTING` from the homepage repository's
+ * `vercel.json`, then its one rewrite) in front of the app's `vercel.json`. A page, link or asset
+ * that works on `astro preview` but not behind this chain fails here (Review Focus #1 of the plan).
+ * The front server does not emulate the homepage's own global headers; the headers checked below
+ * are the app's `vercel.json`'s.
  *
- * The trailing-slash rule found (2026-11-08), asserted below so that a change is deliberate:
+ * The trailing-slash rule, asserted below so that a change is deliberate:
  *
- * - Through the homepage, `/waveui/docs/components/button/` (and `/waveui/docs/`) is a **404**.
- *   Vercel compiles a rewrite's `source` with path-to-regexp in strict mode, so the homepage's
- *   `/waveui/docs/:path*` does not match a path that ends in `/`, and the request never reaches
- *   the app. (It would become a redirect only if the homepage's own `vercel.json` said
- *   `trailingSlash: false`: redirects run before rewrites.)
- * - The app on its own answers it with a **308 to `/waveui/docs/components/button`**
- *   (`trailingSlash: false`), and `/waveui/docs/components/button.html` with a 308 to the same
- *   address (`cleanUrls`). The site's own links never end in `/` or `.html`; the crawl below
- *   requires every address to answer 200 without a redirect.
+ * - Through the homepage, `/waveui/docs/components/button/`, `/waveui/docs/components/` and
+ *   `/waveui/docs/` get a **308 to the address without the slash**, which then answers 200. The
+ *   homepage's `trailingSlash: false` redirect does it: on Vercel redirects run before rewrites,
+ *   and the homepage's rewrite source `/waveui/docs/:path*` (strict, as Vercel compiles sources)
+ *   would not match a path that ends in `/` anyway.
+ * - The app on its own (its `vercel.json` has `trailingSlash: false` too) answers the same 308;
+ *   `.html` and `/index` addresses get a 308 to the clean address (`cleanUrls`, both projects).
+ *   The site's own links never end in `/` or `.html`; the crawl below requires every address to
+ *   answer 200 without a redirect.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -37,23 +40,32 @@ const SECURITY_HEADERS = {
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 test.describe('routing behind the homepage rewrite', () => {
-  test('the trailing-slash rule: a 404 through the homepage, a 308 from the app alone', async ({
+  test('the trailing-slash rule: a 308 to the address without the slash, then 200, through the homepage and from the app alone', async ({
     request,
   }) => {
-    for (const path of [`${DOCS}/components/button/`, `${DOCS}/`, `${DOCS}/components/`]) {
-      const response = await request.get(path, { maxRedirects: 0 });
-      expect(response.status(), path).toBe(404);
+    const slashed: [string, string][] = [
+      [`${DOCS}/components/button/`, `${DOCS}/components/button`],
+      [`${DOCS}/components/`, `${DOCS}/components`],
+      [`${DOCS}/`, DOCS],
+    ];
+    for (const [from, to] of slashed) {
+      const response = await request.get(from, { maxRedirects: 0 });
+      expect(response.status(), from).toBe(308);
+      expect(response.headers().location, from).toBe(to);
+      const followed = await request.get(to, { maxRedirects: 0 });
+      expect(followed.status(), to).toBe(200);
+      expect(followed.headers()['content-type'], to).toBe('text/html; charset=utf-8');
     }
 
     const servers = await startServers({ port: 0 });
     const app = await playwrightRequest.newContext({ baseURL: servers.appOrigin });
     try {
-      const slash = await app.get(`${DOCS}/components/button/`, { maxRedirects: 0 });
-      expect(slash.status()).toBe(308);
-      expect(slash.headers().location).toBe(`${DOCS}/components/button`);
-      const root = await app.get(`${DOCS}/`, { maxRedirects: 0 });
-      expect(root.status()).toBe(308);
-      expect(root.headers().location).toBe(DOCS);
+      for (const [from, to] of slashed) {
+        const response = await app.get(from, { maxRedirects: 0 });
+        expect(response.status(), `app alone: ${from}`).toBe(308);
+        expect(response.headers().location, `app alone: ${from}`).toBe(to);
+        expect((await app.get(to, { maxRedirects: 0 })).status(), `app alone: ${to}`).toBe(200);
+      }
     } finally {
       await app.dispose();
       await servers.close();
@@ -116,19 +128,37 @@ test.describe('routing behind the homepage rewrite', () => {
     expect(page.headers()['cache-control']).not.toContain('immutable');
     expect((await request.get(css!)).headers()['cache-control']).toBe(IMMUTABLE);
     expect((await request.get(js!)).headers()['cache-control']).toBe(IMMUTABLE);
+    // What Vercel sends for a static `.js` file.
     expect((await request.get(js!)).headers()['content-type']).toBe(
-      'text/javascript; charset=utf-8',
+      'application/javascript; charset=utf-8',
     );
     const index = await request.get(`${DOCS}/_assets/search-index.json`);
     expect(index.headers()['cache-control']).not.toContain('immutable');
   });
 
-  test('the server refuses a vercel.json key it does not implement', () => {
+  test('the server refuses a vercel.json key it does not implement, at the top or in a rule', () => {
     const directory = mkdtempSync(join(tmpdir(), 'waveui-e2e-'));
+    const file = join(directory, 'vercel.json');
+    const load = (config: object) => {
+      writeFileSync(file, JSON.stringify(config));
+      return () => loadVercelConfig(file);
+    };
+    const rewrite = { source: '/waveui/docs/:path*', destination: '/:path*' };
+    const header = { source: '/(.*)', headers: [{ key: 'X-Frame-Options', value: 'DENY' }] };
     try {
-      const file = join(directory, 'vercel.json');
-      writeFileSync(file, JSON.stringify({ cleanUrls: true, redirects: [] }));
-      expect(() => loadVercelConfig(file)).toThrow(/does not implement "redirects"/);
+      expect(load({ cleanUrls: true, rewrites: [rewrite], headers: [header] })).not.toThrow();
+      expect(load({ cleanUrls: true, redirects: [] })).toThrow(/does not implement "redirects"/);
+      for (const key of ['has', 'missing', 'statusCode', 'permanent']) {
+        expect(load({ rewrites: [{ ...rewrite, [key]: [] }] }), key).toThrow(
+          new RegExp(`does not implement "${key}" in a rewrite`),
+        );
+        expect(load({ headers: [{ ...header, [key]: [] }] }), key).toThrow(
+          new RegExp(`does not implement "${key}" in a headers rule`),
+        );
+      }
+      expect(
+        load({ headers: [{ source: '/(.*)', headers: [{ key: 'A', value: 'b', when: 1 }] }] }),
+      ).toThrow(/does not implement "when" in a header/);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -144,6 +174,9 @@ const CSS_URL = /url\(\s*(['"]?)([^'")]+)\1\s*\)|@import\s+(['"])([^'"]+)\3/g;
 
 /** What the addresses an earlier crawl of this worker fetched answered: a problem, or `null`. */
 const answered = new Map<string, string | null>();
+
+/** The static imports (addresses) found in each script this worker's crawls followed. */
+const staticImports = new Map<string, string[]>();
 
 /**
  * Fetches `url` (once per worker) and returns a problem, or `null` when it answered as it should:
@@ -194,7 +227,7 @@ test.describe('every address of every page answers through the homepage rewrite'
       const pending: Promise<string | null>[] = [];
       const inFlight = new Map<string, Promise<string | null>>();
       const external = new Set<string>();
-      const visit = (value: string | null | undefined, base: URL) => {
+      const visit = (value: string | null | undefined, base: URL): string | undefined => {
         if (!value || value.startsWith('#') || /^(data|mailto|tel|blob):/i.test(value)) return;
         const url = new URL(value, base);
         if (url.origin !== pageUrl.origin) {
@@ -203,6 +236,7 @@ test.describe('every address of every page answers through the homepage rewrite'
         }
         url.hash = '';
         pending.push(check(request, url, follow, inFlight));
+        return url.pathname + url.search;
       };
       const scanCss = (text: string, base: URL) => {
         for (const match of text.matchAll(CSS_URL)) visit(match[2] ?? match[4], base);
@@ -210,7 +244,11 @@ test.describe('every address of every page answers through the homepage rewrite'
       const follow = (url: URL, body: string) => {
         if (url.pathname.endsWith('.css')) scanCss(body, url);
         if (url.pathname.endsWith('.js')) {
-          for (const [, spec] of body.matchAll(RELATIVE_IMPORT)) visit(spec, url);
+          const imports = [...body.matchAll(RELATIVE_IMPORT)].map(([, spec]) => visit(spec, url));
+          staticImports.set(
+            url.pathname + url.search,
+            imports.filter((key): key is string => key !== undefined),
+          );
           for (const [, spec] of body.matchAll(DYNAMIC_IMPORT)) visit(spec, url);
           for (const [, spec] of body.matchAll(PRELOAD_DEP)) visit(`${DOCS}/${spec}`, url);
         }
@@ -248,6 +286,19 @@ test.describe('every address of every page answers through the homepage rewrite'
         problems,
         `${sitePage.name}: addresses that fail through the homepage rewrite`,
       ).toEqual([]);
+      // Scripts were really followed: the static imports of at least one island's component chunk
+      // were requested, and every one of them answered 200.
+      const islandImports = [...document.querySelectorAll('astro-island[component-url]')].flatMap(
+        (island) =>
+          staticImports.get(new URL(island.getAttribute('component-url')!, pageUrl).pathname) ?? [],
+      );
+      expect(
+        islandImports.length,
+        `${sitePage.name}: imports of the island chunks`,
+      ).toBeGreaterThan(0);
+      for (const key of islandImports) {
+        expect(answered.get(key), `${sitePage.name}: ${key}`).toBeNull();
+      }
       for (const url of external) {
         // External links are never fetched; the build's gate allows only GitHub and npm in guides.
         expect(new URL(url).protocol, `${sitePage.name}: ${url}`).toBe('https:');

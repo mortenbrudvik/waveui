@@ -4,7 +4,8 @@
  * hamburger opens; until the island has hydrated, that hamburger is disabled. This link, rendered
  * on the server with no script, lies over it with the same look and name: it goes to
  * `#components-nav`, and site.css shows the pane, in the page above the content, while it is the
- * target (`:target`). The browser scrolls to the pane, and the next Tab goes into it.
+ * target (`:target`), until the island hydrates. The browser scrolls to the pane, and the next Tab
+ * goes into it.
  *
  * site.css shows the link only below 48rem, with scripts on, while the window has no
  * `data-shell-ready` (the island sets it once it has hydrated). It is out of the flow (its wrapper

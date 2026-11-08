@@ -52,7 +52,8 @@
  *
  * Until the island has hydrated (it sets `data-shell-ready` on the window), or for good when its
  * script fails to load, the fallback link over the hamburger (shell/NavFallbackLink.tsx) reaches
- * the pane instead: it targets the pane, which is then shown in the page above the content.
+ * the pane instead: it targets the pane, which is then shown in the page above the content (until
+ * the island hydrates, when the drawer takes over).
  */
 .shell-nav-fallback {
   display: none;
@@ -67,7 +68,9 @@
     display: block;
   }
 
-  .shell-nav:target {
+  /* Only before hydration: afterwards the drawer is the way in, and a #components-nav address
+     must not leave the pane in the page next to it. */
+  .shell-window:not([data-shell-ready]) .shell-nav:target {
     display: block;
   }
 
