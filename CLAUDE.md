@@ -23,10 +23,10 @@ npm run typecheck        # three programs: tsconfig.json (library), tsconfig.dev
 npm run dev              # Storybook on port 6006 (theme and direction toolbars); also `npm run storybook`
 npm run build-storybook  # storybook build + node scripts/verify-storybook.mjs (the library sheet and the
                          # stories' own sheet, every wave:wave-rtl: class with Wave's direction variant)
-npm run lint             # ESLint over src/ stories/ .storybook/ scripts/ codemod/ (--max-warnings 0: a
-                         # warning fails)
+npm run lint             # ESLint over src/ stories/ .storybook/ scripts/ codemod/ website/ (--max-warnings 0:
+                         # a warning fails)
 npm run lint:fix         # ESLint with auto-fix (same directories as lint)
-npm run format           # Prettier write (src, stories, .storybook, scripts, codemod)
+npm run format           # Prettier write (src, stories, .storybook, scripts, codemod, website; no .astro)
 npm run format:check     # Prettier check (LF line endings)
 npm run check:package    # publint + attw (esm-only profile) on a tarball packed by scripts/attw-pack.mjs
 npm run test:pack        # node scripts/pack-smoke.mjs: packs the tarball, installs it into the
@@ -46,6 +46,14 @@ node scripts/verify-dist.mjs --final  # publish gate for dist (also run by prepu
 node scripts/check-release.mjs vX.Y.Z --registry  # tag = v + version, dated CHANGELOG section, not on npm; a pushed
                                   # v* tag runs it, the gate, npm publish (trusted publishing) and the GitHub release
                                   # (.github/workflows/release.yml, docs/RELEASING.md); ci.yml gates main and PRs
+npm run site:build       # the docs site (website/, README there): website/dist; builds the library first only when
+                         # dist/index.mjs is absent (a stale dist is not rebuilt: npm run build after library changes)
+npm run site:test        # the site's Vitest projects (site, shell, pages); site:test:pages builds first and requires
+                         # the built-page tests (WAVEUI_REQUIRE_PAGES)
+npm run site:check       # gates of website/dist: first-load JS budget + base-path rules (check-budget.mjs, exceptions in
+                         # website/budget-exceptions.json) and skipped stories (check-skipped.mjs)
+npm run site:e2e         # Playwright (Chromium) against the build behind website/vercel.json and the homepage rewrite
+npm run site:typecheck   # tsc -p website/tsconfig.json; site:dev starts the Astro dev server
 ```
 
 Focused runs:
@@ -75,6 +83,7 @@ Toolchain: `devEngines` requires Node `^22.22.2 || ^24.15.0 || >=26.0.0` (npm st
 - Build: Vite library mode with preserved modules, ES modules only since 1.0 (Phase 14 spec R4: `lib.formats: ['es']`, `.mjs` modules and their maps, `exports["."]` `{ types, default }`, `main` `./dist/index.mjs`, no `module`; `verify-dist`'s `checkNoCommonJs` fails on any `.cjs`, `.cjs.map` or `.d.cts`, and `checkRequireEsm` loads the entry with `require()` in a child process and compares its names with `import()`'s, which a top-level `await` would break), `"use client"` banner on every module under `src/components` and `src/hooks` except `index` barrels (`src/lib` stays server-safe), rolled-up `index.d.ts`. CSS is built separately by `scripts/build-css.mjs`: the compile check first, then `dist/styles.css`, `dist/components.css`, `dist/utilities.css` and `dist/preflight.css`, all unlayered (Tailwind's `--tw-*` fallback aside).
 - `scripts/` — `build-css`, `verify-dist` (its `runScript` is the shared entry guard: a gate script that cannot confirm its own path exits 1), `verify-storybook`, `pack-smoke` (+ `fixtures/plain`, `fixtures/tailwind`), `attw-pack` (attw on a self-packed tarball, for `check:package`), `check-ts-coverage`, `check-release` (the release workflow's tag check and notes), `prefix-codemod` (the AST codemod that prefixes the library's class words and the compile check `build-css` runs, with `prefix-allowlist.json`, the tier-2 word-file pairs), `prefix-tests-codemod` (the tests' twin: Wave's classes in assertions get `wave:`, a consumer's class passed in stays; `--report` lists what it cannot decide), and `claude/` (the Claude Code hooks and the exit-gate runner, see Claude Code setup); their tests in `scripts/__tests__/`. `codemod/migrate-1.0.mjs` ships in the package (the app migration of 1.0, dependency-free; its `THEME_TABLE` is generated from `tokens.css` by its `--print-table` and a test keeps them equal), with its tests in `codemod/__tests__/`.
 - `stories/` — one file per component, title `Components/<Category>/<Name>`, plus `Charts.stories.tsx` (`Guides/Charts`, the guide's chart recipes on Recharts and Chart.js, the repository's only importer of those devDependencies, which `verify-dist` keeps out of `dist`); `.storybook/preview.tsx` wraps stories in `WaveProvider` with theme/dir toolbars and imports two sheets (one Tailwind build has one prefix): `.storybook/preview.css`, the library's prefixed `styles.css`, and `.storybook/stories.css`, the stories' own classes compiled as an app's unprefixed build compiles them (the namespaced keys of `tokens.css` as a reference, `variants.css`, `stories/` as the only source); and `.storybook/exportDocblocks.ts` (after Storybook's docgen plugin) feeds autodocs the export JSDoc (C-DOCS).
+- `website/` — the docs site (Astro 7 and React islands, pre-rendered under `/waveui/docs`, one page per `Components/...` story title, built from the stories and the library's own `src/` and `dist`), an npm workspace that is private and never published: it must not change the tarball, `check:package`, `test:pack`, the `verify-dist` budgets or the 1.x API (the one tarball difference is the root `package.json` `workspaces` field). Its gates are `site:check` (150,000 B gzipped of first-load JavaScript per page, exceptions only in `website/budget-exceptions.json` and `budget-real-browser.json` with a measured number and a reason, `website/BUDGET.md`; the skipped stories in `website/skipped-stories.json`), `site:e2e` and its own Vitest projects; the ci.yml `website` job runs them, and lint and format cover its TypeScript, modules, CSS and JSON. `website/README.md` has the architecture map, how to add a component and the Vercel setup.
 - Tests: `__tests__/` next to each component, hook and lib module; repo-level suites in `src/__tests__/` (`conventions.test.ts`, `stories.a11y.test.tsx`, `integration.test.tsx`, `public-types.test.ts`, `classNames.test.ts`, `slotParts.test.ts`, `removedApi.test.ts`, `test-utils.test.tsx`); helpers in `src/test-utils.ts`, `src/test-utils-field.tsx` and, for Menu items, `src/components/navigation/__tests__/menuHarness.tsx`; environment in `src/test-setup.ts`.
 
 ## Conventions (every component, hook and story)

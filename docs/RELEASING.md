@@ -75,6 +75,21 @@ It reports the packages with verified registry signatures and those with verifie
 
 The workflow always publishes a release to `latest`, which npm refuses to move back to a lower version: a patch of an older line (0.7.1 after 0.8.0) fails in publish and needs its own dist-tag, which the workflow does not offer yet.
 
+## Documentation site
+
+The documentation app in [`website/`](../website/README.md) is not part of the package and is not released with it: it is its own Vercel project (`brudvik.com/waveui/docs`), and a release workflow run neither builds nor waits for it.
+
+- **When it deploys.** Vercel's Git integration deploys every push to `main` to production and every pull request to a preview. The site builds from the checkout of that commit (the library first, then the site: `website/vercel.json`), so it shows the library version, the import sizes and the changelog of that commit.
+- **What must be green first.** The CI job `Website (Linux, Node 24)` runs `npm run site:typecheck`, `site:test`, `site:check` (the JavaScript budget, the base-path rules, the skipped stories) and `site:e2e` (Chromium, behind the homepage's rewrite). Vercel itself runs only the build, so a red `site:check` or `site:e2e` does not stop a deploy: merge to `main` only with that job green, and treat it as required in the `main` ruleset. Run them locally when a change touches `src/`, `stories/` or the changelog: `npm run build && npm run site:build && npm run site:check && npm run site:e2e`.
+- **After a release tag.** The release commit is on `main`, so its push has deployed the site already, with the new version and the dated changelog section. To deploy again on demand (the first deploy failed, or `main` moved after the tag), post the project's deploy hook; a hook redeploys the tip of the branch it was made for (`main`), not a tag, so do it while the tagged commit is still the tip:
+
+  ```bash
+  curl -X POST "$WAVEUI_DOCS_DEPLOY_HOOK"
+  ```
+
+  The hook URL (Vercel project, Settings, Git, Deploy Hooks, named `release`) is a secret kept outside the repository; no workflow posts it yet.
+- **Setup and rewrite.** The Vercel project settings, the homepage's rewrite (`WAVEUI_DOCS_URL`) and the matching `cleanUrls`/`trailingSlash` settings are in [website/README.md](../website/README.md#deploying-vercel).
+
 ## One-time setup
 
 The maintainer does these once, in this order, before the first tag. `npm trust` asks for two-factor authentication in the browser, so it runs in your own terminal (it cannot run from an agent's shell).
