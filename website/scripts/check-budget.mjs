@@ -60,6 +60,12 @@ export const BUDGET_MARGIN = 1_024;
 /** The app's address prefix, without the trailing slash, and the one address outside it. */
 const DOCS_BASE = BASE.slice(0, -1);
 const CLOSE_URL = '/waveui';
+/**
+ * The homepage's origin, which owns the app's addresses: a page's `<link rel="canonical">` names its
+ * own address there. The same value as `CANONICAL_ORIGIN` in `src/shell/urls.ts` (a test keeps them
+ * equal).
+ */
+export const CANONICAL_ORIGIN = 'https://brudvik.com';
 const ASSETS = `${BASE}_assets/`;
 const IMAGE_HOST = 'i.pravatar.cc';
 
@@ -316,6 +322,18 @@ export function checkPage(html, readAsset, exception) {
         continue;
       }
       if (name === 'a' && key === 'href' && inGuide && isAllowedExternalLink(value)) continue;
+      // A canonical link points at a page, it loads nothing: on the homepage's origin it must name
+      // an address of the app (the same rules as any other address, the app's index included).
+      if (
+        name === 'link' &&
+        key === 'href' &&
+        attributes.get('rel') === 'canonical' &&
+        value.startsWith(`${CANONICAL_ORIGIN}/`)
+      ) {
+        const path = value.slice(CANONICAL_ORIGIN.length);
+        if (path !== DOCS_BASE) checkAddress(path, `${tag} ${key}`);
+        continue;
+      }
       checkAddress(value, `${tag} ${key}`);
       if (isScriptUrl(key) && !value.startsWith(ASSETS) && !isFont(value)) {
         problems.push(`${tag} ${key} "${value}" is not under ${ASSETS}`);

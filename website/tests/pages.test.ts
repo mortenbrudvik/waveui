@@ -20,7 +20,7 @@ import { formatDescription, isHookEntry, metaDescription } from '../src/docs/pag
 import { readSearchIndex, serialiseSearchIndex } from '../src/search/searchIndex';
 import { getImportSizes, getLibraryVersion } from '../src/docs/sizes';
 import { formatKB } from '../src/shell/StatusBar';
-import { componentHref, DOCS_BASE, INTRO_URL } from '../src/shell/urls';
+import { canonicalUrl, componentHref, DOCS_BASE, INTRO_URL } from '../src/shell/urls';
 import { extractStorySource } from '../src/stories/source';
 import { REPO_ROOT } from '../src/repoRoot';
 import { requireBuiltSiteUnlessOptional, SITE_DIST } from '../test/builtSite';
@@ -374,6 +374,16 @@ describe.skipIf(!state.ready)(title, () => {
             closeLinks++;
             continue;
           }
+          // The page's canonical link names its own address on the homepage's host: it loads
+          // nothing (the next test pins its value).
+          if (
+            element.tagName === 'LINK' &&
+            element.getAttribute('rel') === 'canonical' &&
+            attribute === 'href' &&
+            value === canonicalUrl(pagePath)
+          ) {
+            continue;
+          }
           if (isAllowedGuideLink(element, attribute, value)) {
             guideLinks++;
             continue;
@@ -577,6 +587,22 @@ describe.skipIf(!state.ready)(title, () => {
         links.map((link) => link.getAttribute('href')),
         relative(SITE_DIST, file),
       ).toEqual([`${DOCS_BASE}/favicon.ico`]);
+    }
+  });
+
+  it('every page names its address on the homepage’s host as canonical, whichever host served it', () => {
+    const seen = new Set<string>();
+    for (const file of allPages()) {
+      const name = relative(SITE_DIST, file);
+      const page = name.replace(/\\/g, '/').replace(/\.html$/, '');
+      const expected = `https://brudvik.com${DOCS_BASE}${page === 'index' ? '' : `/${page}`}`;
+      const links = [...load(file).querySelectorAll('link[rel="canonical"]')];
+      expect(
+        links.map((link) => link.getAttribute('href')),
+        name,
+      ).toEqual([expected]);
+      expect(seen.has(expected), `${name} repeats ${expected}`).toBe(false);
+      seen.add(expected);
     }
   });
 

@@ -226,6 +226,38 @@ describe('checkPage', () => {
       expect(after.problems.join('\n')).toMatch(/outside \/waveui\/docs\//);
     });
 
+    it('allows a canonical link to the app’s own address on the homepage’s host, and no other', () => {
+      const canonical = (href) => pageHtml({ head: `<link rel="canonical" href="${href}">` });
+      for (const href of [
+        'https://brudvik.com/waveui/docs',
+        'https://brudvik.com/waveui/docs/components/button',
+      ]) {
+        expect(check(canonical(href)).problems, href).toEqual([]);
+      }
+      // The exemption is for the page's own address: another host, another path, a trailing slash,
+      // and any other rel or element still fail.
+      for (const href of [
+        'https://example.com/waveui/docs/components/button',
+        'https://brudvik.com/waveui',
+        'https://brudvik.com/other/page',
+        'https://brudvik.com/waveui/docs/components/',
+        'http://brudvik.com/waveui/docs',
+        'https://brudvik.com.evil.example/waveui/docs',
+      ]) {
+        expect(check(canonical(href)).problems.join('\n'), href).toMatch(
+          /outside \/waveui\/docs\//,
+        );
+      }
+      for (const tag of [
+        '<link rel="alternate" href="https://brudvik.com/waveui/docs">',
+        '<link rel="preload" href="https://brudvik.com/waveui/docs">',
+        '<a rel="canonical" href="https://brudvik.com/waveui/docs">x</a>',
+      ]) {
+        const html = tag.startsWith('<a') ? pageHtml({ body: tag }) : pageHtml({ head: tag });
+        expect(check(html).problems.join('\n'), tag).toMatch(/outside \/waveui\/docs\//);
+      }
+    });
+
     it('exactly one Close link is required', () => {
       expect(check(pageHtml({ close: '' })).problems.join('\n')).toContain('Close link');
       expect(

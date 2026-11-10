@@ -7,6 +7,27 @@
 /** Where the app lives: every page and asset is under it. */
 export const DOCS_BASE = '/waveui/docs';
 
+/**
+ * The host that owns the docs' addresses: the homepage serves the app through a rewrite, so the same
+ * HTML also answers on the app's own Vercel host. Every page names its address here as canonical,
+ * so a search engine that reaches it on either host indexes this one (a `noindex` would hide the
+ * homepage's copy too, which is the same document).
+ */
+export const CANONICAL_ORIGIN = 'https://brudvik.com';
+
+/**
+ * The canonical address of the page served at `pathname`: the homepage's origin and the path
+ * without a trailing slash (the site redirects one away) or a file extension (clean URLs serve
+ * `/button.html` as `/button`), the app's index as `DOCS_BASE` itself.
+ */
+export function canonicalUrl(pathname: string): string {
+  const path = pathname
+    .replace(/\.html$/, '')
+    .replace(/\/index$/, '')
+    .replace(/\/+$/, '');
+  return `${CANONICAL_ORIGIN}${path}`;
+}
+
 /** The intro page on the homepage, outside the app: the title bar's Close goes there. */
 export const INTRO_URL = '/waveui';
 
