@@ -18,7 +18,13 @@
  *   centered, at most 1200px wide, or fills the screen while maximized, and its panes scroll on
  *   their own.
  *
- * Props: `title` (the page title), `current` (the page's navigation value, marked current: a
+ * - The head carries the page's `<meta name="description">` and the site icon, which the build ships
+ *   as `website/public/favicon.ico` under the base (the browser would otherwise ask the host's root
+ *   for `/favicon.ico`, which only the homepage behind the rewrite answers).
+ *
+ * Props: `title` (the page title), `description` (the page's meta description: a sentence or two,
+ * at most 160 characters, different on every page; required so a page cannot go without one),
+ * `current` (the page's navigation value, marked current: a
  * component's catalog slug, or `guide:<id>` of `GUIDE_LINKS` for a guide page and the components
  * index), `status` (the status bar's measured facts; nothing is shown that is not given) and
  * `copyText` (what Copy code copies; without it there is no Copy code).
@@ -32,17 +38,19 @@ import { NavFallbackLink } from '../shell/NavFallbackLink';
 import { NavPane } from '../shell/NavPane';
 import { StatusBar, type ShellStatus } from '../shell/StatusBar';
 import { TitleBar } from '../shell/TitleBar';
+import { DOCS_BASE } from '../shell/urls';
 import { WINDOW_INIT_SCRIPT } from '../shell/windowState';
 import { THEME_INIT_SCRIPT } from '../theme/themeInit';
 
 export interface Props {
   title: string;
+  description: string;
   current?: string;
   status?: ShellStatus;
   copyText?: string;
 }
 
-const { title, current, status, copyText } = Astro.props;
+const { title, description, current, status, copyText } = Astro.props;
 const entries = getCatalog().map(({ slug, name, category }) => ({ slug, name, category }));
 ---
 
@@ -52,6 +60,8 @@ const entries = getCatalog().map(({ slug, name, category }) => ({ slug, name, ca
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{`${title} · WaveUI docs`}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href={`${DOCS_BASE}/favicon.ico`} sizes="48x48" />
     <script is:inline set:html={THEME_INIT_SCRIPT} />
   </head>
   <body class="wave-root m-0 bg-wave-muted">

@@ -16,7 +16,13 @@ import PropsTable from '../../docs/PropsTable.astro';
 import StoryCode from '../../docs/StoryCode.astro';
 import Example from '../../islands/Example.astro';
 import { getCatalog, type ComponentEntry } from '../../catalog/catalog';
-import { exampleAnchors, getSiteImportSizes, isHookEntry, pageSections } from '../../docs/page';
+import {
+  exampleAnchors,
+  getSiteImportSizes,
+  isHookEntry,
+  metaDescription,
+  pageSections,
+} from '../../docs/page';
 import { extractDocs } from '../../docs/props';
 import { getLibraryVersion } from '../../docs/sizes';
 import { analyzeExample } from '../../examples/analysis';
@@ -69,7 +75,13 @@ const CODE = 'rounded-sm bg-wave-muted px-1 font-wave-mono text-[0.9em]';
 const CELL = 'border-b border-wave-border px-2 py-2 align-top';
 ---
 
-<AppLayout title={entry.name} current={entry.slug} status={status} copyText={stories[0]?.source}>
+<AppLayout
+  title={entry.name}
+  description={metaDescription(docs.description) || `The ${entry.name} component of WaveUI, with live examples.`}
+  current={entry.slug}
+  status={status}
+  copyText={stories[0]?.source}
+>
   <article
     class="flex flex-col gap-6 p-4 break-words md:p-6 lg:grid lg:grid-cols-[minmax(0,1fr)_12rem] lg:grid-rows-[auto_1fr] lg:gap-x-8"
   >

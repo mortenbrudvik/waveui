@@ -16,7 +16,7 @@ import { extractDocs, type ComponentDocs } from '../src/docs/props';
 import { CHANGELOG_URL, parseChangelog } from '../src/docs/changelog';
 import { README_SECTIONS } from '../src/docs/guides';
 import { GUIDE_CONTENT_TAGS, isAllowedExternalLink } from '../src/docs/markdown';
-import { formatDescription, isHookEntry } from '../src/docs/page';
+import { formatDescription, isHookEntry, metaDescription } from '../src/docs/page';
 import { readSearchIndex, serialiseSearchIndex } from '../src/search/searchIndex';
 import { getImportSizes, getLibraryVersion } from '../src/docs/sizes';
 import { formatKB } from '../src/shell/StatusBar';
@@ -543,6 +543,40 @@ describe.skipIf(!state.ready)(title, () => {
           expect(value, `${name}: ${attribute}`).not.toContain('[object Object]');
         }
       }
+    }
+  });
+
+  it('every page has a meta description, and a component page’s is the start of its own description', () => {
+    const seen = new Map<string, string>();
+    for (const file of allPages()) {
+      const name = relative(SITE_DIST, file);
+      const descriptions = [...load(file).querySelectorAll('meta[name="description"]')];
+      expect(descriptions, name).toHaveLength(1);
+      const text = descriptions[0]!.getAttribute('content') ?? '';
+      expect(text.length, `${name}: ${text}`).toBeGreaterThanOrEqual(20);
+      expect(text.length, name).toBeLessThanOrEqual(160);
+      expect(
+        seen.get(text),
+        `${name} repeats the description of ${seen.get(text)}`,
+      ).toBeUndefined();
+      seen.set(text, name);
+    }
+    for (const entry of catalog) {
+      const text = load(pageFile(entry))
+        .querySelector('meta[name="description"]')
+        ?.getAttribute('content');
+      expect(text, entry.slug).toBe(metaDescription(docs(entry).description));
+    }
+  });
+
+  it('every page links the site icon, which the build ships under the base', () => {
+    expect(existsSync(join(SITE_DIST, 'favicon.ico'))).toBe(true);
+    for (const file of allPages()) {
+      const links = [...load(file).querySelectorAll('link[rel~="icon"]')];
+      expect(
+        links.map((link) => link.getAttribute('href')),
+        relative(SITE_DIST, file),
+      ).toEqual([`${DOCS_BASE}/favicon.ico`]);
     }
   });
 

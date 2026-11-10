@@ -79,6 +79,34 @@ export function formatDescription(text: string): DescriptionParagraph[] {
     .filter((paragraph) => paragraph.length > 0);
 }
 
+/** The longest description a search result shows whole. */
+export const META_DESCRIPTION_LIMIT = 160;
+
+/**
+ * The text of a page's `<meta name="description">`: the first paragraph of a JSDoc text as plain
+ * text (a code span without its backticks), at most `limit` characters. A longer paragraph is cut
+ * after the last whole sentence that fits (when that keeps a useful amount of text), else at a word,
+ * with an ellipsis. An empty text gives an empty string.
+ */
+export function metaDescription(text: string, limit = META_DESCRIPTION_LIMIT): string {
+  const first = formatDescription(text)[0];
+  if (!first) return '';
+  const plain = first
+    .map((line) => line.map((run) => run.text).join(''))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (plain.length <= limit) return plain;
+  const end = [...plain.matchAll(/[.!?](?=\s)/g)]
+    .map((match) => (match.index ?? 0) + 1)
+    .filter((position) => position <= limit)
+    .at(-1);
+  if (end !== undefined && end >= Math.min(40, limit / 2)) return plain.slice(0, end);
+  const cut = plain.slice(0, limit - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > 0 ? cut.slice(0, space) : cut).replace(/[\s,;:(–-]+$/, '')}…`;
+}
+
 /** A heading of the page's content, listed in its "On this page" pane. */
 export interface PageSection {
   id: string;

@@ -4,6 +4,7 @@ import {
   exampleAnchors,
   formatDescription,
   isHookEntry,
+  metaDescription,
   pageSections,
 } from './page';
 
@@ -116,5 +117,41 @@ describe('page helpers', () => {
     expect(exampleAnchor('Default')).toBe('example-default');
     expect(exampleAnchor('WithIconAfter')).toBe('example-with-icon-after');
     expect(exampleAnchor('Size_Large2')).toBe('example-size-large2');
+  });
+});
+
+describe('metaDescription', () => {
+  it('is the first paragraph as plain text: wrapped lines joined, a code span without its backticks', () => {
+    expect(metaDescription('A `Button` that\nwraps.\n\nSecond paragraph.')).toBe(
+      'A Button that wraps.',
+    );
+  });
+
+  it('keeps a short paragraph whole and has no text for an empty description', () => {
+    expect(metaDescription('Short.')).toBe('Short.');
+    expect(metaDescription('')).toBe('');
+    expect(metaDescription('  \n\n ')).toBe('');
+  });
+
+  it('keeps whole sentences when the paragraph is longer than a search result shows', () => {
+    const first = 'A first sentence that says what the component is for and how it behaves.';
+    const second = 'A second sentence that goes on for quite a while and does not stop.';
+    const text = `${first} ${second} ${'A third sentence that no longer fits in a result. '.repeat(2)}`;
+    expect(metaDescription(text)).toBe(`${first} ${second}`);
+  });
+
+  it('cuts one long sentence at a word and marks the cut', () => {
+    const text = `${'word '.repeat(60)}end.`;
+    const result = metaDescription(text);
+    expect(result.length).toBeLessThanOrEqual(160);
+    expect(result.endsWith('…')).toBe(true);
+    expect(result).not.toMatch(/\s…$/);
+    expect(text.startsWith(result.slice(0, -1))).toBe(true);
+  });
+
+  it('honours a limit of its own', () => {
+    expect(metaDescription('One sentence here. And another one follows it.', 25)).toBe(
+      'One sentence here.',
+    );
   });
 });

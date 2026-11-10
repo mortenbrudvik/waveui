@@ -14,7 +14,11 @@ const LINK =
   'rounded-sm text-wave-primary underline underline-offset-2 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-wave-ring';
 ---
 
-<AppLayout title="Welcome" status={{ version: getLibraryVersion() }}>
+<AppLayout
+  title="Welcome"
+  description="Documentation for WaveUI, a React component library in the Windows Fluent style, with live examples, props and class names for every component."
+  status={{ version: getLibraryVersion() }}
+>
   <div class="flex flex-col gap-3 p-6">
     <h1 class="m-0 text-wave-title-2">WaveUI docs</h1>
     <p class="m-0 max-w-prose text-wave-body-1">

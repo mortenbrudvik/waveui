@@ -16,7 +16,12 @@ const sections = headings
   .map(({ id, text }) => ({ id, title: text }));
 ---
 
-<AppLayout title="Theming" current="guide:theming" status={{ version: getLibraryVersion() }}>
+<AppLayout
+  title="Theming"
+  description="Light, dark and high contrast themes and right to left in WaveUI, and how to set brand colors and override its tokens."
+  current="guide:theming"
+  status={{ version: getLibraryVersion() }}
+>
   <GuideArticle title="Theming" sections={sections}>
     <Fragment set:html={html} />
     <p>
