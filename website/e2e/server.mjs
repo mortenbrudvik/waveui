@@ -18,8 +18,10 @@
  * - **The front server** stands for the homepage's project at brudvik.com
  *   ({@link HOMEPAGE_ROUTING}): first its own redirects, `cleanUrls` and `trailingSlash: false`
  *   (Vercel runs redirects before rewrites, so `/waveui/docs/components/button/` gets a 308 to
- *   `/waveui/docs/components/button` from the homepage before its rewrite is tried); then its one
- *   rewrite, which sends `/waveui/docs/:path*` to the app, path unchanged; `/waveui` answers with
+ *   `/waveui/docs/components/button` from the homepage before its rewrite is tried); then its two
+ *   rewrites ({@link HOMEPAGE_REWRITES}), the first that matches, which send the docs root and
+ *   `/waveui/docs/:path*` to the app with the destination's path filled in (an empty `:path*`
+ *   leaves a slash: why the docs root has a rule of its own); `/waveui` answers with
  *   a stub of the intro page (the title bar's Close goes there); every other path is a 404. It
  *   does not emulate the homepage's own `headers` (its global security headers equal the app's,
  *   and the tests check the app's). The tests talk to the front server only.
@@ -72,6 +74,23 @@ const RULE_KEYS = {
  * change there must be made here too (and in `website/vercel.json`).
  */
 export const HOMEPAGE_ROUTING = { cleanUrls: true, trailingSlash: false };
+
+/**
+ * The homepage's rewrites of the app's prefix, in order, copied from the homepage repository's
+ * `vercel.json` (read 2026-11-10, its commit 24aa6fe) with the app's host left out: the path of
+ * each destination is what the app receives. They are a copy for the reason {@link HOMEPAGE_ROUTING}
+ * gives; a change there must be made here too.
+ *
+ * The docs root has a rule of its own, ahead of the wildcard, because of what an empty `:path*`
+ * leaves behind: the wildcard forwards `/waveui/docs` as `/waveui/docs/`, the app redirects that to
+ * `/waveui/docs` (`trailingSlash: false`), the proxy passes the redirect on and the browser asks the
+ * same address again, for ever. That loop reached production on 2026-11-10 before the root rule was
+ * added; forwarded without the slash the app answers 200.
+ */
+export const HOMEPAGE_REWRITES = [
+  { source: DOCS_PREFIX, destination: DOCS_PREFIX },
+  { source: `${DOCS_PREFIX}/:path*`, destination: `${DOCS_PREFIX}/:path*` },
+];
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -342,11 +361,13 @@ function withoutHopHeaders(headers) {
 }
 
 /**
- * The front server's handler: the homepage's redirects ({@link HOMEPAGE_ROUTING}), then its one
- * rewrite to the app at `appOrigin`, and the stub of the intro page.
+ * The front server's handler: the homepage's redirects ({@link HOMEPAGE_ROUTING}), then the first
+ * of its rewrites ({@link HOMEPAGE_REWRITES}, or `rewrites`) that matches, to the app at
+ * `appOrigin` with the destination's path filled in (an empty `:path*` leaves its slash, as on
+ * Vercel), and the stub of the intro page.
  */
-export function createFrontHandler({ appOrigin }) {
-  const rewrite = compileSource(`${DOCS_PREFIX}/:path*`);
+export function createFrontHandler({ appOrigin, rewrites = HOMEPAGE_REWRITES }) {
+  const rules = rewrites.map((rule) => ({ ...rule, compiled: compileSource(rule.source) }));
   const app = new URL(appOrigin);
   // Kept-alive connections, a few at a time: a burst of new connections (a crawl's hundreds of
   // requests) overflows the app server's accept queue on Windows (ECONNREFUSED).
@@ -359,14 +380,16 @@ export function createFrontHandler({ appOrigin }) {
       send(res, req.method ?? 'GET', 308, { location: `${redirect}${url.search}` }, '');
       return;
     }
-    if (matchSource(rewrite, path)) {
+    const rule = rules.find(({ compiled }) => matchSource(compiled, path) !== null);
+    if (rule) {
+      const upstreamPath = fillDestination(rule.destination, matchSource(rule.compiled, path));
       const upstream = request(
         {
           agent,
           hostname: app.hostname,
           port: app.port,
           method: req.method,
-          path: req.url,
+          path: `${upstreamPath}${url.search}`,
           headers: { ...withoutHopHeaders(req.headers), host: app.host },
         },
         (response) => {
@@ -413,6 +436,7 @@ export async function startServers({
   host = '127.0.0.1',
   dist = join(siteRoot, 'dist'),
   configFile = join(siteRoot, 'vercel.json'),
+  homepageRewrites = HOMEPAGE_REWRITES,
 } = {}) {
   try {
     statSync(join(dist, 'index.html'));
@@ -423,7 +447,7 @@ export async function startServers({
   const appServer = createServer(createAppHandler({ dist, config }));
   const appAddress = await listen(appServer, 0, host);
   const appOrigin = `http://${host}:${appAddress.port}`;
-  const frontServer = createServer(createFrontHandler({ appOrigin }));
+  const frontServer = createServer(createFrontHandler({ appOrigin, rewrites: homepageRewrites }));
   const frontAddress = await listen(frontServer, port, host);
   const origin = `http://${host}:${frontAddress.port}`;
   const close = () =>

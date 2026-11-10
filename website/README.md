@@ -75,12 +75,13 @@ Vercel does not run the end-to-end suite or the real-browser budget (`site:e2e`,
 4. Under Build and Deployment, check **Node.js Version** is 24.x (Vercel's default; the repository's `devEngines` asks for `^22.22.2 || ^24.15.0 || >=26`). npm 11 comes with it; the repository asks for npm 11.11 or later and only warns.
 5. Under Deployment Protection, use **Standard Protection** (the production domain stays public) and not "All Deployments": the homepage reads the project's production domain, `<project>.vercel.app`, without credentials.
 6. Settings, Git, **Deploy Hooks**: create a hook named `release` for the branch `main` and keep the URL private. A hook redeploys the tip of a branch on a `POST` (never a tag): call it after a release is tagged and merged, so the version, sizes and changelog on the site are the release's (`docs/RELEASING.md`).
-7. In the homepage repository (`homepage-brudvik-com`), add the rewrite to its `vercel.json`, with the project's production host in place of `WAVEUI_DOCS_URL`:
+7. In the homepage repository (`homepage-brudvik-com`), add two rewrites to its `vercel.json`, in this order, with the project's production host in place of `WAVEUI_DOCS_URL`:
 
    ```json
+   { "source": "/waveui/docs", "destination": "https://WAVEUI_DOCS_URL/waveui/docs" },
    { "source": "/waveui/docs/:path*", "destination": "https://WAVEUI_DOCS_URL/waveui/docs/:path*" }
    ```
 
-   The path is kept whole: the app's own `vercel.json` rewrites `/waveui/docs/:path*` to the files of `dist`.
+   The path is kept whole: the app's own `vercel.json` rewrites `/waveui/docs/:path*` to the files of `dist`. The docs root needs the first rule, ahead of the wildcard: through the wildcard alone Vercel forwards `/waveui/docs` as `/waveui/docs/` (an empty `:path*` leaves its slash), the app redirects that to `/waveui/docs` (`trailingSlash: false`), and the browser follows the redirect to the same address for ever (this happened on brudvik.com on 2026-11-10). `e2e/server.mjs` keeps a copy of both rules (`HOMEPAGE_REWRITES`), and `server.spec.ts` reproduces the loop without the first.
 8. **The two projects' routing settings must agree.** The homepage has `cleanUrls: true` and `trailingSlash: false`; so does `website/vercel.json`. A difference would redirect between the two (a slash added by one, removed by the other). `e2e/server.mjs` keeps a copy of the homepage's two settings (`HOMEPAGE_ROUTING`) that nothing checks against the homepage: change both together.
 9. Open `https://brudvik.com/waveui/docs/components/button` and `.../theming`, and check the title bar's Close link goes to `/waveui`.

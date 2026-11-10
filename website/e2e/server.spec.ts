@@ -1,7 +1,7 @@
 /**
  * The deployment's routing, through `e2e/server.mjs`: the homepage (its `cleanUrls` and
  * `trailingSlash: false` redirects, copied in `HOMEPAGE_ROUTING` from the homepage repository's
- * `vercel.json`, then its one rewrite) in front of the app's `vercel.json`. A page, link or asset
+ * `vercel.json`, then its two rewrites) in front of the app's `vercel.json`. A page, link or asset
  * that works on `astro preview` but not behind this chain fails here (Review Focus #1 of the plan).
  * The front server does not emulate the homepage's own global headers; the headers checked below
  * are the app's `vercel.json`'s.
@@ -29,7 +29,13 @@ import {
   type APIRequestContext,
 } from '@playwright/test';
 import { JSDOM } from 'jsdom';
-import { INTRO_STUB_MARKER, loadVercelConfig, startServers } from './server.mjs';
+import {
+  fillDestination,
+  HOMEPAGE_REWRITES,
+  INTRO_STUB_MARKER,
+  loadVercelConfig,
+  startServers,
+} from './server.mjs';
 import { DOCS, sitePages } from './site';
 
 const SECURITY_HEADERS = {
@@ -41,6 +47,40 @@ const SECURITY_HEADERS = {
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 test.describe('routing behind the homepage rewrite', () => {
+  test('the homepage has two rewrites, the docs root first, and the root is forwarded without a slash', () => {
+    expect(HOMEPAGE_REWRITES.map((rule) => rule.source)).toEqual([DOCS, `${DOCS}/:path*`]);
+    expect(HOMEPAGE_REWRITES[0]!.destination).toBe(DOCS);
+    // What an empty :path* leaves behind: the wildcard rule forwards the docs root with a slash.
+    expect(fillDestination(`${DOCS}/:path*`, { path: undefined })).toBe(`${DOCS}/`);
+  });
+
+  test('the docs root answers 200 with the start page through the homepage, with no redirect', async ({
+    request,
+  }) => {
+    const response = await request.get(DOCS, { maxRedirects: 0 });
+    expect(response.status()).toBe(200);
+    expect(await response.text()).toContain('<title>Welcome · WaveUI docs</title>');
+  });
+
+  // The loop that reached production on 2026-11-10: a homepage with only the wildcard rule forwards
+  // /waveui/docs as /waveui/docs/, the app redirects that to /waveui/docs, and the browser asks again.
+  // The server reproduces it when the root rule is left out, so it can catch the rule's absence.
+  test('without the root rule the homepage loops on the docs root, as production did', async () => {
+    const servers = await startServers({
+      port: 0,
+      homepageRewrites: [{ source: `${DOCS}/:path*`, destination: `${DOCS}/:path*` }],
+    });
+    try {
+      const front = await playwrightRequest.newContext({ baseURL: servers.origin });
+      const response = await front.get(DOCS, { maxRedirects: 0 });
+      expect(response.status()).toBe(308);
+      expect(response.headers().location).toBe(DOCS);
+      await front.dispose();
+    } finally {
+      await servers.close();
+    }
+  });
+
   test('the trailing-slash rule: a 308 to the address without the slash, then 200, through the homepage and from the app alone', async ({
     request,
   }) => {
