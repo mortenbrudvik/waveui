@@ -44,8 +44,14 @@ const headingId = (category: string) =>
 /** The first group's heading: the guide pages and the components index. */
 const GUIDES = 'Guides';
 
+/**
+ * A group's heading is set in capitals and a rule separates the group from the one above: without
+ * them it read as one more link (the category `Button` over the page `Button`).
+ */
 const HEADING_CLASSES =
-  'px-4 pt-3 pb-1 text-wave-caption-1 font-semibold text-wave-muted-foreground';
+  'px-4 pt-3 pb-1 text-wave-caption-1 font-semibold tracking-wide text-wave-muted-foreground uppercase';
+
+const SEPARATED_GROUP_CLASSES = 'mt-2 border-t border-wave-border';
 
 export function NavPane({
   entries,
@@ -75,7 +81,7 @@ export function NavPane({
         </ul>
       </li>
       {groupByCategory(entries).map(({ category, entries: items }) => (
-        <li key={category}>
+        <li key={category} className={SEPARATED_GROUP_CLASSES}>
           <h2 id={headingId(category)} className={HEADING_CLASSES}>
             {category}
           </h2>

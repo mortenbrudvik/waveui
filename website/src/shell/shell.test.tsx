@@ -34,6 +34,7 @@ vi.mock('../theme/themeChoice', async (importOriginal) => {
 
 type LayoutProps = {
   title: string;
+  description?: string;
   current?: string;
   status?: { importSize?: { minified: number; gzip: number }; version: string };
   copyText?: string;
@@ -45,7 +46,10 @@ const STORY_SOURCE = '<Button appearance="primary">Save</Button>';
 let container: AstroContainer;
 
 async function renderLayout(props: LayoutProps, content = CONTENT): Promise<string> {
-  return container.renderToString(AppLayout, { props, slots: { default: content } });
+  return container.renderToString(AppLayout, {
+    props: { description: 'A page of the docs, for the tests.', ...props },
+    slots: { default: content },
+  });
 }
 
 /** The page's HTML as an inert document: no script runs, as with scripts off. */
@@ -211,6 +215,19 @@ describe('AppLayout (server-rendered HTML)', () => {
       expect([...list.querySelectorAll('a')].map((a) => a.textContent)).toEqual(
         catalog.filter((entry) => entry.category === categories[index]).map((e) => e.name),
       );
+    }
+  });
+
+  it('the group headings stand apart from the links: capitals, and every group after the first starts below a separator', async () => {
+    const doc = parse(await renderLayout({ title: 'Button', current: 'button' }));
+    const groups = [...doc.querySelectorAll('nav > ul > li')];
+    expect(groups.length).toBeGreaterThan(2);
+    for (const [index, group] of groups.entries()) {
+      const heading = group.querySelector('h2')!;
+      expect(heading.classList.contains('uppercase'), heading.textContent ?? '').toBe(true);
+      expect(heading.classList.contains('tracking-wide'), heading.textContent ?? '').toBe(true);
+      // The first group sits at the top of the pane; every later one is set off from the links above.
+      expect(group.classList.contains('border-t'), heading.textContent ?? '').toBe(index > 0);
     }
   });
 
