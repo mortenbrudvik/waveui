@@ -4,6 +4,8 @@ A React component library inspired by the Fluent UI 2 design language: 80 access
 
 > This is **not** Microsoft's official `@fluentui/react-components` package.
 
+**Documentation:** [brudvik.com/waveui/docs](https://brudvik.com/waveui/docs) has a page for every component, with live examples, props and keyboard support, built from the stories and the source JSDoc.
+
 - [Requirements](#requirements) · [Installation](#installation) · [Quick start](#quick-start)
 - [Styles](#styles) · [Theming](#theming) · [Global effects](#global-effects) · [Styling hooks](#styling-hooks) · [Customization](#customization)
 - [React Server Components](#react-server-components) · [Components](#components) · [Usage notes](#usage-notes)
