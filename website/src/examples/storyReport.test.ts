@@ -79,5 +79,7 @@ describe('the story report', () => {
       (integration) => typeof integration.hooks['astro:build:start'] === 'function',
     );
     expect(hooked.map((integration) => integration.name)).toEqual(['waveui-example-islands']);
-  });
+    // Importing the configuration loads Vite, Tailwind and the build plugins: in a full run, with
+    // the other projects competing for the machine, that takes longer than the default 5 s.
+  }, 60_000);
 });
