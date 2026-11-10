@@ -5,7 +5,9 @@
  *
  * - maximize/restore: `data-maximized` on the window, remembered (`shell/windowState.ts`);
  * - the theme and direction: `<html>`'s `wave-*` class and `dir`, saved with `saveChoice`, then a
- *   `CHOICE_EVENT` for other islands;
+ *   `CHOICE_EVENT` for other islands. The Theme control's first option is System, which is also what
+ *   a reader who never chose has: it stores `"system"`, resolves to the operating system's theme
+ *   and follows it while the page is open (forced colors, a dark color scheme, then light);
  * - the navigation drawer below 48rem: the hamburger sets `data-nav-open` on the window (site.css
  *   shows the pane as a drawer), focus moves to the current link, and Escape, a click on the
  *   backdrop (both return focus to the hamburger) or focus moving elsewhere closes it;
@@ -32,9 +34,13 @@ import { MaximizeButton } from '../shell/TitleBar';
 import { saveMaximized } from '../shell/windowState';
 import {
   readDocumentChoice,
+  readThemePreference,
+  resolveTheme,
   saveChoice,
   type SiteChoice,
+  type SiteDir,
   type SiteTheme,
+  type ThemePreference,
 } from '../theme/themeChoice';
 import type { SearchPaletteProps } from './SearchPalette';
 
@@ -87,18 +93,32 @@ function storage(): Storage | null {
   }
 }
 
-function applyChoice(choice: SiteChoice): void {
+/** Whether the system matches a media query; false where `matchMedia` is missing or throws. */
+function systemMatches(query: string): boolean {
+  return window.matchMedia(query).matches;
+}
+
+/** The queries the System theme reads: forced colors and a dark color scheme. */
+const SYSTEM_QUERIES = ['(forced-colors: active)', '(prefers-color-scheme: dark)'] as const;
+
+/**
+ * Put the choice on `<html>` and tell the other islands. A change of the reader's own is saved
+ * with the preference they picked (System included), never the theme it resolved to: a reader on
+ * System who flips the direction stays on System. A change that only follows the system is not.
+ */
+function applyChoice(choice: SiteChoice, save?: ThemePreference): void {
   const html = document.documentElement;
   html.classList.remove(...THEMES.map((theme) => `wave-${theme}`));
   html.classList.add(`wave-${choice.theme}`);
   html.dir = choice.dir;
-  saveChoice(storage(), choice);
+  if (save) saveChoice(storage(), { theme: save, dir: choice.dir });
   window.dispatchEvent(new CustomEvent(CHOICE_EVENT, { detail: choice }));
 }
 
 export default function ShellControls({ copyText }: ShellControlsProps) {
   const [ready, setReady] = React.useState(false);
   const [choice, setChoice] = React.useState<SiteChoice>({ theme: 'light', dir: 'ltr' });
+  const [preference, setPreference] = React.useState<ThemePreference>('system');
   const [maximized, setMaximized] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(false);
   const [copyStatus, setCopyStatus] = React.useState<CopyStatus>('idle');
@@ -175,6 +195,7 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe read of the document (website/src/islands)
     setApple(isApplePlatform());
     setChoice(readDocumentChoice());
+    setPreference(readThemePreference(storage()));
     setMaximized(byId(SHELL_IDS.window)?.hasAttribute('data-maximized') ?? false);
     setMaximizeSlot(byId(SHELL_IDS.maximizeSlot));
     setReady(true);
@@ -250,10 +271,36 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
     );
   };
 
-  const choose = (next: SiteChoice) => {
-    applyChoice(next);
+  const choose = (theme: ThemePreference, dir: SiteDir) => {
+    const next: SiteChoice = { theme: resolveTheme(theme, systemMatches), dir };
+    applyChoice(next, theme);
     setChoice(next);
+    setPreference(theme);
   };
+
+  // While the theme is System, the page follows the operating system as it changes (a scheme
+  // switch at dusk, forced colors turned on). Nothing is stored: the preference is still System.
+  React.useEffect(() => {
+    if (!ready || preference !== 'system') return;
+    let lists: MediaQueryList[];
+    try {
+      lists = SYSTEM_QUERIES.map((query) => window.matchMedia(query));
+    } catch {
+      return;
+    }
+    const follow = () => {
+      const current = readDocumentChoice();
+      const theme = resolveTheme('system', systemMatches);
+      if (theme === current.theme) return;
+      const next: SiteChoice = { theme, dir: current.dir };
+      applyChoice(next);
+      setChoice(next);
+    };
+    for (const list of lists) list.addEventListener('change', follow);
+    return () => {
+      for (const list of lists) list.removeEventListener('change', follow);
+    };
+  }, [ready, preference]);
 
   return (
     <>
@@ -261,6 +308,7 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
         ready={ready}
         copyText={copyText}
         choice={choice}
+        themePreference={preference}
         navOpen={navOpen}
         copyStatus={copyStatus}
         searchShortcut={apple ? 'Meta+K' : 'Control+K'}
@@ -269,8 +317,8 @@ export default function ShellControls({ copyText }: ShellControlsProps) {
         onToggleNav={toggleNav}
         onCopy={copy}
         onSearch={() => window.dispatchEvent(new CustomEvent(SEARCH_EVENT))}
-        onThemeChange={(theme) => choose({ ...choice, theme })}
-        onDirChange={(dir) => choose({ ...choice, dir })}
+        onThemeChange={(theme) => choose(theme, choice.dir)}
+        onDirChange={(dir) => choose(preference, dir)}
       />
       {navOpen ? (
         <div

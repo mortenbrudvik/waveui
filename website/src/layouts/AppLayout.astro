@@ -8,7 +8,10 @@
  *
  * - The head inlines `THEME_INIT_SCRIPT`, so the theme class and `dir` on `<html>` are set before
  *   first paint (the static markup is light and left to right); the window inlines
- *   `WINDOW_INIT_SCRIPT` as its first child, so a maximized window stays maximized across pages.
+ *   `WINDOW_INIT_SCRIPT` as its first child, so a maximized window stays maximized across pages;
+ *   the body ends with `EXAMPLE_PREVIEW_SCRIPT`, which gives the examples' static previews (server-
+ *   rendered light and left to right, each in a provider root of its own) the page's theme and
+ *   direction before the first paint, so they do not change when their islands hydrate.
  * - The skip link is the first focusable element; then the title bar's controls, the navigation
  *   and the content (the command bar first).
  * - No web fonts: `.wave-root` sets WaveUI's system font stack.
@@ -42,7 +45,7 @@ import { StatusBar, type ShellStatus } from '../shell/StatusBar';
 import { TitleBar } from '../shell/TitleBar';
 import { canonicalUrl, DOCS_BASE } from '../shell/urls';
 import { WINDOW_INIT_SCRIPT } from '../shell/windowState';
-import { THEME_INIT_SCRIPT } from '../theme/themeInit';
+import { EXAMPLE_PREVIEW_SCRIPT, THEME_INIT_SCRIPT } from '../theme/themeInit';
 
 export interface Props {
   title: string;
@@ -89,5 +92,6 @@ const entries = getCatalog().map(({ slug, name, category }) => ({ slug, name, ca
       </div>
       <StatusBar status={status} />
     </div>
+    <script is:inline set:html={EXAMPLE_PREVIEW_SCRIPT} />
   </body>
 </html>

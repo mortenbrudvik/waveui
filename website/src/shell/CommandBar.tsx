@@ -14,7 +14,7 @@ import type * as React from 'react';
 import { Button } from '../../../src/components/button/Button';
 import { Select } from '../../../src/components/input/Select';
 import { Hamburger } from '../../../src/components/navigation/Hamburger';
-import type { SiteChoice, SiteDir, SiteTheme } from '../theme/themeChoice';
+import type { SiteChoice, SiteDir, ThemePreference } from '../theme/themeChoice';
 import { SHELL_IDS } from './ids';
 
 export type CopyStatus = 'idle' | 'copied' | 'failed';
@@ -24,7 +24,10 @@ export interface CommandBarProps {
   ready: boolean;
   /** The code Copy code copies; without it there is no Copy code command. */
   copyText?: string | undefined;
+  /** The page's resolved theme and direction. */
   choice: SiteChoice;
+  /** What the Theme control shows: a theme, or System, which follows the operating system. */
+  themePreference: ThemePreference;
   navOpen: boolean;
   copyStatus: CopyStatus;
   /** The Search command's `aria-keyshortcuts`: `Meta+K` on Apple platforms. @default 'Control+K' */
@@ -35,11 +38,12 @@ export interface CommandBarProps {
   onToggleNav: () => void;
   onCopy: () => void;
   onSearch: () => void;
-  onThemeChange: (theme: SiteTheme) => void;
+  onThemeChange: (preference: ThemePreference) => void;
   onDirChange: (dir: SiteDir) => void;
 }
 
-const THEME_OPTIONS: readonly { value: SiteTheme; label: string }[] = [
+const THEME_OPTIONS: readonly { value: ThemePreference; label: string }[] = [
+  { value: 'system', label: 'System' },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
   { value: 'high-contrast', label: 'High contrast' },
@@ -98,6 +102,7 @@ export function CommandBar({
   searchShortcut = 'Control+K',
   searchFailed = false,
   hamburgerRef,
+  themePreference,
   onToggleNav,
   onCopy,
   onSearch,
@@ -142,9 +147,9 @@ export function CommandBar({
           aria-label="Theme"
           size="small"
           className={SELECT_CLASSES}
-          value={choice.theme}
+          value={themePreference}
           disabled={disabled}
-          onValueChange={(value) => onThemeChange(value as SiteTheme)}
+          onValueChange={(value) => onThemeChange(value as ThemePreference)}
         >
           {THEME_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>

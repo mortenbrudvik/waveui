@@ -127,6 +127,99 @@ test('theme switch persists across a reload and sets no flash', async ({ page })
   expect(await themeClasses(page)).toEqual(['wave-dark']);
 });
 
+/** What each example's static preview root carries: its theme class, `data-wave-theme` and `dir`. */
+const previewRoots = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('[data-example-preview] .wave-root[data-wave-theme]')].map(
+      (root) => ({
+        themes: [...root.classList].filter((name) =>
+          /^wave-(light|dark|high-contrast)$/.test(name),
+        ),
+        attribute: root.getAttribute('data-wave-theme'),
+        dir: root.getAttribute('dir'),
+      }),
+    ),
+  );
+
+test('the static example previews show the reader’s theme and direction before any island runs', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.addInitScript(() => {
+    localStorage.setItem('waveui-docs:choice', JSON.stringify({ theme: 'system', dir: 'rtl' }));
+  });
+  // No script of the app loads, so nothing hydrates: what the previews show is the server's markup
+  // as the inline scripts left it.
+  await page.route('**/_assets/*.js', (route) => route.abort());
+  await page.goto(BUTTON, { waitUntil: 'domcontentloaded' });
+  expect(await themeClasses(page)).toEqual(['wave-dark']);
+  const roots = await previewRoots(page);
+  expect(roots.length).toBeGreaterThan(0);
+  for (const root of roots) {
+    expect(root).toEqual({ themes: ['wave-dark'], attribute: 'dark', dir: 'rtl' });
+  }
+});
+
+test('hydration keeps the theme and direction the previews showed, and reports nothing', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.addInitScript(() => {
+    localStorage.setItem('waveui-docs:choice', JSON.stringify({ theme: 'dark', dir: 'rtl' }));
+  });
+  await page.goto(BUTTON);
+  await waitForShell(page);
+  await hydrateAllIslands(page);
+  // Hydrated, the examples still show the page's theme and direction, and nothing was reported.
+  const roots = await previewRoots(page);
+  expect(roots.length).toBeGreaterThan(0);
+  for (const root of roots) {
+    expect(root).toEqual({ themes: ['wave-dark'], attribute: 'dark', dir: 'rtl' });
+  }
+  expect(errors).toEqual([]);
+});
+
+test('System is the Theme control’s first option, follows the operating system and can be left and chosen again', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(BUTTON);
+  await waitForShell(page);
+  const theme = page.getByRole('combobox', { name: 'Theme' });
+  await expect(theme).toHaveValue('system');
+  expect(await theme.locator('option').allTextContents()).toEqual([
+    'System',
+    'Light',
+    'Dark',
+    'High contrast',
+  ]);
+  expect(await themeClasses(page)).toEqual(['wave-light']);
+
+  // On System the page changes with the system while it is open.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(() => themeClasses(page)).toEqual(['wave-dark']);
+  await expect(theme).toHaveValue('system');
+
+  // A picked theme ignores the system.
+  await theme.selectOption('light');
+  expect(await themeClasses(page)).toEqual(['wave-light']);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  expect(await themeClasses(page)).toEqual(['wave-light']);
+
+  // System again: it follows at once, survives a reload and a change of direction.
+  await theme.selectOption('system');
+  expect(await themeClasses(page)).toEqual(['wave-dark']);
+  await page.getByRole('combobox', { name: 'Direction' }).selectOption('rtl');
+  await page.reload();
+  await waitForShell(page);
+  await expect(theme).toHaveValue('system');
+  expect(await themeClasses(page)).toEqual(['wave-dark']);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect.poll(() => themeClasses(page)).toEqual(['wave-light']);
+});
+
 test('blocked localStorage still renders and switches theme for the session', async ({ page }) => {
   const errors = collectErrors(page);
   await page.emulateMedia({ colorScheme: 'light' });

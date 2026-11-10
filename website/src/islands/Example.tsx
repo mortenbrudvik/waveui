@@ -9,7 +9,9 @@
  * What the island does:
  *
  * - The static preview is the story with its default args, light and left to right, rendered on
- *   the server; it needs no script. Once hydrated (`client:visible`) the example follows the
+ *   the server; it needs no script, and the layout's last inline script
+ *   (`EXAMPLE_PREVIEW_SCRIPT`) gives it the page's theme and direction before the first paint, so
+ *   nothing changes when the island hydrates. Once hydrated (`client:visible`) the example follows the
  *   page's theme and direction: it reads `<html>` in an effect (so the first client render matches
  *   the server's) and again on every `CHOICE_EVENT`, and hands them to the story's `WaveProvider`
  *   through `SiteChoiceContext`.

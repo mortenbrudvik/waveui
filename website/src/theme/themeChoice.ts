@@ -15,6 +15,20 @@ export interface SiteChoice {
   dir: SiteDir;
 }
 
+/**
+ * What the reader picked for the theme: one of the themes, or `'system'`, which follows the
+ * operating system (forced colors, then a dark color scheme, then light) and changes with it. The
+ * page always carries a resolved {@link SiteTheme}; only the stored choice and the Theme control
+ * hold the preference.
+ */
+export type ThemePreference = 'system' | SiteTheme;
+
+/** The choice as stored: the theme preference (System included) and the direction. */
+export interface StoredChoice {
+  theme: ThemePreference;
+  dir: SiteDir;
+}
+
 /** The storage key of the choice; the value is JSON `{ theme, dir }`. */
 export const STORAGE_KEY = 'waveui-docs:choice';
 
@@ -43,8 +57,30 @@ function systemTheme(matches: (query: string) => boolean): SiteTheme {
 }
 
 /**
- * The choice to apply: each field of the stored choice if it is valid, else the system's theme
- * (forced colors, then a dark color scheme, then light) and left to right. A storage that throws
+ * The theme a preference gives now: a theme as it is, `'system'` as the system's (a `matches` that
+ * throws counts as no match).
+ */
+export function resolveTheme(
+  preference: ThemePreference,
+  matches: (query: string) => boolean,
+): SiteTheme {
+  return preference === 'system' ? systemTheme(matches) : preference;
+}
+
+/**
+ * The preference stored: its theme if that is one of the themes or `'system'`, else System, which
+ * is also what a reader who never chose gets. A storage that throws or holds something else counts
+ * as empty.
+ */
+export function readThemePreference(storage: Pick<Storage, 'getItem'> | null): ThemePreference {
+  const { theme } = readStored(storage);
+  return THEMES.find((candidate) => candidate === theme) ?? 'system';
+}
+
+/**
+ * The choice to apply: each field of the stored choice if it is valid (a stored `'system'` is not
+ * a theme, so it counts as none), else the system's theme (forced colors, then a dark color scheme,
+ * then light) and left to right. A storage that throws
  * or holds something else counts as empty, and so does a `matches` that throws.
  */
 export function resolveInitialChoice(
@@ -71,7 +107,7 @@ export function readDocumentChoice(doc: Document = document): SiteChoice {
 }
 
 /** Remember the choice. A missing or failing storage is ignored. */
-export function saveChoice(storage: Pick<Storage, 'setItem'> | null, choice: SiteChoice): void {
+export function saveChoice(storage: Pick<Storage, 'setItem'> | null, choice: StoredChoice): void {
   try {
     storage?.setItem(STORAGE_KEY, JSON.stringify({ theme: choice.theme, dir: choice.dir }));
   } catch {

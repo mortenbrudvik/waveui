@@ -173,6 +173,19 @@ describe('AppLayout (server-rendered HTML)', () => {
     expect(doc.documentElement.outerHTML).not.toMatch(/fonts\.googleapis|@font-face|\.woff2?/);
   });
 
+  it('ends the body with the script that gives the example previews the page’s theme', async () => {
+    const doc = parse(await renderLayout({ title: 'Button' }));
+    const { EXAMPLE_PREVIEW_SCRIPT } = await import('../theme/themeInit');
+    // The last child of the body, after every example it acts on has been parsed.
+    const last = doc.body.lastElementChild;
+    expect(last?.tagName).toBe('SCRIPT');
+    expect(last?.textContent).toBe(EXAMPLE_PREVIEW_SCRIPT);
+    const copies = [...doc.body.querySelectorAll('script')].filter(
+      (script) => script.textContent === EXAMPLE_PREVIEW_SCRIPT,
+    );
+    expect(copies).toHaveLength(1);
+  });
+
   it('nav lists the guides first, then every category and all 80 component links, current marked aria-current="page"', async () => {
     const doc = parse(await renderLayout({ title: 'Data grid', current: 'data-grid' }));
     const nav = doc.querySelector('nav')!;
@@ -564,8 +577,9 @@ describe('ShellControls (the island)', () => {
     }
   });
 
-  it('shows the choice the head script applied', async () => {
+  it('shows the stored choice, and the direction the head script applied', async () => {
     load(await renderLayout({ title: 'Button' }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme: 'high-contrast', dir: 'rtl' }));
     document.documentElement.className = 'wave-high-contrast';
     document.documentElement.dir = 'rtl';
     await hydrateIsland();
@@ -575,6 +589,138 @@ describe('ShellControls (the island)', () => {
     expect((screen.getByRole('combobox', { name: 'Direction' }) as HTMLSelectElement).value).toBe(
       'rtl',
     );
+  });
+
+  describe('the System theme', () => {
+    /** A `matchMedia` whose answers and listeners the test controls. */
+    function stubSystem(initial: { dark?: boolean; forced?: boolean } = {}) {
+      const state = { dark: initial.dark ?? false, forced: initial.forced ?? false };
+      const listeners = new Set<() => void>();
+      const answer = (query: string) =>
+        query === '(prefers-color-scheme: dark)'
+          ? state.dark
+          : query === '(forced-colors: active)'
+            ? state.forced
+            : false;
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        get matches() {
+          return answer(query);
+        },
+        media: query,
+        addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+        removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+      }));
+      return {
+        set(next: { dark?: boolean; forced?: boolean }) {
+          Object.assign(state, next);
+          act(() => listeners.forEach((listener) => listener()));
+        },
+        listeners,
+      };
+    }
+
+    const themeSelect = () => screen.getByRole('combobox', { name: 'Theme' }) as HTMLSelectElement;
+
+    it('is the first option of the Theme control, ahead of the three themes', async () => {
+      await mount();
+      expect([...themeSelect().options].map((option) => [option.value, option.text])).toEqual([
+        ['system', 'System'],
+        ['light', 'Light'],
+        ['dark', 'Dark'],
+        ['high-contrast', 'High contrast'],
+      ]);
+    });
+
+    it('is what the control shows when nothing is stored, and when "system" is', async () => {
+      await mount();
+      expect(themeSelect().value).toBe('system');
+      act(() => root?.unmount());
+      root = undefined;
+      document.body.innerHTML = '';
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme: 'system', dir: 'ltr' }));
+      await mount();
+      expect(themeSelect().value).toBe('system');
+    });
+
+    it('a stored theme is what the control shows, not System', async () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme: 'dark', dir: 'ltr' }));
+      await mount();
+      expect(themeSelect().value).toBe('dark');
+    });
+
+    it('applies the system’s theme, stores "system" and reports the resolved theme', async () => {
+      stubSystem({ dark: true });
+      await mount();
+      const user = userEvent.setup();
+      await user.selectOptions(themeSelect(), 'light');
+      expect(document.documentElement.classList.contains('wave-light')).toBe(true);
+      const choices: unknown[] = [];
+      const listener = (event: Event) => choices.push((event as CustomEvent).detail);
+      window.addEventListener(CHOICE_EVENT, listener);
+      try {
+        await user.selectOptions(themeSelect(), 'system');
+        expect(document.documentElement.classList.contains('wave-dark')).toBe(true);
+        expect(document.documentElement.classList.contains('wave-light')).toBe(false);
+        expect(saveChoice).toHaveBeenLastCalledWith(localStorage, { theme: 'system', dir: 'ltr' });
+        expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual({
+          theme: 'system',
+          dir: 'ltr',
+        });
+        // The islands get a theme to render, never the preference.
+        expect(choices).toEqual([{ theme: 'dark', dir: 'ltr' }]);
+      } finally {
+        window.removeEventListener(CHOICE_EVENT, listener);
+      }
+    });
+
+    it('stays System when only the direction changes', async () => {
+      stubSystem({ dark: true });
+      await mount();
+      await userEvent
+        .setup()
+        .selectOptions(screen.getByRole('combobox', { name: 'Direction' }), 'rtl');
+      expect(saveChoice).toHaveBeenLastCalledWith(localStorage, { theme: 'system', dir: 'rtl' });
+      expect(themeSelect().value).toBe('system');
+    });
+
+    it('follows the system while it is chosen, and only then', async () => {
+      const system = stubSystem({ dark: false });
+      await mount();
+      const user = userEvent.setup();
+      await user.selectOptions(themeSelect(), 'system');
+      const html = document.documentElement;
+      expect(html.classList.contains('wave-light')).toBe(true);
+      const choices: unknown[] = [];
+      const listener = (event: Event) => choices.push((event as CustomEvent).detail);
+      window.addEventListener(CHOICE_EVENT, listener);
+      try {
+        system.set({ dark: true });
+        expect(html.classList.contains('wave-dark')).toBe(true);
+        system.set({ forced: true });
+        expect(html.classList.contains('wave-high-contrast')).toBe(true);
+        expect(choices).toEqual([
+          { theme: 'dark', dir: 'ltr' },
+          { theme: 'high-contrast', dir: 'ltr' },
+        ]);
+        // Picking a theme ends the following: the listeners are gone and the system is ignored.
+        await user.selectOptions(themeSelect(), 'light');
+        expect(system.listeners.size).toBe(0);
+        system.set({ forced: false, dark: false });
+        system.set({ dark: true });
+        expect(html.classList.contains('wave-light')).toBe(true);
+      } finally {
+        window.removeEventListener(CHOICE_EVENT, listener);
+      }
+    });
+
+    it('follows the system for a reader who never chose, without storing anything', async () => {
+      const system = stubSystem({ dark: false });
+      await mount();
+      system.set({ dark: true });
+      expect(document.documentElement.classList.contains('wave-dark')).toBe(true);
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+      expect(saveChoice).not.toHaveBeenCalled();
+    });
   });
 
   it('a storage that throws keeps the change for the page', async () => {

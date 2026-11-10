@@ -4,8 +4,14 @@
  * evaluated in jsdom on the same inputs, so the two cannot drift apart.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resolveInitialChoice, saveChoice, STORAGE_KEY } from './themeChoice';
-import { THEME_INIT_SCRIPT } from './themeInit';
+import {
+  readThemePreference,
+  resolveInitialChoice,
+  resolveTheme,
+  saveChoice,
+  STORAGE_KEY,
+} from './themeChoice';
+import { EXAMPLE_PREVIEW_SCRIPT, THEME_INIT_SCRIPT } from './themeInit';
 
 const none = () => false;
 const only = (query: string) => (q: string) => q === query;
@@ -72,6 +78,53 @@ describe('resolveInitialChoice', () => {
       throw new Error('no matchMedia');
     };
     expect(resolveInitialChoice(null, matches)).toEqual({ theme: 'light', dir: 'ltr' });
+  });
+});
+
+describe('the System preference', () => {
+  const dark = '(prefers-color-scheme: dark)';
+
+  it('a stored "system" follows the system, and keeps its direction', () => {
+    const stored = JSON.stringify({ theme: 'system', dir: 'rtl' });
+    expect(resolveInitialChoice(storageOf(stored), only(dark))).toEqual({
+      theme: 'dark',
+      dir: 'rtl',
+    });
+    expect(resolveInitialChoice(storageOf(stored), none)).toEqual({ theme: 'light', dir: 'rtl' });
+  });
+
+  it('resolveTheme gives a fixed theme as it is and System as the system’s', () => {
+    expect(resolveTheme('dark', none)).toBe('dark');
+    expect(resolveTheme('light', only(dark))).toBe('light');
+    expect(resolveTheme('system', only(dark))).toBe('dark');
+    expect(resolveTheme('system', only('(forced-colors: active)'))).toBe('high-contrast');
+    expect(resolveTheme('system', none)).toBe('light');
+    expect(
+      resolveTheme('system', () => {
+        throw new Error('no matchMedia');
+      }),
+    ).toBe('light');
+  });
+
+  it('readThemePreference is the stored theme, else System', () => {
+    for (const theme of ['light', 'dark', 'high-contrast', 'system']) {
+      expect(readThemePreference(storageOf(JSON.stringify({ theme, dir: 'ltr' })))).toBe(theme);
+    }
+    // Nothing stored, a storage that throws, and anything invalid all follow the system.
+    for (const raw of [null, '{not json', 'null', '42', '"dark"', '{}', '{"theme":"sepia"}']) {
+      expect(readThemePreference(storageOf(raw)), String(raw)).toBe('system');
+    }
+    expect(readThemePreference(throwingStorage)).toBe('system');
+    expect(readThemePreference(null)).toBe('system');
+  });
+
+  it('saveChoice stores System as "system"', () => {
+    const setItem = vi.fn();
+    saveChoice({ setItem }, { theme: 'system', dir: 'rtl' });
+    expect(setItem).toHaveBeenCalledExactlyOnceWith(
+      STORAGE_KEY,
+      JSON.stringify({ theme: 'system', dir: 'rtl' }),
+    );
   });
 });
 
@@ -189,6 +242,12 @@ describe('THEME_INIT_SCRIPT', () => {
     { name: 'wrong theme', stored: '{"theme":"sepia","dir":"rtl"}', matches: only(dark) },
     { name: 'wrong dir', stored: '{"theme":"dark","dir":"up"}', matches: none },
     { name: 'empty object', stored: '{}', matches: only(forced) },
+    {
+      name: 'stored system, dark scheme',
+      stored: '{"theme":"system","dir":"rtl"}',
+      matches: only(dark),
+    },
+    { name: 'stored system, nothing', stored: '{"theme":"system","dir":"ltr"}', matches: none },
   ];
 
   it.each(cases)('agrees with resolveInitialChoice: $name', ({ stored, matches }) => {
@@ -197,5 +256,83 @@ describe('THEME_INIT_SCRIPT', () => {
     const expected = resolveInitialChoice(storageOf(stored), matches);
     expect(html.className).toBe(`wave-${expected.theme}`);
     expect(html.getAttribute('dir')).toBe(expected.dir);
+  });
+});
+
+describe('EXAMPLE_PREVIEW_SCRIPT', () => {
+  const html = document.documentElement;
+  const run = () => (0, eval)(EXAMPLE_PREVIEW_SCRIPT);
+
+  /** An example's static preview root, as the server renders it: light and left to right. */
+  const previewRoot = () => {
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-example-preview', '');
+    wrapper.innerHTML =
+      '<div dir="ltr" data-wave-theme="light" class="wave-root wave-light wave:bg-background"></div>';
+    document.body.append(wrapper);
+    return wrapper.firstElementChild as HTMLElement;
+  };
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    html.className = '';
+    html.removeAttribute('dir');
+  });
+
+  it('is a small, import-free string', () => {
+    expect(typeof EXAMPLE_PREVIEW_SCRIPT).toBe('string');
+    expect(new TextEncoder().encode(EXAMPLE_PREVIEW_SCRIPT).length).toBeLessThan(600);
+    expect(EXAMPLE_PREVIEW_SCRIPT).not.toMatch(/\bimport\b/);
+  });
+
+  it('gives each static preview the page’s theme and direction, and keeps its other classes', () => {
+    html.className = 'wave-dark';
+    html.dir = 'rtl';
+    const [a, b] = [previewRoot(), previewRoot()];
+    run();
+    for (const root of [a, b]) {
+      expect([...root.classList].sort()).toEqual(['wave-dark', 'wave-root', 'wave:bg-background']);
+      expect(root.getAttribute('data-wave-theme')).toBe('dark');
+      expect(root.getAttribute('dir')).toBe('rtl');
+    }
+  });
+
+  it('follows the page’s direction alone, and its theme alone', () => {
+    html.className = 'wave-light';
+    html.dir = 'rtl';
+    const rtl = previewRoot();
+    run();
+    expect(rtl.getAttribute('dir')).toBe('rtl');
+    expect(rtl.classList.contains('wave-light')).toBe(true);
+
+    html.className = 'wave-high-contrast';
+    html.dir = 'ltr';
+    const contrast = previewRoot();
+    run();
+    expect(contrast.classList.contains('wave-high-contrast')).toBe(true);
+    expect(contrast.classList.contains('wave-light')).toBe(false);
+    expect(contrast.getAttribute('data-wave-theme')).toBe('high-contrast');
+  });
+
+  it('leaves a light, left-to-right page’s previews as the server rendered them', () => {
+    html.className = 'wave-light';
+    html.dir = 'ltr';
+    const root = previewRoot();
+    const before = root.outerHTML;
+    run();
+    expect(root.outerHTML).toBe(before);
+  });
+
+  it('touches nothing outside the previews, and throws nothing on a page without any', () => {
+    html.className = 'wave-dark';
+    html.dir = 'rtl';
+    const outside = document.createElement('div');
+    outside.className = 'wave-root wave-light';
+    outside.setAttribute('data-wave-theme', 'light');
+    document.body.append(outside);
+    expect(run).not.toThrow();
+    expect(outside.className).toBe('wave-root wave-light');
+    expect(outside.getAttribute('data-wave-theme')).toBe('light');
+    expect(outside.hasAttribute('dir')).toBe(false);
   });
 });
